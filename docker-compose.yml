@@ -1,0 +1,24 @@
+name: nekkora-platform
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nekkora-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nekkora}
+      POSTGRES_USER: ${POSTGRES_USER:-nekkora}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nekkora}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - nekkora_postgres_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nekkora} -d ${POSTGRES_DB:-nekkora}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  nekkora_postgres_data:
