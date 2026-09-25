@@ -2,7 +2,7 @@
 
 **Data:** 2026-09-25
 **Escopo:** implementação e validação da migration de segurança (papéis por serviço, privilégios mínimos, funções privilegiadas encapsuladas, provisionamento atômico, RLS por organização, contextos de sessão, retirada do papel substituído).
-**Base aprovada:** `2026-09-25-contratos-funcoes-rls.md` (rev. 3), `2026-09-25-matriz-privilegios-001-011.md` (rev. 4), `2026-09-25-preparacao-seguranca-postgres.md`.
+**Base aprovada:** `2026-09-25-contratos-funcoes-rls.md` (rev. 4), `2026-09-25-matriz-privilegios-001-011.md` (rev. 5), `2026-09-25-preparacao-seguranca-postgres.md`. A implementação partiu do contrato rev. 3 e da matriz rev. 4; as revisões seguintes registram as duas mudanças aprovadas durante ela (§3).
 **Fora de escopo:** API, ativação do expurgo e requisitos de infraestrutura (TLS, `pg_hba`, senhas, backup).
 **Status:** implementada e validada pelo autor nos cenários abaixo. **Ainda não revisada de forma independente nem encerrada.** Cópia canônica no repositório: `docs/relatorios/2026-09-25-validacao-012-security-rls.md`.
 
@@ -148,6 +148,8 @@ Nada foi enviado ao remoto. O hash deste commit fica registrado no §9, no commi
 | 45 | `workspaces` | direta | `nekkora` | platform SIU; scheduler_owner S |
 
 Totais: 39 diretas × 2 políticas + 3 derivadas × 1 = **81 políticas**; 42 tabelas com `ENABLE` + `FORCE`; 3 sem RLS. `nekkora_scheduler`, `nekkora_provisioning` e `nekkora_retention_executor` não aparecem na tabela: não têm privilégio de tabela, só `EXECUTE`.
+
+**Invariante que protege essa separação:** políticas permissivas que se aplicam ao mesmo papel se combinam por OR. As duas políticas de cada tabela nunca se somam para um mesmo papel porque os grupos são disjuntos: nenhum papel de serviço é membro de um owner, nem o contrário. Uma membership entre eles daria ao papel de serviço também a política de contexto de função, e ele passaria a enxergar linhas por um GUC que ele mesmo pode definir. A 012 verifica "nenhuma membership envolvendo `nekkora_*`" no próprio bloco final e aborta se encontrar; a comparação de catálogo (`00`) reconfere. Qualquer `GRANT <owner> TO <serviço>` futuro quebra esse invariante e precisa ser tratado como mudança de segurança.
 
 **Pontos para a revisão do conteúdo:**
 - `organizations` usa a própria chave (`organization_id`) na política. O `platform` só vê e altera a linha da organização do contexto.
@@ -329,7 +331,7 @@ Com contexto ausente ou divergente, a trigger de origem da 011 não enxerga a ex
 
 ## 8. Conclusão
 
-Nos cenários executados, a 012 aplica sem erro sobre 001–011, e o catálogo instalado coincide com a matriz aprovada: 145 privilégios de tabela, 15 de coluna e 12 funções, com diferença zero nos dois sentidos, mais os acréscimos e interpretações registrados no §3. Cada serviço executa o próprio fluxo com o próprio papel. Operações não concedidas, organização divergente e contexto ausente ou malformado são rejeitados, com o mecanismo identificado. O contexto não sobrevive entre transações da mesma conexão. O contexto de função é salvo e restaurado sem afetar o guard de categoria. Provisionamento e bootstrap são atômicos. As duas corridas testadas resolvem pelo lock, com resultado correto. O expurgo continua desativado.
+Nos cenários executados, a 012 aplica sem erro sobre 001–011, e o catálogo instalado coincide com a matriz aprovada: 145 privilégios de tabela, 15 de coluna e 12 funções, com diferença zero nos dois sentidos, mais os acréscimos e interpretações registrados no §3. Cada serviço executa o próprio fluxo com o próprio papel. Operações não concedidas, organização divergente e contexto ausente ou malformado são rejeitados, com o mecanismo identificado. O contexto de requisição, **quando definido por `SET LOCAL`**, não sobrevive entre transações da mesma conexão. Um `SET` de sessão vaza para a transação seguinte (I09); evitar isso cabe ao backend e ao pool. O contexto de função é salvo e restaurado sem afetar o guard de categoria. Provisionamento e bootstrap são atômicos. As duas corridas testadas resolvem pelo lock, com resultado correto. O expurgo continua desativado.
 
 Do ponto de vista do autor, a 012 está **apta para revisão independente**, com as pendências do §7. Ela ainda **não** está revisada nem encerrada. Esta validação **não** declara cobertura exaustiva nem conformidade LGPD, e não substitui os requisitos de infraestrutura. RLS está validada nos cenários acima, que usam papéis reais e políticas de fato habilitadas; não é uma prova de isolamento para toda consulta futura da API.
 
