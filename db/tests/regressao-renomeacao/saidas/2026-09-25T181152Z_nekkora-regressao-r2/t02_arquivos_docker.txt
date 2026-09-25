@@ -1,0 +1,10 @@
+== repositorio, exceto esta pasta de testes e .git (esperado: nada)
+(nenhuma ocorrencia)
+== .git/config (remoto externo; URL omitida)
+1
+== pasta de testes (ocorrencias intencionais: testes do nome antigo e documentacao)
+sql/01_t02_catalogo.sql
+sql/04_t02_guc_antigo.sql
+README.md
+== docker (containers, volumes, redes)
+(nenhuma ocorrencia)

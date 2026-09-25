@@ -1,0 +1,53 @@
+Pager usage is off.
+    papel    
+-------------
+ nekkora_app
+(1 row)
+
+=== entrega atrasada: evento PROCESS_SUCCEEDED seq 2 e log STDERR, apos execucao SUCCEEDED e associacao ENDED
+INSERT 0 1
+INSERT 0 1
+=== reenvio identico, event_id e log_id ja existentes: 0 linhas, depois comparacao com o registro existente
+INSERT 0 0
+               event_id               | fingerprint_igual_ao_reenviado |              payload               
+--------------------------------------+--------------------------------+------------------------------------
+ eeeeeeee-0000-0000-0000-000000000001 | t                              | {"pid": 4242, "schema_version": 1}
+(1 row)
+
+INSERT 0 0
+                log_id                | fingerprint_igual_ao_reenviado |                     payload                     
+--------------------------------------+--------------------------------+-------------------------------------------------
+ ffffffff-0000-0000-0000-000000000001 | t                              | {"message": "ola nekkora", "schema_version": 1}
+(1 row)
+
+=== reenvio divergente, mesmo event_id com fingerprint e payload diferentes: 0 linhas, original preservado
+INSERT 0 0
+               event_id               | divergente_sobrescreveu |              payload               
+--------------------------------------+-------------------------+------------------------------------
+ eeeeeeee-0000-0000-0000-000000000001 | f                       | {"pid": 4242, "schema_version": 1}
+(1 row)
+
+=== mesma sequence com outro event_id, conflito da chave natural: 0 linhas
+INSERT 0 0
+=== origem invalida: agent diferente da alocacao historica
+ERROR:  agent nao corresponde a alocacao historica da execucao (event_id=b368e809-9a65-4645-be3f-c89d410d24ca)
+CONTEXT:  PL/pgSQL function enforce_execution_event_agent_origin() line 13 at RAISE
+=== estado final
+ sequence | event_type |                           fingerprint                            |                payload                
+----------+------------+------------------------------------------------------------------+---------------------------------------
+        1 |          1 | e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1 | {"pid": 4242, "schema_version": 1}
+        2 |          2 | e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2 | {"exit_code": 0, "schema_version": 1}
+(2 rows)
+
+                log_id                | channel |      worker_agent_assignment_id      |                         payload                          
+--------------------------------------+---------+--------------------------------------+----------------------------------------------------------
+ ffffffff-0000-0000-0000-000000000001 |       2 | cccccccc-cccc-cccc-cccc-ccccccccccc3 | {"message": "ola nekkora", "schema_version": 1}
+ ffffffff-0000-0000-0000-000000000002 |       1 | cccccccc-cccc-cccc-cccc-ccccccccccc3 | {"level": 2, "message": "agent up", "schema_version": 1}
+ ffffffff-0000-0000-0000-000000000003 |       3 | cccccccc-cccc-cccc-cccc-ccccccccccc3 | {"message": "warn tardio", "schema_version": 1}
+(3 rows)
+
+ eventos | logs 
+---------+------
+       2 |    3
+(1 row)
+

@@ -1,0 +1,42 @@
+Pager usage is off.
+    papel    | session_user 
+-------------+--------------
+ nekkora_app | nekkora_app
+(1 row)
+
+=== insercao valida continua funcionando
+INSERT 0 1
+INSERT 0 1
+=== execution_events: UPDATE / DELETE / TRUNCATE
+ERROR:  permission denied for table execution_events
+ERROR:  permission denied for table execution_events
+ERROR:  permission denied for table execution_events
+=== logs: UPDATE / DELETE / TRUNCATE
+ERROR:  permission denied for table logs
+ERROR:  permission denied for table logs
+ERROR:  permission denied for table logs
+=== INSERT ja expurgado (payload NULL + campos de expurgo)
+=== organization_usage_daily
+ERROR:  evento nao pode nascer ja expurgado (event_id=dfd2e9a4-3613-4d49-a452-8cf30c5744b3)
+CONTEXT:  PL/pgSQL function enforce_execution_event_agent_origin() line 24 at RAISE
+ERROR:  permission denied for table organization_usage_daily
+ERROR:  agregado diario deve nascer OPEN (organization_id=11111111-1111-1111-1111-111111111111, resource_code=5, usage_date=2026-09-01)
+CONTEXT:  PL/pgSQL function enforce_usage_daily_born_open() line 4 at RAISE
+ERROR:  permission denied for table organization_usage_daily
+=== outras tabelas da baseline sem GRANT
+ERROR:  permission denied for table executions
+ERROR:  permission denied for table organizations
+=== escalonamento
+ERROR:  permission denied for schema public
+LINE 1: CREATE TABLE public.tentativa_intrusa (id INT);
+                     ^
+ERROR:  permission denied to set role "nekkora_retention_owner"
+ERROR:  permission denied to set role "nekkora"
+ERROR:  permission denied for function close_usage_day
+ERROR:  permission denied for function purge_expired_records
+=== contagens finais
+ eventos | logs 
+---------+------
+       3 |    4
+(1 row)
+

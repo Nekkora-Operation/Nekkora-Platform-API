@@ -1,0 +1,20 @@
+Pager usage is off.
+  papel  
+---------
+ nekkora
+(1 row)
+
+BEGIN
+SET
+ERROR:  unrecognized configuration parameter "nekkora.actor_membership_id"
+CONTEXT:  SQL statement "INSERT INTO workspace_configuration_events
+        (organization_id, workspace_id, event_type, performed_by_membership_id, parameter_id)
+    VALUES
+        (NEW.organization_id, NEW.workspace_id, 1, current_setting('nekkora.actor_membership_id')::uuid, NEW.parameter_id)"
+PL/pgSQL function audit_workspace_parameter_insert() line 3 at SQL statement
+ROLLBACK
+ parametros_t02 
+----------------
+              0
+(1 row)
+

@@ -1,0 +1,44 @@
+Pager usage is off.
+ papel_t04 
+-----------
+ nekkora
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+BEGIN
+INSERT 0 1
+INSERT 0 5
+COMMIT
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+BEGIN
+SET
+INSERT 0 1
+COMMIT
+ event_type |      performed_by_membership_id      
+------------+--------------------------------------
+          1 | 44444444-4444-4444-4444-444444444444
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+UPDATE 1
+INSERT 0 1
+UPDATE 1
+UPDATE 1
+             execution_id             | status | origin | alocada | ordem_ok 
+--------------------------------------+--------+--------+---------+----------
+ dddddddd-0000-0000-0000-000000000001 |      3 |      1 | t       | t
+(1 row)
+
+               marker               
+------------------------------------
+ t04 setup ok (execucao em RUNNING)
+(1 row)
+

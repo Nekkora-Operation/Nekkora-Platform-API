@@ -1,0 +1,15 @@
+Pager usage is off.
+  papel  
+---------
+ nekkora
+(1 row)
+
+BEGIN
+INSERT 0 4
+ALTER TABLE
+ALTER TABLE
+INSERT 0 2
+INSERT 0 1
+INSERT 0 3
+INSERT 0 2
+ERROR:  cannot ALTER TABLE "execution_events" because it has pending trigger events

@@ -1,0 +1,16 @@
+Pager usage is off.
+  papel  
+---------
+ nekkora
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+             execution_id             | status |      worker_agent_assignment_id      
+--------------------------------------+--------+--------------------------------------
+ dddddddd-0000-0000-0000-000000000003 |      4 | cccccccc-cccc-cccc-cccc-ccccccccccc5
+(1 row)
+

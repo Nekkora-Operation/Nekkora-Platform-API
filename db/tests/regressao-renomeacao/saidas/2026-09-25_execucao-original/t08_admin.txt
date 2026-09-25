@@ -1,0 +1,24 @@
+Pager usage is off.
+  papel  
+---------
+ nekkora
+(1 row)
+
+BEGIN
+ERROR:  agregado diario fechado e imutavel (usage_id=0b70e569-84ee-41d0-9621-d4954973c783)
+CONTEXT:  PL/pgSQL function prevent_usage_origin_change() line 4 at RAISE
+ROLLBACK
+BEGIN
+ERROR:  agregado diario fechado e imutavel (usage_id=0b70e569-84ee-41d0-9621-d4954973c783)
+CONTEXT:  PL/pgSQL function prevent_usage_origin_change() line 4 at RAISE
+ROLLBACK
+BEGIN
+ERROR:  exclusao nao permitida em organization_usage_daily (historico preservado)
+CONTEXT:  PL/pgSQL function prevent_delete() line 3 at RAISE
+ROLLBACK
+ resource_code | status | records_count | bytes_count |        consolidated_at        | persistidos_agora 
+---------------+--------+---------------+-------------+-------------------------------+-------------------
+             4 |      2 |             2 |         139 | 2026-09-25 17:56:57.410269+00 | 2/139
+             5 |      2 |             3 |         157 | 2026-09-25 17:56:57.407901+00 | 3/157
+(2 rows)
+

@@ -1,0 +1,16 @@
+Pager usage is off.
+    papel    
+-------------
+ nekkora_app
+(1 row)
+
+ERROR:  agregado diario fechado e imutavel (usage_id=fbedfef6-a35f-44a4-bfc3-37759a47ee3c)
+CONTEXT:  PL/pgSQL function prevent_usage_origin_change() line 4 at RAISE
+ERROR:  agregado diario fechado e imutavel (usage_id=3e3b6fff-bac9-49b7-ac01-96362144aeea)
+CONTEXT:  PL/pgSQL function prevent_usage_origin_change() line 4 at RAISE
+INSERT 0 1
+ dia_atribuido 
+---------------
+ 2026-09-25
+(1 row)
+

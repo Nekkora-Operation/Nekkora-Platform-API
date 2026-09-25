@@ -1,0 +1,23 @@
+Pager usage is off.
+  papel  
+---------
+ nekkora
+(1 row)
+
+BEGIN
+INSERT 0 4
+ALTER TABLE
+ALTER TABLE
+INSERT 0 2
+INSERT 0 1
+INSERT 0 3
+INSERT 0 2
+SET CONSTRAINTS
+ALTER TABLE
+ALTER TABLE
+COMMIT
+             marker             |        clock_timestamp        
+--------------------------------+-------------------------------
+ preparacao historica committed | 2026-09-25 17:56:37.679589+00
+(1 row)
+

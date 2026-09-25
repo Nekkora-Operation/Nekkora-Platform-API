@@ -1,0 +1,24 @@
+Pager usage is off.
+  papel  |       cluster_name        
+---------+---------------------------
+ nekkora | nekkora-regressao-isolada
+(1 row)
+
+DO
+BEGIN
+INSERT 0 4
+ALTER TABLE
+ALTER TABLE
+INSERT 0 2
+INSERT 0 1
+INSERT 0 3
+INSERT 0 2
+SET CONSTRAINTS
+ALTER TABLE
+ALTER TABLE
+COMMIT
+             marker             |        clock_timestamp        
+--------------------------------+-------------------------------
+ preparacao historica committed | 2026-09-25 18:12:09.579658+00
+(1 row)
+

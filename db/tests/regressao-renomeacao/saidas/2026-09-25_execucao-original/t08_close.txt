@@ -1,0 +1,20 @@
+Pager usage is off.
+           papel            |        clock_timestamp        
+----------------------------+-------------------------------
+ nekkora_retention_executor | 2026-09-25 17:56:57.402562+00
+(1 row)
+
+ close_usage_day 
+-----------------
+ 
+(1 row)
+
+ close_usage_day 
+-----------------
+ 
+(1 row)
+
+ERROR:  dia ja esta fechado (organization_id=11111111-1111-1111-1111-111111111111, resource_code=5, usage_date=2026-09-24)
+CONTEXT:  PL/pgSQL function public.close_usage_day(uuid,integer,date) line 44 at RAISE
+ERROR:  fechamento so processa dias estritamente passados (usage_date=2026-09-25, hoje=2026-09-25)
+CONTEXT:  PL/pgSQL function public.close_usage_day(uuid,integer,date) line 32 at RAISE

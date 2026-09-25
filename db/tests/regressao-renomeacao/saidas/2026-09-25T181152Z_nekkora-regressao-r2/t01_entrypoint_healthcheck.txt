@@ -1,0 +1,20 @@
+== healthcheck
+["CMD-SHELL","pg_isready -U nekkora -d nekkora"]
+
+== entrypoint (migrations aplicadas / erros)
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/001_initial.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/002_identity.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/003_access_control.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/004_workers_agents.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/005_automations_versions.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/006_executions.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/007_events_logs.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/008_parametros_secrets.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/009_agendamentos.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/010_recursos_limites_retencao.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/011_fechamento_expurgo.sql
+PostgreSQL init process complete; ready for start up.
+== mounts
+volume /var/lib/docker/volumes/nekkora-regressao-r2_nekkora_postgres_data/_data -> /var/lib/postgresql/data
+bind /run/desktop/mnt/host/c/Users/nicol/nekkora/nekkora-platform/db/migrations -> /docker-entrypoint-initdb.d
+

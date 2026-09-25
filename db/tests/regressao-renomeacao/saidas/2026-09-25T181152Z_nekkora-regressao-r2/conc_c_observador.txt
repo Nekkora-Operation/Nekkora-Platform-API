@@ -1,0 +1,17 @@
+Pager usage is off.
+         c_observacao          | pid |          usename           | state  | wait_event_type |  wait_event   |                                 query                                  
+-------------------------------+-----+----------------------------+--------+-----------------+---------------+------------------------------------------------------------------------
+ 2026-09-25 18:12:17.859735+00 | 251 | nekkora_app                | active | Timeout         | PgSleep       | SELECT pg_sleep(12);
+ 2026-09-25 18:12:17.85974+00  | 258 | nekkora_retention_executor | active | Lock            | transactionid | SELECT close_usage_day('11111111-1111-1111-1111-111111111111', 5, '202
+(2 rows)
+
+         bloqueado          | bloqueado_por | papel_bloqueador 
+----------------------------+---------------+------------------
+ nekkora_retention_executor | {251}         | nekkora_app
+(1 row)
+
+ status | records_count | bytes_count 
+--------+---------------+-------------
+      1 |             0 |           0
+(1 row)
+

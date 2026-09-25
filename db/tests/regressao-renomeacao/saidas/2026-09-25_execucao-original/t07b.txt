@@ -1,0 +1,35 @@
+Pager usage is off.
+  papel  
+---------
+ nekkora
+(1 row)
+
+BEGIN
+ERROR:  atualizacao nao permitida em execution_events (so a transicao de expurgo e aceita)
+CONTEXT:  PL/pgSQL function enforce_redaction_or_reject() line 51 at RAISE
+ROLLBACK
+BEGIN
+ERROR:  exclusao nao permitida em execution_events (historico preservado)
+CONTEXT:  PL/pgSQL function prevent_delete() line 3 at RAISE
+ROLLBACK
+BEGIN
+ERROR:  truncate nao permitido em execution_events (historico preservado)
+CONTEXT:  PL/pgSQL function prevent_truncate() line 3 at RAISE
+ROLLBACK
+BEGIN
+ERROR:  atualizacao nao permitida em logs (so a transicao de expurgo e aceita)
+CONTEXT:  PL/pgSQL function enforce_redaction_or_reject() line 51 at RAISE
+ROLLBACK
+BEGIN
+ERROR:  exclusao nao permitida em logs (historico preservado)
+CONTEXT:  PL/pgSQL function prevent_delete() line 3 at RAISE
+ROLLBACK
+BEGIN
+ERROR:  truncate nao permitido em logs (historico preservado)
+CONTEXT:  PL/pgSQL function prevent_truncate() line 3 at RAISE
+ROLLBACK
+ eventos | logs 
+---------+------
+       3 |    4
+(1 row)
+

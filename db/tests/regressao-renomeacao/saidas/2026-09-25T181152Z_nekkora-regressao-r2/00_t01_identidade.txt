@@ -1,0 +1,21 @@
+Pager usage is off.
+ current_database | current_user |       cluster_name        |                                         version                                          
+------------------+--------------+---------------------------+------------------------------------------------------------------------------------------
+ nekkora          | nekkora      | nekkora-regressao-isolada | PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+(1 row)
+
+ tabelas_public 
+----------------
+             45
+(1 row)
+
+ triggers_nao_internas | habilitadas 
+-----------------------+-------------
+                   131 |         131
+(1 row)
+
+ linhas_de_dados_iniciais 
+--------------------------
+                        0
+(1 row)
+

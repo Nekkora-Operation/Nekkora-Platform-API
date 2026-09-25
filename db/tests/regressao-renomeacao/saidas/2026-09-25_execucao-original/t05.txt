@@ -1,0 +1,58 @@
+Pager usage is off.
+  papel  
+---------
+ nekkora
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+ pg_sleep 
+----------
+ 
+(1 row)
+
+=== ocorrencia 1: materializa e processa
+INSERT 0 1
+ out_status | out_skip_reason |           out_execution_id           
+------------+-----------------+--------------------------------------
+          2 |                 | 8f70a66a-9979-4d50-bcb1-9717cf5c1b62
+(1 row)
+
+=== reprocessamento: deve devolver a mesma decisao, sem nova execucao
+ out_status | out_skip_reason |           out_execution_id           
+------------+-----------------+--------------------------------------
+          2 |                 | 8f70a66a-9979-4d50-bcb1-9717cf5c1b62
+(1 row)
+
+ status | skip_reason |             execution_id             | origin | exec_status |     authorized_by_membership_id      | execucoes_da_ocorrencia 
+--------+-------------+--------------------------------------+--------+-------------+--------------------------------------+-------------------------
+      2 |             | 8f70a66a-9979-4d50-bcb1-9717cf5c1b62 |      2 |           1 | 44444444-4444-4444-4444-444444444444 |                       1
+(1 row)
+
+=== ocorrencia 2 fica PENDING; suspensao
+ERROR:  duplicate key value violates unique constraint "automation_schedule_occurrences_schedule_id_scheduled_for_key"
+DETAIL:  Key (schedule_id, scheduled_for)=(abababab-0000-0000-0000-000000000001, 2026-09-25 17:45:00+00) already exists.
+ occurrence_id | status 
+---------------+--------
+(0 rows)
+
+UPDATE 1
+ occurrence_id | status | skip_reason | execution_id | decidida 
+---------------+--------+-------------+--------------+----------
+(0 rows)
+
+=== processar a pendente apos suspensao: devolve SKIPPED/SCHEDULE_SUSPENDED, sem execucao
+ERROR:  ocorrencia inexistente (occurrence_id=acacacac-0000-0000-0000-000000000002)
+CONTEXT:  PL/pgSQL function process_schedule_occurrence(uuid,boolean) line 25 at RAISE
+=== materializar com agenda suspensa: rejeitado
+ERROR:  agendamento suspenso nao aceita nova ocorrencia (schedule_id=abababab-0000-0000-0000-000000000001)
+CONTEXT:  PL/pgSQL function materialize_schedule_occurrence() line 20 at RAISE
+=== retomada nao ressuscita a ocorrencia suspensa
+UPDATE 1
+ERROR:  ocorrencia inexistente (occurrence_id=acacacac-0000-0000-0000-000000000002)
+CONTEXT:  PL/pgSQL function process_schedule_occurrence(uuid,boolean) line 25 at RAISE
+ execucoes_agendadas 
+---------------------
+                   1
+(1 row)
+

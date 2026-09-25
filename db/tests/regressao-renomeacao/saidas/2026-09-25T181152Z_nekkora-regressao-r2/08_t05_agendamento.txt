@@ -1,0 +1,31 @@
+Pager usage is off.
+  papel  
+---------
+ nekkora
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+ pg_sleep 
+----------
+ 
+(1 row)
+
+=== ocorrencia 1: materializa e processa
+INSERT 0 1
+ out_status | out_skip_reason |           out_execution_id           
+------------+-----------------+--------------------------------------
+          2 |                 | 9e493c56-b368-4dc8-b228-ba09b650806f
+(1 row)
+
+=== reprocessamento: deve devolver a mesma decisao, sem nova execucao
+ out_status | out_skip_reason |           out_execution_id           
+------------+-----------------+--------------------------------------
+          2 |                 | 9e493c56-b368-4dc8-b228-ba09b650806f
+(1 row)
+
+ status | skip_reason |             execution_id             | origin | exec_status |     authorized_by_membership_id      | execucoes_da_ocorrencia 
+--------+-------------+--------------------------------------+--------+-------------+--------------------------------------+-------------------------
+      2 |             | 9e493c56-b368-4dc8-b228-ba09b650806f |      2 |           1 | 44444444-4444-4444-4444-444444444444 |                       1
+(1 row)
+

@@ -1,0 +1,9 @@
+# Override usado somente pelo run.sh, junto com o docker-compose.yml da raiz do repositorio.
+# - container_name proprio (o da stack principal e fixo em nekkora-postgres);
+# - cluster_name marca o servidor como base isolada de regressao: o script de preparacao
+#   historica (15_t08_prep_2_historico.sql) recusa rodar sem ele.
+# Projeto, volume e porta vem do run.sh (-p, prefixo do volume, POSTGRES_PORT).
+services:
+  postgres:
+    container_name: ${REGRESSAO_CONTAINER:?defina REGRESSAO_CONTAINER (use o run.sh)}
+    command: ["postgres", "-c", "cluster_name=nekkora-regressao-isolada"]

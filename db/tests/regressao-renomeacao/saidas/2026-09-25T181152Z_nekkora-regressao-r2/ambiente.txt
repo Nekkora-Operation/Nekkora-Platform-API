@@ -1,0 +1,6 @@
+data_utc=2026-09-25T18:11:52Z
+commit=1964bd7
+arvore_limpa=nao
+projeto=nekkora-regressao-r2 container=nekkora-regressao-r2-postgres volume=nekkora-regressao-r2_nekkora_postgres_data porta=55433
+docker=29.7.2
+compose=5.3.1

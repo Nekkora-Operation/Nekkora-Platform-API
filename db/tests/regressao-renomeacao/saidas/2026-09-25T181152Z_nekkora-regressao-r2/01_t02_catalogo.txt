@@ -1,0 +1,16 @@
+Pager usage is off.
+                             src                             | count 
+-------------------------------------------------------------+-------
+ pg_proc                                                     |     0
+ pg_proc.proconfig                                           |     0
+ pg_description                                              |     0
+ pg_roles                                                    |     0
+ pg_database                                                 |     0
+ pg_class                                                    |     0
+ pg_constraint                                               |     0
+ pg_trigger                                                  |     0
+ pg_namespace                                                |     0
+ pg_db_role_setting                                          |     0
+ pg_policy (RLS, esperado 0 antes da migration de seguranca) |     0
+(11 rows)
+

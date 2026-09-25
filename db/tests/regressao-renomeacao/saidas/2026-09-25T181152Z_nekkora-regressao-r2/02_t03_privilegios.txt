@@ -1,0 +1,72 @@
+Pager usage is off.
+            rolname             | rolsuper | rolcanlogin | rolinherit | rolcreaterole | rolcreatedb | rolbypassrls 
+--------------------------------+----------+-------------+------------+---------------+-------------+--------------
+ nekkora                        | t        | t           | t          | t             | t           | t
+ nekkora_app                    | f        | t           | t          | f             | f           | f
+ nekkora_retention_executor     | f        | t           | t          | f             | f           | f
+ nekkora_retention_owner        | f        | f           | t          | f             | f           | f
+ nekkora_retention_tables_owner | f        | f           | t          | f             | f           | f
+(5 rows)
+
+ papel | membro_de 
+-------+-----------
+(0 rows)
+
+             owner              | relkind | count 
+--------------------------------+---------+-------
+ nekkora                        | i       |   123
+ nekkora                        | r       |    41
+ nekkora_retention_tables_owner | i       |    10
+ nekkora_retention_tables_owner | r       |     4
+(4 rows)
+
+                 relname                 |             owner              |                                                                                      relacl                                                                                      
+-----------------------------------------+--------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ execution_events                        | nekkora_retention_tables_owner | {nekkora_retention_tables_owner=arwdDxt/nekkora_retention_tables_owner,nekkora_app=ar/nekkora_retention_tables_owner,nekkora_retention_owner=r/nekkora_retention_tables_owner}
+ executions                              | nekkora                        | {nekkora=arwdDxt/nekkora,nekkora_app=r/nekkora}
+ logs                                    | nekkora_retention_tables_owner | {nekkora_retention_tables_owner=arwdDxt/nekkora_retention_tables_owner,nekkora_app=ar/nekkora_retention_tables_owner,nekkora_retention_owner=r/nekkora_retention_tables_owner}
+ organization_purge_runs                 | nekkora_retention_tables_owner | {nekkora_retention_tables_owner=arwdDxt/nekkora_retention_tables_owner,nekkora_retention_owner=ar/nekkora_retention_tables_owner}
+ organization_retention_policy_revisions | nekkora                        | {nekkora=arwdDxt/nekkora,nekkora_app=r/nekkora,nekkora_retention_owner=r/nekkora}
+ organization_usage_daily                | nekkora_retention_tables_owner | {nekkora_retention_tables_owner=arwdDxt/nekkora_retention_tables_owner,nekkora_app=ar/nekkora_retention_tables_owner,nekkora_retention_owner=arw/nekkora_retention_tables_owner}
+ worker_agent_assignments                | nekkora                        | {nekkora=arwdDxt/nekkora,nekkora_app=r/nekkora}
+(7 rows)
+
+          tabela          |      attname      |                           attacl                           
+--------------------------+-------------------+------------------------------------------------------------
+ execution_events         | payload           | {nekkora_retention_owner=w/nekkora_retention_tables_owner}
+ execution_events         | purge_run_id      | {nekkora_retention_owner=w/nekkora_retention_tables_owner}
+ execution_events         | purged_at         | {nekkora_retention_owner=w/nekkora_retention_tables_owner}
+ execution_events         | purged_by_user_id | {nekkora_retention_owner=w/nekkora_retention_tables_owner}
+ logs                     | payload           | {nekkora_retention_owner=w/nekkora_retention_tables_owner}
+ logs                     | purge_run_id      | {nekkora_retention_owner=w/nekkora_retention_tables_owner}
+ logs                     | purged_at         | {nekkora_retention_owner=w/nekkora_retention_tables_owner}
+ logs                     | purged_by_user_id | {nekkora_retention_owner=w/nekkora_retention_tables_owner}
+ organization_usage_daily | bytes_count       | {nekkora_app=w/nekkora_retention_tables_owner}
+ organization_usage_daily | consolidated_at   | {nekkora_app=w/nekkora_retention_tables_owner}
+ organization_usage_daily | records_count     | {nekkora_app=w/nekkora_retention_tables_owner}
+(11 rows)
+
+                      funcao                      |          owner          | prosecdef |              proconfig              |                                                  proacl                                                  
+--------------------------------------------------+-------------------------+-----------+-------------------------------------+----------------------------------------------------------------------------------------------------------
+ purge_expired_records(uuid,integer,uuid,integer) | nekkora_retention_owner | t         | {"search_path=pg_catalog, pg_temp"} | {nekkora_retention_owner=X/nekkora_retention_owner}
+ close_usage_day(uuid,integer,date)               | nekkora_retention_owner | t         | {"search_path=pg_catalog, pg_temp"} | {nekkora_retention_owner=X/nekkora_retention_owner,nekkora_retention_executor=X/nekkora_retention_owner}
+(2 rows)
+
+ nspname |  pg_get_userbyid  |                            nspacl                             
+---------+-------------------+---------------------------------------------------------------
+ public  | pg_database_owner | {pg_database_owner=UC/pg_database_owner,=U/pg_database_owner}
+(1 row)
+
+                  proname                   |   referencias   
+--------------------------------------------+-----------------
+ assert_single_category_per_transaction     | nekkora-literal
+ audit_automation_version_binding_delete    | nekkora-literal
+ audit_automation_version_parameter_binding | nekkora-literal
+ audit_automation_version_secret_binding    | nekkora-literal
+ audit_workspace_parameter_insert           | nekkora-literal
+ audit_workspace_parameter_update           | nekkora-literal
+ audit_workspace_parameter_value_insert     | nekkora-literal
+ audit_workspace_secret_insert              | nekkora-literal
+ audit_workspace_secret_update              | nekkora-literal
+(9 rows)
+

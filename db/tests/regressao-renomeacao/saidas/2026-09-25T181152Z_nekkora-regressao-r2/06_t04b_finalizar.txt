@@ -1,0 +1,32 @@
+Pager usage is off.
+  papel  
+---------
+ nekkora
+(1 row)
+
+UPDATE 1
+ status | status_reason | exit_code | ordem_ok 
+--------+---------------+-----------+----------
+      4 |             1 |         0 | t
+(1 row)
+
+ERROR:  execucao em estado terminal e imutavel (execution_id=dddddddd-0000-0000-0000-000000000001)
+CONTEXT:  PL/pgSQL function prevent_execution_mutation() line 4 at RAISE
+ERROR:  execucao em estado terminal e imutavel (execution_id=dddddddd-0000-0000-0000-000000000001)
+CONTEXT:  PL/pgSQL function prevent_execution_mutation() line 4 at RAISE
+INSERT 0 1
+ERROR:  transicao de status invalida (execution_id=dddddddd-0000-0000-0000-000000000002, 1 -> 3)
+CONTEXT:  PL/pgSQL function prevent_execution_mutation() line 37 at RAISE
+UPDATE 1
+UPDATE 1
+            assignment_id             | status | encerrada 
+--------------------------------------+--------+-----------
+ cccccccc-cccc-cccc-cccc-ccccccccccc3 |      2 | t
+(1 row)
+
+             execution_id             | status | status_reason 
+--------------------------------------+--------+---------------
+ dddddddd-0000-0000-0000-000000000001 |      4 |             1
+ dddddddd-0000-0000-0000-000000000002 |      6 |             4
+(2 rows)
+

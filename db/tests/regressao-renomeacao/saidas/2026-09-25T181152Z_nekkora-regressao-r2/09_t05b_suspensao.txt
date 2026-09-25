@@ -1,0 +1,51 @@
+Pager usage is off.
+  papel  
+---------
+ nekkora
+(1 row)
+
+ status | resumed_at 
+--------+------------
+      1 | 
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+=== ocorrencia 2 fica PENDING
+INSERT 0 1
+            occurrence_id             | status 
+--------------------------------------+--------
+ acacacac-0000-0000-0000-000000000002 |      1
+(1 row)
+
+=== suspensao com a ocorrencia pendente
+UPDATE 1
+            occurrence_id             | status | skip_reason | execution_id | decidida 
+--------------------------------------+--------+-------------+--------------+----------
+ acacacac-0000-0000-0000-000000000002 |      3 |           3 |              | t
+(1 row)
+
+=== processar a pendente apos suspensao: devolve SKIPPED/SCHEDULE_SUSPENDED, sem execucao
+ out_status | out_skip_reason | out_execution_id 
+------------+-----------------+------------------
+          3 |               3 | 
+(1 row)
+
+=== retomada nao ressuscita a ocorrencia suspensa
+UPDATE 1
+ out_status | out_skip_reason | out_execution_id 
+------------+-----------------+------------------
+          3 |               3 | 
+(1 row)
+
+=== ocorrencia decidida e imutavel
+ERROR:  ocorrencia decidida e imutavel (occurrence_id=acacacac-0000-0000-0000-000000000002)
+CONTEXT:  PL/pgSQL function prevent_occurrence_mutation() line 4 at RAISE
+ execucoes_agendadas | ocorrencias_distintas 
+---------------------+-----------------------
+                   1 |                     1
+(1 row)
+
