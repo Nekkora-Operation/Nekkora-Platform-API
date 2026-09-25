@@ -12,6 +12,9 @@
 #      atual: rotulo com.docker.compose.project igual ao projeto do caso E criacao posterior ao
 #      inicio do caso. Qualquer outro recurso com o mesmo nome e deixado intacto (e reportado).
 #
+# Limitacao: EXECUCAO UNICA. Rotulo + data de criacao nao provam autoria exclusiva se dois executa.sh
+# rodarem ao mesmo tempo com os mesmos nomes; paralelismo exigira um identificador exclusivo por execucao.
+#
 # Uso: db/tests/seguranca-012/testes-do-runner/executa.sh
 set -uo pipefail
 AQUI="$(cd "$(dirname "$0")" && pwd)"

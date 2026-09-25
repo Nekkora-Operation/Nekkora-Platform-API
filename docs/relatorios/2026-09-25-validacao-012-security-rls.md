@@ -413,6 +413,8 @@ Todos os 7 casos produziram falha inequívoca (`falhas=0`).
 
 A função de propriedade foi conferida isoladamente contra a stack `nekkora-seg-012c`, com rótulo errado, rótulo certo e criação anterior ao início: decidiu corretamente nos três casos.
 
+**Limitação atual — execução única:** rótulo de projeto + data de criação provam que o recurso foi criado *depois do início do caso* e *para aquele projeto*, mas **não** provam autoria exclusiva se dois `executa.sh` rodarem **ao mesmo tempo** com os mesmos nomes fixos. Nesse caso, um poderia considerar como seus os recursos do outro. O runner deve ser executado uma vez por vez. Para suportar paralelismo, será necessário um identificador exclusivo por execução (por exemplo, sufixo aleatório no nome do projeto ou um rótulo próprio da execução, verificado antes de agir).
+
 **Teste direcionado** (`testes-do-runner/saidas-protecao/`):
 - Preparados um volume `nekkora-mut-m1_nekkora_postgres_data`, com arquivo marcador, e um container `nekkora-mut-m4a-postgres` (criado, nunca iniciado).
 - O runner recusou com exit 2 e listou os dois.
@@ -421,3 +423,5 @@ A função de propriedade foi conferida isoladamente contra a stack `nekkora-seg
 - A bateria SQL não foi repetida: a mudança não toca a migration nem os scripts da suíte.
 
 **Situação:** os três achados da primeira revisão foram considerados encerrados pelo revisor, conforme a cobertura apresentada. Este achado operacional foi corrigido e testado. As pendências do §7 (fechamento concorrente com inserção não confirmada, virada UTC, infraestrutura, ativação do expurgo) seguem separadas.
+
+**Encerramento da revisão:** o revisor encerrou a revisão da 012 e da correção operacional do runner dentro da cobertura documentada. A base foi a inspeção do pacote e das saídas; o revisor não reexecutou os testes Docker. Não foi pedida nova bateria SQL nem nova recriação da base principal. A limitação de execução única do runner de testes deliberados ficou registrada acima.

@@ -85,3 +85,4 @@ Os ganchos `TESTE_MUTACAO` e `TESTE_FORCAR_FALHA_A` do `run.sh` existem só para
 - Se **qualquer** container, volume ou rede com esses nomes já existir, o script aborta antes de executar qualquer caso (exit 2) e não cria, altera nem remove nada. A mesma checagem é repetida antes de cada caso.
 - Verificação de invariantes e limpeza só atuam sobre recursos **comprovadamente criados pelo caso atual**: rótulo `com.docker.compose.project` do caso **e** criação posterior ao início do caso. Qualquer outro recurso é preservado e reportado.
 - Teste direcionado: `testes-do-runner/saidas-protecao/`.
+- **Limitação:** execução única. Rótulo + data de criação não provam autoria exclusiva se dois `executa.sh` rodarem ao mesmo tempo com os mesmos nomes; paralelismo exigirá um identificador exclusivo por execução.
