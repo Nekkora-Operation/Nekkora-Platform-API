@@ -1,0 +1,51 @@
+== identificacao antes da recriacao (2026-09-25T21:03:27Z)
+commit=44a4d44 branch=feat/012-security-rls
+NAME                STATUS              CONFIG FILES
+nekkora-platform    running(1)          C:\Users\nicol\nekkora\nekkora-platform\docker-compose.yml
+nekkora-seg-012     running(1)          C:\Users\nicol\nekkora\nekkora-platform\docker-compose.yml,C:\Users\nicol\nekkora\nekkora-platform\db\tests\seguranca-012\compose.teste.yml
+nekkora-seg-012b    running(1)          C:\Users\nicol\nekkora\nekkora-platform\docker-compose.yml,C:\Users\nicol\nekkora\nekkora-platform\db\tests\seguranca-012\compose.teste.yml
+container=/nekkora-postgres id=3fa66b5fc4403c56496646f137b863378956218ca5b341bbec5b7006e68fcc2e projeto=nekkora-platform config=C:\Users\nicol\nekkora\nekkora-platform\docker-compose.yml
+volume /var/lib/docker/volumes/nekkora-platform_nekkora_postgres_data/_data -> /var/lib/postgresql/data
+bind /run/desktop/mnt/host/c/Users/nicol/nekkora/nekkora-platform/db/migrations -> /docker-entrypoint-initdb.d
+
+volume=nekkora-platform_nekkora_postgres_data criado=2026-09-25T17:08:56Z projeto=nekkora-platform
+usuarios do volume: nekkora-postgres
+system_identifier=7689521054829649955
+organizations=2
+roles=nekkora,nekkora_app,nekkora_retention_executor,nekkora_retention_owner,nekkora_retention_tables_owner
+== recriacao (somente container nekkora-postgres e volume nekkora-platform_nekkora_postgres_data)
+nekkora-postgres
+nekkora-platform_nekkora_postgres_data
+ Volume nekkora-platform_nekkora_postgres_data Creating 
+ Volume nekkora-platform_nekkora_postgres_data Created 
+ Container nekkora-postgres Creating 
+ Container nekkora-postgres Created 
+ Container nekkora-postgres Starting 
+ Container nekkora-postgres Started 
+== depois
+container=/nekkora-postgres id=3c612d040167a9e3b6d0adf93b0098c5ca1249dafcec35856dcfe8b49f99875c projeto=nekkora-platform saude=healthy
+volume /var/lib/docker/volumes/nekkora-platform_nekkora_postgres_data/_data -> /var/lib/postgresql/data
+bind /run/desktop/mnt/host/c/Users/nicol/nekkora/nekkora-platform/db/migrations -> /docker-entrypoint-initdb.d
+
+volume=nekkora-platform_nekkora_postgres_data criado=2026-09-25T21:03:29Z projeto=nekkora-platform
+0 /var/run/postgresql:5432 - accepting connections
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/001_initial.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/002_identity.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/003_access_control.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/004_workers_agents.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/005_automations_versions.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/006_executions.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/007_events_logs.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/008_parametros_secrets.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/009_agendamentos.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/010_recursos_limites_retencao.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/011_fechamento_expurgo.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/012_security_rls.sql
+PostgreSQL init process complete; ready for start up.
+NAME                STATUS              CONFIG FILES
+nekkora-platform    running(1)          C:\Users\nicol\nekkora\nekkora-platform\docker-compose.yml
+nekkora-seg-012     running(1)          C:\Users\nicol\nekkora\nekkora-platform\docker-compose.yml,C:\Users\nicol\nekkora\nekkora-platform\db\tests\seguranca-012\compose.teste.yml
+nekkora-seg-012b    running(1)          C:\Users\nicol\nekkora\nekkora-platform\docker-compose.yml,C:\Users\nicol\nekkora\nekkora-platform\db\tests\seguranca-012\compose.teste.yml
+nekkora-platform_nekkora_postgres_data
+nekkora-seg-012_nekkora_postgres_data
+nekkora-seg-012b_nekkora_postgres_data

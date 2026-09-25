@@ -49,3 +49,9 @@ Não rode perto de 00:00 UTC.
 
 - `saidas/2026-09-25T184124Z_nekkora-seg-012_INVALIDA-fixture-s02/`: primeira execução, **inválida**. O `scheduled_for` truncado ao segundo caiu antes do `resumed_at`, S05/S06 falharam por variável não definida, e o runner da época não detectou. Mantida como evidência do defeito que levou às travas atuais.
 - `saidas/<timestamp>_<projeto>/`: execuções válidas.
+
+## Verificação de instalação limpa (`instalacao-limpa/`)
+
+`verifica.sh <container> <org_interna_uuid> <staff_uuid>` roda, numa base **recém-instalada** (001–012 pelo entrypoint e procedimento inicial de `db/bootstrap` já aplicado), uma verificação curta com os papéis reais: catálogo × matriz, `provision_organization`, fluxo permitido do `platform`, isolamento frente à organização interna, contexto ausente e bootstrap de ORG_ADMIN. **Cria dados** (uma "Organização de Verificação"): use só em base nova, nunca com dados reais.
+
+`instalacao-limpa/saidas/`: recriação da base principal local em 2026-09-25 (identificação do projeto e do volume antes e depois, bootstrap, verificação). Valida **instalação limpa**; a atualização de uma base populada não foi exercitada.

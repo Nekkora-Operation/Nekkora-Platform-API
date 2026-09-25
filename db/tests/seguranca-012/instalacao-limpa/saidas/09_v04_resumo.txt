@@ -1,0 +1,12 @@
+Pager usage is off.
+           organization_id            |            name            | status | limites | politicas_retencao | usuarios | workspaces | bootstrap_org_admin | eventos_provisionamento 
+--------------------------------------+----------------------------+--------+---------+--------------------+----------+------------+---------------------+-------------------------
+ df125fb7-4f94-460e-b14c-9e494d05cf4f | Nekkora                    |      1 |       5 |                  0 |        1 |          0 |                   0 |                       0
+ 15c4541c-e137-45e4-84d6-648109249aba | Organizacao de Verificacao |      1 |       5 |                  0 |        1 |          1 |                   1 |                       1
+(2 rows)
+
+ nekkora_app | tabelas_rls_force | politicas | triggers_habilitadas | cluster_name 
+-------------+-------------------+-----------+----------------------+--------------
+           0 |                42 |        81 | 131/131              | 
+(1 row)
+

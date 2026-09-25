@@ -335,4 +335,33 @@ Do ponto de vista do autor, a 012 está **apta para revisão independente**, com
 
 ## 9. Recriação da base principal (instalação limpa)
 
-*A preencher depois do commit dedicado (§1.1): identificação exata do projeto e do volume, recriação só dessa base, aplicação de 001–012, procedimento inicial e verificação curta com os papéis reais.*
+Executada depois do commit dedicado **`44a4d44`** (branch `feat/012-security-rls`), por decisão do responsável: a base local é descartável, e os dados antigos tinham sido montados fora do fluxo de provisionamento. Evidências em `db/tests/seguranca-012/instalacao-limpa/saidas/`.
+
+**Identificação antes de agir** (`01_recriacao.txt`): projeto Compose `nekkora-platform`, container `nekkora-postgres` (`3fa66b5f…`), volume `nekkora-platform_nekkora_postgres_data` (criado 17:08:56Z), usado **somente** por esse container. Estado antigo: 001–011, `nekkora_app` presente, 2 organizações.
+
+**Recriação:** `docker rm -f nekkora-postgres`, `docker volume rm nekkora-platform_nekkora_postgres_data` e `docker compose up -d` a partir do repositório. Nada além desses dois recursos foi removido: a rede do projeto e as stacks `nekkora-seg-012`/`012b` ficaram intactas, e não houve `down -v`. Resultado: container `3c612d04…`, mesmo projeto e mesmo nome de volume (recriado às 21:03:29Z), bind das migrations na pasta atual, healthy (`accepting connections`), **001–012 aplicadas pelo entrypoint sem erro**.
+
+**Procedimento inicial** (`02_ids.txt`, `03_bootstrap.txt`): `db/bootstrap/001_organizacao_interna_nekkora.sql` pelo executor administrativo, com ids novos:
+- organização interna `df125fb7-4f94-460e-b14c-9e494d05cf4f` ("Nekkora");
+- staff `f03286af-1506-4cb4-9d00-6cace2c2ea44` (`staff@nekkora.local`);
+- limites `(1,FINITE,0)`, `(2,FINITE,0)`, `(3,FINITE,0)`, `(4,UNLIMITED)`, `(5,UNLIMITED)`.
+
+Uma transação, exit 0: 1 organização, 1 usuário, 5 limites.
+
+**Verificação curta com os papéis reais** (`verifica.sh`; saídas `05`–`09`):
+
+| Verificação | Papel | Resultado |
+|---|---|---|
+| Catálogo × matriz (mesmo script da suíte) | `nekkora` | 7 diferenças, todas vazias |
+| Acesso direto a `organizations` | provisioning | Negado (privilégio) |
+| `provision_organization` com 5 limites | provisioning | Organização de verificação `15c4541c-…` criada com 5 limites, sem política de retenção |
+| Array com 4 elementos | provisioning | Rejeitado antes de qualquer `INSERT` |
+| Fluxo permitido no contexto de V: usuário, vínculo, credencial, workspace | platform | Aceito; o contexto vê só V (1/1/1/1) |
+| Contexto da organização interna | platform | Vê só a interna; workspace e credencial de V invisíveis; `UPDATE` em V → 0 linhas; `INSERT` em V → `WITH CHECK` |
+| Sem contexto, mesma conexão (PID 221) | platform | Contexto vazio, 0 linhas; `INSERT` → `WITH CHECK` |
+| `INSERT organizations`; `provision_first_org_admin` | platform | Negados (privilégio) |
+| Bootstrap de ORG_ADMIN com responsável nulo, direto | platform | Rejeitado pela trigger (`current_user=nekkora_platform`) |
+| `provision_first_org_admin(V)`; repetição | provisioning | Atribuído (1 atribuição + 1 evento); repetição recusada |
+| Estado final | `nekkora` | 2 organizações; `nekkora_app` ausente; 42 tabelas com RLS `ENABLE`+`FORCE`; 81 políticas; triggers 131/131 |
+
+**Alcance:** isto valida a **instalação limpa** da 012 na base principal. **Não** comprova a atualização de uma base já populada (§7, item 1): esse cenário **não foi exercitado**. A base principal agora contém a organização interna e a organização de verificação criadas acima.

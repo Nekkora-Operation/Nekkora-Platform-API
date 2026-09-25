@@ -1,0 +1,52 @@
+Pager usage is off.
+      papel       | pid 
+------------------+-----
+ nekkora_platform | 221
+(1 row)
+
+=== fluxo permitido: usuario, vinculo, credencial e workspace no contexto da organizacao V
+BEGIN
+SET
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+ orgs | users | credenciais | workspaces |              org_vista               
+------+-------+-------------+------------+--------------------------------------
+    1 |     1 |           1 |          1 | 15c4541c-e137-45e4-84d6-648109249aba
+(1 row)
+
+COMMIT
+=== isolamento: contexto da organizacao interna nao ve nem altera V
+BEGIN
+SET
+ orgs |              org_vista               | users_da_interna | ws_v_visivel | credencial_v_visivel 
+------+--------------------------------------+------------------+--------------+----------------------
+    1 | df125fb7-4f94-460e-b14c-9e494d05cf4f |                1 |            0 |                    0
+(1 row)
+
+UPDATE 0
+COMMIT
+BEGIN
+SET
+ERROR:  new row violates row-level security policy for table "workspaces"
+ROLLBACK
+=== sem contexto (mesma conexao, transacao seguinte)
+ mesmo_pid | contexto | orgs | workspaces 
+-----------+----------+------+------------
+       221 |          |    0 |          0
+(1 row)
+
+=== operacoes nao concedidas ao platform
+ERROR:  new row violates row-level security policy for table "workspaces"
+BEGIN
+SET
+ERROR:  permission denied for table organizations
+ROLLBACK
+=== bootstrap de ORG_ADMIN fora da funcao: rejeitado pela trigger
+BEGIN
+ERROR:  permission denied for function provision_first_org_admin
+SET
+ERROR:  bootstrap sem responsavel so e permitido via provision_first_org_admin (current_user=nekkora_platform)
+CONTEXT:  PL/pgSQL function enforce_org_role_assignment_bootstrap() line 5 at RAISE
+ROLLBACK

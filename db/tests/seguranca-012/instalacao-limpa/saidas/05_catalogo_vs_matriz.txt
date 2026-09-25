@@ -1,0 +1,137 @@
+Pager usage is off.
+=== papeis
+            rolname             | rolsuper | rolcanlogin | rolinherit | rolcreaterole | rolcreatedb | rolreplication | rolbypassrls 
+--------------------------------+----------+-------------+------------+---------------+-------------+----------------+--------------
+ nekkora                        | t        | t           | t          | t             | t           | t              | t
+ nekkora_ingestion              | f        | t           | t          | f             | f           | f              | f
+ nekkora_platform               | f        | t           | t          | f             | f           | f              | f
+ nekkora_provisioning           | f        | t           | t          | f             | f           | f              | f
+ nekkora_provisioning_owner     | f        | f           | t          | f             | f           | f              | f
+ nekkora_retention_executor     | f        | t           | t          | f             | f           | f              | f
+ nekkora_retention_owner        | f        | f           | t          | f             | f           | f              | f
+ nekkora_retention_tables_owner | f        | f           | t          | f             | f           | f              | f
+ nekkora_scheduler              | f        | t           | t          | f             | f           | f              | f
+ nekkora_scheduler_owner        | f        | f           | t          | f             | f           | f              | f
+(10 rows)
+
+ memberships_entre_papeis 
+--------------------------
+                        0
+(1 row)
+
+ nekkora_app_existe 
+--------------------
+                  0
+(1 row)
+
+CREATE TABLE
+INSERT 0 145
+SELECT 145
+=== tabela: esperado e nao instalado (deve ser vazio)
+ papel | tabela | priv 
+-------+--------+------
+(0 rows)
+
+=== tabela: instalado e nao esperado (deve ser vazio)
+ papel | tabela | priv 
+-------+--------+------
+(0 rows)
+
+CREATE TABLE
+INSERT 0 15
+SELECT 15
+=== coluna: esperado e nao instalado (deve ser vazio)
+ papel | tabela | coluna | priv 
+-------+--------+--------+------
+(0 rows)
+
+=== coluna: instalado e nao esperado (deve ser vazio)
+ papel | tabela | coluna | priv 
+-------+--------+--------+------
+(0 rows)
+
+CREATE TABLE
+INSERT 0 12
+SELECT 12
+=== funcao: esperado e nao instalado (deve ser vazio)
+ funcao | owner | secdef | execute_para 
+--------+-------+--------+--------------
+(0 rows)
+
+=== funcao: instalado e nao esperado (deve ser vazio)
+ funcao | owner | secdef | execute_para 
+--------+-------+--------+--------------
+(0 rows)
+
+=== funcoes privilegiadas: search_path e EXECUTE de PUBLIC
+                               funcao                                |                  proconfig                  | execute_public 
+---------------------------------------------------------------------+---------------------------------------------+----------------
+ process_schedule_occurrence(uuid,boolean)                           | {"search_path=pg_catalog, public, pg_temp"} | f
+ assign_received_at_and_lock_barrier(uuid,integer)                   | {"search_path=pg_catalog, pg_temp"}         | f
+ close_usage_day(uuid,integer,date)                                  | {"search_path=pg_catalog, pg_temp"}         | f
+ purge_expired_records(uuid,integer,uuid,integer)                    | {"search_path=pg_catalog, pg_temp"}         | f
+ reconsolidate_usage_day(uuid,integer,date)                          | {"search_path=pg_catalog, pg_temp"}         | f
+ process_schedule_occurrence(uuid,uuid,boolean)                      | {"search_path=pg_catalog, pg_temp"}         | f
+ create_schedule_occurrence(uuid,uuid,uuid,timestamp with time zone) | {"search_path=pg_catalog, pg_temp"}         | f
+ set_schedule_status(uuid,uuid,smallint,uuid)                        | {"search_path=pg_catalog, pg_temp"}         | f
+ provision_organization(uuid,text,text,uuid,resource_limit_input[])  | {"search_path=pg_catalog, pg_temp"}         | f
+ provision_first_org_admin(uuid,uuid,uuid,text,uuid)                 | {"search_path=pg_catalog, pg_temp"}         | f
+ provision_resource_limit(uuid,integer,smallint,bigint,uuid)         | {"search_path=pg_catalog, pg_temp"}         | f
+ provision_retention_policy(uuid,integer,smallint,integer,uuid)      | {"search_path=pg_catalog, pg_temp"}         | f
+(12 rows)
+
+=== funcoes invoker de public sem search_path fixo (so as sql puras de validacao, sem acesso a tabela)
+           proname            
+------------------------------
+ is_valid_command_contract
+ is_valid_cron_expression
+ is_valid_event_payload
+ is_valid_log_payload
+ is_valid_relative_entrypoint
+(5 rows)
+
+=== RLS: tabelas de public por situacao
+     situacao     | tabelas |               sem_rls                
+------------------+---------+--------------------------------------
+ RLS enable+force |      42 | 
+ sem RLS          |       3 | permissions, role_permissions, roles
+(2 rows)
+
+=== RLS: politicas por nome e papeis (tenant diretas: 39 x 2; derivadas: 3 x 1)
+         polname         |                                   papeis                                   | polcmd | polpermissive | tabelas 
+-------------------------+----------------------------------------------------------------------------+--------+---------------+---------
+ tenant_function_context | nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner | *      | t             |      39
+ tenant_request_context  | nekkora_ingestion,nekkora_platform                                         | *      | t             |      39
+ tenant_request_context  | nekkora_platform                                                           | *      | t             |       3
+(3 rows)
+
+=== RLS: tabela com organization_id sem as duas politicas (deve ser vazio)
+ relname 
+---------
+(0 rows)
+
+=== exemplo de politica instalada (workspaces)
+         polname         |                                               using_expr                                                |                                               check_expr                                                
+-------------------------+---------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------
+ tenant_function_context | (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) | (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+ tenant_request_context  | (organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)    | (organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+(2 rows)
+
+        polname         |                                                                          using_expr                                                                           
+------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------
+ tenant_request_context | (EXISTS ( SELECT 1                                                                                                                                           +
+                        |    FROM users u                                                                                                                                              +
+                        |   WHERE ((u.user_id = user_credentials.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid))))
+(1 row)
+
+=== schema public e privilegios padrao
+ nspname |                            nspacl                             
+---------+---------------------------------------------------------------
+ public  | {pg_database_owner=UC/pg_database_owner,=U/pg_database_owner}
+(1 row)
+
+  papel  | defaclnamespace | defaclobjtype |      defaclacl      
+---------+-----------------+---------------+---------------------
+ nekkora |               0 | f             | {nekkora=X/nekkora}
+(1 row)
+

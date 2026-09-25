@@ -1,0 +1,17 @@
+Pager usage is off.
+        papel         
+----------------------
+ nekkora_provisioning
+(1 row)
+
+=== acesso direto negado
+ERROR:  permission denied for table organizations
+=== provision_organization com cinco limites explicitos
+          organizacao_criada          
+--------------------------------------
+ 15c4541c-e137-45e4-84d6-648109249aba
+(1 row)
+
+=== array invalido rejeitado antes de qualquer INSERT
+ERROR:  p_resource_limits deve ter exatamente 5 elementos (recebido=4)
+CONTEXT:  PL/pgSQL function public.provision_organization(uuid,text,text,uuid,public.resource_limit_input[]) line 16 at RAISE

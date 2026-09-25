@@ -1,0 +1,15 @@
+Pager usage is off.
+BEGIN
+ org_id_ok | org_name_ok | staff_id_ok | staff_email_ok | staff_name_ok | limites_ok 
+-----------+-------------+-------------+----------------+---------------+------------
+ t         | t           | t           | t              | t             | t
+(1 row)
+
+DO
+COMMIT
+           organization_id            |  name   | status | usuarios | limites 
+--------------------------------------+---------+--------+----------+---------
+ df125fb7-4f94-460e-b14c-9e494d05cf4f | Nekkora |      1 |        1 |       5
+(1 row)
+
+exit=0
