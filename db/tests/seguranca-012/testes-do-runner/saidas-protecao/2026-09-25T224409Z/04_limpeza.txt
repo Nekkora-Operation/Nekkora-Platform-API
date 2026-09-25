@@ -1,1 +1,3 @@
 recursos do teste removidos; restantes nekkora-mut-*: 0 containers, 0 volumes
+
+Correcao posterior: o docker rm do container conflitante (imagem postgres, que declara VOLUME) deixou um volume anonimo (9dc8df8dd22a4adfd623ed98cf8f4ea1e8a93a794e52abdd775fd13bcd7199d8, criado 22:44:10Z, vazio, sem uso). Ele foi removido depois, na limpeza das stacks de revisao. O "0 volumes" acima contava so volumes nomeados nekkora-mut-*.
