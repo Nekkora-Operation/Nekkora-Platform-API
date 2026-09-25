@@ -13,7 +13,7 @@
 | Repositório | `C:\Users\nicol\nekkora\nekkora-platform`, commit base `df6640d` (`main` = `origin/main` = `Nekkora-Operation/Nekkora-Platform-API`) |
 | Arquivos | `db/migrations/012_security_rls.sql`; `db/bootstrap/001_organizacao_interna_nekkora.sql` (procedimento inicial, §6.2); `db/tests/seguranca-012/` (runner, 25 scripts, README, saídas); nota de escopo no README de `db/tests/regressao-renomeacao/`; este relatório em `docs/relatorios/`. Commit dedicado no branch `feat/012-security-rls` (§1.1) |
 | Encerramento da regressão | Testes e relatório já na `main`, pelo responsável. As duas stacks descartáveis (`nekkora-regressao`, `nekkora-regressao-r2`) foram removidas depois de confirmar as 49 saídas em `origin/main`: container, volume e rede removidos um a um, pelo nome exato, sem `down -v` |
-| Execuções da suíte (todas preservadas em `db/tests/seguranca-012/saidas/`) | **`2026-09-25T191906Z_nekkora-seg-012b`**: execução de referência, com o procedimento inicial de `db/bootstrap` (organização interna + staff + 5 limites). Stack `nekkora-seg-012b`, porta 55451. **`2026-09-25T184518Z_nekkora-seg-012`**: válida, anterior à criação do bootstrap (seed sem limites para a organização interna); resultados idênticos por arquivo. Stack `nekkora-seg-012`, porta 55450, mantida para revisão. **`2026-09-25T184124Z_nekkora-seg-012_INVALIDA-fixture-s02`**: **inválida**, preservada como evidência do defeito de fixture (§6.1). Todas com 001–012 pelo entrypoint, PostgreSQL 16.15, `cluster_name=nekkora-regressao-isolada` |
+| Execuções da suíte (todas preservadas em `db/tests/seguranca-012/saidas/`) | **`2026-09-25T223250Z_nekkora-seg-012c`**: **execução de referência atual**, com a suíte corrigida após a revisão (asserções que abortam, §10) e a 012 com os invariantes ampliados; stack `nekkora-seg-012c`, porta 55452. **`2026-09-25T191906Z_nekkora-seg-012b`**: referência anterior à revisão, com o procedimento inicial de `db/bootstrap` (organização interna + staff + 5 limites). Stack `nekkora-seg-012b`, porta 55451. **`2026-09-25T184518Z_nekkora-seg-012`**: válida, anterior à criação do bootstrap (seed sem limites para a organização interna); resultados idênticos por arquivo. Stack `nekkora-seg-012`, porta 55450, mantida para revisão. **`2026-09-25T184124Z_nekkora-seg-012_INVALIDA-fixture-s02`**: **inválida**, preservada como evidência do defeito de fixture (§6.1). Todas com 001–012 pelo entrypoint, PostgreSQL 16.15, `cluster_name=nekkora-regressao-isolada` |
 | Stack principal | Recriada do zero **depois** do commit da 012 (instalação limpa, §9). Antes disso, continuava em 001–011 |
 | Ambiente de desenvolvimento | `nekkora-seg-dev` (porta 55440), usado para iterar e removido ao final. Nenhuma evidência deste relatório vem dele |
 
@@ -55,7 +55,8 @@ Nada foi enviado ao remoto. O hash deste commit fica registrado no §9, no commi
 11. **Invariantes verificados ao final da própria migration:**
     - nenhum `nekkora_*` privilegiado;
     - nenhum papel `LOGIN` dono de objeto;
-    - nenhuma membership entre papéis;
+    - nenhuma membership envolvendo os 9 papéis protegidos (serviços e owners), **em qualquer sentido e com qualquer outro papel** (ampliado na revisão, §10);
+    - nenhum papel protegido com `CREATE` **efetivo** no schema `public` ou no banco (acrescentado na revisão, §10);
     - todo `SECURITY DEFINER` com `search_path` fixo e sem `EXECUTE` público;
     - `CREATE` em `public` fora de `PUBLIC`;
     - `nekkora_app` inexistente.
@@ -159,7 +160,7 @@ Totais: 39 diretas × 2 políticas + 3 derivadas × 1 = **81 políticas**; 42 ta
 
 ## 4. Resultados por cenário (execução válida)
 
-Números citados abaixo: execução de referência `…T191906Z_nekkora-seg-012b`, idêntica por arquivo à `…T184518Z_nekkora-seg-012`. Os horários de concorrência do §5 são da `…T184518Z`.
+Números citados abaixo: execução `…T191906Z_nekkora-seg-012b`. A execução de referência atual, `…T223250Z_nekkora-seg-012c`, verifica os mesmos cenários **por asserção** (§10), com os mesmos valores. A `012b` é idêntica por arquivo à `…T184518Z_nekkora-seg-012`. Os horários de concorrência do §5 são da `…T184518Z`.
 
 Os papéis conectam diretamente (`psql -U <papel>`). "Admin" = `nekkora`, usado só para seed, fixture histórica e leitura de catálogo/estado.
 
@@ -367,3 +368,35 @@ Uma transação, exit 0: 1 organização, 1 usuário, 5 limites.
 | Estado final | `nekkora` | 2 organizações; `nekkora_app` ausente; 42 tabelas com RLS `ENABLE`+`FORCE`; 81 políticas; triggers 131/131 |
 
 **Alcance:** isto valida a **instalação limpa** da 012 na base principal. **Não** comprova a atualização de uma base já populada (§7, item 1): esse cenário **não foi exercitado**. A base principal agora contém a organização interna e a organização de verificação criadas acima.
+
+## 10. Revisão da 012: achados e correções
+
+Revisão por inspeção estática do código e das evidências (sem executar 001–012), mais a reprodução local do comportamento de `wait`. **Três achados concretos**, todos na capacidade de **detectar** regressões. A revisão não encontrou nas saídas evidência de concessões indevidas existentes.
+
+| # | Achado | Correção |
+|---|---|---|
+| 1 | O runner podia informar sucesso com resultados incorretos: as diferenças do catálogo, as contagens, as comparações e muitas operações negativas eram só **impressas**. A busca final por erro de sintaxe não detectava, por exemplo, uma operação proibida que tivesse sucesso | Helper `sql/_asserts.inc.sql`, prefixado a todo script na mesma sessão, com `ON_ERROR_STOP` para a suíte inteira. `pg_temp.afirma` cobre contagens, igualdades e estados; `pg_temp.espera_erro(sql, SQLSTATE, trecho)` exige que a operação falhe com o SQLSTATE e a mensagem esperados. Todos os scripts reescritos: **139 afirmações e 87 rejeições conferidas** na execução de referência. O `00` passou a comparar também as 81 políticas (papéis, comando, tipo, `USING` = `WITH CHECK`, expressão exata), a classificação das 45 tabelas e o privilégio padrão, e a considerar **qualquer** beneficiário de `GRANT` (antes, só `nekkora_*`) |
+| 2 | `wait "$PA" "$PB"` devolve só o código do último processo e escondia a falha da sessão A (reproduzido pelo revisor: A = 7, B = 0, `wait` = 0) | Cada sessão é aguardada e verificada **separadamente** (`aguarda_sessoes`), com os códigos registrados em `sessoes_concorrentes.txt`. O observador de cada corrida passou a **afirmar** que a sessão certa estava em espera de lock, bloqueada pela outra. Os ids devolvidos a A e B são comparados. O mesmo defeito, presente no `run.sh` da regressão da renomeação, também foi corrigido |
+| 3 | Os invariantes da seção 15 verificavam menos que o desenho: a membership só olhava o membro com prefixo `nekkora_` (um `GRANT nekkora_scheduler_owner TO outro_servico` passaria), e o `CREATE` só era verificado para `PUBLIC` | Seção 15 da 012: membership envolvendo qualquer um dos 9 papéis protegidos, **em qualquer sentido e com qualquer outro papel**; `CREATE` **efetivo** (direto, herdado ou via `PUBLIC`) de cada papel protegido no schema `public` e no banco. A mesma cobertura foi acrescentada ao `00` |
+
+**Correção de uma afirmação minha anterior:** eu tinha dito que a checagem de membership "pegava os dois sentidos". Isso só valia quando os dois papéis tinham o prefixo `nekkora_`.
+
+**Testes deliberados do próprio runner** (`testes-do-runner/executa.sh`, saídas em `testes-do-runner/saidas/2026-09-25T223416Z/`). Cada caso rodou numa stack nova e isolada, depois removida:
+
+| Caso | Defeito introduzido | Resultado |
+|---|---|---|
+| m1 | `GRANT SELECT ON organization_usage_daily TO nekkora_platform` | Runner exit 1 no `00`: `FALHA DE ASSERCAO: nenhum privilegio de tabela alem da matriz` |
+| m2 | Trigger de bootstrap desabilitada (catálogo de privilégios intacto) | Runner exit 1 no `05b`: `operacao deveria ter falhado (esperado 42501), mas teve sucesso` |
+| m3 | Só a sessão A da concorrência 1 falha | Runner exit 1: `concorrencia 1: sessao A falhou (exit=3)`, com B exit 0 |
+| m4a | `GRANT nekkora_scheduler_owner TO outro_servico` | `00` falha (membership); seção 15 aborta: `nekkora_scheduler_owner -> outro_servico` |
+| m4b | `GRANT papel_qualquer TO nekkora_platform` | `00` falha; seção 15 aborta: `papel_qualquer -> nekkora_platform` |
+| m4c | `GRANT CREATE ON SCHEMA public TO nekkora_platform` | `00` falha (`CREATE` efetivo); seção 15 aborta: `nekkora_platform` |
+| m4d | `GRANT CREATE ON DATABASE nekkora TO nekkora_retention_owner` | `00` falha; seção 15 aborta: `nekkora_retention_owner` |
+
+Todos os 7 casos produziram falha inequívoca (`falhas=0`).
+
+**Cenário normal depois das correções:** execução `2026-09-25T223250Z_nekkora-seg-012c`, completa e aprovada (001–012 aplicadas com a 012 revisada), com as duas sessões de cada corrida em exit 0 e os mesmos ids para A e B.
+
+**Base principal:** a 012 aplicada nela é a versão anterior à revisão. A mudança da revisão se limita ao bloco de verificação da seção 15, sem nenhum objeto diferente. O bloco revisado, executado contra a base principal (`instalacao-limpa/saidas/10_invariantes_secao15_revisados.txt`), passou: nenhuma membership e nenhum `CREATE` efetivo nos papéis protegidos. Uma nova recriação não foi feita.
+
+**Limite do harness:** as asserções usam funções temporárias (`pg_temp`), criadas com o privilégio `TEMP`, que `PUBLIC` tem por padrão. Se `TEMP` for revogado dos papéis de serviço no futuro, o harness precisará de outro meio.

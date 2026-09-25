@@ -1,5 +1,6 @@
 -- conc2 A - papel: nekkora_ingestion. Insere um evento HOJE e segura a transacao aberta: a barreira
 -- (assign_received_at_and_lock_barrier) mantem FOR SHARE na linha de hoje ate o COMMIT.
+-- Gancho de teste do runner: com -v forcar_falha_a=1, A falha DEPOIS do commit (B segue normal).
 \pset pager off
 SELECT 'A' AS s, current_user, pg_backend_pid(), clock_timestamp() AS a_inicio;
 BEGIN;
@@ -12,3 +13,6 @@ SELECT pg_sleep(10);
 SELECT clock_timestamp() AS a_antes_commit;
 COMMIT;
 SELECT clock_timestamp() AS a_depois_commit;
+\if :{?forcar_falha_a}
+SELECT pg_temp.afirma(false, 'falha forcada na sessao A (teste do runner)');
+\endif

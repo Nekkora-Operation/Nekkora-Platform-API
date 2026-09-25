@@ -1,0 +1,33 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+ s |   current_user    | pg_backend_pid |           a_inicio           
+---+-------------------+----------------+------------------------------
+ A | nekkora_ingestion |            309 | 2026-09-25 22:33:14.27446+00
+(1 row)
+
+BEGIN
+SET
+INSERT 0 1
+   a_inseriu_nao_confirmado    
+-------------------------------
+ 2026-09-25 22:33:14.283844+00
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+        a_antes_commit         
+-------------------------------
+ 2026-09-25 22:33:24.284851+00
+(1 row)
+
+COMMIT
+        a_depois_commit        
+-------------------------------
+ 2026-09-25 22:33:24.287619+00
+(1 row)
+

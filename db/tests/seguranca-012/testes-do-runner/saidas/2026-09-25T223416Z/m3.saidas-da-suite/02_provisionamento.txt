@@ -1,0 +1,166 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+             afirma             
+--------------------------------
+ ok: papel nekkora_provisioning
+(1 row)
+
+=== P01 acesso direto a tabela: negado (so EXECUTE nas funcoes)
+NOTICE:  rejeitado como esperado [42501] permission denied for table organizations
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table organizations
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+=== P02 validacao do array - cada caso rejeitado antes de qualquer INSERT
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_resource_limit_revisions
+      espera_erro      
+-----------------------
+ ok: rejeitado [22023]
+(1 row)
+
+NOTICE:  rejeitado como esperado [22023] p_resource_limits deve ter exatamente 5 elementos (recebido=4)
+      espera_erro      
+-----------------------
+ ok: rejeitado [22023]
+(1 row)
+
+NOTICE:  rejeitado como esperado [22023] p_resource_limits deve cobrir exatamente os resource_code {1,2,3,4,5}, sem repeticao (recebido={1,2,3,4})
+NOTICE:  rejeitado como esperado [22023] elemento 1 (resource_code=1): FINITE exige limit_value >= 0
+      espera_erro      
+-----------------------
+ ok: rejeitado [22023]
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [22023]
+(1 row)
+
+NOTICE:  rejeitado como esperado [22023] elemento 1 (resource_code=1): FINITE exige limit_value >= 0
+      espera_erro      
+-----------------------
+ ok: rejeitado [22023]
+(1 row)
+
+NOTICE:  rejeitado como esperado [22023] elemento 4 (resource_code=4): UNLIMITED exige limit_value nulo
+      espera_erro      
+-----------------------
+ ok: rejeitado [22023]
+(1 row)
+
+NOTICE:  rejeitado como esperado [22023] elemento 1 (resource_code=1): limit_mode invalido (3)
+      espera_erro      
+-----------------------
+ ok: rejeitado [22023]
+(1 row)
+
+NOTICE:  rejeitado como esperado [22023] elemento 1 de p_resource_limits sem resource_code/limit_mode
+      espera_erro      
+-----------------------
+ ok: rejeitado [22023]
+(1 row)
+
+NOTICE:  rejeitado como esperado [22023] p_resource_limits deve ser um array unidimensional nao nulo
+      espera_erro      
+-----------------------
+ ok: rejeitado [22023]
+(1 row)
+
+=== P03 atomicidade: responsavel inexistente - a organizacao ja inserida e desfeita junto (conferido no 03)
+NOTICE:  rejeitado como esperado [22023] p_resource_limits deve ser um array unidimensional nao nulo
+NOTICE:  rejeitado como esperado [23503] insert or update on table "organization_resource_limit_revisions" violates foreign key constraint "organization_resource_limit_revisio_provisioned_by_user_id_fkey"
+      espera_erro      
+-----------------------
+ ok: rejeitado [23503]
+(1 row)
+
+=== P04 caminho valido: organizacoes A e B, cinco limites explicitos cada (ordem dos elementos irrelevante)
+                  afirma                   
+-------------------------------------------
+ ok: provision_organization A devolve o id
+(1 row)
+
+                  afirma                   
+-------------------------------------------
+ ok: provision_organization B devolve o id
+(1 row)
+
+=== P05 organizacao duplicada: rejeitada
+NOTICE:  rejeitado como esperado [23505] duplicate key value violates unique constraint "organizations_pkey"
+      espera_erro      
+-----------------------
+ ok: rejeitado [23505]
+(1 row)
+
+=== P06 limite e retencao avulsos
+           afirma           
+----------------------------
+ ok: nova revisao de limite
+(1 row)
+
+            afirma            
+------------------------------
+ ok: politica de eventos de A
+(1 row)
+
+          afirma           
+---------------------------
+ ok: politica de logs de A
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [22023]
+(1 row)
+
+NOTICE:  rejeitado como esperado [22023] FINITE exige retention_days > 0 (category=1)
+      espera_erro      
+-----------------------
+ ok: rejeitado [22023]
+(1 row)
+
+NOTICE:  rejeitado como esperado [22023] category invalida (3)
+      espera_erro      
+-----------------------
+ ok: rejeitado [22023]
+(1 row)
+
+NOTICE:  rejeitado como esperado [22023] resource_code invalido (6)
+NOTICE:  rejeitado como esperado [42501] organizacao inexistente (organization_id=eeeeeeee-0000-0000-0000-00000000000e)
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+=== P07 funcoes de outros servicos: sem EXECUTE; contexto de funcao restaurado
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for function set_schedule_status
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for function close_usage_day
+                    afirma                     
+-----------------------------------------------
+ ok: fn_organization_id vazio apos as chamadas
+(1 row)
+

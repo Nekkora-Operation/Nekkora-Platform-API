@@ -1,0 +1,10 @@
+>> subindo stack isolada nekkora-mut-m2
+>> MUTACAO DELIBERADA: /c/Users/nicol/nekkora/nekkora-platform/db/tests/seguranca-012/testes-do-runner/mutacoes/m2_negativa_passa.sql
+>> 00_catalogo_vs_matriz (papel: nekkora)
+>> 01_bootstrap (papel: nekkora)
+>> 02_provisionamento (papel: nekkora_provisioning)
+>> 03_verifica_provisionamento (papel: nekkora)
+>> 04_platform_setup_A (papel: nekkora_platform)
+>> 04_platform_setup_B (papel: nekkora_platform)
+>> 05b_bootstrap_desvio_platform (papel: nekkora_platform)
+ERRO: 05b_bootstrap_desvio_platform falhou (assercao ou erro inesperado - ver /c/Users/nicol/nekkora/nekkora-platform/db/tests/seguranca-012/saidas/2026-09-25T223426Z_nekkora-mut-m2/05b_bootstrap_desvio_platform.txt)

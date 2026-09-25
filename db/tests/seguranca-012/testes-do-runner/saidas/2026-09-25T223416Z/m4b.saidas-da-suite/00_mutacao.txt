@@ -1,0 +1,7 @@
+== mutacao aplicada de proposito (teste do runner): /c/Users/nicol/nekkora/nekkora-platform/db/tests/seguranca-012/testes-do-runner/mutacoes/m4b_membership_outro_para_servico.sql
+-- M4b: sentido inverso - um papel qualquer concedido a um servico.
+CREATE ROLE papel_qualquer NOLOGIN;
+GRANT papel_qualquer TO nekkora_platform;
+== resultado
+CREATE ROLE
+GRANT ROLE

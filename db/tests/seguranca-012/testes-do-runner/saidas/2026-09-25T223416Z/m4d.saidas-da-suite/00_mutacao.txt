@@ -1,0 +1,5 @@
+== mutacao aplicada de proposito (teste do runner): /c/Users/nicol/nekkora/nekkora-platform/db/tests/seguranca-012/testes-do-runner/mutacoes/m4d_create_banco_owner.sql
+-- M4d: CREATE no banco concedido a um proprietario de funcao.
+GRANT CREATE ON DATABASE nekkora TO nekkora_retention_owner;
+== resultado
+GRANT

@@ -1,0 +1,20 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+         c_observacao          | pid |      usename      | state  | wait_event_type |  wait_event   |                            query                             
+-------------------------------+-----+-------------------+--------+-----------------+---------------+--------------------------------------------------------------
+ 2026-09-25 22:34:58.378428+00 | 267 | nekkora_scheduler | active | Timeout         | PgSleep       | SELECT pg_sleep(8);
+ 2026-09-25 22:34:58.378432+00 | 281 | nekkora_scheduler | active | Lock            | transactionid | SELECT create_schedule_occurrence('aaaaaaaa-0000-0000-0000-0
+(2 rows)
+
+ bloqueado |      usename      | bloqueado_por 
+-----------+-------------------+---------------
+       281 | nekkora_scheduler | {267}
+(1 row)
+
+                                            afirma                                            
+----------------------------------------------------------------------------------------------
+ ok: sessao de nekkora_scheduler em espera de lock, bloqueada por sessao de nekkora_scheduler
+(1 row)
+

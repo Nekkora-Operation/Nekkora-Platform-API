@@ -1,0 +1,111 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma            
+-----------------------------
+ ok: papel nekkora_scheduler
+(1 row)
+
+=== S01 sem acesso direto: tabelas, implementacao interna (2 parametros), suspender/retomar
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_schedule_occurrences
+NOTICE:  rejeitado como esperado [42501] permission denied for table executions
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for function process_schedule_occurrence
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+=== S02 materializacao idempotente (sequencial): mesmo (schedule, scheduled_for) -> mesmo occurrence_id
+NOTICE:  rejeitado como esperado [42501] permission denied for function set_schedule_status
+                      afirma                       
+---------------------------------------------------
+ ok: segunda chamada devolve o mesmo occurrence_id
+(1 row)
+
+        afirma         
+-----------------------
+ ok: fn_ctx restaurado
+(1 row)
+
+=== S03 referencias cruzadas: rejeitadas com erro nomeado
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] agendamento nao pertence ao workspace informado (schedule_id=aaaaaaaa-0000-0000-000b-000000000001, workspace_id=bbbbbbbb-0000-0000-0003-000000000001)
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] agendamento inexistente ou de outra organizacao (organization_id=aaaaaaaa-0000-0000-0000-00000000000a, schedule_id=bbbbbbbb-0000-0000-000b-000000000001)
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] agendamento inexistente ou de outra organizacao (organization_id=bbbbbbbb-0000-0000-0000-00000000000b, schedule_id=aaaaaaaa-0000-0000-000b-000000000001)
+      espera_erro      
+-----------------------
+ ok: rejeitado [22004]
+(1 row)
+
+=== S04 regra de negocio da trigger inalterada: materializacao antecipada rejeitada
+NOTICE:  rejeitado como esperado [22004] materializacao exige organization_id, workspace_id, schedule_id e scheduled_for
+NOTICE:  rejeitado como esperado [P0001] materializacao antecipada - scheduled_for no futuro (schedule_id=aaaaaaaa-0000-0000-000b-000000000001, scheduled_for=2026-09-25 23:33:03.228711+00)
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+=== S05 processamento pelo ponto de entrada de 3 parametros; reprocessamento devolve a mesma decisao
+                      afirma                       
+---------------------------------------------------
+ ok: processamento: EXECUTION_CREATED com execucao
+(1 row)
+
+                       afirma                        
+-----------------------------------------------------
+ ok: reprocessamento: mesma decisao e mesma execucao
+(1 row)
+
+        afirma         
+-----------------------
+ ok: fn_ctx restaurado
+(1 row)
+
+=== S06 organizacao divergente da ocorrencia / ocorrencia inexistente: rejeitado
+NOTICE:  rejeitado como esperado [42501] ocorrencia inexistente ou de outra organizacao (organization_id=bbbbbbbb-0000-0000-0000-00000000000b, occurrence_id=0766f719-fd1c-4a00-8c22-15ab72e39afd)
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] ocorrencia inexistente ou de outra organizacao (organization_id=aaaaaaaa-0000-0000-0000-00000000000a, occurrence_id=88db0e67-c53f-4b1f-b962-af45ca8859e2)
+               resultado                
+----------------------------------------
+ scheduler: todas as assercoes passaram
+(1 row)
+

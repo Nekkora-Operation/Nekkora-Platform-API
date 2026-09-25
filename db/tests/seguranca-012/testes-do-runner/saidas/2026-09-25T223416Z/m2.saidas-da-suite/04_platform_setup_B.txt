@@ -1,0 +1,96 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+      papel       |             organizacao              
+------------------+--------------------------------------
+ nekkora_platform | bbbbbbbb-0000-0000-0000-00000000000b
+(1 row)
+
+=== identidade, credencial, workspace
+BEGIN
+SET
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+COMMIT
+=== parametro e secret (auditoria da 008 via nekkora.actor_membership_id)
+BEGIN
+SET
+ actor_definido 
+----------------
+ t
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+COMMIT
+=== Worker (capacidade 010), Agent, associacoes
+BEGIN
+SET
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+COMMIT
+=== automacao e versao publicada
+BEGIN
+SET
+INSERT 0 1
+INSERT 0 1
+UPDATE 1
+COMMIT
+=== execucao manual: criar -> reservar -> iniciar (fica RUNNING para a ingestao)
+BEGIN
+SET
+INSERT 0 1
+UPDATE 1
+UPDATE 1
+COMMIT
+=== agendamento e revisao (processamento fica com o scheduler)
+BEGIN
+SET
+INSERT 0 1
+INSERT 0 1
+UPDATE 1
+COMMIT
+=== visao do proprio contexto
+BEGIN
+SET
+ orgs_visiveis | users_visiveis | credenciais_visiveis | workspaces_visiveis | execucoes_visiveis | eventos_auditoria_visiveis | limites_visiveis 
+---------------+----------------+----------------------+---------------------+--------------------+----------------------------+------------------
+             1 |              1 |                    1 |                   1 |                  1 |                          2 |                5
+(1 row)
+
+          unica_org_visivel           
+--------------------------------------
+ bbbbbbbb-0000-0000-0000-00000000000b
+(1 row)
+
+                  afirma                  
+------------------------------------------
+ ok: contexto ve so a propria organizacao
+(1 row)
+
+                              afirma                              
+------------------------------------------------------------------
+ ok: contexto ve 1 usuario, 1 credencial, 1 workspace, 1 execucao
+(1 row)
+
+                      afirma                      
+--------------------------------------------------
+ ok: auditoria 008: 2 eventos com o ator definido
+(1 row)
+
+         afirma          
+-------------------------
+ ok: execucao em RUNNING
+(1 row)
+
+                           afirma                           
+------------------------------------------------------------
+ ok: limites visiveis so da propria organizacao, 5 recursos
+(1 row)
+
+COMMIT

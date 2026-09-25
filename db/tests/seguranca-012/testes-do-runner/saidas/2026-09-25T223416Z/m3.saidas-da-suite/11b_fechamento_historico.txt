@@ -1,0 +1,24 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+                afirma                
+--------------------------------------
+ ok: papel nekkora_retention_executor
+(1 row)
+
+ close_usage_day 
+-----------------
+ 
+(1 row)
+
+ close_usage_day 
+-----------------
+ 
+(1 row)
+
+        afirma         
+-----------------------
+ ok: fn_ctx restaurado
+(1 row)
+

@@ -1,0 +1,34 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+ s |   current_user    | pg_backend_pid |           a_inicio            
+---+-------------------+----------------+-------------------------------
+ A | nekkora_scheduler |            267 | 2026-09-25 22:34:53.269536+00
+(1 row)
+
+BEGIN
+                occ_a                 |            a_criou            
+--------------------------------------+-------------------------------
+ 251485e1-e539-40bd-b306-2e2b80eefd20 | 2026-09-25 22:34:53.277118+00
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+        a_antes_commit         
+-------------------------------
+ 2026-09-25 22:35:01.285834+00
+(1 row)
+
+COMMIT
+        a_depois_commit        
+-------------------------------
+ 2026-09-25 22:35:01.287542+00
+(1 row)
+
+MARCADOR_OCC_A=251485e1-e539-40bd-b306-2e2b80eefd20
+ERROR:  FALHA DE ASSERCAO: falha forcada na sessao A (teste do runner)
+CONTEXT:  PL/pgSQL function pg_temp_3.afirma(boolean,text) line 4 at RAISE

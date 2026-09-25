@@ -1,0 +1,1 @@
+concorrencia 1: sessao A exit=3, sessao B exit=0

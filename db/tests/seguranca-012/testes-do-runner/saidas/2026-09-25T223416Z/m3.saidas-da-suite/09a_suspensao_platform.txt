@@ -1,0 +1,27 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+BEGIN
+SET
+            afirma             
+-------------------------------
+ ok: ocorrencia pendente antes
+(1 row)
+
+       afirma        
+---------------------
+ ok: agenda suspensa
+(1 row)
+
+                               afirma                               
+--------------------------------------------------------------------
+ ok: pendente fechada como SKIPPED/SCHEDULE_SUSPENDED, sem execucao
+(1 row)
+
+COMMIT

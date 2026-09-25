@@ -27,3 +27,6 @@ COMMIT;
 SELECT tgenabled, count(*) AS triggers FROM pg_trigger WHERE NOT tgisinternal GROUP BY 1;
 SELECT organization_id, count(*), sum(octet_length(payload::text)) AS bytes FROM execution_events
 WHERE (received_at AT TIME ZONE 'UTC')::date = '2026-09-10' GROUP BY 1 ORDER BY 1;
+SELECT pg_temp.afirma((SELECT count(*) FILTER (WHERE tgenabled = 'O') = count(*) AND count(*) = 131 FROM pg_trigger WHERE NOT tgisinternal), 'triggers reabilitadas: 131/131');
+SELECT pg_temp.afirma((SELECT count(*) = 3 AND sum(octet_length(payload::text)) = 135 FROM execution_events WHERE organization_id = 'aaaaaaaa-0000-0000-0000-00000000000a' AND (received_at AT TIME ZONE 'UTC')::date = '2026-09-10'), 'D: A 3 eventos / 135 bytes');
+SELECT pg_temp.afirma((SELECT count(*) = 2 AND sum(octet_length(payload::text)) = 70 FROM execution_events WHERE organization_id = 'bbbbbbbb-0000-0000-0000-00000000000b' AND (received_at AT TIME ZONE 'UTC')::date = '2026-09-10'), 'D: B 2 eventos / 70 bytes');

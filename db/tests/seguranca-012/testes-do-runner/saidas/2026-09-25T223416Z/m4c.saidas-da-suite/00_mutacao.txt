@@ -1,0 +1,5 @@
+== mutacao aplicada de proposito (teste do runner): /c/Users/nicol/nekkora/nekkora-platform/db/tests/seguranca-012/testes-do-runner/mutacoes/m4c_create_schema_servico.sql
+-- M4c: CREATE no schema public concedido diretamente a um servico (a checagem antiga so via PUBLIC).
+GRANT CREATE ON SCHEMA public TO nekkora_platform;
+== resultado
+GRANT

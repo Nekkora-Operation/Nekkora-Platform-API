@@ -1,0 +1,6 @@
+data_utc=2026-09-25T22:35:13Z
+commit=51e2496
+arvore_limpa=nao
+projeto=nekkora-mut-m4b container=nekkora-mut-m4b-postgres volume=nekkora-mut-m4b_nekkora_postgres_data porta=55465
+docker=29.7.2
+compose=5.3.1

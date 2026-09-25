@@ -1,0 +1,2 @@
+concorrencia 1: sessao A exit=0, sessao B exit=0
+concorrencia 2: sessao A exit=0, sessao B exit=0

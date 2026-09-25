@@ -1,0 +1,5 @@
+== mutacao aplicada de proposito (teste do runner): /c/Users/nicol/nekkora/nekkora-platform/db/tests/seguranca-012/testes-do-runner/mutacoes/m1_catalogo_grant_extra.sql
+-- M1: diferenca no catalogo - privilegio fora da matriz para um servico.
+GRANT SELECT ON organization_usage_daily TO nekkora_platform;
+== resultado
+GRANT

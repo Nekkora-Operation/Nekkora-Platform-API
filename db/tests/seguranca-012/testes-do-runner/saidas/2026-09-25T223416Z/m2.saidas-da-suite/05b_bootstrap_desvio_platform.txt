@@ -1,0 +1,20 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+=== B06 INSERT direto com responsavel nulo, no proprio contexto: rejeitado pela trigger (current_user)
+BEGIN
+SET
+                             afirma                             
+----------------------------------------------------------------
+ ok: A ainda sem atribuicoes (isola a checagem de current_user)
+(1 row)
+
+ERROR:  FALHA DE ASSERCAO: operacao deveria ter falhado (esperado 42501), mas teve sucesso: INSERT INTO organization_role_assignments (organization_id, membership_id, role_id, scope, status, assigned_by_membership_id)
+  SELECT 'aaaaaaaa-0000-0000-0000-00000000000a', 'aaaaaaaa-0000-0000-0002-000000000001', role_id, 1, 1, NULL FROM roles WHERE code = 'ORG_ADMIN'
+CONTEXT:  PL/pgSQL function pg_temp_3.espera_erro(text,text,text) line 12 at RAISE

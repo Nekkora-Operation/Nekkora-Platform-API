@@ -124,7 +124,11 @@ docker exec -i "$REGRESSAO_CONTAINER" psql -X -d nekkora -U nekkora_retention_ex
 PID_B=$!
 sleep 4
 docker exec -i "$REGRESSAO_CONTAINER" psql -X -d nekkora -U nekkora < "$AQUI/sql/conc_c_observador.sql" > "$SAIDA/conc_c_observador.txt" 2>&1
-wait "$PID_A" "$PID_B"
+# aguarda as DUAS sessoes e verifica cada codigo (um "wait A B" conjunto devolve so o do ultimo)
+RA=0; wait "$PID_A" || RA=$?
+RB=0; wait "$PID_B" || RB=$?
+[ "$RA" -eq 0 ] || falha "concorrencia: sessao A falhou (exit=$RA)"
+[ "$RB" -eq 0 ] || falha "concorrencia: sessao B falhou (exit=$RB)"
 
 roda nekkora 20_resumo.sql
 

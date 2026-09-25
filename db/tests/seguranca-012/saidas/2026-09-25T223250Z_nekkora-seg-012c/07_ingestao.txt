@@ -1,0 +1,156 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma            
+-----------------------------
+ ok: papel nekkora_ingestion
+(1 row)
+
+=== G01 ingestao valida em A e em B, cada uma no proprio contexto; fn_ctx restaurado pela barreira
+BEGIN
+SET
+         afirma         
+------------------------
+ ok: fn_ctx vazio antes
+(1 row)
+
+INSERT 0 1
+                afirma                 
+---------------------------------------
+ ok: fn_ctx restaurado apos a barreira
+(1 row)
+
+                                afirma                                
+----------------------------------------------------------------------
+ ok: received_at atribuido pelo servidor (valor do chamador ignorado)
+(1 row)
+
+INSERT 0 1
+          afirma           
+---------------------------
+ ok: A ve 1 evento e 1 log
+(1 row)
+
+COMMIT
+BEGIN
+SET
+INSERT 0 2
+            afirma             
+-------------------------------
+ ok: B ve so os 2 eventos de B
+(1 row)
+
+COMMIT
+=== G02 sem contexto: rejeitado (a trigger de origem nao enxerga a execucao sob RLS)
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+=== G03 contexto A, evento declarado de B (execucao de B): rejeitado
+NOTICE:  rejeitado como esperado [P0001] execucao sem alocacao nao pode receber evento (execution_id=aaaaaaaa-0000-0000-000a-000000000001)
+BEGIN
+SET
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+NOTICE:  rejeitado como esperado [P0001] execucao sem alocacao nao pode receber evento (execution_id=bbbbbbbb-0000-0000-000a-000000000001)
+ROLLBACK
+=== G04 barreira chamada direto com organizacao divergente do contexto / sem contexto: erro nomeado 42501
+BEGIN
+SET
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] contexto organizacional ausente ou divergente na ingestao (organization_id=bbbbbbbb-0000-0000-0000-00000000000b, contexto=aaaaaaaa-0000-0000-0000-00000000000a)
+ROLLBACK
+NOTICE:  rejeitado como esperado [42501] contexto organizacional ausente ou divergente na ingestao (organization_id=aaaaaaaa-0000-0000-0000-00000000000a, contexto=<ausente>)
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+=== G05 contexto de funcao com valor anterior nao vazio: preservado apos erro e apos sucesso
+BEGIN
+SET
+SET
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] new row for relation "execution_events" violates check constraint "execution_events_check"
+                  afirma                  
+------------------------------------------
+ ok: fn_ctx anterior preservado apos erro
+(1 row)
+
+INSERT 0 1
+                                afirma                                
+----------------------------------------------------------------------
+ ok: fn_ctx anterior (nao vazio) devolvido pela barreira apos sucesso
+(1 row)
+
+COMMIT
+=== G06 operacoes nao concedidas a ingestao
+BEGIN
+SET
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table execution_events
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table logs
+NOTICE:  rejeitado como esperado [42501] permission denied for table execution_events
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_usage_daily
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_usage_daily
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspaces
+ROLLBACK
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for function reconsolidate_usage_day
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for function close_usage_day
+               resultado               
+---------------------------------------
+ ingestao: todas as assercoes passaram
+(1 row)
+

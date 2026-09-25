@@ -1,0 +1,82 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+CREATE TABLE
+INSERT 0 9
+=== papeis
+            rolname             | rolsuper | rolcanlogin | rolinherit | rolcreaterole | rolcreatedb | rolreplication | rolbypassrls 
+--------------------------------+----------+-------------+------------+---------------+-------------+----------------+--------------
+ nekkora                        | t        | t           | t          | t             | t           | t              | t
+ nekkora_ingestion              | f        | t           | t          | f             | f           | f              | f
+ nekkora_platform               | f        | t           | t          | f             | f           | f              | f
+ nekkora_provisioning           | f        | t           | t          | f             | f           | f              | f
+ nekkora_provisioning_owner     | f        | f           | t          | f             | f           | f              | f
+ nekkora_retention_executor     | f        | t           | t          | f             | f           | f              | f
+ nekkora_retention_owner        | f        | f           | t          | f             | f           | f              | f
+ nekkora_retention_tables_owner | f        | f           | t          | f             | f           | f              | f
+ nekkora_scheduler              | f        | t           | t          | f             | f           | f              | f
+ nekkora_scheduler_owner        | f        | f           | t          | f             | f           | f              | f
+(10 rows)
+
+               afirma               
+------------------------------------
+ ok: os 9 papeis protegidos existem
+(1 row)
+
+                                    afirma                                    
+------------------------------------------------------------------------------
+ ok: papeis protegidos sem atributo privilegiado e com LOGIN/NOLOGIN esperado
+(1 row)
+
+          afirma          
+--------------------------
+ ok: nekkora_app removido
+(1 row)
+
+=== memberships envolvendo papeis protegidos, nos dois sentidos (deve ser vazio)
+ papel_concedido | membro 
+-----------------+--------
+(0 rows)
+
+                                              afirma                                               
+---------------------------------------------------------------------------------------------------
+ ok: nenhuma membership envolvendo papel protegido, em qualquer sentido e com qualquer outro papel
+(1 row)
+
+=== CREATE efetivo dos papeis protegidos (deve ser vazio)
+ papel | create_em_public | create_no_banco 
+-------+------------------+-----------------
+(0 rows)
+
+                                   afirma                                   
+----------------------------------------------------------------------------
+ ok: nenhum papel protegido com CREATE efetivo no schema public ou no banco
+(1 row)
+
+               afirma                
+-------------------------------------
+ ok: CREATE em public fora de PUBLIC
+(1 row)
+
+CREATE TABLE
+INSERT 0 145
+SELECT 146
+=== tabela: esperado e nao instalado (deve ser vazio)
+ papel | tabela | priv 
+-------+--------+------
+(0 rows)
+
+=== tabela: instalado e nao esperado (deve ser vazio)
+      papel       |          tabela          |  priv  
+------------------+--------------------------+--------
+ nekkora_platform | organization_usage_daily | SELECT
+(1 row)
+
+                        afirma                        
+------------------------------------------------------
+ ok: privilegios de tabela esperados todos instalados
+(1 row)
+
+ERROR:  FALHA DE ASSERCAO: nenhum privilegio de tabela alem da matriz (qualquer beneficiario)
+CONTEXT:  PL/pgSQL function pg_temp_3.afirma(boolean,text) line 4 at RAISE

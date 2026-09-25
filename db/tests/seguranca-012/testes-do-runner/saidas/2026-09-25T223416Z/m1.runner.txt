@@ -1,0 +1,4 @@
+>> subindo stack isolada nekkora-mut-m1
+>> MUTACAO DELIBERADA: /c/Users/nicol/nekkora/nekkora-platform/db/tests/seguranca-012/testes-do-runner/mutacoes/m1_catalogo_grant_extra.sql
+>> 00_catalogo_vs_matriz (papel: nekkora)
+ERRO: 00_catalogo_vs_matriz falhou (assercao ou erro inesperado - ver /c/Users/nicol/nekkora/nekkora-platform/db/tests/seguranca-012/saidas/2026-09-25T223416Z_nekkora-mut-m1/00_catalogo_vs_matriz.txt)

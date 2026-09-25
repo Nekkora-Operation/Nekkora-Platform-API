@@ -86,4 +86,12 @@ SELECT (SELECT count(*) FROM organizations) AS orgs_visiveis, (SELECT count(*) F
        (SELECT count(*) FROM executions) AS execucoes_visiveis, (SELECT count(*) FROM workspace_configuration_events) AS eventos_auditoria_visiveis,
        (SELECT count(*) FROM organization_resource_limit_revisions) AS limites_visiveis;
 SELECT DISTINCT organization_id AS unica_org_visivel FROM executions;
+SELECT pg_temp.afirma((SELECT count(*) FROM organizations) = 1 AND (SELECT organization_id FROM organizations) = :'org'::uuid, 'contexto ve so a propria organizacao');
+SELECT pg_temp.afirma((SELECT count(*) FROM users) = 1 AND (SELECT count(*) FROM user_credentials) = 1
+                      AND (SELECT count(*) FROM workspaces) = 1 AND (SELECT count(*) FROM executions) = 1, 'contexto ve 1 usuario, 1 credencial, 1 workspace, 1 execucao');
+SELECT pg_temp.afirma((SELECT count(*) FROM workspace_configuration_events) = 2
+                      AND (SELECT count(DISTINCT performed_by_membership_id) FROM workspace_configuration_events) = 1, 'auditoria 008: 2 eventos com o ator definido');
+SELECT pg_temp.afirma((SELECT status FROM executions) = 3, 'execucao em RUNNING');
+SELECT pg_temp.afirma(NOT EXISTS (SELECT 1 FROM organization_resource_limit_revisions WHERE organization_id <> :'org'::uuid)
+                      AND (SELECT count(DISTINCT resource_code) FROM organization_resource_limit_revisions) = 5, 'limites visiveis so da propria organizacao, 5 recursos');
 COMMIT;

@@ -1,0 +1,2 @@
+ERROR:  papel protegido com CREATE efetivo em public ou no banco: nekkora_retention_owner
+CONTEXT:  PL/pgSQL function inline_code_block line 42 at RAISE

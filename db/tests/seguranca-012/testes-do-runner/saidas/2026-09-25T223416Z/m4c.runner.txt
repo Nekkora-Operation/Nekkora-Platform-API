@@ -1,0 +1,4 @@
+>> subindo stack isolada nekkora-mut-m4c
+>> MUTACAO DELIBERADA: /c/Users/nicol/nekkora/nekkora-platform/db/tests/seguranca-012/testes-do-runner/mutacoes/m4c_create_schema_servico.sql
+>> 00_catalogo_vs_matriz (papel: nekkora)
+ERRO: 00_catalogo_vs_matriz falhou (assercao ou erro inesperado - ver /c/Users/nicol/nekkora/nekkora-platform/db/tests/seguranca-012/saidas/2026-09-25T223523Z_nekkora-mut-m4c/00_catalogo_vs_matriz.txt)

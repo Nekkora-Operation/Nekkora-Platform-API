@@ -1,0 +1,41 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+=== B06 INSERT direto com responsavel nulo, no proprio contexto: rejeitado pela trigger (current_user)
+BEGIN
+SET
+                             afirma                             
+----------------------------------------------------------------
+ ok: A ainda sem atribuicoes (isola a checagem de current_user)
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] bootstrap sem responsavel so e permitido via provision_first_org_admin (current_user=nekkora_platform)
+ROLLBACK
+=== B07 funcao de bootstrap: sem EXECUTE para o platform
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+=== B08 platform nao le eventos de provisionamento (sem GRANT)
+NOTICE:  rejeitado como esperado [42501] permission denied for function provision_first_org_admin
+BEGIN
+SET
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_provisioning_events
+ROLLBACK

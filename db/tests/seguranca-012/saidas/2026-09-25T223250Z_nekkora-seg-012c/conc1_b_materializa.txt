@@ -1,0 +1,15 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+ s |   current_user    | pg_backend_pid |           b_inicio            
+---+-------------------+----------------+-------------------------------
+ B | nekkora_scheduler |            281 | 2026-09-25 22:33:08.793227+00
+(1 row)
+
+                occ_b                 |          b_concluiu           
+--------------------------------------+-------------------------------
+ 120dd4cc-261e-455e-a185-9a5580f8fa0d | 2026-09-25 22:33:13.752549+00
+(1 row)
+
+MARCADOR_OCC_B=120dd4cc-261e-455e-a185-9a5580f8fa0d

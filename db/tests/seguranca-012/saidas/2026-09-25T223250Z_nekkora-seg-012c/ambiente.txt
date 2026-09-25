@@ -1,0 +1,6 @@
+data_utc=2026-09-25T22:32:51Z
+commit=51e2496
+arvore_limpa=nao
+projeto=nekkora-seg-012c container=nekkora-seg-012c-postgres volume=nekkora-seg-012c_nekkora_postgres_data porta=55452
+docker=29.7.2
+compose=5.3.1

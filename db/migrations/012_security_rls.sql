@@ -1044,10 +1044,30 @@ BEGIN
     WHERE r.rolname LIKE 'nekkora\_%' AND r.rolcanlogin;
     IF v_bad IS NOT NULL THEN RAISE EXCEPTION 'papel LOGIN dono de objeto: %', v_bad; END IF;
 
-    -- nenhuma membership entre papeis nekkora_*
-    IF EXISTS (SELECT 1 FROM pg_auth_members am JOIN pg_roles m ON m.oid = am.member WHERE m.rolname LIKE 'nekkora\_%') THEN
-        RAISE EXCEPTION 'membership inesperada envolvendo papel nekkora_*';
-    END IF;
+    -- nenhuma membership envolvendo um papel protegido (servico ou proprietario), em QUALQUER
+    -- sentido e com QUALQUER outro papel: concedido a alguem ou recebendo de alguem. Uma membership
+    -- somaria politicas permissivas (OR) de grupos distintos ou daria privilegios de proprietario.
+    SELECT string_agg(format('%s -> %s', r.rolname, m.rolname), ', ') INTO v_bad
+    FROM pg_auth_members am
+    JOIN pg_roles r ON r.oid = am.roleid
+    JOIN pg_roles m ON m.oid = am.member
+    WHERE r.rolname IN ('nekkora_platform', 'nekkora_ingestion', 'nekkora_scheduler', 'nekkora_provisioning',
+                        'nekkora_retention_executor', 'nekkora_scheduler_owner', 'nekkora_provisioning_owner',
+                        'nekkora_retention_owner', 'nekkora_retention_tables_owner')
+       OR m.rolname IN ('nekkora_platform', 'nekkora_ingestion', 'nekkora_scheduler', 'nekkora_provisioning',
+                        'nekkora_retention_executor', 'nekkora_scheduler_owner', 'nekkora_provisioning_owner',
+                        'nekkora_retention_owner', 'nekkora_retention_tables_owner');
+    IF v_bad IS NOT NULL THEN RAISE EXCEPTION 'membership envolvendo papel protegido (concedido -> membro): %', v_bad; END IF;
+
+    -- nenhum papel protegido com CREATE EFETIVO (direto, herdado ou via PUBLIC) no schema public ou
+    -- no banco: CREATE em public reabriria o sombreamento de objetos nas funcoes com public no
+    -- search_path; CREATE no banco permitiria criar schemas.
+    SELECT string_agg(p.papel, ', ') INTO v_bad
+    FROM unnest(ARRAY['nekkora_platform', 'nekkora_ingestion', 'nekkora_scheduler', 'nekkora_provisioning',
+                      'nekkora_retention_executor', 'nekkora_scheduler_owner', 'nekkora_provisioning_owner',
+                      'nekkora_retention_owner', 'nekkora_retention_tables_owner']) AS p(papel)
+    WHERE has_schema_privilege(p.papel, 'public', 'CREATE') OR has_database_privilege(p.papel, current_database(), 'CREATE');
+    IF v_bad IS NOT NULL THEN RAISE EXCEPTION 'papel protegido com CREATE efetivo em public ou no banco: %', v_bad; END IF;
 
     -- toda funcao SECURITY DEFINER tem search_path fixo e nenhuma concede EXECUTE a PUBLIC
     SELECT string_agg(p.oid::regprocedure::text, ', ') INTO v_bad

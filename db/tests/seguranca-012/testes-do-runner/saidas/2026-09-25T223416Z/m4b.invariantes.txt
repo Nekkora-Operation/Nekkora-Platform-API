@@ -1,0 +1,2 @@
+ERROR:  membership envolvendo papel protegido (concedido -> membro): papel_qualquer -> nekkora_platform
+CONTEXT:  PL/pgSQL function inline_code_block line 32 at RAISE

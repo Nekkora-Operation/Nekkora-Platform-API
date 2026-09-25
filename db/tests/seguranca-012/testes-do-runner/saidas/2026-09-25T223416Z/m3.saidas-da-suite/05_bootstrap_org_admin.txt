@@ -1,0 +1,59 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+             afirma             
+--------------------------------
+ ok: papel nekkora_provisioning
+(1 row)
+
+=== B01 vinculo de outra organizacao (membership de B para a organizacao A): erro nomeado
+NOTICE:  rejeitado como esperado [23503] vinculo nao pertence a organizacao informada (organization_id=aaaaaaaa-0000-0000-0000-00000000000a, membership_id=bbbbbbbb-0000-0000-0002-000000000001)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23503]
+(1 row)
+
+=== B02 atomicidade: evento de provisionamento falha (responsavel inexistente) - atribuicao desfeita junto
+NOTICE:  rejeitado como esperado [23503] insert or update on table "identity_provisioning_events" violates foreign key constraint "identity_provisioning_events_provisioned_by_user_id_fkey"
+      espera_erro      
+-----------------------
+ ok: rejeitado [23503]
+(1 row)
+
+=== B03 canal vazio / parametro ausente
+      espera_erro      
+-----------------------
+ ok: rejeitado [22004]
+(1 row)
+
+NOTICE:  rejeitado como esperado [22004] bootstrap exige organization_id, membership_id, provisioned_by_user_id, channel e correlation_id
+NOTICE:  rejeitado como esperado [22004] bootstrap exige organization_id, membership_id, provisioned_by_user_id, channel e correlation_id
+      espera_erro      
+-----------------------
+ ok: rejeitado [22004]
+(1 row)
+
+=== B04 caminho autorizado, A e B (B04 so passa se B02 nao deixou atribuicao orfa em A)
+     afirma      
+-----------------
+ ok: bootstrap A
+(1 row)
+
+     afirma      
+-----------------
+ ok: bootstrap B
+(1 row)
+
+=== B05 segundo bootstrap na mesma organizacao: rejeitado
+NOTICE:  rejeitado como esperado [P0001] bootstrap sem responsavel só é permitido quando a organizacao ainda nao tem nenhuma atribuicao (organization_id=aaaaaaaa-0000-0000-0000-00000000000a)
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+                    afirma                     
+-----------------------------------------------
+ ok: fn_organization_id vazio apos as chamadas
+(1 row)
+

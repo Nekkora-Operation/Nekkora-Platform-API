@@ -1,0 +1,2 @@
+ERROR:  membership envolvendo papel protegido (concedido -> membro): nekkora_scheduler_owner -> outro_servico
+CONTEXT:  PL/pgSQL function inline_code_block line 32 at RAISE

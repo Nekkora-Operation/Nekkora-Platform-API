@@ -17,7 +17,13 @@ O `run.sh`:
 - **recusa** a stack principal (`nekkora-platform`), a porta 5432 e volume ou container já existentes;
 - nunca executa `down -v` nem limpeza global. A stack fica no ar ao final, e o comando de remoção é impresso;
 - roda cada script com o papel indicado abaixo, conectando **diretamente** com ele (nunca por `SET ROLE` a partir do superusuário, exceto no informativo `11c`);
-- **aborta** se um passo positivo falhar (esses passos ligam `ON_ERROR_STOP`) ou se qualquer saída tiver erro de sintaxe ou variável psql não substituída. Os cenários negativos rodam sem `ON_ERROR_STOP`, porque o erro esperado é a evidência.
+- **aborta diante de qualquer resultado inesperado.** Todo script recebe, na mesma sessão, `sql/_asserts.inc.sql`, que liga `ON_ERROR_STOP` e define:
+  - `pg_temp.afirma(condição, descrição)`: contagens, igualdades e estados;
+  - `pg_temp.espera_erro(sql, SQLSTATE, trecho)`: uma operação proibida precisa **falhar** com aquele SQLSTATE e aquele trecho de mensagem. Se tiver sucesso, ou falhar por outro motivo, o script aborta.
+  
+  O erro esperado é registrado como `NOTICE` (`rejeitado como esperado […]`).
+- **concorrência:** as duas sessões de cada corrida são aguardadas e verificadas **separadamente**. O observador afirma que a sessão certa estava em espera de lock, bloqueada pela outra. Os ids devolvidos a A e B são comparados.
+- rede de segurança final: nenhuma saída pode conter erro de sintaxe, variável não substituída ou `FALHA DE ASSERCAO`.
 
 Não rode perto de 00:00 UTC.
 
@@ -49,9 +55,28 @@ Não rode perto de 00:00 UTC.
 
 - `saidas/2026-09-25T184124Z_nekkora-seg-012_INVALIDA-fixture-s02/`: primeira execução, **inválida**. O `scheduled_for` truncado ao segundo caiu antes do `resumed_at`, S05/S06 falharam por variável não definida, e o runner da época não detectou. Mantida como evidência do defeito que levou às travas atuais.
 - `saidas/<timestamp>_<projeto>/`: execuções válidas.
+  - `2026-09-25T223250Z_nekkora-seg-012c`: **referência atual**, com asserções que abortam (após a revisão);
+  - `2026-09-25T191906Z_nekkora-seg-012b` e `2026-09-25T184518Z_nekkora-seg-012`: anteriores à revisão, com resultados só impressos, conferidos manualmente.
+- `testes-do-runner/saidas/<timestamp>/`: os 7 casos de defeito deliberado, cada um com o log do runner, as saídas da suíte até a falha e, nos casos m4, a saída do bloco de invariantes da seção 15.
 
 ## Verificação de instalação limpa (`instalacao-limpa/`)
 
 `verifica.sh <container> <org_interna_uuid> <staff_uuid>` roda, numa base **recém-instalada** (001–012 pelo entrypoint e procedimento inicial de `db/bootstrap` já aplicado), uma verificação curta com os papéis reais: catálogo × matriz, `provision_organization`, fluxo permitido do `platform`, isolamento frente à organização interna, contexto ausente e bootstrap de ORG_ADMIN. **Cria dados** (uma "Organização de Verificação"): use só em base nova, nunca com dados reais.
 
 `instalacao-limpa/saidas/`: recriação da base principal local em 2026-09-25 (identificação do projeto e do volume antes e depois, bootstrap, verificação). Valida **instalação limpa**; a atualização de uma base populada não foi exercitada.
+
+## Testes do próprio runner (`testes-do-runner/`)
+
+`testes-do-runner/executa.sh` introduz defeitos **de propósito**, cada um numa stack nova e isolada (removida ao final do caso), e **exige** que a suíte falhe com a mensagem esperada. Nos casos de concessão indevida, exige também que o bloco de invariantes da seção 15 da 012, extraído da própria migration, aborte na base mutada.
+
+| Caso | Defeito introduzido | Onde precisa falhar |
+|---|---|---|
+| m1 | `GRANT SELECT ON organization_usage_daily TO nekkora_platform` | `00`: privilégio de tabela além da matriz |
+| m2 | trigger de bootstrap desabilitada (não muda o catálogo de privilégios) | `05b`: a operação negativa teve sucesso |
+| m3 | só a sessão A da concorrência 1 falha (`TESTE_FORCAR_FALHA_A=1`) | runner: "sessão A falhou" |
+| m4a | `GRANT nekkora_scheduler_owner TO outro_servico` (papel fora do prefixo) | `00` e seção 15: membership |
+| m4b | `GRANT papel_qualquer TO nekkora_platform` (sentido inverso) | `00` e seção 15: membership |
+| m4c | `GRANT CREATE ON SCHEMA public TO nekkora_platform` | `00` e seção 15: `CREATE` efetivo |
+| m4d | `GRANT CREATE ON DATABASE nekkora TO nekkora_retention_owner` | `00` e seção 15: `CREATE` efetivo |
+
+Os ganchos `TESTE_MUTACAO` e `TESTE_FORCAR_FALHA_A` do `run.sh` existem só para esses testes e nunca são usados numa execução normal.

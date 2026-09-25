@@ -1,0 +1,12 @@
+m1: runner exit=1; ERRO: 00_catalogo_vs_matriz falhou (assercao ou erro inesperado - ver /c/Users/nicol/nekkora/nekkora-platform/db/tests/seguranca-012/saidas/2026-09-25T223416Z_nekkora-mut-m1/00_catalogo_vs_matriz.txt); mensagem esperada [nenhum privilegio de tabela alem da matriz]: ok
+m2: runner exit=1; ERRO: 05b_bootstrap_desvio_platform falhou (assercao ou erro inesperado - ver /c/Users/nicol/nekkora/nekkora-platform/db/tests/seguranca-012/saidas/2026-09-25T223426Z_nekkora-mut-m2/05b_bootstrap_desvio_platform.txt); mensagem esperada [operacao deveria ter falhado]: ok
+m3: runner exit=1; ERRO: concorrencia 1: sessao A falhou (exit=3); mensagem esperada [concorrencia 1: sessao A falhou]: ok
+m4a: runner exit=1; ERRO: 00_catalogo_vs_matriz falhou (assercao ou erro inesperado - ver /c/Users/nicol/nekkora/nekkora-platform/db/tests/seguranca-012/saidas/2026-09-25T223502Z_nekkora-mut-m4a/00_catalogo_vs_matriz.txt); mensagem esperada [nenhuma membership envolvendo papel protegido]: ok
+m4a: invariantes da secao 15 exit=3 (ERROR:  membership envolvendo papel protegido (concedido -> membro): nekkora_scheduler_owner -> outro_servico): ok
+m4b: runner exit=1; ERRO: 00_catalogo_vs_matriz falhou (assercao ou erro inesperado - ver /c/Users/nicol/nekkora/nekkora-platform/db/tests/seguranca-012/saidas/2026-09-25T223512Z_nekkora-mut-m4b/00_catalogo_vs_matriz.txt); mensagem esperada [nenhuma membership envolvendo papel protegido]: ok
+m4b: invariantes da secao 15 exit=3 (ERROR:  membership envolvendo papel protegido (concedido -> membro): papel_qualquer -> nekkora_platform): ok
+m4c: runner exit=1; ERRO: 00_catalogo_vs_matriz falhou (assercao ou erro inesperado - ver /c/Users/nicol/nekkora/nekkora-platform/db/tests/seguranca-012/saidas/2026-09-25T223523Z_nekkora-mut-m4c/00_catalogo_vs_matriz.txt); mensagem esperada [nenhum papel protegido com CREATE efetivo]: ok
+m4c: invariantes da secao 15 exit=3 (ERROR:  papel protegido com CREATE efetivo em public ou no banco: nekkora_platform): ok
+m4d: runner exit=1; ERRO: 00_catalogo_vs_matriz falhou (assercao ou erro inesperado - ver /c/Users/nicol/nekkora/nekkora-platform/db/tests/seguranca-012/saidas/2026-09-25T223533Z_nekkora-mut-m4d/00_catalogo_vs_matriz.txt); mensagem esperada [nenhum papel protegido com CREATE efetivo]: ok
+m4d: invariantes da secao 15 exit=3 (ERROR:  papel protegido com CREATE efetivo em public ou no banco: nekkora_retention_owner): ok
+falhas=0

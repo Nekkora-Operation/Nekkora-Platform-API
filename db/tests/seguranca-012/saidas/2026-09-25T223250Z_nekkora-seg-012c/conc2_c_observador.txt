@@ -1,0 +1,20 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+         c_observacao          | pid |          usename           | state  | wait_event_type |  wait_event   |                            query                             
+-------------------------------+-----+----------------------------+--------+-----------------+---------------+--------------------------------------------------------------
+ 2026-09-25 22:33:20.403281+00 | 309 | nekkora_ingestion          | active | Timeout         | PgSleep       | SELECT pg_sleep(10);
+ 2026-09-25 22:33:20.403285+00 | 317 | nekkora_retention_executor | active | Lock            | transactionid | SELECT out_records_count AS rec, out_bytes_count AS bytes, c
+(2 rows)
+
+ bloqueado |          usename           | bloqueado_por 
+-----------+----------------------------+---------------
+       317 | nekkora_retention_executor | {309}
+(1 row)
+
+                                                afirma                                                 
+-------------------------------------------------------------------------------------------------------
+ ok: sessao de nekkora_retention_executor em espera de lock, bloqueada por sessao de nekkora_ingestion
+(1 row)
+

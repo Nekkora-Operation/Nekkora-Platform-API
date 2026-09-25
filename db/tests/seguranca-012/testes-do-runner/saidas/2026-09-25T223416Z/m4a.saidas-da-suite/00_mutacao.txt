@@ -1,0 +1,7 @@
+== mutacao aplicada de proposito (teste do runner): /c/Users/nicol/nekkora/nekkora-platform/db/tests/seguranca-012/testes-do-runner/mutacoes/m4a_membership_owner_para_outro.sql
+-- M4a: owner concedido a um papel FORA do prefixo nekkora_ (nao detectado pela checagem antiga).
+CREATE ROLE outro_servico LOGIN;
+GRANT nekkora_scheduler_owner TO outro_servico;
+== resultado
+CREATE ROLE
+GRANT ROLE

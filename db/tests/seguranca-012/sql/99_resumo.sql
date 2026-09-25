@@ -13,3 +13,15 @@ FROM automation_schedule_occurrences o LEFT JOIN executions e ON e.schedule_occu
 SELECT (SELECT count(*) FROM organization_purge_runs) AS purge_runs,
        (SELECT count(*) FILTER (WHERE tgenabled = 'O') || '/' || count(*) FROM pg_trigger WHERE NOT tgisinternal) AS triggers_habilitadas,
        (SELECT count(*) FROM pg_roles WHERE rolname = 'nekkora_app') AS nekkora_app;
+SELECT pg_temp.afirma((SELECT count(*) FROM organization_purge_runs) = 0, 'nenhum expurgo executado');
+SELECT pg_temp.afirma((SELECT count(*) FILTER (WHERE tgenabled = 'O') = count(*) FROM pg_trigger WHERE NOT tgisinternal), 'todas as triggers habilitadas');
+SELECT pg_temp.afirma(NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nekkora_app'), 'nekkora_app inexistente');
+SELECT pg_temp.afirma(NOT EXISTS (
+    SELECT 1 FROM organization_usage_daily d
+    WHERE d.consolidated_at IS NOT NULL AND (d.records_count, d.bytes_count) IS DISTINCT FROM (
+      CASE d.resource_code
+        WHEN 5 THEN (SELECT (count(*), coalesce(sum(octet_length(payload::text)), 0))::record FROM execution_events e WHERE e.organization_id = d.organization_id AND (e.received_at AT TIME ZONE 'UTC')::date = d.usage_date)
+        ELSE (SELECT (count(*), coalesce(sum(octet_length(payload::text)), 0))::record FROM logs e WHERE e.organization_id = d.organization_id AND (e.received_at AT TIME ZONE 'UTC')::date = d.usage_date)
+      END)),
+  'todo agregado consolidado (fechado ou reconsolidado) = registros persistidos');
+SELECT 'resumo: todas as assercoes passaram' AS resultado;

@@ -1,0 +1,19 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+ s |        current_user        | pg_backend_pid |           b_inicio            
+---+----------------------------+----------------+-------------------------------
+ B | nekkora_retention_executor |            317 | 2026-09-25 22:33:17.379175+00
+(1 row)
+
+ records | bytes |          b_concluiu           
+---------+-------+-------------------------------
+       3 |   135 | 2026-09-25 22:33:24.289802+00
+(1 row)
+
+                            afirma                            
+--------------------------------------------------------------
+ ok: reconsolidacao inclui o evento confirmado por A: 3 / 135
+(1 row)
+
