@@ -1,0 +1,12 @@
+Pager usage is off.
+         c_observacao          | pid |          usename           | state  | wait_event_type |  wait_event   |                            query                             
+-------------------------------+-----+----------------------------+--------+-----------------+---------------+--------------------------------------------------------------
+ 2026-09-25 19:19:36.268468+00 | 312 | nekkora_ingestion          | active | Timeout         | PgSleep       | SELECT pg_sleep(10);
+ 2026-09-25 19:19:36.268476+00 | 320 | nekkora_retention_executor | active | Lock            | transactionid | SELECT *, clock_timestamp() AS b_concluiu FROM reconsolidate
+(2 rows)
+
+ bloqueado |          usename           | bloqueado_por 
+-----------+----------------------------+---------------
+       320 | nekkora_retention_executor | {312}
+(1 row)
+

@@ -1,0 +1,15 @@
+Pager usage is off.
+BEGIN
+SET
+      papel_efetivo      | fn_ctx | eventos_de_2026_09_10_visiveis_sem_contexto 
+-------------------------+--------+---------------------------------------------
+ nekkora_retention_owner |        |                                           0
+(1 row)
+
+SET
+ eventos_visiveis_com_contexto_a 
+---------------------------------
+                               3
+(1 row)
+
+ROLLBACK

@@ -1,0 +1,24 @@
+Pager usage is off.
+  papel  |       cluster_name        
+---------+---------------------------
+ nekkora | nekkora-regressao-isolada
+(1 row)
+
+DO
+BEGIN
+ALTER TABLE
+INSERT 0 5
+SET CONSTRAINTS
+ALTER TABLE
+COMMIT
+ tgenabled | triggers 
+-----------+----------
+ O         |      131
+(1 row)
+
+           organization_id            | count | bytes 
+--------------------------------------+-------+-------
+ aaaaaaaa-0000-0000-0000-00000000000a |     3 |   135
+ bbbbbbbb-0000-0000-0000-00000000000b |     2 |    70
+(2 rows)
+

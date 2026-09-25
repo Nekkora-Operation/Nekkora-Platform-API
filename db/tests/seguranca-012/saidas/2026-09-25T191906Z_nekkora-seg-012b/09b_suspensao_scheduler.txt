@@ -1,0 +1,17 @@
+Pager usage is off.
+       papel       
+-------------------
+ nekkora_scheduler
+(1 row)
+
+ out_status | out_skip_reason | out_execution_id 
+------------+-----------------+------------------
+          3 |               3 | 
+(1 row)
+
+ERROR:  agendamento suspenso nao aceita nova ocorrencia (schedule_id=aaaaaaaa-0000-0000-000b-000000000001)
+CONTEXT:  PL/pgSQL function materialize_schedule_occurrence() line 20 at RAISE
+SQL statement "INSERT INTO public.automation_schedule_occurrences (organization_id, workspace_id, schedule_id, scheduled_for, status)
+            VALUES (p_organization_id, p_workspace_id, p_schedule_id, p_scheduled_for, 1)
+            RETURNING occurrence_id"
+PL/pgSQL function public.create_schedule_occurrence(uuid,uuid,uuid,timestamp with time zone) line 37 at SQL statement

@@ -1,0 +1,55 @@
+Pager usage is off.
+       papel       
+-------------------
+ nekkora_scheduler
+(1 row)
+
+=== S01 sem acesso direto: tabelas, implementacao interna (2 parametros), suspender/retomar
+ERROR:  permission denied for table automation_schedule_occurrences
+ERROR:  permission denied for table executions
+ERROR:  permission denied for function process_schedule_occurrence
+ERROR:  permission denied for function set_schedule_status
+=== S02 materializacao idempotente (sequencial): mesmo (schedule, scheduled_for) -> mesmo occurrence_id
+                 occ1                 | segunda_chamada_mesmo_id | fn_ctx_apos 
+--------------------------------------+--------------------------+-------------
+ ae0e2d57-d53a-4072-8eef-c061b5589344 | t                        | 
+(1 row)
+
+=== S03 referencias cruzadas: rejeitadas com erro nomeado
+ERROR:  agendamento nao pertence ao workspace informado (schedule_id=aaaaaaaa-0000-0000-000b-000000000001, workspace_id=bbbbbbbb-0000-0000-0003-000000000001)
+CONTEXT:  PL/pgSQL function public.create_schedule_occurrence(uuid,uuid,uuid,timestamp with time zone) line 22 at RAISE
+ERROR:  agendamento inexistente ou de outra organizacao (organization_id=aaaaaaaa-0000-0000-0000-00000000000a, schedule_id=bbbbbbbb-0000-0000-000b-000000000001)
+CONTEXT:  PL/pgSQL function public.create_schedule_occurrence(uuid,uuid,uuid,timestamp with time zone) line 18 at RAISE
+ERROR:  agendamento inexistente ou de outra organizacao (organization_id=bbbbbbbb-0000-0000-0000-00000000000b, schedule_id=aaaaaaaa-0000-0000-000b-000000000001)
+CONTEXT:  PL/pgSQL function public.create_schedule_occurrence(uuid,uuid,uuid,timestamp with time zone) line 18 at RAISE
+ERROR:  materializacao exige organization_id, workspace_id, schedule_id e scheduled_for
+CONTEXT:  PL/pgSQL function public.create_schedule_occurrence(uuid,uuid,uuid,timestamp with time zone) line 8 at RAISE
+=== S04 regra de negocio da trigger inalterada: materializacao antecipada rejeitada
+ERROR:  materializacao antecipada - scheduled_for no futuro (schedule_id=aaaaaaaa-0000-0000-000b-000000000001, scheduled_for=2026-09-25 19:45:30.087192+00)
+CONTEXT:  PL/pgSQL function materialize_schedule_occurrence() line 25 at RAISE
+SQL statement "INSERT INTO public.automation_schedule_occurrences (organization_id, workspace_id, schedule_id, scheduled_for, status)
+            VALUES (p_organization_id, p_workspace_id, p_schedule_id, p_scheduled_for, 1)
+            RETURNING occurrence_id"
+PL/pgSQL function public.create_schedule_occurrence(uuid,uuid,uuid,timestamp with time zone) line 37 at SQL statement
+=== S05 processamento pelo ponto de entrada de 3 parametros
+ out_status | out_skip_reason |           out_execution_id           
+------------+-----------------+--------------------------------------
+          2 |                 | 361f2c9b-ebfc-4d04-b141-5d330db3b1a0
+(1 row)
+
+=== reprocessamento devolve a mesma decisao
+ out_status | out_skip_reason |           out_execution_id           
+------------+-----------------+--------------------------------------
+          2 |                 | 361f2c9b-ebfc-4d04-b141-5d330db3b1a0
+(1 row)
+
+ fn_ctx_apos 
+-------------
+ 
+(1 row)
+
+=== S06 organizacao divergente da ocorrencia / ocorrencia inexistente: rejeitado
+ERROR:  ocorrencia inexistente ou de outra organizacao (organization_id=bbbbbbbb-0000-0000-0000-00000000000b, occurrence_id=ae0e2d57-d53a-4072-8eef-c061b5589344)
+CONTEXT:  PL/pgSQL function public.process_schedule_occurrence(uuid,uuid,boolean) line 17 at RAISE
+ERROR:  ocorrencia inexistente ou de outra organizacao (organization_id=aaaaaaaa-0000-0000-0000-00000000000a, occurrence_id=ff9ff685-8a70-4c77-a87f-a31ef1cabb83)
+CONTEXT:  PL/pgSQL function public.process_schedule_occurrence(uuid,uuid,boolean) line 17 at RAISE

@@ -1,0 +1,85 @@
+Pager usage is off.
+        papel         
+----------------------
+ nekkora_provisioning
+(1 row)
+
+=== P01 acesso direto a tabela: negado (so EXECUTE nas funcoes)
+ERROR:  permission denied for table organizations
+ERROR:  permission denied for table organizations
+=== P02 validacao do array - cada caso rejeitado antes de qualquer INSERT
+ERROR:  permission denied for table organization_resource_limit_revisions
+ERROR:  p_resource_limits deve ter exatamente 5 elementos (recebido=4)
+CONTEXT:  PL/pgSQL function public.provision_organization(uuid,text,text,uuid,public.resource_limit_input[]) line 16 at RAISE
+ERROR:  p_resource_limits deve cobrir exatamente os resource_code {1,2,3,4,5}, sem repeticao (recebido={1,2,3,4})
+CONTEXT:  PL/pgSQL function public.provision_organization(uuid,text,text,uuid,public.resource_limit_input[]) line 37 at RAISE
+ERROR:  elemento 1 (resource_code=1): FINITE exige limit_value >= 0
+CONTEXT:  PL/pgSQL function public.provision_organization(uuid,text,text,uuid,public.resource_limit_input[]) line 25 at RAISE
+ERROR:  elemento 1 (resource_code=1): FINITE exige limit_value >= 0
+CONTEXT:  PL/pgSQL function public.provision_organization(uuid,text,text,uuid,public.resource_limit_input[]) line 25 at RAISE
+ERROR:  elemento 4 (resource_code=4): UNLIMITED exige limit_value nulo
+CONTEXT:  PL/pgSQL function public.provision_organization(uuid,text,text,uuid,public.resource_limit_input[]) line 29 at RAISE
+ERROR:  elemento 1 (resource_code=1): limit_mode invalido (3)
+CONTEXT:  PL/pgSQL function public.provision_organization(uuid,text,text,uuid,public.resource_limit_input[]) line 32 at RAISE
+ERROR:  elemento 1 de p_resource_limits sem resource_code/limit_mode
+CONTEXT:  PL/pgSQL function public.provision_organization(uuid,text,text,uuid,public.resource_limit_input[]) line 21 at RAISE
+ERROR:  p_resource_limits deve ser um array unidimensional nao nulo
+CONTEXT:  PL/pgSQL function public.provision_organization(uuid,text,text,uuid,public.resource_limit_input[]) line 13 at RAISE
+ERROR:  p_resource_limits deve ser um array unidimensional nao nulo
+CONTEXT:  PL/pgSQL function public.provision_organization(uuid,text,text,uuid,public.resource_limit_input[]) line 13 at RAISE
+=== P03 atomicidade: responsavel inexistente - organizacao ja inserida precisa ser desfeita junto
+ERROR:  insert or update on table "organization_resource_limit_revisions" violates foreign key constraint "organization_resource_limit_revisio_provisioned_by_user_id_fkey"
+DETAIL:  Key is not present in table "users".
+CONTEXT:  SQL statement "INSERT INTO public.organization_resource_limit_revisions (organization_id, resource_code, limit_mode, limit_value, provisioned_by_user_id)
+        SELECT p_organization_id, e.resource_code, e.limit_mode, e.limit_value, p_provisioned_by_user_id
+        FROM unnest(p_resource_limits) e
+        ORDER BY e.resource_code"
+PL/pgSQL function public.provision_organization(uuid,text,text,uuid,public.resource_limit_input[]) line 47 at SQL statement
+=== P04 caminho valido: organizacoes A e B, cinco limites explicitos cada (ordem dos elementos irrelevante)
+                org_a                 
+--------------------------------------
+ aaaaaaaa-0000-0000-0000-00000000000a
+(1 row)
+
+                org_b                 
+--------------------------------------
+ bbbbbbbb-0000-0000-0000-00000000000b
+(1 row)
+
+=== P05 organizacao duplicada: rejeitada
+ERROR:  duplicate key value violates unique constraint "organizations_pkey"
+CONTEXT:  SQL statement "INSERT INTO public.organizations (organization_id, name, legal_name, status)
+        VALUES (p_organization_id, p_name, p_legal_name, 1)"
+PL/pgSQL function public.provision_organization(uuid,text,text,uuid,public.resource_limit_input[]) line 43 at SQL statement
+=== P06 limite e retencao avulsos
+ nova_revisao_limite 
+---------------------
+ t
+(1 row)
+
+ politica_eventos_a 
+--------------------
+ t
+(1 row)
+
+ politica_logs_a 
+-----------------
+ t
+(1 row)
+
+ERROR:  FINITE exige retention_days > 0 (category=1)
+CONTEXT:  PL/pgSQL function public.provision_retention_policy(uuid,integer,smallint,integer,uuid) line 14 at RAISE
+ERROR:  category invalida (3)
+CONTEXT:  PL/pgSQL function public.provision_retention_policy(uuid,integer,smallint,integer,uuid) line 10 at RAISE
+ERROR:  resource_code invalido (6)
+CONTEXT:  PL/pgSQL function public.provision_resource_limit(uuid,integer,smallint,bigint,uuid) line 10 at RAISE
+ERROR:  organizacao inexistente (organization_id=eeeeeeee-0000-0000-0000-00000000000e)
+CONTEXT:  PL/pgSQL function public.provision_resource_limit(uuid,integer,smallint,bigint,uuid) line 28 at RAISE
+=== P07 funcoes de outros servicos: sem EXECUTE
+ERROR:  permission denied for function set_schedule_status
+ERROR:  permission denied for function close_usage_day
+ fn_ctx_apos_chamadas 
+----------------------
+ 
+(1 row)
+

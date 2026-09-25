@@ -1,0 +1,13 @@
+Pager usage is off.
+  papel  
+---------
+ nekkora
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+ marker  
+---------
+ seed ok
+(1 row)
+

@@ -1,0 +1,217 @@
+Pager usage is off.
+      papel       | pid 
+------------------+-----
+ nekkora_platform | 162
+(1 row)
+
+=== I01 contexto A: so linhas de A; ids de B invisiveis
+BEGIN
+SET
+ ws | exec | users | ws_b_por_id | org_b_por_id 
+----+------+-------+-------------+--------------
+  1 |    1 |     1 |           0 |            0
+(1 row)
+
+=== I02 UPDATE em linha de B com contexto A: 0 linhas (USING filtra, sem erro)
+UPDATE 0
+UPDATE 0
+UPDATE 0
+COMMIT
+=== I03 INSERT com organization_id de B no contexto A: rejeitado por WITH CHECK
+BEGIN
+SET
+ERROR:  new row violates row-level security policy for table "workspaces"
+ROLLBACK
+=== I04 UPDATE movendo linha de A para B: rejeitado por WITH CHECK
+BEGIN
+SET
+UPDATE 0
+ERROR:  new row violates row-level security policy for table "workspaces"
+ROLLBACK
+=== I05 sem contexto: nenhuma linha, nenhuma escrita
+ contexto_atual 
+----------------
+ 
+(1 row)
+
+ ws | orgs | cred 
+----+------+------
+  0 |    0 |    0
+(1 row)
+
+ERROR:  new row violates row-level security policy for table "workspaces"
+=== I06 contexto vazio
+BEGIN
+SET
+ ws_contexto_vazio 
+-------------------
+                 0
+(1 row)
+
+ROLLBACK
+=== I07 contexto malformado: erro de conversao, nada retornado
+BEGIN
+SET
+ERROR:  invalid input syntax for type uuid: "nao-e-um-uuid"
+ROLLBACK
+=== I08 reutilizacao de conexao: SET LOCAL nao sobrevive ao fim da transacao
+BEGIN
+SET
+ pid | ws_txn1 
+-----+---------
+ 162 |       1
+(1 row)
+
+COMMIT
+ mesmo_pid | contexto_apos_commit | ws_txn2 
+-----------+----------------------+---------
+       162 |                      |       0
+(1 row)
+
+BEGIN
+SET
+ ws_txn3_contexto_b |              org_vista               
+--------------------+--------------------------------------
+                  1 | bbbbbbbb-0000-0000-0000-00000000000b
+(1 row)
+
+ROLLBACK
+ contexto_apos_rollback | ws_txn4 
+------------------------+---------
+                        |       0
+(1 row)
+
+=== I09 uso indevido (informativo): SET de sessao, sem LOCAL, vaza para a transacao seguinte
+SET
+ ws_com_set_de_sessao_na_txn_seguinte 
+--------------------------------------
+                                    1
+(1 row)
+
+RESET
+ ws_apos_reset 
+---------------
+             0
+(1 row)
+
+=== I10 falsificar nekkora.fn_organization_id nao afeta a politica do platform
+BEGIN
+SET
+SET
+ ws |              org_vista               
+----+--------------------------------------
+  1 | aaaaaaaa-0000-0000-0000-00000000000a
+(1 row)
+
+ROLLBACK
+BEGIN
+SET
+ ws_so_com_fn_ctx 
+------------------
+                0
+(1 row)
+
+ROLLBACK
+=== I11 operacoes nao concedidas ao platform
+BEGIN
+SET
+ERROR:  permission denied for table organizations
+ROLLBACK
+BEGIN
+SET
+ERROR:  permission denied for table automation_schedules
+ROLLBACK
+BEGIN
+SET
+ERROR:  permission denied for table automation_schedule_occurrences
+ROLLBACK
+BEGIN
+SET
+ERROR:  permission denied for table organization_usage_daily
+ROLLBACK
+BEGIN
+SET
+ERROR:  permission denied for table executions
+ROLLBACK
+BEGIN
+SET
+ERROR:  permission denied for table execution_events
+ROLLBACK
+ERROR:  permission denied for function create_schedule_occurrence
+ERROR:  permission denied for function process_schedule_occurrence
+ERROR:  permission denied for function process_schedule_occurrence
+ERROR:  permission denied for function reconsolidate_usage_day
+ERROR:  permission denied for function assign_received_at_and_lock_barrier
+ERROR:  permission denied for function provision_organization
+ERROR:  permission denied for schema public
+LINE 1: CREATE TABLE public.intrusa (id int);
+                     ^
+CREATE TABLE
+=== I12 set_schedule_status: contexto obrigatorio e coincidente
+BEGIN
+SET
+ suspenso 
+----------
+        2
+(1 row)
+
+ idempotente 
+-------------
+           2
+(1 row)
+
+ retomado 
+----------
+        1
+(1 row)
+
+ fn_ctx_apos_retorno 
+---------------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+SET
+ERROR:  contexto organizacional ausente ou divergente (organization_id=bbbbbbbb-0000-0000-0000-00000000000b, contexto=aaaaaaaa-0000-0000-0000-00000000000a)
+CONTEXT:  PL/pgSQL function public.set_schedule_status(uuid,uuid,smallint,uuid) line 16 at RAISE
+ROLLBACK
+BEGIN
+SET
+ERROR:  agendamento inexistente ou de outra organizacao (organization_id=aaaaaaaa-0000-0000-0000-00000000000a, schedule_id=bbbbbbbb-0000-0000-000b-000000000001)
+CONTEXT:  PL/pgSQL function public.set_schedule_status(uuid,uuid,smallint,uuid) line 27 at RAISE
+ROLLBACK
+ERROR:  contexto organizacional ausente ou divergente (organization_id=aaaaaaaa-0000-0000-0000-00000000000a, contexto=<ausente>)
+CONTEXT:  PL/pgSQL function public.set_schedule_status(uuid,uuid,smallint,uuid) line 16 at RAISE
+BEGIN
+SET
+ERROR:  status desejado invalido (3): 1=ACTIVE, 2=SUSPENDED
+CONTEXT:  PL/pgSQL function public.set_schedule_status(uuid,uuid,smallint,uuid) line 12 at RAISE
+ROLLBACK
+BEGIN
+SET
+ agenda_b_intacta 
+------------------
+                1
+(1 row)
+
+ROLLBACK
+=== I13 objeto temporario sombreando tabela real nao desvia as triggers (search_path fixo, pg_temp por ultimo)
+INSERT 0 1
+ALTER TABLE
+           organization_id            | status_na_tabela_temporaria 
+--------------------------------------+-----------------------------
+ aaaaaaaa-0000-0000-0000-00000000000a |                           3
+(1 row)
+
+BEGIN
+SET
+ consulta_nao_qualificada_da_sessao 
+------------------------------------
+                                  3
+(1 row)
+
+INSERT 0 1
+UPDATE 1
+COMMIT
+DROP TABLE

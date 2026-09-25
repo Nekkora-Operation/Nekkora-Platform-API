@@ -1,0 +1,6 @@
+Pager usage is off.
+ records_count | bytes_count |        consolidated_at        | persistidos 
+---------------+-------------+-------------------------------+-------------
+             3 |         135 | 2026-09-25 18:45:51.005228+00 | 3/135
+(1 row)
+

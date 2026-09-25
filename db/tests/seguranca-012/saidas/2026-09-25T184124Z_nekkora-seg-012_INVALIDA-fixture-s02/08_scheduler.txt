@@ -1,0 +1,56 @@
+Pager usage is off.
+       papel       
+-------------------
+ nekkora_scheduler
+(1 row)
+
+=== S01 sem acesso direto: tabelas, implementacao interna (2 parametros), suspender/retomar
+ERROR:  permission denied for table automation_schedule_occurrences
+ERROR:  permission denied for table executions
+ERROR:  permission denied for function process_schedule_occurrence
+ERROR:  permission denied for function set_schedule_status
+=== S02 materializacao idempotente (sequencial): mesmo (schedule, scheduled_for) -> mesmo occurrence_id
+ERROR:  scheduled_for anterior ao marco de retomada (schedule_id=aaaaaaaa-0000-0000-000b-000000000001, scheduled_for=2026-09-25 18:41:35+00, resumed_at=2026-09-25 18:41:35.383862+00)
+CONTEXT:  PL/pgSQL function materialize_schedule_occurrence() line 29 at RAISE
+SQL statement "INSERT INTO public.automation_schedule_occurrences (organization_id, workspace_id, schedule_id, scheduled_for, status)
+            VALUES (p_organization_id, p_workspace_id, p_schedule_id, p_scheduled_for, 1)
+            RETURNING occurrence_id"
+PL/pgSQL function public.create_schedule_occurrence(uuid,uuid,uuid,timestamp with time zone) line 37 at SQL statement
+ERROR:  syntax error at or near ":"
+LINE 1: SELECT :'occ1' AS occ1,
+               ^
+=== S03 referencias cruzadas: rejeitadas com erro nomeado
+ERROR:  agendamento nao pertence ao workspace informado (schedule_id=aaaaaaaa-0000-0000-000b-000000000001, workspace_id=bbbbbbbb-0000-0000-0003-000000000001)
+CONTEXT:  PL/pgSQL function public.create_schedule_occurrence(uuid,uuid,uuid,timestamp with time zone) line 22 at RAISE
+ERROR:  agendamento inexistente ou de outra organizacao (organization_id=aaaaaaaa-0000-0000-0000-00000000000a, schedule_id=bbbbbbbb-0000-0000-000b-000000000001)
+CONTEXT:  PL/pgSQL function public.create_schedule_occurrence(uuid,uuid,uuid,timestamp with time zone) line 18 at RAISE
+ERROR:  agendamento inexistente ou de outra organizacao (organization_id=bbbbbbbb-0000-0000-0000-00000000000b, schedule_id=aaaaaaaa-0000-0000-000b-000000000001)
+CONTEXT:  PL/pgSQL function public.create_schedule_occurrence(uuid,uuid,uuid,timestamp with time zone) line 18 at RAISE
+ERROR:  materializacao exige organization_id, workspace_id, schedule_id e scheduled_for
+CONTEXT:  PL/pgSQL function public.create_schedule_occurrence(uuid,uuid,uuid,timestamp with time zone) line 8 at RAISE
+=== S04 regra de negocio da trigger inalterada: materializacao antecipada rejeitada
+ERROR:  materializacao antecipada - scheduled_for no futuro (schedule_id=aaaaaaaa-0000-0000-000b-000000000001, scheduled_for=2026-09-25 19:41:35.8815+00)
+CONTEXT:  PL/pgSQL function materialize_schedule_occurrence() line 25 at RAISE
+SQL statement "INSERT INTO public.automation_schedule_occurrences (organization_id, workspace_id, schedule_id, scheduled_for, status)
+            VALUES (p_organization_id, p_workspace_id, p_schedule_id, p_scheduled_for, 1)
+            RETURNING occurrence_id"
+PL/pgSQL function public.create_schedule_occurrence(uuid,uuid,uuid,timestamp with time zone) line 37 at SQL statement
+=== S05 processamento pelo ponto de entrada de 3 parametros
+=== reprocessamento devolve a mesma decisao
+ERROR:  syntax error at or near ":"
+LINE 1: ...ccurrence('aaaaaaaa-0000-0000-0000-00000000000a', :'occ1', t...
+                                                             ^
+ERROR:  syntax error at or near ":"
+LINE 1: ...ccurrence('aaaaaaaa-0000-0000-0000-00000000000a', :'occ1', t...
+                                                             ^
+ fn_ctx_apos 
+-------------
+ 
+(1 row)
+
+=== S06 organizacao divergente da ocorrencia / ocorrencia inexistente: rejeitado
+ERROR:  syntax error at or near ":"
+LINE 1: ...ccurrence('bbbbbbbb-0000-0000-0000-00000000000b', :'occ1', t...
+                                                             ^
+ERROR:  ocorrencia inexistente ou de outra organizacao (organization_id=aaaaaaaa-0000-0000-0000-00000000000a, occurrence_id=c49dead3-bd8d-491c-b251-563577464cfa)
+CONTEXT:  PL/pgSQL function public.process_schedule_occurrence(uuid,uuid,boolean) line 17 at RAISE

@@ -1,5 +1,7 @@
 # Regressão da renomeação Radiant → Nekkora (baseline 001–011)
 
+> **Escopo encerrado com a 012.** Esta suíte valida a baseline 001–011. A partir de `012_security_rls.sql`, ela não se aplica mais como está: o `nekkora_app` foi substituído por `nekkora_ingestion` e removido, e as tabelas de tenant passaram a exigir contexto RLS. O `run.sh` exige exatamente 11 migrations aplicadas, então falha logo no início, em vez de produzir resultado enganoso. A validação vigente é `db/tests/seguranca-012/`.
+
 Testes reproduzíveis da missão de regressão de 2026-09-25. O relatório completo está em `relatorios/2026-09-25-regressao-renomeacao-nekkora.md`, fora deste repositório.
 
 ## Como rodar

@@ -1,0 +1,24 @@
+Pager usage is off.
+      papel       
+------------------
+ nekkora_platform
+(1 row)
+
+=== B06 INSERT direto com responsavel nulo, no proprio contexto: rejeitado pela trigger (current_user)
+BEGIN
+SET
+ERROR:  bootstrap sem responsavel so e permitido via provision_first_org_admin (current_user=nekkora_platform)
+CONTEXT:  PL/pgSQL function enforce_org_role_assignment_bootstrap() line 5 at RAISE
+ROLLBACK
+=== B07 funcao de bootstrap: sem EXECUTE para o platform
+ERROR:  permission denied for function provision_first_org_admin
+=== B08 platform le as proprias atribuicoes (antes do bootstrap: 0) e nao le eventos de provisionamento (sem GRANT)
+BEGIN
+SET
+ atribuicoes_visiveis_a 
+------------------------
+                      0
+(1 row)
+
+ERROR:  permission denied for table identity_provisioning_events
+ROLLBACK

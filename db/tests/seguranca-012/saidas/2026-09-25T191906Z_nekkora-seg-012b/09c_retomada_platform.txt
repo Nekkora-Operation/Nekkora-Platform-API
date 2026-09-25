@@ -1,0 +1,19 @@
+Pager usage is off.
+BEGIN
+SET
+ agenda 
+--------
+      1
+(1 row)
+
+ ocorrencia_apos_retomada | skip_reason 
+--------------------------+-------------
+                        3 |           3
+(1 row)
+
+ resumed_at_atribuido 
+----------------------
+ t
+(1 row)
+
+COMMIT

@@ -1,0 +1,12 @@
+Pager usage is off.
+         c_observacao          | pid |      usename      | state  | wait_event_type |  wait_event   |                            query                             
+-------------------------------+-----+-------------------+--------+-----------------+---------------+--------------------------------------------------------------
+ 2026-09-25 18:45:37.54356+00  | 252 | nekkora_scheduler | active | Timeout         | PgSleep       | SELECT pg_sleep(8);
+ 2026-09-25 18:45:37.543567+00 | 266 | nekkora_scheduler | active | Lock            | transactionid | SELECT create_schedule_occurrence('aaaaaaaa-0000-0000-0000-0
+(2 rows)
+
+ bloqueado |      usename      | bloqueado_por 
+-----------+-------------------+---------------
+       266 | nekkora_scheduler | {252}
+(1 row)
+

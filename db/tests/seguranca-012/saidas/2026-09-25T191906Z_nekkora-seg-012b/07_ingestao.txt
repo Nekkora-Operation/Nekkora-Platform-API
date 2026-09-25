@@ -1,0 +1,99 @@
+Pager usage is off.
+       papel       | pid 
+-------------------+-----
+ nekkora_ingestion | 189
+(1 row)
+
+=== G01 ingestao valida em A e em B, cada uma no proprio contexto
+BEGIN
+SET
+ fn_ctx_antes 
+--------------
+ 
+(1 row)
+
+INSERT 0 1
+ fn_ctx_apos_barreira_restaurado 
+---------------------------------
+ 
+(1 row)
+
+INSERT 0 1
+ eventos_visiveis_a | logs_visiveis_a 
+--------------------+-----------------
+                  1 |               1
+(1 row)
+
+COMMIT
+BEGIN
+SET
+INSERT 0 2
+ eventos_visiveis_b |              org_vista               
+--------------------+--------------------------------------
+                  2 | bbbbbbbb-0000-0000-0000-00000000000b
+(1 row)
+
+COMMIT
+=== G02 sem contexto: rejeitado (a trigger de origem nao enxerga a execucao sob RLS)
+ERROR:  execucao sem alocacao nao pode receber evento (execution_id=aaaaaaaa-0000-0000-000a-000000000001)
+CONTEXT:  PL/pgSQL function enforce_execution_event_agent_origin() line 8 at RAISE
+=== G03 contexto A, evento declarado de B (execucao de B): rejeitado
+BEGIN
+SET
+ERROR:  execucao sem alocacao nao pode receber evento (execution_id=bbbbbbbb-0000-0000-000a-000000000001)
+CONTEXT:  PL/pgSQL function enforce_execution_event_agent_origin() line 8 at RAISE
+ROLLBACK
+=== G04 barreira chamada direto com organizacao divergente do contexto: erro nomeado (42501)
+BEGIN
+SET
+ERROR:  contexto organizacional ausente ou divergente na ingestao (organization_id=bbbbbbbb-0000-0000-0000-00000000000b, contexto=aaaaaaaa-0000-0000-0000-00000000000a)
+CONTEXT:  PL/pgSQL function public.assign_received_at_and_lock_barrier(uuid,integer) line 17 at RAISE
+ROLLBACK
+ERROR:  contexto organizacional ausente ou divergente na ingestao (organization_id=aaaaaaaa-0000-0000-0000-00000000000a, contexto=<ausente>)
+CONTEXT:  PL/pgSQL function public.assign_received_at_and_lock_barrier(uuid,integer) line 17 at RAISE
+=== G05 restauracao apos erro dentro da barreira: fn_ctx volta ao valor anterior
+BEGIN
+SET
+SET
+SAVEPOINT
+ERROR:  new row for relation "execution_events" violates check constraint "execution_events_check"
+ROLLBACK
+           fn_ctx_apos_erro           
+--------------------------------------
+ 11111111-2222-3333-4444-555555555555
+(1 row)
+
+INSERT 0 1
+         fn_ctx_apos_sucesso          
+--------------------------------------
+ 11111111-2222-3333-4444-555555555555
+(1 row)
+
+COMMIT
+=== G06 operacoes nao concedidas a ingestao
+BEGIN
+SET
+ERROR:  permission denied for table execution_events
+ROLLBACK
+BEGIN
+SET
+ERROR:  permission denied for table logs
+ROLLBACK
+BEGIN
+SET
+ERROR:  permission denied for table execution_events
+ROLLBACK
+BEGIN
+SET
+ERROR:  permission denied for table organization_usage_daily
+ROLLBACK
+BEGIN
+SET
+ERROR:  permission denied for table organization_usage_daily
+ROLLBACK
+BEGIN
+SET
+ERROR:  permission denied for table workspaces
+ROLLBACK
+ERROR:  permission denied for function reconsolidate_usage_day
+ERROR:  permission denied for function close_usage_day

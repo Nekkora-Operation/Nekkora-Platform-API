@@ -1,0 +1,24 @@
+Pager usage is off.
+      papel       
+------------------
+ nekkora_platform
+(1 row)
+
+BEGIN
+SET
+ ocorrencia_antes 
+------------------
+                1
+(1 row)
+
+ agenda 
+--------
+      2
+(1 row)
+
+ ocorrencia_depois | skip_reason | execution_id 
+-------------------+-------------+--------------
+                 3 |           3 | 
+(1 row)
+
+COMMIT

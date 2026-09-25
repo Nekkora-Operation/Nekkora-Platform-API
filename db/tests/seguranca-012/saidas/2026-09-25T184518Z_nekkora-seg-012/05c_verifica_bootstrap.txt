@@ -1,0 +1,7 @@
+Pager usage is off.
+           organization_id            | bootstrap |   papel   | eventos 
+--------------------------------------+-----------+-----------+---------
+ aaaaaaaa-0000-0000-0000-00000000000a | t         | ORG_ADMIN |       1
+ bbbbbbbb-0000-0000-0000-00000000000b | t         | ORG_ADMIN |       1
+(2 rows)
+

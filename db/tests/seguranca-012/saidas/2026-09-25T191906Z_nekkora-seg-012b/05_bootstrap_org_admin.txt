@@ -1,0 +1,36 @@
+Pager usage is off.
+        papel         
+----------------------
+ nekkora_provisioning
+(1 row)
+
+=== B01 vinculo de outra organizacao (membership de B para a organizacao A): rejeitado com erro nomeado
+=== B02 atomicidade: evento de provisionamento falha (responsavel inexistente) - atribuicao desfeita junto
+ERROR:  vinculo nao pertence a organizacao informada (organization_id=aaaaaaaa-0000-0000-0000-00000000000a, membership_id=bbbbbbbb-0000-0000-0002-000000000001)
+CONTEXT:  PL/pgSQL function public.provision_first_org_admin(uuid,uuid,uuid,text,uuid) line 29 at RAISE
+ERROR:  insert or update on table "identity_provisioning_events" violates foreign key constraint "identity_provisioning_events_provisioned_by_user_id_fkey"
+DETAIL:  Key is not present in table "users".
+CONTEXT:  SQL statement "INSERT INTO public.identity_provisioning_events (organization_id, assignment_id, provisioned_by_user_id, channel, correlation_id)
+        VALUES (p_organization_id, v_assignment_id, p_provisioned_by_user_id, p_channel, p_correlation_id)"
+PL/pgSQL function public.provision_first_org_admin(uuid,uuid,uuid,text,uuid) line 33 at SQL statement
+=== B03 parametro obrigatorio ausente / canal vazio
+ERROR:  bootstrap exige organization_id, membership_id, provisioned_by_user_id, channel e correlation_id
+CONTEXT:  PL/pgSQL function public.provision_first_org_admin(uuid,uuid,uuid,text,uuid) line 9 at RAISE
+=== B04 caminho autorizado, A e B
+ bootstrap_a 
+-------------
+ t
+(1 row)
+
+ bootstrap_b 
+-------------
+ t
+(1 row)
+
+=== B05 segundo bootstrap na mesma organizacao: rejeitado
+ERROR:  bootstrap sem responsavel só é permitido quando a organizacao ainda nao tem nenhuma atribuicao (organization_id=aaaaaaaa-0000-0000-0000-00000000000a)
+CONTEXT:  PL/pgSQL function enforce_org_role_assignment_bootstrap() line 10 at RAISE
+SQL statement "INSERT INTO public.organization_role_assignments (organization_id, membership_id, role_id, scope, status, assigned_by_membership_id)
+            VALUES (p_organization_id, p_membership_id, v_role_id, 1, 1, NULL)
+            RETURNING assignment_id"
+PL/pgSQL function public.provision_first_org_admin(uuid,uuid,uuid,text,uuid) line 25 at SQL statement

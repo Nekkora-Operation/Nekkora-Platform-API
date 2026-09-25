@@ -1,0 +1,112 @@
+Pager usage is off.
+           papel            | pid |  hoje_utc  
+----------------------------+-----+------------
+ nekkora_retention_executor | 218 | 2026-09-25
+(1 row)
+
+=== R01 reconsolidacao sob RLS conta so a organizacao do parametro (B tem eventos no mesmo dia)
+ org | out_records_count | out_bytes_count |      out_consolidated_at      
+-----+-------------------+-----------------+-------------------------------
+ A   |                 2 |              71 | 2026-09-25 18:41:37.027016+00
+(1 row)
+
+ org | out_records_count | out_bytes_count |      out_consolidated_at      
+-----+-------------------+-----------------+-------------------------------
+ B   |                 2 |              71 | 2026-09-25 18:41:37.028963+00
+(1 row)
+
+  org   | out_records_count | out_bytes_count |      out_consolidated_at      
+--------+-------------------+-----------------+-------------------------------
+ A logs |                 1 |              41 | 2026-09-25 18:41:37.030972+00
+(1 row)
+
+=== R02 guard + contexto de funcao na mesma transacao
+BEGIN
+ out_records_count 
+-------------------
+                 2
+(1 row)
+
+ fn_ctx_restaurado |             guard_intacto              
+-------------------+----------------------------------------
+                   | aaaaaaaa-0000-0000-0000-00000000000a:1
+(1 row)
+
+ close_usage_day 
+-----------------
+ 
+(1 row)
+
+ fn_ctx_restaurado |             guard_intacto              
+-------------------+----------------------------------------
+                   | aaaaaaaa-0000-0000-0000-00000000000a:1
+(1 row)
+
+SAVEPOINT
+ERROR:  esta transacao ja processou organizacao/categoria aaaaaaaa-0000-0000-0000-00000000000a:1 - fechamento/expurgo nao pode misturar organizacao/categoria na mesma transacao (tentativa atual=aaaaaaaa-0000-0000-0000-00000000000a:2)
+CONTEXT:  PL/pgSQL function assert_single_category_per_transaction(uuid,integer) line 13 at RAISE
+SQL statement "SELECT public.assert_single_category_per_transaction(p_organization_id, v_category)"
+PL/pgSQL function public.reconsolidate_usage_day(uuid,integer,date) line 22 at PERFORM
+ROLLBACK
+SAVEPOINT
+ERROR:  esta transacao ja processou organizacao/categoria aaaaaaaa-0000-0000-0000-00000000000a:1 - fechamento/expurgo nao pode misturar organizacao/categoria na mesma transacao (tentativa atual=bbbbbbbb-0000-0000-0000-00000000000b:1)
+CONTEXT:  PL/pgSQL function assert_single_category_per_transaction(uuid,integer) line 13 at RAISE
+SQL statement "SELECT public.assert_single_category_per_transaction(p_organization_id, v_category)"
+PL/pgSQL function public.reconsolidate_usage_day(uuid,integer,date) line 22 at PERFORM
+ROLLBACK
+COMMIT
+=== R03 reset: mesma conexao, transacao seguinte com outro par
+ mesmo_pid | guard_fora_de_txn 
+-----------+-------------------
+       218 | 
+(1 row)
+
+BEGIN
+ out_records_count 
+-------------------
+                 0
+(1 row)
+
+COMMIT
+=== R04 contexto de funcao: valor anterior nao vazio preservado no sucesso e no erro (salvar/restaurar por funcao)
+BEGIN
+SET
+ close_usage_day 
+-----------------
+ 
+(1 row)
+
+         fn_ctx_apos_sucesso          
+--------------------------------------
+ 11111111-2222-3333-4444-555555555555
+(1 row)
+
+SAVEPOINT
+ERROR:  dia ja esta fechado (organization_id=aaaaaaaa-0000-0000-0000-00000000000a, resource_code=4, usage_date=2026-09-01)
+CONTEXT:  PL/pgSQL function public.close_usage_day(uuid,integer,date) line 47 at RAISE
+ROLLBACK
+           fn_ctx_apos_erro           
+--------------------------------------
+ 11111111-2222-3333-4444-555555555555
+(1 row)
+
+COMMIT
+=== R05 regras da reconsolidacao
+ERROR:  reconsolidacao nao processa dia futuro (usage_date=2026-09-26, hoje=2026-09-25)
+CONTEXT:  PL/pgSQL function public.reconsolidate_usage_day(uuid,integer,date) line 31 at RAISE
+ERROR:  dia ja esta fechado, reconsolidacao nao permitida (organization_id=aaaaaaaa-0000-0000-0000-00000000000a, resource_code=5, usage_date=2026-09-01)
+CONTEXT:  PL/pgSQL function public.reconsolidate_usage_day(uuid,integer,date) line 43 at RAISE
+ERROR:  resource_code invalido para reconsolidacao de consumo diario (3)
+CONTEXT:  PL/pgSQL function public.reconsolidate_usage_day(uuid,integer,date) line 20 at RAISE
+BEGIN
+ERROR:  reconsolidacao exige transaction_isolation=read committed (atual=repeatable read)
+CONTEXT:  PL/pgSQL function public.reconsolidate_usage_day(uuid,integer,date) line 26 at RAISE
+ROLLBACK
+ERROR:  reconsolidacao exige organization_id, resource_code e usage_date
+CONTEXT:  PL/pgSQL function public.reconsolidate_usage_day(uuid,integer,date) line 13 at RAISE
+=== R06 nao concedido ao executor
+ERROR:  permission denied for function purge_expired_records
+ERROR:  permission denied for table organization_usage_daily
+ERROR:  permission denied for table execution_events
+ERROR:  permission denied for function assign_received_at_and_lock_barrier
+ERROR:  permission denied for function provision_resource_limit

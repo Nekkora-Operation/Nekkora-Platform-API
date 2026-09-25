@@ -1,0 +1,6 @@
+Pager usage is off.
+ linhas_para_a_identidade |            occurrence_id             
+--------------------------+--------------------------------------
+                        1 | 14edf7a0-6c53-4d93-80ae-6deddf96e327
+(1 row)
+
