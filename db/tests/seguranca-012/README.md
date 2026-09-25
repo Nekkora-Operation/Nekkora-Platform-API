@@ -80,3 +80,8 @@ Não rode perto de 00:00 UTC.
 | m4d | `GRANT CREATE ON DATABASE nekkora TO nekkora_retention_owner` | `00` e seção 15: `CREATE` efetivo |
 
 Os ganchos `TESTE_MUTACAO` e `TESTE_FORCAR_FALHA_A` do `run.sh` existem só para esses testes e nunca são usados numa execução normal.
+
+**Proteção operacional do `executa.sh`:** os nomes das stacks são fixos (`nekkora-mut-<caso>`).
+- Se **qualquer** container, volume ou rede com esses nomes já existir, o script aborta antes de executar qualquer caso (exit 2) e não cria, altera nem remove nada. A mesma checagem é repetida antes de cada caso.
+- Verificação de invariantes e limpeza só atuam sobre recursos **comprovadamente criados pelo caso atual**: rótulo `com.docker.compose.project` do caso **e** criação posterior ao início do caso. Qualquer outro recurso é preservado e reportado.
+- Teste direcionado: `testes-do-runner/saidas-protecao/`.

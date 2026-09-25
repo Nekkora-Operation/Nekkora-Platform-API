@@ -1,0 +1,5 @@
+ERRO: recursos com nomes reservados pelos testes do runner ja existem. Nada foi executado,
+criado, alterado ou removido. Remova-os conscientemente ou investigue antes de rodar:
+  - volume nekkora-mut-m1_nekkora_postgres_data
+  - container nekkora-mut-m4a-postgres
+exit=2

@@ -1,0 +1,10 @@
+== preparacao: recursos com nomes conflitantes (criados por este teste)
+nekkora-mut-m1_nekkora_postgres_data
+97e42b7b35c89b79ec744a0bd79630bf8c41c72b82ec17b286b9bd31b765c600
+== estado antes
+volume nekkora-mut-m1_nekkora_postgres_data criado=2026-09-25T22:44:09Z labels=map[origem:teste-protecao]
+container /nekkora-mut-m4a-postgres id=97e42b7b35c89b79ec744a0bd79630bf8c41c72b82ec17b286b9bd31b765c600 criado=2026-09-25T22:44:10.564169172Z status=created
+cat: can't open 'D:/marcador.txt': No such file or directory
+marcador: 
+stacks nekkora-mut-* antes: 1  volumes: 1  redes: 0
+pastas de saida antes: 2026-09-25T223416Z 

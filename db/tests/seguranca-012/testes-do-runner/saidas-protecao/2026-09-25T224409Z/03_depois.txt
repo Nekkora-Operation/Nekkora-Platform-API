@@ -1,0 +1,8 @@
+== estado depois
+volume nekkora-mut-m1_nekkora_postgres_data criado=2026-09-25T22:44:09Z labels=map[origem:teste-protecao]
+container /nekkora-mut-m4a-postgres id=97e42b7b35c89b79ec744a0bd79630bf8c41c72b82ec17b286b9bd31b765c600 criado=2026-09-25T22:44:10.564169172Z status=created
+marcador: marcador-preexistente
+stacks nekkora-mut-* depois: 1  volumes: 1  redes: 0
+pastas de saida depois: 2026-09-25T223416Z 
+processos psql no container m4a (nunca iniciado): status=created iniciado_em=0001-01-01T00:00:00Z
+IDENTICOS: volume e container sem alteracao

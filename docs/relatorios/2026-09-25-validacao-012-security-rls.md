@@ -400,3 +400,24 @@ Todos os 7 casos produziram falha inequívoca (`falhas=0`).
 **Base principal:** a 012 aplicada nela é a versão anterior à revisão. A mudança da revisão se limita ao bloco de verificação da seção 15, sem nenhum objeto diferente. O bloco revisado, executado contra a base principal (`instalacao-limpa/saidas/10_invariantes_secao15_revisados.txt`), passou: nenhuma membership e nenhum `CREATE` efetivo nos papéis protegidos. Uma nova recriação não foi feita.
 
 **Limite do harness:** as asserções usam funções temporárias (`pg_temp`), criadas com o privilégio `TEMP`, que `PUBLIC` tem por padrão. Se `TEMP` for revogado dos papéis de serviço no futuro, o harness precisará de outro meio.
+
+### 10.1 Achado da segunda revisão: proteção operacional do runner de testes deliberados
+
+**Achado:** `testes-do-runner/executa.sh` chamava a remoção da stack mesmo quando o `run.sh` se recusava a iniciar por já existir container ou volume. Como os nomes são fixos (`nekkora-mut-m1`…), uma reexecução poderia apagar recursos preexistentes que não criou e, nos casos m4, rodar a verificação de invariantes contra um container alheio.
+
+**Correção:**
+1. Verificação prévia de todos os nomes reservados: se algum container, volume ou rede já existir, o script aborta com exit 2, antes de criar qualquer coisa.
+2. A mesma verificação imediatamente antes de cada caso.
+3. Verificação de invariantes e limpeza só sobre recursos comprovadamente criados pelo caso atual: rótulo `com.docker.compose.project` do caso **e** criação posterior ao início do caso. Todo o resto é preservado e reportado.
+4. A coleta das saídas passou a pegar só o diretório criado na execução, nunca um preexistente de mesmo nome.
+
+A função de propriedade foi conferida isoladamente contra a stack `nekkora-seg-012c`, com rótulo errado, rótulo certo e criação anterior ao início: decidiu corretamente nos três casos.
+
+**Teste direcionado** (`testes-do-runner/saidas-protecao/`):
+- Preparados um volume `nekkora-mut-m1_nekkora_postgres_data`, com arquivo marcador, e um container `nekkora-mut-m4a-postgres` (criado, nunca iniciado).
+- O runner recusou com exit 2 e listou os dois.
+- Depois da execução, os dois estavam **idênticos**: mesmo id, mesma data de criação e marcador preservado. O container nunca foi iniciado, então nada foi executado nele. Nenhuma stack nova, nenhuma pasta de saída nova.
+- Os recursos do teste foram removidos em seguida.
+- A bateria SQL não foi repetida: a mudança não toca a migration nem os scripts da suíte.
+
+**Situação:** os três achados da primeira revisão foram considerados encerrados pelo revisor, conforme a cobertura apresentada. Este achado operacional foi corrigido e testado. As pendências do §7 (fechamento concorrente com inserção não confirmada, virada UTC, infraestrutura, ativação do expurgo) seguem separadas.

@@ -1,0 +1,1 @@
+recursos do teste removidos; restantes nekkora-mut-*: 0 containers, 0 volumes
