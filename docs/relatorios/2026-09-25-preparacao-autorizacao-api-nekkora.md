@@ -181,9 +181,9 @@ Nenhuma migration ou configuração de produção é alterada por este relatóri
 |---|---|---|
 | 8.1 Seletor da organização | **Fechada (v1)** | `organization_id` como identificador público na rota. UUID não é segredo. Slug ou subdomínio fica para depois, porque exigiria resolver o identificador sem busca global sob RLS. Links de convite, verificação e redefinição também carregam esse contexto |
 | 8.2 Papel do portal externo | **Direção escolhida (b); desenho pendente** | Identidade **e processo** próprios para o portal, com papel somente de leitura e acesso a *views* do conteúdo publicado. Exige migration e testes próprios. As views restringem **por cliente e concessão ativa**; filtrar só por organização não basta. O processo do portal **não** tem as credenciais do `nekkora_platform`. **Por que continua pendente:** na aplicação, o fluxo é validar a sessão no banco e derivar o contexto do vínculo encontrado, nunca de um ID do navegador. Mas um contexto de cliente guardado num parâmetro customizado **não é barreira independente no banco**: o PostgreSQL aceita parâmetros de dois componentes, e `set_config` permite a qualquer papel defini-los durante a transação. Então o papel do portal **não pode** conseguir ler dados de outro cliente só por definir outro contexto. **Critério para fechar:** o desenho das views precisa incluir um **teste negativo direto**: mesmo tentando trocar o contexto de cliente, a identidade do portal não consegue ler dados de outra concessão |
-| 8.3 Sessão | **Formato fechado; durações pendentes** | Token opaco aleatório, guardado como hash em `user_sessions`, enviado em cookie `Secure`, `HttpOnly`, `SameSite=Lax`, com proteção CSRF nas operações que alteram estado. **Pendente:** duração absoluta e por inatividade |
+| 8.3 Sessão | **Fechada para a área interna; duração do portal pendente** | Formato: token opaco aleatório, guardado como hash em `user_sessions`, enviado em cookie `Secure`, `HttpOnly`, `SameSite=Lax`, com proteção CSRF nas operações que alteram estado. Política (detalhada em **§11.4**): prazo absoluto de **12 h**; inatividade de **30 min** (interna); até **10 sessões** ativas por conta; logout, "encerrar todas" e revogação na troca de senha, na recuperação e na suspensão. **Pendente:** inatividade do portal externo (proposta: 15 min), a fechar junto com o desenho da 8.2 |
 | 8.4 Revogação contínua | **Fechada** | Revalidar sessão, conta, vínculo e concessão a cada requisição. Token autocontido sem consulta ao estado atual não atende |
-| 8.5 `last_seen_at` | **Pendente** | Depende da tolerância de inatividade (8.3). Só depois dela se escolhe entre escrita por requisição e atualização em janela |
+| 8.5 `last_seen_at` | **Fechada** | No máximo **1 escrita por minuto** por sessão, por `UPDATE` condicional e atômico. **Tolerância registrada:** a sessão pode ser encerrada por inatividade **até 1 minuto antes** do limite exato de 30 min. Detalhe em **§11.4** |
 | 8.6 Proteção contra abuso | **Base fechada; limites pendentes** | Rate limiting e limite de tentativas **obrigatórios**. **Sem bloqueio permanente acionável só por tentativas anônimas**, para evitar negação de serviço contra contas. **Pendente:** limites exatos e MFA |
 | 8.7 Contrato HTTP | **Base fechada; rotas pendentes** | Cookie seguro; CSRF para escrita; CORS com origens permitidas explicitamente, **sem wildcard com credenciais**. **Pendente:** rotas e códigos exatos |
 | 8.8 Auditoria de negativas | **Fechada** | Log estruturado e sanitizado da aplicação (C10), **sem tabela nova** por enquanto. Registra decisão, ação e correlação; nunca senha, token, payload ou valores de secrets |
@@ -192,11 +192,47 @@ Nenhuma migration ou configuração de produção é alterada por este relatóri
 
 ### 11.3 O que isso destrava e o que ainda bloqueia
 
-- **Destravado:** revisão detalhada do fluxo de autenticação e sessão (8.1, 8.3 formato, 8.4, 8.7 base, 8.8).
+- **Destravado:** revisão detalhada do fluxo de autenticação e sessão (8.1, 8.3 para a área interna, 8.4, 8.5, 8.7 base, 8.8).
 - **Ainda bloqueia partes da implementação:**
-  - 8.3 durações e 8.5: expiração;
+  - 8.3 inatividade do portal externo: fecha junto com a 8.2;
   - 8.6 limites: rate limiting;
   - 8.7 rotas: contrato HTTP;
   - 8.10 parâmetros: hash fictício e login;
   - 8.9 e o pré-requisito da 8.2: portal do cliente.
 - **Migration do portal (8.2):** só deve ser desenhada depois de definir como as views identificam o cliente autorizado sem confiar em IDs do navegador **e** sem depender de um parâmetro que o próprio papel do portal possa redefinir. O desenho só é aceito com o teste negativo de troca de contexto.
+
+### 11.4 Política de sessão e `last_seen_at` (8.3/8.5, aprovada em 2026-09-25)
+
+**Valores:**
+
+| Item | Decisão |
+|---|---|
+| Prazo absoluto | **12 horas**, gravado em `expires_at` na criação e **nunca renovado** |
+| Inatividade (área interna) | **30 minutos**. Só atividade autenticada válida renova esta janela, e nunca além do prazo absoluto |
+| Inatividade (portal externo) | **Pendente**, com proposta de 15 min, a fechar com o desenho da 8.2 |
+| Sessões simultâneas | Até **10 ativas por conta**. Ao exceder, revoga-se a **sessão ativa mais antiga**; a entrada nova não é rejeitada. Escopo por conta, porque o schema não tem coluna de dispositivo |
+| `last_seen_at` | No máximo **uma escrita por minuto** por sessão. Pode encerrar a sessão por inatividade **até 1 minuto antes** do limite exato |
+
+**Sessão ativa** é a que satisfaz, ao mesmo tempo: `revoked_at IS NULL`, `expires_at` posterior ao instante de referência, e `last_seen_at` dentro da janela de inatividade em relação a esse instante.
+
+**Relógio:** as verificações **não** usam `now()`. No PostgreSQL, `now()` é o início da transação, e uma requisição que esperou por um lock validaria a sessão com um horário antigo. **A validação e o toque em `last_seen_at` usam um único instante, capturado com `clock_timestamp()` depois de obtido o lock da linha da sessão.** Todos os tempos são durações avaliadas com o relógio do banco, nunca o do navegador nem o da JVM. **Custo aceito do desenho:** requisições simultâneas da mesma sessão se serializam brevemente nesse lock. **O desempenho dessa serialização deve ser medido nos testes de integração.**
+
+**Atualização de `last_seen_at`:** um `UPDATE` condicional na linha já travada. Ele só avança `last_seen_at` para o instante capturado quando a sessão está ativa nesse instante **e** a última escrita tem mais de 1 minuto. Não altera `expires_at`, nunca faz `last_seen_at` retroceder e não "revive" uma sessão já inativa, expirada ou revogada. Duas requisições da mesma sessão ficam serializadas pelo lock; a segunda vê o valor já atualizado e não escreve de novo.
+
+**Limite de 10 sessões:** o login obtém primeiro um **lock da conta**, que serializa logins concorrentes da mesma conta. Só depois, **em outro comando** sob `READ COMMITTED`, conta as sessões ativas: não revogadas, não expiradas e dentro da janela de inatividade, pelo instante capturado depois do lock. Se a nova sessão excederia o limite, revoga-se a ativa mais antiga na mesma transação.
+
+**Revogação:**
+
+| Evento | Efeito |
+|---|---|
+| Logout | Revoga a sessão atual |
+| "Encerrar todas as sessões" | Revoga todas as sessões ativas da conta |
+| Troca de senha autenticada | Revoga **todas as outras** sessões; a atual pode continuar |
+| Redefinição por recuperação | Revoga **todas** as sessões |
+| Suspensão da conta ou do vínculo | Revoga as sessões da conta. A revalidação (8.4) já bloqueia o acesso durante a suspensão, mas sem revogação uma sessão antiga poderia voltar a funcionar depois da reativação |
+
+A revogação grava `revoked_at` só onde ele ainda é nulo (idempotente). Nenhum caminho da API volta `revoked_at` para nulo. Reativar uma conta ou um vínculo não restaura sessões revogadas.
+
+**Garantia da API e endurecimento futuro:** hoje o banco **não impede** alterações indevidas em `user_sessions`. Não há trigger: o `nekkora_platform` tem `UPDATE` em todas as colunas e poderia aumentar `expires_at`, limpar `revoked_at` ou fazer `last_seen_at` retroceder. Essas regras são **garantias da API**. Uma trigger que as imponha no banco fica registrada como **endurecimento futuro**, que exigiria migration própria e **não bloqueia** esta etapa.
+
+**Pendência relacionada, fora desta decisão:** retenção e limpeza das sessões expiradas ou revogadas. O `nekkora_platform` não tem `DELETE` em `user_sessions`; ver o C11 do relatório operacional.
