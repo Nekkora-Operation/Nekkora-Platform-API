@@ -1,0 +1,9 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+                                       afirma                                       
+------------------------------------------------------------------------------------
+ ok: s_x: toque aplicado pela funcao do portal; marcador, CSRF e revogacao intactos
+(1 row)
+

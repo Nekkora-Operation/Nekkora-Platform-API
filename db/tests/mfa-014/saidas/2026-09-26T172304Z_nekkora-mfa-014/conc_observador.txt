@@ -1,0 +1,20 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+         c_observacao          | pid |     usename      | state  | wait_event_type |  wait_event   |                            query                             
+-------------------------------+-----+------------------+--------+-----------------+---------------+--------------------------------------------------------------
+ 2026-09-26 17:23:27.584636+00 | 313 | nekkora_platform | active | Timeout         | PgSleep       | SELECT pg_sleep(6);
+ 2026-09-26 17:23:27.584642+00 | 320 | nekkora_platform | active | Lock            | transactionid | WITH u AS (UPDATE auth_challenges SET consumed_at = clock_ti
+(2 rows)
+
+ bloqueado |     usename      | bloqueado_por 
+-----------+------------------+---------------
+       320 | nekkora_platform | {313}
+(1 row)
+
+                                           afirma                                           
+--------------------------------------------------------------------------------------------
+ ok: sessao de nekkora_platform em espera de lock, bloqueada por sessao de nekkora_platform
+(1 row)
+

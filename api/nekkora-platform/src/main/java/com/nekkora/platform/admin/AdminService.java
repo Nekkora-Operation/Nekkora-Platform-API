@@ -1,0 +1,182 @@
+package com.nekkora.platform.admin;
+
+import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.jdbc.core.simple.JdbcClient;
+
+import com.nekkora.core.db.DbErrors;
+import com.nekkora.core.db.OrgTransactions;
+import com.nekkora.core.db.OrgTransactions.Mode;
+import com.nekkora.core.token.Tokens;
+import com.nekkora.core.web.ApiError;
+import com.nekkora.core.web.ApiException;
+import com.nekkora.core.web.RequestContext;
+import com.nekkora.platform.account.AccountRepository;
+import com.nekkora.platform.mail.MailSender;
+import com.nekkora.platform.mfa.MfaRepository;
+import com.nekkora.platform.session.SessionRepository;
+import com.nekkora.platform.session.ValidSession;
+
+/**
+ * Rotas internas do primeiro corte (contrato 8.7, §5.3). Autorizacao pela matriz da 003 (permissao, nao nome de
+ * papel), revalidada DENTRO da transacao da acao, junto com a sessao do ator (sem confiar no principal do filtro).
+ */
+public final class AdminService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(AdminService.class);
+    private static final short ACTIVE = 2;
+    private static final short SUSPENDED = 3;
+
+    private final OrgTransactions tx;
+    private final AccountRepository accounts;
+    private final SessionRepository sessions;
+    private final MfaRepository mfa;
+    private final MailSender mail;
+    private final java.time.Duration stepUpWindow;
+
+    public AdminService(OrgTransactions tx, AccountRepository accounts, SessionRepository sessions, MfaRepository mfa, MailSender mail,
+                        java.time.Duration stepUpWindow) {
+        this.tx = tx;
+        this.accounts = accounts;
+        this.sessions = sessions;
+        this.mfa = mfa;
+        this.mail = mail;
+        this.stepUpWindow = stepUpWindow;
+    }
+
+    private enum Failure { SESSION, PERMISSION, OWN_ACCOUNT, TARGET_NOT_FOUND, STEP_UP }
+
+    /** Suspende a conta (permissao org.manage): organizacao -> conta; revoga sessoes e invalida desafios (§11.4). */
+    public void suspend(UUID org, ValidSession actor, String actorToken, UUID target) {
+        runAdminAction(org, j -> {
+            accounts.lockOrganization(j, org);
+            Failure f = authorize(j, org, actor, actorToken, "org.manage", target);
+            if (f != null) {
+                return f;
+            }
+            if (!accounts.lock(j, org, target)) {
+                return Failure.TARGET_NOT_FOUND;
+            }
+            accounts.updateStatus(j, org, target, SUSPENDED);
+            mfa.invalidateForAccount(j, target, null);
+            sessions.revokeForAccount(j, target, null);
+            return null;
+        });
+    }
+
+    /** Reativa a conta. NAO restaura sessoes revogadas nem concessoes revogadas. */
+    public void reactivate(UUID org, ValidSession actor, String actorToken, UUID target) {
+        runAdminAction(org, j -> {
+            accounts.lockOrganization(j, org);
+            Failure f = authorize(j, org, actor, actorToken, "org.manage", target);
+            if (f != null) {
+                return f;
+            }
+            if (!accounts.lock(j, org, target)) {
+                return Failure.TARGET_NOT_FOUND;
+            }
+            accounts.updateStatus(j, org, target, ACTIVE);
+            return null;
+        });
+    }
+
+    /** Revoga a concessao externa (permissao external_access.manage). Idempotente se ja revogada. */
+    public void revokeGrant(UUID org, ValidSession actor, String actorToken, UUID grant) {
+        runAdminAction(org, j -> {
+            Failure f = authorize(j, org, actor, actorToken, "external_access.manage", null);
+            if (f != null) {
+                return f;
+            }
+            Integer status = j.sql("SELECT status FROM public.client_workspace_grants WHERE organization_id = ? AND grant_id = ? FOR UPDATE")
+                    .param(org).param(grant).query(Integer.class).optional().orElse(null);
+            if (status == null) {
+                return Failure.TARGET_NOT_FOUND;
+            }
+            if (status != 4) {
+                j.sql("""
+                        UPDATE public.client_workspace_grants SET status = 4, revoked_at = clock_timestamp(), revoked_by_membership_id = ?
+                         WHERE organization_id = ? AND grant_id = ?
+                        """).param(actor.membershipId()).param(org).param(grant).update();
+            }
+            return null;
+        });
+    }
+
+    /**
+     * Reset administrativo de MFA (contrato, §3.4): permissao identity.mfa.reset; step-up com TOTP nos ultimos 5
+     * min NA MESMA sessao (lido do banco, nao do principal do filtro); alvo diferente do ator; na mesma transacao,
+     * conta do alvo -> desafios -> fator/codigos -> sessoes; auditoria; aviso ao titular depois do commit.
+     */
+    public void resetMfa(UUID org, ValidSession actor, String actorToken, UUID target) {
+        String[] email = new String[1];
+        runAdminAction(org, j -> {
+            Failure f = authorize(j, org, actor, actorToken, "identity.mfa.reset", target);
+            if (f != null) {
+                return f;
+            }
+            Boolean recent = j.sql("SELECT mfa_step_up_at IS NOT NULL AND mfa_step_up_at > clock_timestamp() - ?::interval FROM public.user_sessions WHERE session_id = ?")
+                    .param(SessionRepository.interval(stepUpWindow)).param(actor.sessionId()).query(Boolean.class).single();
+            if (!recent) {
+                return Failure.STEP_UP;
+            }
+            if (!accounts.lock(j, org, target)) {
+                return Failure.TARGET_NOT_FOUND;
+            }
+            mfa.invalidateForAccount(j, target, null);
+            mfa.disableFactor(j, target);
+            sessions.revokeForAccount(j, target, null);
+            mfa.recordEvent(j, org, target, actor.userId(), MfaRepository.EV_RESET_ADMIN, correlation());
+            email[0] = accounts.byId(j, org, target).map(AccountRepository.Account::email).orElse(null);
+            return null;
+        });
+        if (email[0] != null) {
+            mail.send(MailSender.Kind.NOTICE_MFA_RESET, org, email[0], null);
+        }
+    }
+
+    /** Ator: conta interna, sessao ainda valida (reavaliada aqui), permissao da matriz, e alvo != ator quando houver alvo. */
+    private Failure authorize(JdbcClient j, UUID org, ValidSession actor, String actorToken, String permission, UUID target) {
+        if (sessions.validate(j, org, Tokens.sha256Hex(actorToken), false).isEmpty()) {
+            return Failure.SESSION;
+        }
+        if (!actor.isInternal() || !accounts.hasPermission(j, org, actor.userId(), permission)) {
+            return Failure.PERMISSION;
+        }
+        if (target != null && target.equals(actor.userId())) {
+            return Failure.OWN_ACCOUNT;
+        }
+        return null;
+    }
+
+    private void runAdminAction(UUID org, java.util.function.Function<JdbcClient, Failure> action) {
+        Failure f;
+        try {
+            f = tx.inOrganization(org, Mode.READ_WRITE, action);
+        } catch (RuntimeException e) {
+            // ex.: trigger da 003 que impede deixar a organizacao sem ORG_ADMIN efetivo (P0001) - so SQLSTATE no log
+            if ("P0001".equals(DbErrors.sqlState(e))) {
+                LOG.info("evento=admin.negado regra=invariante_003 correlacao={}", RequestContext.correlation());
+                throw ApiException.forbidden("invariante");
+            }
+            throw e;
+        }
+        if (f != null) {
+            LOG.info("evento=admin.negado regra={} correlacao={}", f, RequestContext.correlation());
+            throw switch (f) {
+                case SESSION -> ApiException.unauthenticated("sessao");
+                case TARGET_NOT_FOUND -> new ApiException(ApiError.NOT_FOUND, "alvo");
+                default -> ApiException.forbidden(f.name());
+            };
+        }
+    }
+
+    private static UUID correlation() {
+        try {
+            return UUID.fromString(RequestContext.correlation());
+        } catch (IllegalArgumentException e) {
+            return UUID.randomUUID();
+        }
+    }
+}

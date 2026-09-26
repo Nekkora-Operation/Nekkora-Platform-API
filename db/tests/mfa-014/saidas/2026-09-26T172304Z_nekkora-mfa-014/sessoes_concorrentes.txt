@@ -1,0 +1,1 @@
+sessao A exit=0; sessao B exit=0; observador exit=0

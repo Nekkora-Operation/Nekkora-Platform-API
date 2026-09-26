@@ -1,0 +1,23 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+BEGIN
+SET
+MARCADOR_SESSAO=A desafio=1 passo=1 codigo=1
+ pg_sleep 
+----------
+ 
+(1 row)
+
+COMMIT
+                                afirma                                
+----------------------------------------------------------------------
+ ok: sessao A: desafio, passo TOTP e codigo consumidos 1 vez(es) cada
+(1 row)
+

@@ -1,0 +1,15 @@
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://nekkora-atualizacao-copia:5432/nekkora (PostgreSQL 16.15)
+Successfully validated 16 migrations (execution time 00:00.102s)
+Current version of schema "public": 012
+Migrating schema "public" to version "013 - portal externo" [non-transactional]
+Migrating schema "public" to version "014 - mfa sessoes" [non-transactional]
+Migrating schema "public" to version "015 - restauracao logica" [non-transactional]
+Successfully applied 3 migrations to schema "public", now at version v015 (execution time 00:00.912s)
+
+--------------------------------------------------------------------------------------------------------
+A more recent version of Flyway is available. Find out more about Flyway 13.8.0 at https://rd.gt/3rXiSlV
+--------------------------------------------------------------------------------------------------------
+migrate: 3 s

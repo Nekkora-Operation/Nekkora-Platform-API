@@ -1,0 +1,20 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma            
+-----------------------------
+ ok: papel nekkora_scheduler
+(1 row)
+
+                 afirma                 
+----------------------------------------
+ ok: processamento devolve (3, 3, NULL)
+(1 row)
+
+NOTICE:  rejeitado como esperado [P0001] agendamento suspenso nao aceita nova ocorrencia (schedule_id=aaaaaaaa-0000-0000-000b-000000000001)
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+

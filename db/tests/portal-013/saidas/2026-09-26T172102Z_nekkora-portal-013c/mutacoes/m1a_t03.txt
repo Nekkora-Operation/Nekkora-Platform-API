@@ -1,0 +1,223 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+                    afirma                    
+----------------------------------------------
+ ok: papel real nekkora_portal (sem SET ROLE)
+(1 row)
+
+=== baseline sem nenhum GUC nekkora.*
+        afirma        
+----------------------
+ ok: baseline sem GUC
+(1 row)
+
+                              afirma                               
+-------------------------------------------------------------------
+ ok: baseline de X: 1 workspace, 7 execucoes, 1 detalhe, 2 eventos
+(1 row)
+
+=== passo 1: nekkora.organization_id = O2 (outra organizacao)
+SET
+                  ok                   
+---------------------------------------
+ ok: passo 1: list_workspaces sem erro
+(1 row)
+
+                  ok                   
+---------------------------------------
+ ok: passo 1: list_executions sem erro
+(1 row)
+
+                 ok                  
+-------------------------------------
+ ok: passo 1: get_execution sem erro
+(1 row)
+
+                     ok                      
+---------------------------------------------
+ ok: passo 1: list_execution_events sem erro
+(1 row)
+
+                      afirma                       |                      afirma                       |                     afirma                      |                         afirma                          
+---------------------------------------------------+---------------------------------------------------+-------------------------------------------------+---------------------------------------------------------
+ ok: passo 1: list_workspaces identico ao baseline | ok: passo 1: list_executions identico ao baseline | ok: passo 1: get_execution identico ao baseline | ok: passo 1: list_execution_events identico ao baseline
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table executions
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grants
+      espera_erro      |      espera_erro      
+-----------------------+-----------------------
+ ok: rejeitado [42501] | ok: rejeitado [42501]
+(1 row)
+
+=== passo 2: nekkora.organization_id = O1
+SET
+                  ok                   
+---------------------------------------
+ ok: passo 2: list_workspaces sem erro
+(1 row)
+
+                  ok                   
+---------------------------------------
+ ok: passo 2: list_executions sem erro
+(1 row)
+
+                 ok                  
+-------------------------------------
+ ok: passo 2: get_execution sem erro
+(1 row)
+
+                     ok                      
+---------------------------------------------
+ ok: passo 2: list_execution_events sem erro
+(1 row)
+
+                      afirma                       |                      afirma                       |                     afirma                      |                         afirma                          
+---------------------------------------------------+---------------------------------------------------+-------------------------------------------------+---------------------------------------------------------
+ ok: passo 2: list_workspaces identico ao baseline | ok: passo 2: list_executions identico ao baseline | ok: passo 2: get_execution identico ao baseline | ok: passo 2: list_execution_events identico ao baseline
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table executions
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grants
+      espera_erro      |      espera_erro      
+-----------------------+-----------------------
+ ok: rejeitado [42501] | ok: rejeitado [42501]
+(1 row)
+
+=== passo 3: nekkora.fn_organization_id = O2 (contexto interno das funcoes)
+SET
+                  ok                   
+---------------------------------------
+ ok: passo 3: list_workspaces sem erro
+(1 row)
+
+                  ok                   
+---------------------------------------
+ ok: passo 3: list_executions sem erro
+(1 row)
+
+                 ok                  
+-------------------------------------
+ ok: passo 3: get_execution sem erro
+(1 row)
+
+                     ok                      
+---------------------------------------------
+ ok: passo 3: list_execution_events sem erro
+(1 row)
+
+                      afirma                       |                      afirma                       |                     afirma                      |                         afirma                          
+---------------------------------------------------+---------------------------------------------------+-------------------------------------------------+---------------------------------------------------------
+ ok: passo 3: list_workspaces identico ao baseline | ok: passo 3: list_executions identico ao baseline | ok: passo 3: get_execution identico ao baseline | ok: passo 3: list_execution_events identico ao baseline
+(1 row)
+
+      espera_erro      |      espera_erro      
+-----------------------+-----------------------
+ ok: rejeitado [42501] | ok: rejeitado [42501]
+(1 row)
+
+=== passo 4: nekkora.fn_organization_id = O1
+NOTICE:  rejeitado como esperado [42501] permission denied for table executions
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grants
+SET
+                  ok                   
+---------------------------------------
+ ok: passo 4: list_workspaces sem erro
+(1 row)
+
+                  ok                   
+---------------------------------------
+ ok: passo 4: list_executions sem erro
+(1 row)
+
+                 ok                  
+-------------------------------------
+ ok: passo 4: get_execution sem erro
+(1 row)
+
+                     ok                      
+---------------------------------------------
+ ok: passo 4: list_execution_events sem erro
+(1 row)
+
+                      afirma                       |                      afirma                       |                     afirma                      |                         afirma                          
+---------------------------------------------------+---------------------------------------------------+-------------------------------------------------+---------------------------------------------------------
+ ok: passo 4: list_workspaces identico ao baseline | ok: passo 4: list_executions identico ao baseline | ok: passo 4: get_execution identico ao baseline | ok: passo 4: list_execution_events identico ao baseline
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table executions
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grants
+      espera_erro      |      espera_erro      
+-----------------------+-----------------------
+ ok: rejeitado [42501] | ok: rejeitado [42501]
+(1 row)
+
+=== passo 5: nekkora.fn_organization_id = valor nao-uuid
+SET
+                  ok                   
+---------------------------------------
+ ok: passo 5: list_workspaces sem erro
+(1 row)
+
+                  ok                   
+---------------------------------------
+ ok: passo 5: list_executions sem erro
+(1 row)
+
+                 ok                  
+-------------------------------------
+ ok: passo 5: get_execution sem erro
+(1 row)
+
+                     ok                      
+---------------------------------------------
+ ok: passo 5: list_execution_events sem erro
+(1 row)
+
+                      afirma                       |                      afirma                       |                     afirma                      |                         afirma                          
+---------------------------------------------------+---------------------------------------------------+-------------------------------------------------+---------------------------------------------------------
+ ok: passo 5: list_workspaces identico ao baseline | ok: passo 5: list_executions identico ao baseline | ok: passo 5: get_execution identico ao baseline | ok: passo 5: list_execution_events identico ao baseline
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table executions
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grants
+      espera_erro      |      espera_erro      
+-----------------------+-----------------------
+ ok: rejeitado [42501] | ok: rejeitado [42501]
+(1 row)
+
+=== passo 6: GUCs de escopo apontando para Y/C2/WS2/concessao de Y (mesma organizacao)
+SET
+SET
+SET
+SET
+SET
+SET
+SET
+                  ok                   
+---------------------------------------
+ ok: passo 6: list_workspaces sem erro
+(1 row)
+
+                  ok                   
+---------------------------------------
+ ok: passo 6: list_executions sem erro
+(1 row)
+
+                 ok                  
+-------------------------------------
+ ok: passo 6: get_execution sem erro
+(1 row)
+
+                     ok                      
+---------------------------------------------
+ ok: passo 6: list_execution_events sem erro
+(1 row)
+
+ERROR:  FALHA DE ASSERCAO: passo 6: list_workspaces identico ao baseline
+CONTEXT:  PL/pgSQL function pg_temp_3.afirma(boolean,text) line 4 at RAISE

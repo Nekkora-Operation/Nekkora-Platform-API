@@ -1,0 +1,31 @@
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://nekkora-atualizacao-copia:5432/nekkora (PostgreSQL 16.15)
+Schema version: 015
+
++-----------+---------+--------------------------------------------------------------+----------+---------------------+--------------------+----------+
+| Category  | Version | Description                                                  | Type     | Installed On        | State              | Undoable |
++-----------+---------+--------------------------------------------------------------+----------+---------------------+--------------------+----------+
+| Versioned | 001     | initial                                                      | SQL      |                     | Below Baseline     | No       |
+| Versioned | 002     | identity                                                     | SQL      |                     | Below Baseline     | No       |
+| Versioned | 003     | access control                                               | SQL      |                     | Below Baseline     | No       |
+| Versioned | 004     | workers agents                                               | SQL      |                     | Below Baseline     | No       |
+| Versioned | 005     | automations versions                                         | SQL      |                     | Below Baseline     | No       |
+| Versioned | 006     | executions                                                   | SQL      |                     | Below Baseline     | No       |
+| Versioned | 007     | events logs                                                  | SQL      |                     | Below Baseline     | No       |
+| Versioned | 008     | parametros secrets                                           | SQL      |                     | Below Baseline     | No       |
+| Versioned | 009     | agendamentos                                                 | SQL      |                     | Below Baseline     | No       |
+| Versioned | 010     | recursos limites retencao                                    | SQL      |                     | Below Baseline     | No       |
+| Versioned | 011     | fechamento expurgo                                           | SQL      |                     | Below Baseline     | No       |
+| Versioned | 012     | security rls                                                 | SQL      |                     | Ignored (Baseline) | No       |
+|           | 012     | ensaio: copia populada conferida (05_aprovacao_baseline.txt) | BASELINE | 2026-09-26 18:32:28 | Baseline           | No       |
+| Versioned | 013     | portal externo                                               | SQL      | 2026-09-26 18:32:33 | Success            | No       |
+| Versioned | 014     | mfa sessoes                                                  | SQL      | 2026-09-26 18:32:33 | Success            | No       |
+| Versioned | 015     | restauracao logica                                           | SQL      | 2026-09-26 18:32:34 | Success            | No       |
++-----------+---------+--------------------------------------------------------------+----------+---------------------+--------------------+----------+
+
+
+--------------------------------------------------------------------------------------------------------
+A more recent version of Flyway is available. Find out more about Flyway 13.8.0 at https://rd.gt/3rXiSlV
+--------------------------------------------------------------------------------------------------------

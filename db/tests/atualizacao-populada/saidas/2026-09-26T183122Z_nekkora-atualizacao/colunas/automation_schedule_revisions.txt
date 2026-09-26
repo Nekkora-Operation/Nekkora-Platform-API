@@ -1,0 +1,1 @@
+revision_id,organization_id,workspace_id,automation_id,schedule_id,revision_number,effective_from,automation_version_id,cron_expression,timezone,late_tolerance_seconds,authorized_by_membership_id,created_by_membership_id,created_at

@@ -1,0 +1,3 @@
+ativas_agora=0
+mfa_events=0
+fatores=0

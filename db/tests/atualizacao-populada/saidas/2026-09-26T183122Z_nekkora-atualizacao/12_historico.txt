@@ -1,0 +1,4 @@
+1|012|ensaio: copia populada conferida (05_aprovacao_baseline.txt)|BASELINE|true
+2|013|portal externo|SQL|true
+3|014|mfa sessoes|SQL|true
+4|015|restauracao logica|SQL|true

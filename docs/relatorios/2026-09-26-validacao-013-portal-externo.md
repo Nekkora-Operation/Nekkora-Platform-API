@@ -213,3 +213,15 @@ Nenhum defeito de segurança foi encontrado nas funções do portal. A única co
 - **8.2 encerrada para a camada de banco**, conforme o escopo e a cobertura documentados. O portal não está completo: continuam pendentes o Spring, a integração da Platform e as decisões 8.6, 8.7 e 8.10 (§14).
 - **Precisão documental incorporada:** a redação do teste 5 (desenho §7), da §4, da §6, da §9 (item 5) e da §11 deste relatório, e do resumo da 8.2 no relatório da API, deixou de afirmar "EXECUTE em apenas quatro funções" em sentido absoluto. O comprovado é que as quatro funções públicas do portal são as únicas funções privilegiadas acessíveis a ele e que o portal não tem acesso direto às tabelas.
 - Os comentários da migration (cabeçalho e bloco de invariantes) usam "EXECUTE em quatro funções SECURITY DEFINER" e "entre as funções SECURITY DEFINER, o portal executa exatamente as quatro". Não foram alterados, para preservar o hash revisado. Se forem ajustados, a migration muda de hash e precisa de nova revisão.
+
+## 16. Adendo (2026-09-26, missão da API v1)
+
+- **Harness:** a suíte passou a montar **só** 001–013, escolhidas explicitamente e copiadas para `saidas/<execução>/migracoes_montadas` (variável `TESTE_MIGRACOES`). A 014 e as posteriores não entram. As asserções não mudaram. A mesma mudança foi aplicada à suíte da 012 (só 001–012).
+- **Reexecução oficial após a 014 existir no repositório:** projeto `nekkora-portal-013c`, porta 55516, rc=0, com as 13 migrations montadas; saídas em `db/tests/portal-013/saidas/2026-09-26T172102Z_nekkora-portal-013c/`. A migration 013 não mudou (`c6192bff…14d9`).
+- **Atualização populada para a 013:** validada, junto com a 014, em `db/tests/atualizacao-populada` (pendência da §14).
+- **Limite de página:** N = 100 passou a ser definitivo (registro de decisões 8.6/8.7/8.10, revisão 4).
+- **Uso pelo portal Spring — alteração explícita do contrato (aceita pelo responsável em 2026-09-26; registro de decisões, revisão 4.1, §5.4):** uma requisição de execução utiliza uma transação `READ COMMITTED` de escrita, com **duas** chamadas às funções autorizadas da 013 (`portal_list_workspaces` e a função da rota). O motivo é omitir `workspaceId` quando o vínculo tem um só workspace concedido (desenho §11.5, decisão 5): as funções de execução não devolvem quantos workspaces o vínculo tem. Nenhuma função nova foi criada, e a 013 não mudou. Evidências:
+  - mesma conexão e mesma transação: `PortalIT.executionRequestUsesOneConnectionForBothFunctionCalls`;
+  - a função de dados mantém a própria autorização: cada função da 013 chama `portal_resolve_session` e `portal_authorized_workspaces` (linhas 294/311, 344/356, 380/390); execução de outro cliente continua 404;
+  - toque no máximo 1/min: `PortalIT.activityTouchAtMostOncePerMinuteWithTwoFunctionCallsPerRequest`.
+  Detalhes em `docs/relatorios/2026-09-26-validacao-api-v1.md`.

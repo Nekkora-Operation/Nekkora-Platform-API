@@ -1,0 +1,1 @@
+occurrence_id,organization_id,workspace_id,schedule_id,revision_id,scheduled_for,expires_at,status,skip_reason,execution_id,decided_at,created_at

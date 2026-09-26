@@ -1,0 +1,42 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+ pg_advisory_lock 
+------------------
+ 
+(1 row)
+
+MARCADOR_LOCK_OBTIDO
+DO
+         c_observacao          | pid  |    usename     | state  | wait_event_type | wait_event | bloqueado_por 
+-------------------------------+------+----------------+--------+-----------------+------------+---------------
+ 2026-09-26 17:22:31.993228+00 | 1460 | nekkora_portal | active | Lock            | advisory   | {1446}
+(1 row)
+
+                                        afirma                                         
+---------------------------------------------------------------------------------------
+ ok: portal parado no ponto de pausa (depois da resolucao), bloqueado pelo coordenador
+(1 row)
+
+                                            afirma                                             
+-----------------------------------------------------------------------------------------------
+ ok: a transacao pausada do portal ja tem xid (FOR UPDATE/toque da sessao feitos na resolucao)
+(1 row)
+
+MARCADOR_PORTAL_PAUSADO
+ cond_ok 
+---------
+ t
+(1 row)
+
+DO
+MARCADOR_MUDANCA_CONFIRMADA
+ liberado 
+----------
+ t
+(1 row)
+

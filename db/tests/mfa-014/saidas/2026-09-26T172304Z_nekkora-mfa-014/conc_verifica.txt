@@ -1,0 +1,19 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+            afirma             
+-------------------------------
+ ok: desafio consumido uma vez
+(1 row)
+
+              afirma               
+-----------------------------------
+ ok: passo TOTP 200 aceito uma vez
+(1 row)
+
+                 afirma                  
+-----------------------------------------
+ ok: codigo de recuperacao usado uma vez
+(1 row)
+

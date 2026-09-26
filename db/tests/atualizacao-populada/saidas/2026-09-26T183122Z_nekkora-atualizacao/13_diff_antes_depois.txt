@@ -1,0 +1,445 @@
+7a8,33
+> colacl|automations|automation_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|automations|name|nekkora_portal_owner|SELECT|grant=f
+> colacl|automations|organization_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|automations|workspace_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_memberships|client_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_memberships|client_membership_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_memberships|organization_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_memberships|status|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_memberships|user_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|approved_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|client_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|client_membership_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|expires_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|grant_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|next_review_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|organization_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|revoked_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|starts_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|status|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|workspace_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|clients|client_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|clients|organization_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|clients|status|nekkora_portal_owner|SELECT|grant=f
+> colacl|execution_events|event_type|nekkora_portal_owner|SELECT|grant=f
+> colacl|execution_events|execution_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|execution_events|organization_id|nekkora_portal_owner|SELECT|grant=f
+11a38,49
+> colacl|execution_events|received_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|execution_events|sequence|nekkora_portal_owner|SELECT|grant=f
+> colacl|execution_events|workspace_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|executions|automation_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|executions|created_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|executions|execution_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|executions|finished_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|executions|organization_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|executions|started_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|executions|status_reason|nekkora_portal_owner|SELECT|grant=f
+> colacl|executions|status|nekkora_portal_owner|SELECT|grant=f
+> colacl|executions|workspace_id|nekkora_portal_owner|SELECT|grant=f
+15a54,74
+> colacl|organizations|organization_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|organizations|status|nekkora_portal_owner|SELECT|grant=f
+> colacl|user_sessions|created_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|user_sessions|expires_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|user_sessions|last_seen_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|user_sessions|last_seen_at|nekkora_portal_owner|UPDATE|grant=f
+> colacl|user_sessions|organization_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|user_sessions|revoked_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|user_sessions|session_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|user_sessions|session_token_hash|nekkora_portal_owner|SELECT|grant=f
+> colacl|user_sessions|user_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|users|account_type|nekkora_portal_owner|SELECT|grant=f
+> colacl|users|email_verified_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|users|organization_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|users|status|nekkora_portal_owner|SELECT|grant=f
+> colacl|users|user_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|workspaces|client_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|workspaces|name|nekkora_portal_owner|SELECT|grant=f
+> colacl|workspaces|organization_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|workspaces|status|nekkora_portal_owner|SELECT|grant=f
+> colacl|workspaces|workspace_id|nekkora_portal_owner|SELECT|grant=f
+35a95,107
+> col|auth_challenges|attempts|smallint|notnull=t|default=0|gen=
+> col|auth_challenges|challenge_id|uuid|notnull=t|default=gen_random_uuid()|gen=
+> col|auth_challenges|consumed_at|timestamp with time zone|notnull=f|default=|gen=
+> col|auth_challenges|created_at|timestamp with time zone|notnull=t|default=now()|gen=
+> col|auth_challenges|credential_hash|text|notnull=f|default=|gen=
+> col|auth_challenges|csrf_token|text|notnull=t|default=|gen=
+> col|auth_challenges|expires_at|timestamp with time zone|notnull=t|default=|gen=
+> col|auth_challenges|invalidated_at|timestamp with time zone|notnull=f|default=|gen=
+> col|auth_challenges|organization_id|uuid|notnull=t|default=|gen=
+> col|auth_challenges|pending_password_hash|text|notnull=f|default=|gen=
+> col|auth_challenges|purpose|smallint|notnull=t|default=|gen=
+> col|auth_challenges|token_hash|text|notnull=t|default=|gen=
+> col|auth_challenges|user_id|uuid|notnull=t|default=|gen=
+217a290,299
+> col|flyway_schema_history|checksum|integer|notnull=f|default=|gen=
+> col|flyway_schema_history|description|character varying(200)|notnull=t|default=|gen=
+> col|flyway_schema_history|execution_time|integer|notnull=t|default=|gen=
+> col|flyway_schema_history|installed_by|character varying(100)|notnull=t|default=|gen=
+> col|flyway_schema_history|installed_on|timestamp without time zone|notnull=t|default=now()|gen=
+> col|flyway_schema_history|installed_rank|integer|notnull=t|default=|gen=
+> col|flyway_schema_history|script|character varying(1000)|notnull=t|default=|gen=
+> col|flyway_schema_history|success|boolean|notnull=t|default=|gen=
+> col|flyway_schema_history|type|character varying(20)|notnull=t|default=|gen=
+> col|flyway_schema_history|version|character varying(50)|notnull=f|default=|gen=
+251a334,340
+> col|mfa_events|actor_user_id|uuid|notnull=f|default=|gen=
+> col|mfa_events|correlation_id|uuid|notnull=t|default=|gen=
+> col|mfa_events|created_at|timestamp with time zone|notnull=t|default=now()|gen=
+> col|mfa_events|event_id|uuid|notnull=t|default=gen_random_uuid()|gen=
+> col|mfa_events|event_type|smallint|notnull=t|default=|gen=
+> col|mfa_events|organization_id|uuid|notnull=t|default=|gen=
+> col|mfa_events|user_id|uuid|notnull=t|default=|gen=
+337a427,445
+> col|user_mfa_factors|confirmed_at|timestamp with time zone|notnull=f|default=|gen=
+> col|user_mfa_factors|created_at|timestamp with time zone|notnull=t|default=now()|gen=
+> col|user_mfa_factors|disabled_at|timestamp with time zone|notnull=f|default=|gen=
+> col|user_mfa_factors|factor_id|uuid|notnull=t|default=gen_random_uuid()|gen=
+> col|user_mfa_factors|factor_type|smallint|notnull=t|default=|gen=
+> col|user_mfa_factors|key_id|text|notnull=t|default=|gen=
+> col|user_mfa_factors|last_used_step|bigint|notnull=f|default=|gen=
+> col|user_mfa_factors|organization_id|uuid|notnull=t|default=|gen=
+> col|user_mfa_factors|secret_ciphertext|bytea|notnull=t|default=|gen=
+> col|user_mfa_factors|secret_nonce|bytea|notnull=t|default=|gen=
+> col|user_mfa_factors|user_id|uuid|notnull=t|default=|gen=
+> col|user_mfa_recovery_codes|code_hash|text|notnull=t|default=|gen=
+> col|user_mfa_recovery_codes|code_id|uuid|notnull=t|default=gen_random_uuid()|gen=
+> col|user_mfa_recovery_codes|created_at|timestamp with time zone|notnull=t|default=now()|gen=
+> col|user_mfa_recovery_codes|factor_id|uuid|notnull=t|default=|gen=
+> col|user_mfa_recovery_codes|invalidated_at|timestamp with time zone|notnull=f|default=|gen=
+> col|user_mfa_recovery_codes|organization_id|uuid|notnull=t|default=|gen=
+> col|user_mfa_recovery_codes|used_at|timestamp with time zone|notnull=f|default=|gen=
+> col|user_mfa_recovery_codes|user_id|uuid|notnull=t|default=|gen=
+338a447
+> col|user_sessions|csrf_token|text|notnull=f|default=|gen=
+340a450,451
+> col|user_sessions|mfa_step_up_at|timestamp with time zone|notnull=f|default=|gen=
+> col|user_sessions|mfa_verified_at|timestamp with time zone|notnull=f|default=|gen=
+463a575,587
+> con|auth_challenges|auth_challenges_attempts_check|CHECK (((attempts >= 0) AND (attempts <= 5)))
+> con|auth_challenges|auth_challenges_check1|CHECK (((consumed_at IS NULL) OR (invalidated_at IS NULL)))
+> con|auth_challenges|auth_challenges_check2|CHECK ((((consumed_at IS NULL) AND (invalidated_at IS NULL)) = (credential_hash IS NOT NULL)))
+> con|auth_challenges|auth_challenges_check3|CHECK ((((consumed_at IS NULL) AND (invalidated_at IS NULL)) OR (pending_password_hash IS NULL)))
+> con|auth_challenges|auth_challenges_check|CHECK (((expires_at > created_at) AND (expires_at <= (created_at + '00:05:00'::interval))))
+> con|auth_challenges|auth_challenges_credential_hash_check|CHECK (((credential_hash IS NULL) OR (btrim(credential_hash) <> ''::text)))
+> con|auth_challenges|auth_challenges_csrf_token_check|CHECK ((csrf_token ~ '^[A-Za-z0-9_-]{43}$'::text))
+> con|auth_challenges|auth_challenges_organization_id_user_id_fkey|FOREIGN KEY (organization_id, user_id) REFERENCES users(organization_id, user_id) ON DELETE RESTRICT
+> con|auth_challenges|auth_challenges_pending_password_hash_check|CHECK (((pending_password_hash IS NULL) OR (btrim(pending_password_hash) <> ''::text)))
+> con|auth_challenges|auth_challenges_pkey|PRIMARY KEY (challenge_id)
+> con|auth_challenges|auth_challenges_purpose_check|CHECK ((purpose = ANY (ARRAY[1, 2])))
+> con|auth_challenges|auth_challenges_token_hash_check|CHECK ((token_hash ~ '^[0-9a-f]{64}$'::text))
+> con|auth_challenges|auth_challenges_token_hash_key|UNIQUE (token_hash)
+629a754
+> con|flyway_schema_history|flyway_schema_history_pk|PRIMARY KEY (installed_rank)
+667a793,797
+> con|mfa_events|mfa_events_check|CHECK (((event_type <> 3) OR ((actor_user_id IS NOT NULL) AND (actor_user_id <> user_id))))
+> con|mfa_events|mfa_events_event_type_check|CHECK ((event_type = ANY (ARRAY[1, 2, 3, 4, 5, 6])))
+> con|mfa_events|mfa_events_organization_id_actor_user_id_fkey|FOREIGN KEY (organization_id, actor_user_id) REFERENCES users(organization_id, user_id) ON DELETE RESTRICT
+> con|mfa_events|mfa_events_organization_id_user_id_fkey|FOREIGN KEY (organization_id, user_id) REFERENCES users(organization_id, user_id) ON DELETE RESTRICT
+> con|mfa_events|mfa_events_pkey|PRIMARY KEY (event_id)
+750a881,898
+> con|user_mfa_factors|user_mfa_factors_check1|CHECK (((disabled_at IS NULL) OR (disabled_at >= created_at)))
+> con|user_mfa_factors|user_mfa_factors_check2|CHECK (((last_used_step IS NULL) OR (confirmed_at IS NOT NULL)))
+> con|user_mfa_factors|user_mfa_factors_check|CHECK (((confirmed_at IS NULL) OR (confirmed_at >= created_at)))
+> con|user_mfa_factors|user_mfa_factors_factor_type_check|CHECK ((factor_type = 1))
+> con|user_mfa_factors|user_mfa_factors_key_id_check|CHECK ((key_id ~ '^[A-Za-z0-9._-]{1,64}$'::text))
+> con|user_mfa_factors|user_mfa_factors_last_used_step_check|CHECK ((last_used_step >= 0))
+> con|user_mfa_factors|user_mfa_factors_organization_id_user_id_factor_id_key|UNIQUE (organization_id, user_id, factor_id)
+> con|user_mfa_factors|user_mfa_factors_organization_id_user_id_fkey|FOREIGN KEY (organization_id, user_id) REFERENCES users(organization_id, user_id) ON DELETE RESTRICT
+> con|user_mfa_factors|user_mfa_factors_pkey|PRIMARY KEY (factor_id)
+> con|user_mfa_factors|user_mfa_factors_secret_ciphertext_check|CHECK ((octet_length(secret_ciphertext) = 36))
+> con|user_mfa_factors|user_mfa_factors_secret_nonce_check|CHECK ((octet_length(secret_nonce) = 12))
+> con|user_mfa_recovery_codes|user_mfa_recovery_codes_check1|CHECK (((used_at IS NULL) OR (used_at >= created_at)))
+> con|user_mfa_recovery_codes|user_mfa_recovery_codes_check2|CHECK (((invalidated_at IS NULL) OR (invalidated_at >= created_at)))
+> con|user_mfa_recovery_codes|user_mfa_recovery_codes_check|CHECK (((used_at IS NULL) OR (invalidated_at IS NULL)))
+> con|user_mfa_recovery_codes|user_mfa_recovery_codes_code_hash_check|CHECK ((code_hash ~ '^[0-9a-f]{64}$'::text))
+> con|user_mfa_recovery_codes|user_mfa_recovery_codes_factor_id_code_hash_key|UNIQUE (factor_id, code_hash)
+> con|user_mfa_recovery_codes|user_mfa_recovery_codes_organization_id_user_id_factor_id_fkey|FOREIGN KEY (organization_id, user_id, factor_id) REFERENCES user_mfa_factors(organization_id, user_id, factor_id) ON DELETE RESTRICT
+> con|user_mfa_recovery_codes|user_mfa_recovery_codes_pkey|PRIMARY KEY (code_id)
+753a902
+> con|user_sessions|user_sessions_csrf_token_check|CHECK (((csrf_token IS NULL) OR (csrf_token ~ '^[A-Za-z0-9_-]{43}$'::text)))
+756a906
+> con|user_sessions|user_sessions_step_up_requires_mfa|CHECK (((mfa_step_up_at IS NULL) OR (mfa_verified_at IS NOT NULL)))
+961a1112
+> fnacl|enforce_user_session_mfa_on_insert()|nekkora|EXECUTE|grant=f
+1033a1185,1194
+> fnacl|portal_authorized_workspaces(uuid,uuid,uuid,timestamp with time zone)|nekkora_portal_owner|EXECUTE|grant=f
+> fnacl|portal_get_execution(uuid,text,uuid)|nekkora_portal_owner|EXECUTE|grant=f
+> fnacl|portal_get_execution(uuid,text,uuid)|nekkora_portal|EXECUTE|grant=f
+> fnacl|portal_list_execution_events(uuid,text,uuid)|nekkora_portal_owner|EXECUTE|grant=f
+> fnacl|portal_list_execution_events(uuid,text,uuid)|nekkora_portal|EXECUTE|grant=f
+> fnacl|portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer)|nekkora_portal_owner|EXECUTE|grant=f
+> fnacl|portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer)|nekkora_portal|EXECUTE|grant=f
+> fnacl|portal_list_workspaces(uuid,text)|nekkora_portal_owner|EXECUTE|grant=f
+> fnacl|portal_list_workspaces(uuid,text)|nekkora_portal|EXECUTE|grant=f
+> fnacl|portal_resolve_session(uuid,text)|nekkora_portal_owner|EXECUTE|grant=f
+1037a1199
+> fnacl|prevent_auth_challenge_change()|nekkora|EXECUTE|grant=f
+1049a1212,1213
+> fnacl|prevent_mfa_factor_change()|nekkora|EXECUTE|grant=f
+> fnacl|prevent_mfa_recovery_code_change()|nekkora|EXECUTE|grant=f
+1059a1224
+> fnacl|prevent_user_session_reactivation()|nekkora|EXECUTE|grant=f
+1136a1302
+> fn|enforce_user_session_mfa_on_insert()|owner=nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=02946d059390c19be81c644923fa1534
+1147c1313
+< fn|is_valid_command_contract(jsonb)|owner=nekkora|secdef=f|vol=i|strict=f|lang=sql|config=|result=boolean|md5=ab73872618a0c7179168af1346fb6f6b
+---
+> fn|is_valid_command_contract(jsonb)|owner=nekkora|secdef=f|vol=i|strict=f|lang=sql|config={"search_path=pg_catalog, public"}|result=boolean|md5=ab73872618a0c7179168af1346fb6f6b
+1172a1339,1344
+> fn|portal_authorized_workspaces(uuid,uuid,uuid,timestamp with time zone)|owner=nekkora_portal_owner|secdef=f|vol=s|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=SETOF uuid|md5=ea611c2b70d0732629ee843f03d1317c
+> fn|portal_get_execution(uuid,text,uuid)|owner=nekkora_portal_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(execution_id uuid, workspace_id uuid, automation_id uuid, automation_name text, created_at timestamp with time zone, started_at timestamp with time zone, finished_at timestamp with time zone, duration interval, status smallint, status_reason smallint)|md5=8b8ccad78e9c7728f819dc48ddf8cef1
+> fn|portal_list_execution_events(uuid,text,uuid)|owner=nekkora_portal_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(event_type smallint, received_at timestamp with time zone)|md5=28e01cae33a8a988f454f9bfbb8ab926
+> fn|portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer)|owner=nekkora_portal_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(execution_id uuid, workspace_id uuid, automation_id uuid, automation_name text, created_at timestamp with time zone, started_at timestamp with time zone, finished_at timestamp with time zone, duration interval, status smallint, status_reason smallint)|md5=90f622312c83a9904273be68dac2063b
+> fn|portal_list_workspaces(uuid,text)|owner=nekkora_portal_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(workspace_id uuid, name text)|md5=1e63acfe8934620580ae5767fb6fda4f
+> fn|portal_resolve_session(uuid,text)|owner=nekkora_portal_owner|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=record|md5=9c5d2f42c823a6f4370fedb6b0ddfac0
+1174a1347
+> fn|prevent_auth_challenge_change()|owner=nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=9ab822cf8f7c0b3f3eb0f614952de937
+1180a1354,1355
+> fn|prevent_mfa_factor_change()|owner=nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=cfc5342369ea51546096aaf7a0eb9eb1
+> fn|prevent_mfa_recovery_code_change()|owner=nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=4eff26675d21bcb684fedf255d5af3fa
+1185a1361
+> fn|prevent_user_session_reactivation()|owner=nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=c1755ca326405788ed20d8d550cfd190
+1203a1380
+> idx|CREATE INDEX flyway_schema_history_s_idx ON public.flyway_schema_history USING btree (success)
+1204a1382
+> idx|CREATE INDEX ix_auth_challenges_user_ativos ON public.auth_challenges USING btree (user_id) WHERE ((consumed_at IS NULL) AND (invalidated_at IS NULL))
+1220a1399
+> idx|CREATE INDEX ix_mfa_events_org_user ON public.mfa_events USING btree (organization_id, user_id)
+1223a1403
+> idx|CREATE INDEX ix_user_mfa_recovery_codes_user_id ON public.user_mfa_recovery_codes USING btree (user_id) WHERE ((used_at IS NULL) AND (invalidated_at IS NULL))
+1232a1413,1414
+> idx|CREATE UNIQUE INDEX auth_challenges_pkey ON public.auth_challenges USING btree (challenge_id)
+> idx|CREATE UNIQUE INDEX auth_challenges_token_hash_key ON public.auth_challenges USING btree (token_hash)
+1270a1453
+> idx|CREATE UNIQUE INDEX flyway_schema_history_pk ON public.flyway_schema_history USING btree (installed_rank)
+1275a1459
+> idx|CREATE UNIQUE INDEX mfa_events_pkey ON public.mfa_events USING btree (event_id)
+1300a1485,1488
+> idx|CREATE UNIQUE INDEX user_mfa_factors_organization_id_user_id_factor_id_key ON public.user_mfa_factors USING btree (organization_id, user_id, factor_id)
+> idx|CREATE UNIQUE INDEX user_mfa_factors_pkey ON public.user_mfa_factors USING btree (factor_id)
+> idx|CREATE UNIQUE INDEX user_mfa_recovery_codes_factor_id_code_hash_key ON public.user_mfa_recovery_codes USING btree (factor_id, code_hash)
+> idx|CREATE UNIQUE INDEX user_mfa_recovery_codes_pkey ON public.user_mfa_recovery_codes USING btree (code_id)
+1312a1501
+> idx|CREATE UNIQUE INDEX ux_user_mfa_factors_um_ativo ON public.user_mfa_factors USING btree (user_id) WHERE (disabled_at IS NULL)
+1337a1527,1528
+> nspacl|public|nekkora_portal_owner|USAGE|grant=f
+> nspacl|public|nekkora_portal|USAGE|grant=f
+1344a1536
+> pol|auth_challenges|tenant_request_context|ALL|PERMISSIVE|{nekkora_platform}|using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+1358a1551
+> pol|automations|portal_function_context|SELECT|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=
+1360a1554
+> pol|client_memberships|portal_function_context|SELECT|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=
+1366a1561
+> pol|client_workspace_grants|portal_function_context|SELECT|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=
+1368a1564
+> pol|clients|portal_function_context|SELECT|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=
+1375a1572
+> pol|execution_events|portal_function_context|SELECT|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=
+1377a1575
+> pol|executions|portal_function_context|SELECT|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=
+1385a1584
+> pol|mfa_events|tenant_request_context|ALL|PERMISSIVE|{nekkora_platform}|using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+1399a1599
+> pol|organizations|portal_function_context|SELECT|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=
+1411a1612,1615
+> pol|user_mfa_factors|tenant_request_context|ALL|PERMISSIVE|{nekkora_platform}|using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+> pol|user_mfa_recovery_codes|tenant_request_context|ALL|PERMISSIVE|{nekkora_platform}|using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+> pol|user_sessions|portal_function_context_update|UPDATE|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+> pol|user_sessions|portal_function_context|SELECT|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=
+1413a1618
+> pol|users|portal_function_context|SELECT|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=
+1431a1637
+> pol|workspaces|portal_function_context|SELECT|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=
+1480a1687,1710
+> relacl|auth_challenges_pkey|nekkora|DELETE|grant=f
+> relacl|auth_challenges_pkey|nekkora|INSERT|grant=f
+> relacl|auth_challenges_pkey|nekkora|REFERENCES|grant=f
+> relacl|auth_challenges_pkey|nekkora|SELECT|grant=f
+> relacl|auth_challenges_pkey|nekkora|TRIGGER|grant=f
+> relacl|auth_challenges_pkey|nekkora|TRUNCATE|grant=f
+> relacl|auth_challenges_pkey|nekkora|UPDATE|grant=f
+> relacl|auth_challenges_token_hash_key|nekkora|DELETE|grant=f
+> relacl|auth_challenges_token_hash_key|nekkora|INSERT|grant=f
+> relacl|auth_challenges_token_hash_key|nekkora|REFERENCES|grant=f
+> relacl|auth_challenges_token_hash_key|nekkora|SELECT|grant=f
+> relacl|auth_challenges_token_hash_key|nekkora|TRIGGER|grant=f
+> relacl|auth_challenges_token_hash_key|nekkora|TRUNCATE|grant=f
+> relacl|auth_challenges_token_hash_key|nekkora|UPDATE|grant=f
+> relacl|auth_challenges|nekkora_platform|INSERT|grant=f
+> relacl|auth_challenges|nekkora_platform|SELECT|grant=f
+> relacl|auth_challenges|nekkora_platform|UPDATE|grant=f
+> relacl|auth_challenges|nekkora|DELETE|grant=f
+> relacl|auth_challenges|nekkora|INSERT|grant=f
+> relacl|auth_challenges|nekkora|REFERENCES|grant=f
+> relacl|auth_challenges|nekkora|SELECT|grant=f
+> relacl|auth_challenges|nekkora|TRIGGER|grant=f
+> relacl|auth_challenges|nekkora|TRUNCATE|grant=f
+> relacl|auth_challenges|nekkora|UPDATE|grant=f
+1913a2144,2164
+> relacl|flyway_schema_history_pk|nekkora|DELETE|grant=f
+> relacl|flyway_schema_history_pk|nekkora|INSERT|grant=f
+> relacl|flyway_schema_history_pk|nekkora|REFERENCES|grant=f
+> relacl|flyway_schema_history_pk|nekkora|SELECT|grant=f
+> relacl|flyway_schema_history_pk|nekkora|TRIGGER|grant=f
+> relacl|flyway_schema_history_pk|nekkora|TRUNCATE|grant=f
+> relacl|flyway_schema_history_pk|nekkora|UPDATE|grant=f
+> relacl|flyway_schema_history_s_idx|nekkora|DELETE|grant=f
+> relacl|flyway_schema_history_s_idx|nekkora|INSERT|grant=f
+> relacl|flyway_schema_history_s_idx|nekkora|REFERENCES|grant=f
+> relacl|flyway_schema_history_s_idx|nekkora|SELECT|grant=f
+> relacl|flyway_schema_history_s_idx|nekkora|TRIGGER|grant=f
+> relacl|flyway_schema_history_s_idx|nekkora|TRUNCATE|grant=f
+> relacl|flyway_schema_history_s_idx|nekkora|UPDATE|grant=f
+> relacl|flyway_schema_history|nekkora|DELETE|grant=f
+> relacl|flyway_schema_history|nekkora|INSERT|grant=f
+> relacl|flyway_schema_history|nekkora|REFERENCES|grant=f
+> relacl|flyway_schema_history|nekkora|SELECT|grant=f
+> relacl|flyway_schema_history|nekkora|TRIGGER|grant=f
+> relacl|flyway_schema_history|nekkora|TRUNCATE|grant=f
+> relacl|flyway_schema_history|nekkora|UPDATE|grant=f
+1966a2218,2224
+> relacl|ix_auth_challenges_user_ativos|nekkora|DELETE|grant=f
+> relacl|ix_auth_challenges_user_ativos|nekkora|INSERT|grant=f
+> relacl|ix_auth_challenges_user_ativos|nekkora|REFERENCES|grant=f
+> relacl|ix_auth_challenges_user_ativos|nekkora|SELECT|grant=f
+> relacl|ix_auth_challenges_user_ativos|nekkora|TRIGGER|grant=f
+> relacl|ix_auth_challenges_user_ativos|nekkora|TRUNCATE|grant=f
+> relacl|ix_auth_challenges_user_ativos|nekkora|UPDATE|grant=f
+2078a2337,2343
+> relacl|ix_mfa_events_org_user|nekkora|DELETE|grant=f
+> relacl|ix_mfa_events_org_user|nekkora|INSERT|grant=f
+> relacl|ix_mfa_events_org_user|nekkora|REFERENCES|grant=f
+> relacl|ix_mfa_events_org_user|nekkora|SELECT|grant=f
+> relacl|ix_mfa_events_org_user|nekkora|TRIGGER|grant=f
+> relacl|ix_mfa_events_org_user|nekkora|TRUNCATE|grant=f
+> relacl|ix_mfa_events_org_user|nekkora|UPDATE|grant=f
+2099a2365,2371
+> relacl|ix_user_mfa_recovery_codes_user_id|nekkora|DELETE|grant=f
+> relacl|ix_user_mfa_recovery_codes_user_id|nekkora|INSERT|grant=f
+> relacl|ix_user_mfa_recovery_codes_user_id|nekkora|REFERENCES|grant=f
+> relacl|ix_user_mfa_recovery_codes_user_id|nekkora|SELECT|grant=f
+> relacl|ix_user_mfa_recovery_codes_user_id|nekkora|TRIGGER|grant=f
+> relacl|ix_user_mfa_recovery_codes_user_id|nekkora|TRUNCATE|grant=f
+> relacl|ix_user_mfa_recovery_codes_user_id|nekkora|UPDATE|grant=f
+2152a2425,2440
+> relacl|mfa_events_pkey|nekkora|DELETE|grant=f
+> relacl|mfa_events_pkey|nekkora|INSERT|grant=f
+> relacl|mfa_events_pkey|nekkora|REFERENCES|grant=f
+> relacl|mfa_events_pkey|nekkora|SELECT|grant=f
+> relacl|mfa_events_pkey|nekkora|TRIGGER|grant=f
+> relacl|mfa_events_pkey|nekkora|TRUNCATE|grant=f
+> relacl|mfa_events_pkey|nekkora|UPDATE|grant=f
+> relacl|mfa_events|nekkora_platform|INSERT|grant=f
+> relacl|mfa_events|nekkora_platform|SELECT|grant=f
+> relacl|mfa_events|nekkora|DELETE|grant=f
+> relacl|mfa_events|nekkora|INSERT|grant=f
+> relacl|mfa_events|nekkora|REFERENCES|grant=f
+> relacl|mfa_events|nekkora|SELECT|grant=f
+> relacl|mfa_events|nekkora|TRIGGER|grant=f
+> relacl|mfa_events|nekkora|TRUNCATE|grant=f
+> relacl|mfa_events|nekkora|UPDATE|grant=f
+2467a2756,2803
+> relacl|user_mfa_factors_organization_id_user_id_factor_id_key|nekkora|DELETE|grant=f
+> relacl|user_mfa_factors_organization_id_user_id_factor_id_key|nekkora|INSERT|grant=f
+> relacl|user_mfa_factors_organization_id_user_id_factor_id_key|nekkora|REFERENCES|grant=f
+> relacl|user_mfa_factors_organization_id_user_id_factor_id_key|nekkora|SELECT|grant=f
+> relacl|user_mfa_factors_organization_id_user_id_factor_id_key|nekkora|TRIGGER|grant=f
+> relacl|user_mfa_factors_organization_id_user_id_factor_id_key|nekkora|TRUNCATE|grant=f
+> relacl|user_mfa_factors_organization_id_user_id_factor_id_key|nekkora|UPDATE|grant=f
+> relacl|user_mfa_factors_pkey|nekkora|DELETE|grant=f
+> relacl|user_mfa_factors_pkey|nekkora|INSERT|grant=f
+> relacl|user_mfa_factors_pkey|nekkora|REFERENCES|grant=f
+> relacl|user_mfa_factors_pkey|nekkora|SELECT|grant=f
+> relacl|user_mfa_factors_pkey|nekkora|TRIGGER|grant=f
+> relacl|user_mfa_factors_pkey|nekkora|TRUNCATE|grant=f
+> relacl|user_mfa_factors_pkey|nekkora|UPDATE|grant=f
+> relacl|user_mfa_factors|nekkora_platform|INSERT|grant=f
+> relacl|user_mfa_factors|nekkora_platform|SELECT|grant=f
+> relacl|user_mfa_factors|nekkora_platform|UPDATE|grant=f
+> relacl|user_mfa_factors|nekkora|DELETE|grant=f
+> relacl|user_mfa_factors|nekkora|INSERT|grant=f
+> relacl|user_mfa_factors|nekkora|REFERENCES|grant=f
+> relacl|user_mfa_factors|nekkora|SELECT|grant=f
+> relacl|user_mfa_factors|nekkora|TRIGGER|grant=f
+> relacl|user_mfa_factors|nekkora|TRUNCATE|grant=f
+> relacl|user_mfa_factors|nekkora|UPDATE|grant=f
+> relacl|user_mfa_recovery_codes_factor_id_code_hash_key|nekkora|DELETE|grant=f
+> relacl|user_mfa_recovery_codes_factor_id_code_hash_key|nekkora|INSERT|grant=f
+> relacl|user_mfa_recovery_codes_factor_id_code_hash_key|nekkora|REFERENCES|grant=f
+> relacl|user_mfa_recovery_codes_factor_id_code_hash_key|nekkora|SELECT|grant=f
+> relacl|user_mfa_recovery_codes_factor_id_code_hash_key|nekkora|TRIGGER|grant=f
+> relacl|user_mfa_recovery_codes_factor_id_code_hash_key|nekkora|TRUNCATE|grant=f
+> relacl|user_mfa_recovery_codes_factor_id_code_hash_key|nekkora|UPDATE|grant=f
+> relacl|user_mfa_recovery_codes_pkey|nekkora|DELETE|grant=f
+> relacl|user_mfa_recovery_codes_pkey|nekkora|INSERT|grant=f
+> relacl|user_mfa_recovery_codes_pkey|nekkora|REFERENCES|grant=f
+> relacl|user_mfa_recovery_codes_pkey|nekkora|SELECT|grant=f
+> relacl|user_mfa_recovery_codes_pkey|nekkora|TRIGGER|grant=f
+> relacl|user_mfa_recovery_codes_pkey|nekkora|TRUNCATE|grant=f
+> relacl|user_mfa_recovery_codes_pkey|nekkora|UPDATE|grant=f
+> relacl|user_mfa_recovery_codes|nekkora_platform|INSERT|grant=f
+> relacl|user_mfa_recovery_codes|nekkora_platform|SELECT|grant=f
+> relacl|user_mfa_recovery_codes|nekkora_platform|UPDATE|grant=f
+> relacl|user_mfa_recovery_codes|nekkora|DELETE|grant=f
+> relacl|user_mfa_recovery_codes|nekkora|INSERT|grant=f
+> relacl|user_mfa_recovery_codes|nekkora|REFERENCES|grant=f
+> relacl|user_mfa_recovery_codes|nekkora|SELECT|grant=f
+> relacl|user_mfa_recovery_codes|nekkora|TRIGGER|grant=f
+> relacl|user_mfa_recovery_codes|nekkora|TRUNCATE|grant=f
+> relacl|user_mfa_recovery_codes|nekkora|UPDATE|grant=f
+2571a2908,2914
+> relacl|ux_user_mfa_factors_um_ativo|nekkora|DELETE|grant=f
+> relacl|ux_user_mfa_factors_um_ativo|nekkora|INSERT|grant=f
+> relacl|ux_user_mfa_factors_um_ativo|nekkora|REFERENCES|grant=f
+> relacl|ux_user_mfa_factors_um_ativo|nekkora|SELECT|grant=f
+> relacl|ux_user_mfa_factors_um_ativo|nekkora|TRIGGER|grant=f
+> relacl|ux_user_mfa_factors_um_ativo|nekkora|TRUNCATE|grant=f
+> relacl|ux_user_mfa_factors_um_ativo|nekkora|UPDATE|grant=f
+2837a3181,3183
+> rel|auth_challenges_pkey|i|owner=nekkora|rls=f|force=f
+> rel|auth_challenges_token_hash_key|i|owner=nekkora|rls=f|force=f
+> rel|auth_challenges|r|owner=nekkora|rls=t|force=t
+2891a3238,3240
+> rel|flyway_schema_history_pk|i|owner=nekkora|rls=f|force=f
+> rel|flyway_schema_history_s_idx|i|owner=nekkora|rls=f|force=f
+> rel|flyway_schema_history|r|owner=nekkora|rls=f|force=f
+2898a3248
+> rel|ix_auth_challenges_user_ativos|i|owner=nekkora|rls=f|force=f
+2914a3265
+> rel|ix_mfa_events_org_user|i|owner=nekkora|rls=f|force=f
+2917a3269
+> rel|ix_user_mfa_recovery_codes_user_id|i|owner=nekkora|rls=f|force=f
+2924a3277,3278
+> rel|mfa_events_pkey|i|owner=nekkora|rls=f|force=f
+> rel|mfa_events|r|owner=nekkora|rls=t|force=t
+2963a3318,3323
+> rel|user_mfa_factors_organization_id_user_id_factor_id_key|i|owner=nekkora|rls=f|force=f
+> rel|user_mfa_factors_pkey|i|owner=nekkora|rls=f|force=f
+> rel|user_mfa_factors|r|owner=nekkora|rls=t|force=t
+> rel|user_mfa_recovery_codes_factor_id_code_hash_key|i|owner=nekkora|rls=f|force=f
+> rel|user_mfa_recovery_codes_pkey|i|owner=nekkora|rls=f|force=f
+> rel|user_mfa_recovery_codes|r|owner=nekkora|rls=t|force=t
+2977a3338
+> rel|ux_user_mfa_factors_um_ativo|i|owner=nekkora|rls=f|force=f
+3015a3377,3379
+> trg|auth_challenges|trg_auth_challenges_prevent_change|enabled=O|CREATE TRIGGER trg_auth_challenges_prevent_change BEFORE UPDATE ON public.auth_challenges FOR EACH ROW EXECUTE FUNCTION prevent_auth_challenge_change()
+> trg|auth_challenges|trg_auth_challenges_prevent_delete|enabled=O|CREATE TRIGGER trg_auth_challenges_prevent_delete BEFORE DELETE ON public.auth_challenges FOR EACH ROW EXECUTE FUNCTION prevent_delete()
+> trg|auth_challenges|trg_auth_challenges_prevent_truncate|enabled=O|CREATE TRIGGER trg_auth_challenges_prevent_truncate BEFORE TRUNCATE ON public.auth_challenges FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+3075a3440,3442
+> trg|mfa_events|trg_mfa_events_prevent_delete|enabled=O|CREATE TRIGGER trg_mfa_events_prevent_delete BEFORE DELETE ON public.mfa_events FOR EACH ROW EXECUTE FUNCTION prevent_delete()
+> trg|mfa_events|trg_mfa_events_prevent_truncate|enabled=O|CREATE TRIGGER trg_mfa_events_prevent_truncate BEFORE TRUNCATE ON public.mfa_events FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|mfa_events|trg_mfa_events_prevent_update|enabled=O|CREATE TRIGGER trg_mfa_events_prevent_update BEFORE UPDATE ON public.mfa_events FOR EACH ROW EXECUTE FUNCTION prevent_update()
+3101a3469,3476
+> trg|user_mfa_factors|trg_user_mfa_factors_prevent_change|enabled=O|CREATE TRIGGER trg_user_mfa_factors_prevent_change BEFORE UPDATE ON public.user_mfa_factors FOR EACH ROW EXECUTE FUNCTION prevent_mfa_factor_change()
+> trg|user_mfa_factors|trg_user_mfa_factors_prevent_delete|enabled=O|CREATE TRIGGER trg_user_mfa_factors_prevent_delete BEFORE DELETE ON public.user_mfa_factors FOR EACH ROW EXECUTE FUNCTION prevent_delete()
+> trg|user_mfa_factors|trg_user_mfa_factors_prevent_truncate|enabled=O|CREATE TRIGGER trg_user_mfa_factors_prevent_truncate BEFORE TRUNCATE ON public.user_mfa_factors FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|user_mfa_recovery_codes|trg_user_mfa_recovery_codes_prevent_change|enabled=O|CREATE TRIGGER trg_user_mfa_recovery_codes_prevent_change BEFORE UPDATE ON public.user_mfa_recovery_codes FOR EACH ROW EXECUTE FUNCTION prevent_mfa_recovery_code_change()
+> trg|user_mfa_recovery_codes|trg_user_mfa_recovery_codes_prevent_delete|enabled=O|CREATE TRIGGER trg_user_mfa_recovery_codes_prevent_delete BEFORE DELETE ON public.user_mfa_recovery_codes FOR EACH ROW EXECUTE FUNCTION prevent_delete()
+> trg|user_mfa_recovery_codes|trg_user_mfa_recovery_codes_prevent_truncate|enabled=O|CREATE TRIGGER trg_user_mfa_recovery_codes_prevent_truncate BEFORE TRUNCATE ON public.user_mfa_recovery_codes FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|user_sessions|trg_user_sessions_enforce_mfa|enabled=O|CREATE TRIGGER trg_user_sessions_enforce_mfa BEFORE INSERT ON public.user_sessions FOR EACH ROW EXECUTE FUNCTION enforce_user_session_mfa_on_insert()
+> trg|user_sessions|trg_user_sessions_prevent_reactivation|enabled=O|CREATE TRIGGER trg_user_sessions_prevent_reactivation BEFORE UPDATE ON public.user_sessions FOR EACH ROW EXECUTE FUNCTION prevent_user_session_reactivation()

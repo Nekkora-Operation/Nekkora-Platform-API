@@ -1,0 +1,1 @@
+agent_id,organization_id,name,installation_id,agent_version,status,registered_at,last_heartbeat_at,created_at,updated_at

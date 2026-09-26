@@ -1,0 +1,332 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+=== I01 contexto A: so linhas de A; ids de B invisiveis
+BEGIN
+SET
+                   afirma                    
+---------------------------------------------
+ ok: A ve 1 workspace, 1 execucao, 1 usuario
+(1 row)
+
+               afirma                
+-------------------------------------
+ ok: workspace de B invisivel por id
+(1 row)
+
+               afirma               
+------------------------------------
+ ok: organizacao B invisivel por id
+(1 row)
+
+=== I02 UPDATE em linha de B com contexto A: 0 linhas (USING filtra, sem erro)
+                 afirma                 
+----------------------------------------
+ ok: UPDATE em workspace de B: 0 linhas
+(1 row)
+
+                afirma                 
+---------------------------------------
+ ok: UPDATE em usuarios de B: 0 linhas
+(1 row)
+
+                       afirma                       
+----------------------------------------------------
+ ok: UPDATE na credencial de B (derivada): 0 linhas
+(1 row)
+
+COMMIT
+=== I03/I04 escrita para B no contexto A: rejeitada por WITH CHECK
+BEGIN
+SET
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] new row violates row-level security policy for table "workspaces"
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] new row violates row-level security policy for table "workspaces"
+ROLLBACK
+=== I05 sem contexto: nenhuma linha, nenhuma escrita
+          afirma           
+---------------------------
+ ok: sem contexto definido
+(1 row)
+
+           afirma           
+----------------------------
+ ok: sem contexto: 0 linhas
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] new row violates row-level security policy for table "workspaces"
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+=== I06 contexto vazio
+BEGIN
+SET
+            afirma            
+------------------------------
+ ok: contexto vazio: 0 linhas
+(1 row)
+
+ROLLBACK
+=== I07 contexto malformado: erro de conversao
+BEGIN
+SET
+NOTICE:  rejeitado como esperado [22P02] invalid input syntax for type uuid: "nao-e-um-uuid"
+      espera_erro      
+-----------------------
+ ok: rejeitado [22P02]
+(1 row)
+
+ROLLBACK
+=== I08 reutilizacao de conexao: SET LOCAL nao sobrevive ao fim da transacao
+BEGIN
+SET
+            afirma            
+------------------------------
+ ok: txn1 contexto A: 1 linha
+(1 row)
+
+COMMIT
+      afirma       
+-------------------
+ ok: mesma conexao
+(1 row)
+
+                     afirma                     
+------------------------------------------------
+ ok: txn2 apos COMMIT: contexto vazio, 0 linhas
+(1 row)
+
+BEGIN
+SET
+          afirma           
+---------------------------
+ ok: txn3 contexto B: so B
+(1 row)
+
+ROLLBACK
+                      afirma                      
+--------------------------------------------------
+ ok: txn4 apos ROLLBACK: contexto vazio, 0 linhas
+(1 row)
+
+=== I09 uso indevido (informativo, mas afirmado): SET de sessao, sem LOCAL, vaza para a transacao seguinte
+SET
+                                afirma                                
+----------------------------------------------------------------------
+ ok: SET de sessao vaza para a transacao seguinte (risco documentado)
+(1 row)
+
+RESET
+          afirma          
+--------------------------
+ ok: apos RESET: 0 linhas
+(1 row)
+
+=== I10 falsificar nekkora.fn_organization_id nao afeta a politica do platform
+BEGIN
+SET
+SET
+             afirma             
+--------------------------------
+ ok: fn_ctx=B ignorado: ve so A
+(1 row)
+
+ROLLBACK
+BEGIN
+SET
+                       afirma                        
+-----------------------------------------------------
+ ok: so fn_ctx, sem contexto de requisicao: 0 linhas
+(1 row)
+
+ROLLBACK
+=== I11 operacoes nao concedidas ao platform
+BEGIN
+SET
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table organizations
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_schedules
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_schedule_occurrences
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_usage_daily
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table executions
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table execution_events
+ROLLBACK
+NOTICE:  rejeitado como esperado [42501] permission denied for function create_schedule_occurrence
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for function process_schedule_occurrence
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for function process_schedule_occurrence
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for function reconsolidate_usage_day
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for function assign_received_at_and_lock_barrier
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for function provision_organization
+NOTICE:  rejeitado como esperado [42501] permission denied for schema public
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+=== I12 set_schedule_status: contexto obrigatorio e coincidente, verificado antes de alterar a agenda
+BEGIN
+SET
+    afirma    
+--------------
+ ok: suspenso
+(1 row)
+
+     afirma      
+-----------------
+ ok: idempotente
+(1 row)
+
+    afirma    
+--------------
+ ok: retomado
+(1 row)
+
+                     afirma                     
+------------------------------------------------
+ ok: fn_organization_id restaurado apos retorno
+(1 row)
+
+COMMIT
+BEGIN
+SET
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] contexto organizacional ausente ou divergente (organization_id=bbbbbbbb-0000-0000-0000-00000000000b, contexto=aaaaaaaa-0000-0000-0000-00000000000a)
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] agendamento inexistente ou de outra organizacao (organization_id=aaaaaaaa-0000-0000-0000-00000000000a, schedule_id=bbbbbbbb-0000-0000-000b-000000000001)
+      espera_erro      
+-----------------------
+ ok: rejeitado [22023]
+(1 row)
+
+NOTICE:  rejeitado como esperado [22023] status desejado invalido (3): 1=ACTIVE, 2=SUSPENDED
+ROLLBACK
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] contexto organizacional ausente ou divergente (organization_id=aaaaaaaa-0000-0000-0000-00000000000a, contexto=<ausente>)
+BEGIN
+SET
+         afirma          
+-------------------------
+ ok: agenda de B intacta
+(1 row)
+
+ROLLBACK
+BEGIN
+SET
+                                     afirma                                     
+--------------------------------------------------------------------------------
+ ok: agenda de A ativa apos as tentativas rejeitadas (nenhuma alterou a agenda)
+(1 row)
+
+ROLLBACK
+=== I13 objeto temporario sombreando tabela real nao desvia as triggers (search_path fixo, pg_temp por ultimo)
+CREATE TABLE
+INSERT 0 1
+BEGIN
+SET
+                             afirma                              
+-----------------------------------------------------------------
+ ok: consulta nao qualificada da sessao le a temporaria (CLOSED)
+(1 row)
+
+INSERT 0 1
+                             afirma                              
+-----------------------------------------------------------------
+ ok: execucao criada: a trigger nao foi desviada pela temporaria
+(1 row)
+
+UPDATE 1
+COMMIT
+DROP TABLE
+               resultado               
+---------------------------------------
+ platform: todas as assercoes passaram
+(1 row)
+

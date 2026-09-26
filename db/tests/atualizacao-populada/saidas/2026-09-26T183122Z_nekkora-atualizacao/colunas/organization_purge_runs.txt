@@ -1,0 +1,1 @@
+purge_run_id,organization_id,category,records_purged,occurred_at,purged_by_user_id

@@ -1,0 +1,5 @@
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://nekkora-atualizacao-copia:5432/nekkora (PostgreSQL 16.15)
+Successfully validated 16 migrations (execution time 00:00.104s)

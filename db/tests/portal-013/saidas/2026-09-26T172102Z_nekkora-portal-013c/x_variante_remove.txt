@@ -1,0 +1,13 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+DROP FUNCTION
+             afirma             
+--------------------------------
+ ok: variante de pausa removida
+(1 row)
+

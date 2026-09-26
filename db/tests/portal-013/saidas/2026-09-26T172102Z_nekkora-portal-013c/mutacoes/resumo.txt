@@ -1,0 +1,14 @@
+impressao_original=0e9cfa7031fa3c906f26b7e7ed1938a7
+m1a: DETECTADA (exit=3, mensagem: FALHA DE ASSERCAO: passo 6: list_workspaces identico ao baseline)
+m1a: restaurado; impressao identica a original
+m1b: DETECTADA (exit=3, mensagem: FALHA DE ASSERCAO: chamada deveria ter sucesso (SQLSTATE NK401): passo 3: list_workspaces sem erro)
+m1b: restaurado; impressao identica a original
+m2/conta: DETECTADA (exit=3, mensagem: FALHA DE ASSERCAO: caso conta: leitura apos a mudanca confirmada entre resolucao e leitura = 0 linha(s))
+m2/vinculo: DETECTADA (exit=3, mensagem: FALHA DE ASSERCAO: caso vinculo: leitura apos a mudanca confirmada entre resolucao e leitura = 0 linha(s))
+m2/cliente: DETECTADA (exit=3, mensagem: FALHA DE ASSERCAO: caso cliente: leitura apos a mudanca confirmada entre resolucao e leitura = 0 linha(s))
+m2/org: DETECTADA (exit=3, mensagem: FALHA DE ASSERCAO: caso org: leitura apos a mudanca confirmada entre resolucao e leitura = 0 linha(s))
+m2: restaurado; impressao identica a original
+m3: DETECTADA (exit=3, mensagem: FALHA DE ASSERCAO: esperado NK401, obtido SQLSTATE 00000: sessao inativa ha 16 min (ws))
+m3: restaurado; impressao identica a original
+m4: DETECTADA (o marcador do papel apareceu no log do servidor sem log_error_verbosity = terse)
+m4: restaurado; impressao identica a original

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Log sanitizado (C10/8.8). As aplicacoes so registram eventos chave=valor sem e-mail, senha, codigo, token,
+  cookie, hash, SQL ou mensagem do servidor. Defesa em profundidade: qualquer sequencia no formato de token D2
+  (43 caracteres base64url isolados) e mascarada na saida, e excecoes sao registradas SEM mensagem nem stack
+  (so a classe), porque a mensagem de uma excecao de banco pode conter valores.
+-->
+<configuration>
+    <conversionRule conversionWord="exceptionClass" converterClass="com.nekkora.core.log.ExceptionClassConverter"/>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%X{correlacao:--}] %logger{36} - %replace(%msg){'(?&lt;![A-Za-z0-9_-])[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048](?![A-Za-z0-9_-])', '[token-mascarado]'}%exceptionClass%n</pattern>
+        </encoder>
+    </appender>
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>

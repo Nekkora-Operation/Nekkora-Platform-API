@@ -1,0 +1,7 @@
+== mutacao aplicada de proposito (teste do runner): m1a_resolve_confia_guc_usuario.sql
+DO
+      resultado       | presente 
+----------------------+----------
+ mutacao m1a aplicada | t
+(1 row)
+

@@ -1,0 +1,20 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+SET
+SET
+SET
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+unnamed portal with parameters: $1 = '10000000-0000-0000-0000-000000000001', $2 = 'MARCADORLOG44p9rAcTWS2aiWGDy0bB44z0AX54gJHA'
+                           nk401                           
+-----------------------------------------------------------
+ ok: NK401 - controle positivo (superusuario, log verboso)
+(1 row)
+

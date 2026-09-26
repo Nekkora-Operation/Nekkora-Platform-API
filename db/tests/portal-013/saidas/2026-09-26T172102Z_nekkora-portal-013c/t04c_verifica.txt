@@ -1,0 +1,39 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+              session_id              |         last_seen_at          |          expires_at           
+--------------------------------------+-------------------------------+-------------------------------
+ 10000000-0000-00c4-0000-000000000208 | 2026-09-26 17:21:28.247871+00 | 2026-09-27 04:51:22.517171+00
+ 10000000-0000-00c4-0000-000000000209 | 2026-09-26 17:21:57.74586+00  | 2026-09-27 04:51:22.517171+00
+ 10000000-0000-00c4-0000-000000000210 | 2026-09-26 17:19:27.74586+00  | 2026-09-27 04:51:22.517171+00
+(3 rows)
+
+                                afirma                                
+----------------------------------------------------------------------
+ ok: xtoq: last_seen_at = instante da 1a chamada (toque apos > 1 min)
+(1 row)
+
+                                        afirma                                         
+---------------------------------------------------------------------------------------
+ ok: xtoq: a 2a chamada (< 1 min depois) NAO escreveu - no maximo 1 escrita por minuto
+(1 row)
+
+                     afirma                      
+-------------------------------------------------
+ ok: xfut: last_seen_at no futuro nao retrocedeu
+(1 row)
+
+                              afirma                               
+-------------------------------------------------------------------
+ ok: xp: 22023 nao tocou last_seen_at (transacao inteira desfeita)
+(1 row)
+
+               afirma               
+------------------------------------
+ ok: expires_at inalterado nas tres
+(1 row)
+

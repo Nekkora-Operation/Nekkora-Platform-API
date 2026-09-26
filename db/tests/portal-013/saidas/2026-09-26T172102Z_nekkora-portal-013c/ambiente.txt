@@ -1,0 +1,46 @@
+data_utc=2026-09-26T17:21:07Z
+commit=9ff34aea2c5e51efe72cef2c3d35d3a40e093e92
+branch=feat/api-v1
+arvore_limpa=nao
+git_status_porcelain:
+   M .gitattributes
+   M db/tests/portal-013/compose.teste.yml
+   M db/tests/portal-013/run.sh
+   M db/tests/seguranca-012/compose.teste.yml
+   M db/tests/seguranca-012/run.sh
+   M docs/relatorios/2026-09-25-preparacao-autorizacao-api-nekkora.md
+  ?? api/
+  ?? db/migrations/014_mfa_sessoes.sql
+  ?? db/tests/atualizacao-populada/
+  ?? db/tests/mfa-014/
+  ?? db/tests/portal-013/saidas/2026-09-26T043635Z_nekkora-portal-013ens/
+  ?? db/tests/portal-013/saidas/2026-09-26T043648Z_nekkora-portal-013ens/
+  ?? db/tests/portal-013/saidas/2026-09-26T043722Z_nekkora-portal-013ens/
+  ?? db/tests/portal-013/saidas/2026-09-26T043911Z_nekkora-portal-013ens/
+  ?? db/tests/portal-013/saidas/2026-09-26T044135Z_nekkora-portal-013ens/
+  ?? db/tests/portal-013/saidas/2026-09-26T044322Z_nekkora-portal-013ens/
+  ?? db/tests/portal-013/saidas/2026-09-26T044517Z_nekkora-portal-013ens/
+  ?? db/tests/portal-013/saidas/2026-09-26T172102Z_nekkora-portal-013c/
+  ?? db/tests/portal-8-2/
+  ?? db/tests/seguranca-012/saidas/2026-09-26T160015Z_nekkora-seg-012h/
+  ?? db/tests/seguranca-012/saidas/2026-09-26T172020Z_nekkora-seg-012/
+  ?? docs/relatorios/2026-09-26-decisoes-8-6-8-7-8-10.md
+migration_013=db/migrations/013_portal_externo.sql sha256=c6192bff305f3888710ef9430751452b7a48a5bc7078691a16e16ddebb4c14d9
+projeto=nekkora-portal-013c container=nekkora-portal-013c-postgres volume=nekkora-portal-013c_nekkora_postgres_data rede=nekkora-portal-013c_default porta=55516
+docker=29.7.2
+compose=5.3.1
+migracoes_montadas:
+  0d6ed7bdaf9931198087f91bff1efb991cf5e67fbc2765747c43b23700cc38ab *001_initial.sql
+  3c00fe2acc44f2b330e88e721b1f8a6e1506b3e8be0a13f23ed044a60c83f465 *002_identity.sql
+  234fc14b791ef520b31896feb19be9aeef5ceef55510d0e0302b1cd66c4a0419 *003_access_control.sql
+  456082e3ea796c7f5da18bcfa9bcdbbf9323af9c646003fcc176daf3cf33fd11 *004_workers_agents.sql
+  1a647b2c60f6ce5e9e0839b1382093bd3e512eb83d1df1f50da903a7f05088ff *005_automations_versions.sql
+  967082fe408a1d90541b25c2071f4f8bf3601f198091e222eb64b562ce8e7332 *006_executions.sql
+  432aae420b0d00c45cf32e1300557b7230cb8e0f3f6ee46506d9d5fd17c44847 *007_events_logs.sql
+  d01106249bbb93bb2e555bae14f55cffb81e2f56a8e1797a523aff411c4b5bd4 *008_parametros_secrets.sql
+  940972b9b40ebef6d71a5d09212b7d31deda62d9bea91d0aee887243dc88612d *009_agendamentos.sql
+  9411040c34186a07404d99609813070a49864be33bb957bfef01dd975a53d59d *010_recursos_limites_retencao.sql
+  38a509845cb4459311b7edfda135ad1ca46203af7387fa45f1e356b200e87ef9 *011_fechamento_expurgo.sql
+  fd758edfb66af9e6b1c17697ebeb2fd8ddf9ce22fa4673c358f28efa78d1fbd7 *012_security_rls.sql
+  c6192bff305f3888710ef9430751452b7a48a5bc7078691a16e16ddebb4c14d9 *013_portal_externo.sql
+server_version=16.15

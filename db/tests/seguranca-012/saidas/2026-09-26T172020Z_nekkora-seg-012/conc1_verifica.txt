@@ -1,0 +1,19 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+ linhas_para_a_identidade |            occurrence_id             
+--------------------------+--------------------------------------
+                        1 | 01e2da16-4873-4fc1-a475-2881a4f90c47
+(1 row)
+
+                   afirma                   
+--------------------------------------------
+ ok: uma unica ocorrencia para a identidade
+(1 row)
+
+                            afirma                            
+--------------------------------------------------------------
+ ok: A e B receberam o mesmo occurrence_id, igual ao da linha
+(1 row)
+

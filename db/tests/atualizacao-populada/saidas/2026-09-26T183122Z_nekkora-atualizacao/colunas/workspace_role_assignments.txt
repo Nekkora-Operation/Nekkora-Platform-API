@@ -1,0 +1,1 @@
+assignment_id,organization_id,workspace_id,membership_id,role_id,scope,status,assigned_by_membership_id,created_at,updated_at,revoked_at,revoked_by_membership_id

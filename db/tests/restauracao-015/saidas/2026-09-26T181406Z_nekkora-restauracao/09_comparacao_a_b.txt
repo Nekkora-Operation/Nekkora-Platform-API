@@ -1,0 +1,1 @@
+catalogo (3480 linhas), papeis (13 linhas) e dados (49 tabelas, 8831 linhas) identicos

@@ -1,0 +1,23 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+         c_observacao          | pid |     usename      | state  | wait_event_type |  wait_event   |                            query                             
+-------------------------------+-----+------------------+--------+-----------------+---------------+--------------------------------------------------------------
+ 2026-09-26 17:21:49.337944+00 | 591 | nekkora_portal   | active | Timeout         | PgSleep       | SELECT pg_sleep(8);
+ 2026-09-26 17:21:49.33795+00  | 598 | nekkora_platform | active | Lock            | transactionid | UPDATE user_sessions SET revoked_at = clock_timestamp() WHER
+(2 rows)
+
+ bloqueado |     usename      | bloqueado_por 
+-----------+------------------+---------------
+       598 | nekkora_platform | {591}
+(1 row)
+
+                                          afirma                                          
+------------------------------------------------------------------------------------------
+ ok: sessao de nekkora_platform em espera de lock, bloqueada por sessao de nekkora_portal
+(1 row)
+

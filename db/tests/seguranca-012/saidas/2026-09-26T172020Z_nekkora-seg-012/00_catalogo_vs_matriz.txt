@@ -1,0 +1,279 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+CREATE TABLE
+INSERT 0 9
+=== papeis
+            rolname             | rolsuper | rolcanlogin | rolinherit | rolcreaterole | rolcreatedb | rolreplication | rolbypassrls 
+--------------------------------+----------+-------------+------------+---------------+-------------+----------------+--------------
+ nekkora                        | t        | t           | t          | t             | t           | t              | t
+ nekkora_ingestion              | f        | t           | t          | f             | f           | f              | f
+ nekkora_platform               | f        | t           | t          | f             | f           | f              | f
+ nekkora_provisioning           | f        | t           | t          | f             | f           | f              | f
+ nekkora_provisioning_owner     | f        | f           | t          | f             | f           | f              | f
+ nekkora_retention_executor     | f        | t           | t          | f             | f           | f              | f
+ nekkora_retention_owner        | f        | f           | t          | f             | f           | f              | f
+ nekkora_retention_tables_owner | f        | f           | t          | f             | f           | f              | f
+ nekkora_scheduler              | f        | t           | t          | f             | f           | f              | f
+ nekkora_scheduler_owner        | f        | f           | t          | f             | f           | f              | f
+(10 rows)
+
+               afirma               
+------------------------------------
+ ok: os 9 papeis protegidos existem
+(1 row)
+
+                                    afirma                                    
+------------------------------------------------------------------------------
+ ok: papeis protegidos sem atributo privilegiado e com LOGIN/NOLOGIN esperado
+(1 row)
+
+          afirma          
+--------------------------
+ ok: nekkora_app removido
+(1 row)
+
+=== memberships envolvendo papeis protegidos, nos dois sentidos (deve ser vazio)
+ papel_concedido | membro 
+-----------------+--------
+(0 rows)
+
+                                              afirma                                               
+---------------------------------------------------------------------------------------------------
+ ok: nenhuma membership envolvendo papel protegido, em qualquer sentido e com qualquer outro papel
+(1 row)
+
+=== CREATE efetivo dos papeis protegidos (deve ser vazio)
+ papel | create_em_public | create_no_banco 
+-------+------------------+-----------------
+(0 rows)
+
+                                   afirma                                   
+----------------------------------------------------------------------------
+ ok: nenhum papel protegido com CREATE efetivo no schema public ou no banco
+(1 row)
+
+               afirma                
+-------------------------------------
+ ok: CREATE em public fora de PUBLIC
+(1 row)
+
+CREATE TABLE
+INSERT 0 145
+SELECT 145
+=== tabela: esperado e nao instalado (deve ser vazio)
+ papel | tabela | priv 
+-------+--------+------
+(0 rows)
+
+=== tabela: instalado e nao esperado (deve ser vazio)
+ papel | tabela | priv 
+-------+--------+------
+(0 rows)
+
+                        afirma                        
+------------------------------------------------------
+ ok: privilegios de tabela esperados todos instalados
+(1 row)
+
+                                 afirma                                 
+------------------------------------------------------------------------
+ ok: nenhum privilegio de tabela alem da matriz (qualquer beneficiario)
+(1 row)
+
+                  afirma                  
+------------------------------------------
+ ok: matriz de tabela com 145 privilegios
+(1 row)
+
+CREATE TABLE
+INSERT 0 15
+SELECT 15
+=== coluna: esperado e nao instalado (deve ser vazio)
+ papel | tabela | coluna | priv 
+-------+--------+--------+------
+(0 rows)
+
+=== coluna: instalado e nao esperado (deve ser vazio)
+ papel | tabela | coluna | priv 
+-------+--------+--------+------
+(0 rows)
+
+                        afirma                        
+------------------------------------------------------
+ ok: privilegios de coluna esperados todos instalados
+(1 row)
+
+                                 afirma                                 
+------------------------------------------------------------------------
+ ok: nenhum privilegio de coluna alem da matriz (qualquer beneficiario)
+(1 row)
+
+CREATE TABLE
+INSERT 0 12
+SELECT 12
+=== funcao: esperado e nao instalado (deve ser vazio)
+ funcao | owner | secdef | execute_para 
+--------+-------+--------+--------------
+(0 rows)
+
+=== funcao: instalado e nao esperado (deve ser vazio)
+ funcao | owner | secdef | execute_para 
+--------+-------+--------+--------------
+(0 rows)
+
+                                    afirma                                     
+-------------------------------------------------------------------------------
+ ok: funcoes privilegiadas esperadas todas instaladas (owner, secdef, EXECUTE)
+(1 row)
+
+                               afirma                                
+---------------------------------------------------------------------
+ ok: nenhuma funcao privilegiada ou EXECUTE explicito alem da matriz
+(1 row)
+
+                                          afirma                                           
+-------------------------------------------------------------------------------------------
+ ok: toda SECURITY DEFINER com search_path = pg_catalog, pg_temp e sem EXECUTE para PUBLIC
+(1 row)
+
+=== funcoes privilegiadas: search_path e EXECUTE de PUBLIC
+                               funcao                                |                  proconfig                  | execute_public 
+---------------------------------------------------------------------+---------------------------------------------+----------------
+ process_schedule_occurrence(uuid,boolean)                           | {"search_path=pg_catalog, public, pg_temp"} | f
+ assign_received_at_and_lock_barrier(uuid,integer)                   | {"search_path=pg_catalog, pg_temp"}         | f
+ close_usage_day(uuid,integer,date)                                  | {"search_path=pg_catalog, pg_temp"}         | f
+ purge_expired_records(uuid,integer,uuid,integer)                    | {"search_path=pg_catalog, pg_temp"}         | f
+ reconsolidate_usage_day(uuid,integer,date)                          | {"search_path=pg_catalog, pg_temp"}         | f
+ process_schedule_occurrence(uuid,uuid,boolean)                      | {"search_path=pg_catalog, pg_temp"}         | f
+ create_schedule_occurrence(uuid,uuid,uuid,timestamp with time zone) | {"search_path=pg_catalog, pg_temp"}         | f
+ set_schedule_status(uuid,uuid,smallint,uuid)                        | {"search_path=pg_catalog, pg_temp"}         | f
+ provision_organization(uuid,text,text,uuid,resource_limit_input[])  | {"search_path=pg_catalog, pg_temp"}         | f
+ provision_first_org_admin(uuid,uuid,uuid,text,uuid)                 | {"search_path=pg_catalog, pg_temp"}         | f
+ provision_resource_limit(uuid,integer,smallint,bigint,uuid)         | {"search_path=pg_catalog, pg_temp"}         | f
+ provision_retention_policy(uuid,integer,smallint,integer,uuid)      | {"search_path=pg_catalog, pg_temp"}         | f
+(12 rows)
+
+=== funcoes invoker de public sem search_path fixo (so as sql puras de validacao, sem acesso a tabela)
+           proname            
+------------------------------
+ is_valid_command_contract
+ is_valid_cron_expression
+ is_valid_event_payload
+ is_valid_log_payload
+ is_valid_relative_entrypoint
+(5 rows)
+
+                             afirma                              
+-----------------------------------------------------------------
+ ok: sem search_path fixo so as 5 funcoes sql puras de validacao
+(1 row)
+
+=== RLS: tabelas de public por situacao
+     situacao     | tabelas |               sem_rls                
+------------------+---------+--------------------------------------
+ RLS enable+force |      42 | 
+ sem RLS          |       3 | permissions, role_permissions, roles
+(2 rows)
+
+SELECT 45
+         afirma         
+------------------------
+ ok: 39 tabelas diretas
+(1 row)
+
+                           afirma                           
+------------------------------------------------------------
+ ok: catalogo global = permissions, role_permissions, roles
+(1 row)
+
+                        afirma                         
+-------------------------------------------------------
+ ok: RLS enable+force em toda tabela direta e derivada
+(1 row)
+
+           afirma            
+-----------------------------
+ ok: catalogo global sem RLS
+(1 row)
+
+=== RLS: politicas por nome e papeis
+         polname         |                                   papeis                                   | polcmd | polpermissive | tabelas 
+-------------------------+----------------------------------------------------------------------------+--------+---------------+---------
+ tenant_function_context | nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner | *      | t             |      39
+ tenant_request_context  | nekkora_ingestion,nekkora_platform                                         | *      | t             |      39
+ tenant_request_context  | nekkora_platform                                                           | *      | t             |       3
+(3 rows)
+
+SELECT 81
+SELECT 81
+=== politicas: esperado e nao instalado / instalado e nao esperado (devem ser vazios)
+ relname | polname | papeis | expr 
+---------+---------+--------+------
+(0 rows)
+
+ relname | polname | papeis | expr 
+---------+---------+--------+------
+(0 rows)
+
+                 afirma                  
+-----------------------------------------
+ ok: 81 politicas esperadas (39 x 2 + 3)
+(1 row)
+
+                                 afirma                                  
+-------------------------------------------------------------------------
+ ok: toda politica esperada instalada com os papeis e a expressao exatos
+(1 row)
+
+                 afirma                  
+-----------------------------------------
+ ok: nenhuma politica alem das esperadas
+(1 row)
+
+                                afirma                                
+----------------------------------------------------------------------
+ ok: toda politica FOR ALL, permissiva, com WITH CHECK igual ao USING
+(1 row)
+
+              afirma              
+----------------------------------
+ ok: nenhuma politica para PUBLIC
+(1 row)
+
+=== exemplo de politica instalada (workspaces, user_credentials)
+         polname         |                                               using_expr                                                |                                               check_expr                                                
+-------------------------+---------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------
+ tenant_function_context | (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) | (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+ tenant_request_context  | (organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)    | (organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+(2 rows)
+
+        polname         |                                                                          using_expr                                                                           
+------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------
+ tenant_request_context | (EXISTS ( SELECT 1                                                                                                                                           +
+                        |    FROM users u                                                                                                                                              +
+                        |   WHERE ((u.user_id = user_credentials.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid))))
+(1 row)
+
+=== schema public e privilegios padrao
+ nspname |                            nspacl                             
+---------+---------------------------------------------------------------
+ public  | {pg_database_owner=UC/pg_database_owner,=U/pg_database_owner}
+(1 row)
+
+  papel  | defaclnamespace | defaclobjtype |      defaclacl      
+---------+-----------------+---------------+---------------------
+ nekkora |               0 | f             | {nekkora=X/nekkora}
+(1 row)
+
+                                          afirma                                           
+-------------------------------------------------------------------------------------------
+ ok: privilegio padrao global do executor de migrations sem EXECUTE para PUBLIC em funcoes
+(1 row)
+
+                   resultado                    
+------------------------------------------------
+ catalogo x matriz: todas as assercoes passaram
+(1 row)
+

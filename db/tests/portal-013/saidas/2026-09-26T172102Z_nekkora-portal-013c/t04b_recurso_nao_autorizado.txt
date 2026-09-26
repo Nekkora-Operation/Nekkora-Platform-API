@@ -1,0 +1,170 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+                    afirma                    
+----------------------------------------------
+ ok: papel real nekkora_portal (sem SET ROLE)
+(1 row)
+
+=== concessao pendente
+                   ok                    |                       afirma                        
+-----------------------------------------+-----------------------------------------------------
+ ok: concessao pendente: list_workspaces | ok: concessao pendente: list_workspaces -> 0 linhas
+(1 row)
+
+                   ok                    |                       afirma                        
+-----------------------------------------+-----------------------------------------------------
+ ok: concessao pendente: list_executions | ok: concessao pendente: list_executions -> 0 linhas
+(1 row)
+
+                  ok                   |                         afirma                         
+---------------------------------------+--------------------------------------------------------
+ ok: concessao pendente: get_execution | ok: concessao pendente: get_execution(e12) -> 0 linhas
+(1 row)
+
+                      ok                       |                      afirma                      
+-----------------------------------------------+--------------------------------------------------
+ ok: concessao pendente: list_execution_events | ok: concessao pendente: eventos(e15) -> 0 linhas
+(1 row)
+
+=== concessao suspensa
+                   ok                    |                       afirma                        
+-----------------------------------------+-----------------------------------------------------
+ ok: concessao suspensa: list_workspaces | ok: concessao suspensa: list_workspaces -> 0 linhas
+(1 row)
+
+                   ok                    |                       afirma                        
+-----------------------------------------+-----------------------------------------------------
+ ok: concessao suspensa: list_executions | ok: concessao suspensa: list_executions -> 0 linhas
+(1 row)
+
+                  ok                   |                         afirma                         
+---------------------------------------+--------------------------------------------------------
+ ok: concessao suspensa: get_execution | ok: concessao suspensa: get_execution(e12) -> 0 linhas
+(1 row)
+
+                      ok                       |                      afirma                      
+-----------------------------------------------+--------------------------------------------------
+ ok: concessao suspensa: list_execution_events | ok: concessao suspensa: eventos(e15) -> 0 linhas
+(1 row)
+
+=== concessao revogada
+                   ok                    |                       afirma                        
+-----------------------------------------+-----------------------------------------------------
+ ok: concessao revogada: list_workspaces | ok: concessao revogada: list_workspaces -> 0 linhas
+(1 row)
+
+                   ok                    |                       afirma                        
+-----------------------------------------+-----------------------------------------------------
+ ok: concessao revogada: list_executions | ok: concessao revogada: list_executions -> 0 linhas
+(1 row)
+
+                  ok                   |                         afirma                         
+---------------------------------------+--------------------------------------------------------
+ ok: concessao revogada: get_execution | ok: concessao revogada: get_execution(e12) -> 0 linhas
+(1 row)
+
+                      ok                       |                      afirma                      
+-----------------------------------------------+--------------------------------------------------
+ ok: concessao revogada: list_execution_events | ok: concessao revogada: eventos(e15) -> 0 linhas
+(1 row)
+
+=== concessao expirada
+                   ok                    |                       afirma                        
+-----------------------------------------+-----------------------------------------------------
+ ok: concessao expirada: list_workspaces | ok: concessao expirada: list_workspaces -> 0 linhas
+(1 row)
+
+                   ok                    |                       afirma                        
+-----------------------------------------+-----------------------------------------------------
+ ok: concessao expirada: list_executions | ok: concessao expirada: list_executions -> 0 linhas
+(1 row)
+
+                  ok                   |                         afirma                         
+---------------------------------------+--------------------------------------------------------
+ ok: concessao expirada: get_execution | ok: concessao expirada: get_execution(e12) -> 0 linhas
+(1 row)
+
+                      ok                       |                      afirma                      
+-----------------------------------------------+--------------------------------------------------
+ ok: concessao expirada: list_execution_events | ok: concessao expirada: eventos(e15) -> 0 linhas
+(1 row)
+
+=== concessao antes de starts_at
+                        ok                         |                            afirma                             
+---------------------------------------------------+---------------------------------------------------------------
+ ok: concessao antes de starts_at: list_workspaces | ok: concessao antes de starts_at: list_workspaces -> 0 linhas
+(1 row)
+
+                        ok                         |                            afirma                             
+---------------------------------------------------+---------------------------------------------------------------
+ ok: concessao antes de starts_at: list_executions | ok: concessao antes de starts_at: list_executions -> 0 linhas
+(1 row)
+
+                       ok                        |                              afirma                              
+-------------------------------------------------+------------------------------------------------------------------
+ ok: concessao antes de starts_at: get_execution | ok: concessao antes de starts_at: get_execution(e12) -> 0 linhas
+(1 row)
+
+                           ok                            |                           afirma                           
+---------------------------------------------------------+------------------------------------------------------------
+ ok: concessao antes de starts_at: list_execution_events | ok: concessao antes de starts_at: eventos(e15) -> 0 linhas
+(1 row)
+
+=== revisao vencida (next_review_at)
+                          ok                           |                              afirma                               
+-------------------------------------------------------+-------------------------------------------------------------------
+ ok: revisao vencida (next_review_at): list_workspaces | ok: revisao vencida (next_review_at): list_workspaces -> 0 linhas
+(1 row)
+
+                          ok                           |                              afirma                               
+-------------------------------------------------------+-------------------------------------------------------------------
+ ok: revisao vencida (next_review_at): list_executions | ok: revisao vencida (next_review_at): list_executions -> 0 linhas
+(1 row)
+
+                         ok                          |                                afirma                                
+-----------------------------------------------------+----------------------------------------------------------------------
+ ok: revisao vencida (next_review_at): get_execution | ok: revisao vencida (next_review_at): get_execution(e12) -> 0 linhas
+(1 row)
+
+                             ok                              |                             afirma                             
+-------------------------------------------------------------+----------------------------------------------------------------
+ ok: revisao vencida (next_review_at): list_execution_events | ok: revisao vencida (next_review_at): eventos(e15) -> 0 linhas
+(1 row)
+
+=== concessao para workspace inativo (WS4)
+                             ok                              |                                 afirma                                  
+-------------------------------------------------------------+-------------------------------------------------------------------------
+ ok: concessao para workspace inativo (WS4): list_workspaces | ok: concessao para workspace inativo (WS4): list_workspaces -> 0 linhas
+(1 row)
+
+                             ok                              |                                 afirma                                  
+-------------------------------------------------------------+-------------------------------------------------------------------------
+ ok: concessao para workspace inativo (WS4): list_executions | ok: concessao para workspace inativo (WS4): list_executions -> 0 linhas
+(1 row)
+
+                            ok                             |                                   afirma                                   
+-----------------------------------------------------------+----------------------------------------------------------------------------
+ ok: concessao para workspace inativo (WS4): get_execution | ok: concessao para workspace inativo (WS4): get_execution(e12) -> 0 linhas
+(1 row)
+
+                                ok                                 |                                afirma                                
+-------------------------------------------------------------------+----------------------------------------------------------------------
+ ok: concessao para workspace inativo (WS4): list_execution_events | ok: concessao para workspace inativo (WS4): eventos(e15) -> 0 linhas
+(1 row)
+
+=== WS4: a execucao existe (e51), o workspace e do mesmo cliente, mas esta inativo
+                       afirma                        
+-----------------------------------------------------
+ ok: Gw: get_execution(e51, WS4 inativo) -> 0 linhas
+(1 row)
+
+                      afirma                      
+--------------------------------------------------
+ ok: Gw: p_workspace_id = WS4 inativo -> 0 linhas
+(1 row)
+

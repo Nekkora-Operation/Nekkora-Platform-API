@@ -1,0 +1,26 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+             afirma              
+---------------------------------
+ ok: papel real nekkora_platform
+(1 row)
+
+=== sem contexto: nenhuma linha das tabelas novas
+                             afirma                              
+-----------------------------------------------------------------
+ ok: sem nekkora.organization_id: nada visivel nas tabelas novas
+(1 row)
+
+SET
+                         afirma                          
+---------------------------------------------------------
+ ok: contexto O2: so o fator de W; o de X (O1) invisivel
+(1 row)
+
+SET
+=== INSERT em user_sessions
+ERROR:  FALHA DE ASSERCAO: operacao deveria ter falhado (esperado 23514), mas teve sucesso: INSERT INTO user_sessions (organization_id, user_id, session_token_hash, expires_at, csrf_token)
+    VALUES ('10000000-0000-0000-0000-000000000001', '10000000-0000-0001-0000-000000000101', repeat('1', 64), now() + interval '1 hour', repeat('A', 43))
+CONTEXT:  PL/pgSQL function pg_temp_3.espera_erro(text,text,text) line 12 at RAISE

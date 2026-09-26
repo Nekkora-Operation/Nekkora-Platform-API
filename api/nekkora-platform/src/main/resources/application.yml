@@ -1,0 +1,88 @@
+# Nekkora Platform - configuracao. Segredos SO por ambiente/servico de segredos (nada versionado):
+#   NEKKORA_DB_URL, NEKKORA_DB_SENHA, NEKKORA_MFA_CHAVE_ID, NEKKORA_MFA_CHAVES ("k1:<base64 32 bytes>"),
+#   NEKKORA_HMAC_ID, NEKKORA_HMAC_CHAVE (base64 >= 32 bytes), NEKKORA_ORIGEM_PUBLICA.
+# Valores de limites e Argon2: CONFIGURACAO INICIAL DE TESTE aprovada (contrato 8.6/8.10, revisao 4), sujeita a
+# calibracao; m=64 MiB, t=3, p=1 e so candidato de benchmark.
+spring:
+  application:
+    name: nekkora-platform
+  main:
+    banner-mode: off
+  data:
+    redis:
+      host: ${NEKKORA_REDIS_HOST:localhost}
+      port: ${NEKKORA_REDIS_PORT:6379}
+      timeout: 500ms
+      connect-timeout: 500ms
+
+server:
+  port: ${NEKKORA_PORTA:8081}
+  forward-headers-strategy: none
+  error:
+    whitelabel:
+      enabled: false
+    include-message: never
+    include-stacktrace: never
+    include-exception: false
+    include-binding-errors: never
+  tomcat:
+    accesslog:
+      enabled: false
+
+nekkora:
+  public-origin: ${NEKKORA_ORIGEM_PUBLICA}
+  trusted-proxies: ${NEKKORA_PROXIES_CONFIAVEIS:127.0.0.1/32,::1/128}
+  database:
+    url: ${NEKKORA_DB_URL}
+    user: ${NEKKORA_DB_USUARIO:nekkora_platform}
+    password: ${NEKKORA_DB_SENHA}
+    max-pool-size: ${NEKKORA_DB_POOL:10}
+  argon2:
+    memory-kib: ${NEKKORA_ARGON2_M:65536}
+    iterations: ${NEKKORA_ARGON2_T:3}
+    parallelism: 1
+    max-concurrent: 4
+    queue: 8
+    wait-ms: 2000
+  keys:
+    aes-current: ${NEKKORA_MFA_CHAVE_ID}
+    aes-by-id: ${NEKKORA_MFA_CHAVES}
+    hmac-id: ${NEKKORA_HMAC_ID}
+    hmac: ${NEKKORA_HMAC_CHAVE}
+  session:
+    absolute: 12h
+    internal-inactivity: 30m
+    external-inactivity: 15m
+    max-per-account: 10
+    challenge: 5m
+    password-recovery: 30m
+    email-verification: 24h
+    step-up: 5m
+  limits:
+    r1-failures: 5
+    r1-window: 15m
+    r2-threshold: 6
+    r2-window: 1h
+    r2-initial-delay: 1s
+    r2-max-delay: 10s
+    r4-failures: 10
+    r4-window: 1h
+    r5-per-identity: 3
+    r5-per-ip: 10
+    r5-window: 1h
+    r6-capacity: 300
+    r6-per-second: 5
+    r7-capacity: 60
+    r7-per-second: 2
+    recovery-response-floor: 300ms
+
+logging:
+  level:
+    root: INFO
+    org.springframework.web: WARN
+    org.springframework.security: WARN
+    org.springframework.jdbc: WARN
+    org.apache.catalina: WARN
+    com.zaxxer.hikari: WARN
+    org.postgresql: WARN
+    io.lettuce: WARN

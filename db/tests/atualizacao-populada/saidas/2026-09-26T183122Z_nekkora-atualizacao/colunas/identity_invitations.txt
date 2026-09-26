@@ -1,0 +1,1 @@
+invitation_id,organization_id,invited_account_type,client_id,email_normalized,issued_by,token_hash,created_at,expires_at,accepted_at,accepted_user_id,revoked_at

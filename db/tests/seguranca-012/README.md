@@ -13,7 +13,7 @@ TESTE_PROJETO=nekkora-seg-2 TESTE_PORTA=55451 db/tests/seguranca-012/run.sh
 Requisitos: Docker com Compose e um shell POSIX (Git Bash no Windows). Não é preciso `psql` local.
 
 O `run.sh`:
-- sobe uma stack **nova e isolada** (projeto, container, volume e porta próprios), com `cluster_name=nekkora-regressao-isolada`, e aplica 001–012 pelo entrypoint. Aborta se não forem exatamente 12 migrations ou se houver `ERROR`/`FATAL`;
+- sobe uma stack **nova e isolada** (projeto, container, volume e porta próprios), com `cluster_name=nekkora-regressao-isolada`, e aplica 001–012 pelo entrypoint. Desde 2026-09-26 as 12 migrations são **escolhidas explicitamente** e copiadas para `saidas/<execução>/migracoes_montadas` (variável `TESTE_MIGRACOES`), e esse diretório é montado no entrypoint; migrations posteriores do repositório (013, 014…) não entram. As asserções não mudaram. Aborta se não forem exatamente 12 migrations ou se houver `ERROR`/`FATAL`;
 - **recusa** a stack principal (`nekkora-platform`), a porta 5432 e volume ou container já existentes;
 - nunca executa `down -v` nem limpeza global. A stack fica no ar ao final, e o comando de remoção é impresso;
 - roda cada script com o papel indicado abaixo, conectando **diretamente** com ele (nunca por `SET ROLE` a partir do superusuário, exceto no informativo `11c`);

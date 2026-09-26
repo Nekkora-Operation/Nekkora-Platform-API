@@ -1,0 +1,1 @@
+binding_id,organization_id,workspace_id,automation_id,automation_version_id,binding_kind,binding_name,created_at

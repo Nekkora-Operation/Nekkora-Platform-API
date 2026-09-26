@@ -1,0 +1,26 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+                  afirma                  
+------------------------------------------
+ ok: base isolada de teste (cluster_name)
+(1 row)
+
+ def_ok 
+--------
+ t
+(1 row)
+
+DO
+ALTER FUNCTION
+REVOKE
+GRANT
+                                                              afirma                                                              
+----------------------------------------------------------------------------------------------------------------------------------
+ ok: variante de pausa = corpo da funcao instalada + 1 linha (pg_advisory_xact_lock); mesmo owner, SECURITY DEFINER e search_path
+(1 row)
+

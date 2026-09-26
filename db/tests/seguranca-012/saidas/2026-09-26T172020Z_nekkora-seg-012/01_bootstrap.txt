@@ -1,0 +1,32 @@
+== execucao sem variaveis (deve falhar)
+Pager usage is off.
+ERRO: defina -v org_id=<uuid>
+ERROR:  variavel psql obrigatoria ausente (ver cabecalho)
+CONTEXT:  PL/pgSQL function inline_code_block line 1 at RAISE
+exit=3 (rejeitado)
+== execucao real
+Pager usage is off.
+BEGIN
+ org_id_ok | org_name_ok | staff_id_ok | staff_email_ok | staff_name_ok | limites_ok 
+-----------+-------------+-------------+----------------+---------------+------------
+ t         | t           | t           | t              | t             | t
+(1 row)
+
+DO
+COMMIT
+           organization_id            |       name       | status | usuarios | limites 
+--------------------------------------+------------------+--------+----------+---------
+ 99999999-0000-0000-0000-000000000099 | Nekkora Internal |      1 |        1 |       5
+(1 row)
+
+== repeticao (deve ser recusada)
+Pager usage is off.
+BEGIN
+ org_id_ok | org_name_ok | staff_id_ok | staff_email_ok | staff_name_ok | limites_ok 
+-----------+-------------+-------------+----------------+---------------+------------
+ t         | t           | t           | t              | t             | t
+(1 row)
+
+ERROR:  bootstrap recusado: a base ja tem organizacoes - use os caminhos de provisionamento
+CONTEXT:  PL/pgSQL function inline_code_block line 18 at RAISE
+exit=3 (recusado)

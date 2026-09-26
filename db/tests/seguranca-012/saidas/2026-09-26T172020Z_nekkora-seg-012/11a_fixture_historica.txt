@@ -1,0 +1,42 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+  papel  |       cluster_name        
+---------+---------------------------
+ nekkora | nekkora-regressao-isolada
+(1 row)
+
+DO
+BEGIN
+ALTER TABLE
+INSERT 0 5
+SET CONSTRAINTS
+ALTER TABLE
+COMMIT
+ tgenabled | triggers 
+-----------+----------
+ O         |      131
+(1 row)
+
+           organization_id            | count | bytes 
+--------------------------------------+-------+-------
+ aaaaaaaa-0000-0000-0000-00000000000a |     3 |   135
+ bbbbbbbb-0000-0000-0000-00000000000b |     2 |    70
+(2 rows)
+
+               afirma               
+------------------------------------
+ ok: triggers reabilitadas: 131/131
+(1 row)
+
+             afirma             
+--------------------------------
+ ok: D: A 3 eventos / 135 bytes
+(1 row)
+
+            afirma             
+-------------------------------
+ ok: D: B 2 eventos / 70 bytes
+(1 row)
+

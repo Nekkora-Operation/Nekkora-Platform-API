@@ -1,0 +1,7 @@
+== mutacao aplicada de proposito (teste do runner): m4_papel_sem_terse.sql
+ALTER ROLE
+      resultado      |                                                                              setconfig                                                                               
+---------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ mutacao m4 aplicada | {log_min_error_statement=panic,log_parameter_max_length=0,log_statement=none,log_min_duration_statement=-1,log_min_duration_sample=-1,log_transaction_sample_rate=0}
+(1 row)
+

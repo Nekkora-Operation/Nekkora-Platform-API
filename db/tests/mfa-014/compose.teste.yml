@@ -1,0 +1,9 @@
+# Override usado somente pelo run.sh desta pasta, junto com o docker-compose.yml da raiz do repositorio.
+# - container_name proprio; cluster_name marca a base isolada de teste da 014;
+# - migrations escolhidas explicitamente pelo run.sh (TESTE_MIGRACOES), no lugar de ./db/migrations.
+services:
+  postgres:
+    container_name: ${TESTE_CONTAINER:?defina TESTE_CONTAINER (use o run.sh)}
+    command: ["postgres", "-c", "cluster_name=nekkora-mfa-014-isolada"]
+    volumes:
+      - ${TESTE_MIGRACOES:?defina TESTE_MIGRACOES (use o run.sh)}:/docker-entrypoint-initdb.d:ro

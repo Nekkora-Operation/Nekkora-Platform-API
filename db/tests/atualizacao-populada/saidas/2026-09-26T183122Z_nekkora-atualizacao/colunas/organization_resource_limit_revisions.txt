@@ -1,0 +1,1 @@
+revision_id,organization_id,resource_code,revision_number,effective_from,limit_mode,limit_value,provisioned_by_user_id,created_at

@@ -1,0 +1,13 @@
+removidas/alteradas (<): 0
+acrescentadas (>): 250
+acrescentadas fora do esperado: 0
+por tipo:
+     42 col
+     38 con
+      5 fn
+      5 fnacl
+     11 idx
+      4 pol
+     15 rel
+    116 relacl
+     14 trg

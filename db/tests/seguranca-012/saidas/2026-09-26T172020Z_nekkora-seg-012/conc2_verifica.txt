@@ -1,0 +1,14 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+ records_count | bytes_count |        consolidated_at        | persistidos 
+---------------+-------------+-------------------------------+-------------
+             3 |         135 | 2026-09-26 17:20:54.189707+00 | 3/135
+(1 row)
+
+                    afirma                    
+----------------------------------------------
+ ok: agregado de hoje = registros persistidos
+(1 row)
+

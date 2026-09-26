@@ -1,0 +1,1 @@
+sessoes=660 revogadas_pela_014=480 ja_revogadas_intactas=180

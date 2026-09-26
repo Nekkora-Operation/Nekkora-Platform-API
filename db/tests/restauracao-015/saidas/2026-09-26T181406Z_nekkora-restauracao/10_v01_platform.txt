@@ -1,0 +1,20 @@
+Pager usage is off.
+BEGIN
+aaaaaaaa-0000-4000-8000-000000000001
+ERROR:  sessao nova exige marcador de MFA e CSRF, sem step-up nem revogacao
+CONTEXT:  PL/pgSQL function public.enforce_user_session_mfa_on_insert() line 4 at RAISE
+sem_marcador_sqlstate=23514
+sem_marcador_msg=sessao nova exige marcador de MFA e CSRF, sem step-up nem revogacao
+ROLLBACK
+BEGIN
+aaaaaaaa-0000-4000-8000-000000000001
+ERROR:  sessao revogada nao pode ser reabilitada nem ter a revogacao alterada
+CONTEXT:  PL/pgSQL function public.prevent_user_session_reactivation() line 4 at RAISE
+reativacao_sqlstate=23514
+reativacao_msg=sessao revogada nao pode ser reabilitada nem ter a revogacao alterada
+ROLLBACK
+BEGIN
+INSERT 0 1
+INSERT 0 1
+COMMIT
+sessao_nova=ok

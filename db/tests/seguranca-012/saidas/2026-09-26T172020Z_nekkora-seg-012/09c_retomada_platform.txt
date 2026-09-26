@@ -1,0 +1,22 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+BEGIN
+SET
+       afirma        
+---------------------
+ ok: agenda retomada
+(1 row)
+
+                      afirma                       
+---------------------------------------------------
+ ok: retomada nao ressuscita a ocorrencia suspensa
+(1 row)
+
+          afirma          
+--------------------------
+ ok: resumed_at atribuido
+(1 row)
+
+COMMIT

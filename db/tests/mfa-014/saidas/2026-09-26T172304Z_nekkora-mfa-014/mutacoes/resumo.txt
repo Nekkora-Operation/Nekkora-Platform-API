@@ -1,0 +1,4 @@
+m1_sem_trigger_update: DETECTADA (ERROR:  FALHA DE ASSERCAO: operacao deveria ter falhado (esperado 23514), mas teve sucesso: UPDATE user_sessions SET expires_at = expires_at + interval '1 minut)
+m1_sem_trigger_update: restaurada; t02 passou de novo
+m2_sem_trigger_insert: DETECTADA (ERROR:  FALHA DE ASSERCAO: operacao deveria ter falhado (esperado 23514), mas teve sucesso: INSERT INTO user_sessions (organization_id, user_id, session_token_h)
+m2_sem_trigger_insert: restaurada; t02 passou de novo

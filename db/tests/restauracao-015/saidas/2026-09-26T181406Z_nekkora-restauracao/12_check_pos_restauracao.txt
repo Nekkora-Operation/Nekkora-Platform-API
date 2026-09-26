@@ -1,0 +1,10 @@
+BEGIN
+SELECT 1
+INSERT 0 1
+UPDATE 1
+entrypoint_valido_sqlstate=00000 linhas=1
+INSERT 0 1
+ERROR:  new row for relation "automation_versions" violates check constraint "automation_versions_check3"
+entrypoint_invalido_sqlstate=23514
+entrypoint_invalido_msg=new row for relation "automation_versions" violates check constraint "automation_versions_check3"
+ROLLBACK

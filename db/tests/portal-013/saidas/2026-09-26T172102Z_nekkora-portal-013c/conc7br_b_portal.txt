@@ -1,0 +1,22 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+                    afirma                    
+----------------------------------------------
+ ok: papel real nekkora_portal (sem SET ROLE)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+MARCADOR_PORTAL_FIM=2026-09-26 17:22:02.080279+00
+                           afirma                           |                           afirma                           
+------------------------------------------------------------+------------------------------------------------------------
+ ok: portal: revogacao confirmada durante a espera -> NK401 | ok: portal: a chamada esperou o lock da revogacao em curso
+(1 row)
+

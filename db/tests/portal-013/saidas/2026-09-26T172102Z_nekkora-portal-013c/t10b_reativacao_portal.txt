@@ -1,0 +1,36 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+                    afirma                    
+----------------------------------------------
+ ok: papel real nekkora_portal (sem SET ROLE)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+                                        nk401                                        
+-------------------------------------------------------------------------------------
+ ok: NK401 - Ra: sessao revogada na suspensao continua invalida depois da reativacao
+(1 row)
+
+             ok             |                                afirma                                 
+----------------------------+-----------------------------------------------------------------------
+ ok: Ra: sessao nova valida | ok: Ra reativada: list_workspaces -> 0 (concessao revogada nao volta)
+(1 row)
+
+                 afirma                 
+----------------------------------------
+ ok: Ra reativada: list_executions -> 0
+(1 row)
+
+                     afirma                     
+------------------------------------------------
+ ok: Ra reativada: get_execution(e11, WS1) -> 0
+(1 row)
+

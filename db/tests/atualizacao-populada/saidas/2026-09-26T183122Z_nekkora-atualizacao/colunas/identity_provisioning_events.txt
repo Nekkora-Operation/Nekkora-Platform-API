@@ -1,0 +1,1 @@
+event_id,organization_id,assignment_id,provisioned_by_user_id,channel,correlation_id,created_at

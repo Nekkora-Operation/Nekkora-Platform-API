@@ -1,0 +1,133 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+                    afirma                    
+----------------------------------------------
+ ok: papel real nekkora_portal (sem SET ROLE)
+(1 row)
+
+=== (a) valores efetivos na sessao do papel
+               name                | setting | source  
+-----------------------------------+---------+---------
+ log_error_verbosity               | terse   | user
+ log_min_duration_sample           | -1      | user
+ log_min_duration_statement        | -1      | user
+ log_min_error_statement           | panic   | user
+ log_parameter_max_length          | 0       | user
+ log_parameter_max_length_on_error | 0       | default
+ log_statement                     | none    | user
+ log_transaction_sample_rate       | 0       | user
+(8 rows)
+
+             afirma              |               afirma                |              afirma              |          afirma          |               afirma                |              afirma              |               afirma                
+---------------------------------+-------------------------------------+----------------------------------+--------------------------+-------------------------------------+----------------------------------+-------------------------------------
+ ok: log_error_verbosity = terse | ok: log_min_error_statement = panic | ok: log_parameter_max_length = 0 | ok: log_statement = none | ok: log_min_duration_statement = -1 | ok: log_min_duration_sample = -1 | ok: log_transaction_sample_rate = 0
+(1 row)
+
+                        afirma                         
+-------------------------------------------------------
+ ok: as 7 vem da configuracao do papel (source = user)
+(1 row)
+
+=== (b) o papel nao consegue desfazer nenhuma
+CREATE TABLE
+INSERT 0 7
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_error_verbosity"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_min_error_statement"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_parameter_max_length"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_statement"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_min_duration_statement"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_min_duration_sample"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_transaction_sample_rate"
+        afirma        
+----------------------
+ ok: SET negado nas 7
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_error_verbosity"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_min_error_statement"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_parameter_max_length"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_statement"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_min_duration_statement"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_min_duration_sample"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_transaction_sample_rate"
+           afirma           
+----------------------------
+ ok: SET LOCAL negado nas 7
+(1 row)
+
+         afirma         
+------------------------
+ ok: RESET negado nas 7
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_error_verbosity"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_min_error_statement"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_parameter_max_length"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_statement"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_min_duration_statement"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_min_duration_sample"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_transaction_sample_rate"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_error_verbosity"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_min_error_statement"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_parameter_max_length"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_statement"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_min_duration_statement"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_min_duration_sample"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_transaction_sample_rate"
+            afirma             
+-------------------------------
+ ok: set_config() negado nas 7
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_error_verbosity"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_min_error_statement"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_parameter_max_length"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_statement"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_min_duration_statement"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_min_duration_sample"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_transaction_sample_rate"
+                     afirma                     
+------------------------------------------------
+ ok: ALTER ROLE nekkora_portal SET negado nas 7
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_error_verbosity"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_min_error_statement"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_parameter_max_length"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_statement"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_min_duration_statement"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_min_duration_sample"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_transaction_sample_rate"
+                      afirma                      
+--------------------------------------------------
+ ok: ALTER ROLE nekkora_portal RESET negado nas 7
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_error_verbosity"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_min_error_statement"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_parameter_max_length"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_statement"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_min_duration_statement"
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_min_duration_sample"
+                                          afirma                                          
+------------------------------------------------------------------------------------------
+ ok: ALTER ROLE nekkora_portal IN DATABASE nekkora SET negado nas 7 (sobreporia a global)
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "log_transaction_sample_rate"
+NOTICE:  rejeitado como esperado [42501] must be owner of database nekkora
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "session_preload_libraries"
+      espera_erro      |      espera_erro      |      espera_erro      
+-----------------------+-----------------------+-----------------------
+ ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501]
+(1 row)
+
+ALTER ROLE nekkora_portal RESET ALL (resposta registrada; o efeito e conferido no catalogo pelo t09b):
+NOTICE:  rejeitado como esperado [42501] access to library "auto_explain" is not allowed
+ALTER ROLE
+MARCADOR_RESET_ALL_SQLSTATE=00000

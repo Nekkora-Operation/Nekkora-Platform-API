@@ -1,0 +1,9 @@
+Pager usage is off.
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+pre_014_sqlstate=NK401
+workspaces=aaaaaaaa-0000-4000-8000-0000000000a1
+execucoes_pagina=84
+execucoes_ids=18c56a37842c472faf412a05728d0001

@@ -1,0 +1,167 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+                afirma                
+--------------------------------------
+ ok: papel nekkora_retention_executor
+(1 row)
+
+=== R01 reconsolidacao sob RLS conta so a organizacao do parametro (B tem eventos no mesmo dia)
+              afirma               
+-----------------------------------
+ ok: A eventos hoje = 2 / 71 bytes
+(1 row)
+
+              afirma               
+-----------------------------------
+ ok: B eventos hoje = 2 / 71 bytes
+(1 row)
+
+             afirma             
+--------------------------------
+ ok: A logs hoje = 1 / 41 bytes
+(1 row)
+
+=== R02 guard + contexto de funcao na mesma transacao (os dois GUCs sao independentes)
+BEGIN
+            afirma            
+------------------------------
+ ok: reconsolidacao A/eventos
+(1 row)
+
+                  afirma                  
+------------------------------------------
+ ok: fn_ctx restaurado; guard intacto A:1
+(1 row)
+
+ close_usage_day 
+-----------------
+ 
+(1 row)
+
+                           afirma                           
+------------------------------------------------------------
+ ok: apos close_usage_day: fn_ctx restaurado; guard intacto
+(1 row)
+
+NOTICE:  rejeitado como esperado [P0001] esta transacao ja processou organizacao/categoria aaaaaaaa-0000-0000-0000-00000000000a:1 - fechamento/expurgo nao pode misturar organizacao/categoria na mesma transacao (tentativa atual=aaaaaaaa-0000-0000-0000-00000000000a:2)
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+NOTICE:  rejeitado como esperado [P0001] esta transacao ja processou organizacao/categoria aaaaaaaa-0000-0000-0000-00000000000a:1 - fechamento/expurgo nao pode misturar organizacao/categoria na mesma transacao (tentativa atual=bbbbbbbb-0000-0000-0000-00000000000b:1)
+COMMIT
+=== R03 reset: mesma conexao, transacao seguinte com outro par
+                      afirma                      
+--------------------------------------------------
+ ok: mesma conexao; guard vazio fora de transacao
+(1 row)
+
+BEGIN
+                       afirma                        
+-----------------------------------------------------
+ ok: novo par (B, logs) aceito na transacao seguinte
+(1 row)
+
+COMMIT
+=== R04 contexto de funcao: valor anterior nao vazio preservado no sucesso e no erro
+BEGIN
+SET
+ close_usage_day 
+-----------------
+ 
+(1 row)
+
+                  afirma                   
+-------------------------------------------
+ ok: valor anterior devolvido apos sucesso
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+NOTICE:  rejeitado como esperado [P0001] dia ja esta fechado (organization_id=aaaaaaaa-0000-0000-0000-00000000000a, resource_code=4, usage_date=2026-09-01)
+                 afirma                  
+-----------------------------------------
+ ok: valor anterior preservado apos erro
+(1 row)
+
+COMMIT
+=== R05 regras da reconsolidacao
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+NOTICE:  rejeitado como esperado [P0001] reconsolidacao nao processa dia futuro (usage_date=2026-09-27, hoje=2026-09-26)
+NOTICE:  rejeitado como esperado [P0001] dia ja esta fechado, reconsolidacao nao permitida (organization_id=aaaaaaaa-0000-0000-0000-00000000000a, resource_code=5, usage_date=2026-09-01)
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+NOTICE:  rejeitado como esperado [P0001] resource_code invalido para reconsolidacao de consumo diario (3)
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+NOTICE:  rejeitado como esperado [22004] reconsolidacao exige organization_id, resource_code e usage_date
+      espera_erro      
+-----------------------
+ ok: rejeitado [22004]
+(1 row)
+
+BEGIN
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+NOTICE:  rejeitado como esperado [P0001] reconsolidacao exige transaction_isolation=read committed (atual=repeatable read)
+ROLLBACK
+=== R06 nao concedido ao executor
+NOTICE:  rejeitado como esperado [42501] permission denied for function purge_expired_records
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_usage_daily
+NOTICE:  rejeitado como esperado [42501] permission denied for table execution_events
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for function assign_received_at_and_lock_barrier
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for function provision_resource_limit
+                resultado                
+-----------------------------------------
+ manutencao: todas as assercoes passaram
+(1 row)
+

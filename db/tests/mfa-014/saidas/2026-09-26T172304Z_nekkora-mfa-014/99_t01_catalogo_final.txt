@@ -1,0 +1,125 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+=== tabelas novas, RLS e politicas
+         relname         | relrowsecurity | relforcerowsecurity |  owner  |                   politicas                   
+-------------------------+----------------+---------------------+---------+-----------------------------------------------
+ auth_challenges         | t              | t                   | nekkora | tenant_request_context:ALL:{nekkora_platform}
+ mfa_events              | t              | t                   | nekkora | tenant_request_context:ALL:{nekkora_platform}
+ user_mfa_factors        | t              | t                   | nekkora | tenant_request_context:ALL:{nekkora_platform}
+ user_mfa_recovery_codes | t              | t                   | nekkora | tenant_request_context:ALL:{nekkora_platform}
+(4 rows)
+
+                   afirma                   
+--------------------------------------------
+ ok: 4 tabelas novas com RLS ENABLE + FORCE
+(1 row)
+
+                                                         afirma                                                         
+------------------------------------------------------------------------------------------------------------------------
+ ok: uma politica por tabela nova: tenant_request_context FOR ALL so para nekkora_platform, pelo contexto da requisicao
+(1 row)
+
+                    afirma                     
+-----------------------------------------------
+ ok: 46 tabelas com RLS (42 da 012 + 4 da 014)
+(1 row)
+
+=== privilegios EXATOS de todos os papeis nekkora* nas tabelas novas (diferenca simetrica)
+CREATE TABLE
+INSERT 0 11
+SELECT 11
+ lado | papel | tabela | priv 
+------+-------+--------+------
+(0 rows)
+
+                                                 afirma                                                  
+---------------------------------------------------------------------------------------------------------
+ ok: tabelas novas: so nekkora_platform (SIU; mfa_events SI); nenhum outro papel de servico ou do portal
+(1 row)
+
+                               afirma                               
+--------------------------------------------------------------------
+ ok: nenhum privilegio de coluna nas tabelas novas fora da Platform
+(1 row)
+
+=== colunas novas de user_sessions
+     attname     |       format_type        | attnotnull 
+-----------------+--------------------------+------------
+ mfa_verified_at | timestamp with time zone | f
+ mfa_step_up_at  | timestamp with time zone | f
+ csrf_token      | text                     | f
+(3 rows)
+
+                    afirma                    
+----------------------------------------------
+ ok: user_sessions: 3 colunas novas anulaveis
+(1 row)
+
+                                      afirma                                      
+----------------------------------------------------------------------------------
+ ok: papeis do portal nao alcancam mfa_verified_at, mfa_step_up_at nem csrf_token
+(1 row)
+
+                                                       afirma                                                       
+--------------------------------------------------------------------------------------------------------------------
+ ok: owner do portal: continua com exatamente as 8 colunas de SELECT da 013 em user_sessions e UPDATE(last_seen_at)
+(1 row)
+
+=== triggers
+         relname         |                    tgname                    | tgenabled |              proname               | prosecdef |                  proconfig                  
+-------------------------+----------------------------------------------+-----------+------------------------------------+-----------+---------------------------------------------
+ auth_challenges         | trg_auth_challenges_prevent_change           | O         | prevent_auth_challenge_change      | f         | {"search_path=pg_catalog, pg_temp"}
+ auth_challenges         | trg_auth_challenges_prevent_delete           | O         | prevent_delete                     | f         | {"search_path=pg_catalog, public, pg_temp"}
+ auth_challenges         | trg_auth_challenges_prevent_truncate         | O         | prevent_truncate                   | f         | {"search_path=pg_catalog, public, pg_temp"}
+ mfa_events              | trg_mfa_events_prevent_delete                | O         | prevent_delete                     | f         | {"search_path=pg_catalog, public, pg_temp"}
+ mfa_events              | trg_mfa_events_prevent_truncate              | O         | prevent_truncate                   | f         | {"search_path=pg_catalog, public, pg_temp"}
+ mfa_events              | trg_mfa_events_prevent_update                | O         | prevent_update                     | f         | {"search_path=pg_catalog, public, pg_temp"}
+ user_mfa_factors        | trg_user_mfa_factors_prevent_change          | O         | prevent_mfa_factor_change          | f         | {"search_path=pg_catalog, pg_temp"}
+ user_mfa_factors        | trg_user_mfa_factors_prevent_delete          | O         | prevent_delete                     | f         | {"search_path=pg_catalog, public, pg_temp"}
+ user_mfa_factors        | trg_user_mfa_factors_prevent_truncate        | O         | prevent_truncate                   | f         | {"search_path=pg_catalog, public, pg_temp"}
+ user_mfa_recovery_codes | trg_user_mfa_recovery_codes_prevent_change   | O         | prevent_mfa_recovery_code_change   | f         | {"search_path=pg_catalog, pg_temp"}
+ user_mfa_recovery_codes | trg_user_mfa_recovery_codes_prevent_delete   | O         | prevent_delete                     | f         | {"search_path=pg_catalog, public, pg_temp"}
+ user_mfa_recovery_codes | trg_user_mfa_recovery_codes_prevent_truncate | O         | prevent_truncate                   | f         | {"search_path=pg_catalog, public, pg_temp"}
+ user_sessions           | trg_user_sessions_enforce_mfa                | O         | enforce_user_session_mfa_on_insert | f         | {"search_path=pg_catalog, pg_temp"}
+ user_sessions           | trg_user_sessions_prevent_reactivation       | O         | prevent_user_session_reactivation  | f         | {"search_path=pg_catalog, pg_temp"}
+(14 rows)
+
+                                               afirma                                                
+-----------------------------------------------------------------------------------------------------
+ ok: 12 triggers nas tabelas novas (mudanca/DELETE/TRUNCATE) e 2 em user_sessions, todas habilitadas
+(1 row)
+
+                                               afirma                                               
+----------------------------------------------------------------------------------------------------
+ ok: funcoes de trigger da 014: INVOKER, search_path = pg_catalog, pg_temp, sem EXECUTE para PUBLIC
+(1 row)
+
+=== permissao identity.mfa.reset
+   papel   |     permissao      
+-----------+--------------------
+ ORG_ADMIN | identity.mfa.reset
+(1 row)
+
+                         afirma                          
+---------------------------------------------------------
+ ok: identity.mfa.reset concedida exatamente a ORG_ADMIN
+(1 row)
+
+=== 013 intacta
+                                                                    oid                                                                    |              corpo               |                                       proacl                                        
+-------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------+-------------------------------------------------------------------------------------
+ portal_authorized_workspaces(uuid,uuid,uuid,timestamp with time zone)                                                                     | ea611c2b70d0732629ee843f03d1317c | {nekkora_portal_owner=X/nekkora_portal_owner}
+ portal_get_execution(uuid,text,uuid)                                                                                                      | 8b8ccad78e9c7728f819dc48ddf8cef1 | {nekkora_portal_owner=X/nekkora_portal_owner,nekkora_portal=X/nekkora_portal_owner}
+ portal_list_execution_events(uuid,text,uuid)                                                                                              | 28e01cae33a8a988f454f9bfbb8ab926 | {nekkora_portal_owner=X/nekkora_portal_owner,nekkora_portal=X/nekkora_portal_owner}
+ portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer) | 90f622312c83a9904273be68dac2063b | {nekkora_portal_owner=X/nekkora_portal_owner,nekkora_portal=X/nekkora_portal_owner}
+ portal_list_workspaces(uuid,text)                                                                                                         | 1e63acfe8934620580ae5767fb6fda4f | {nekkora_portal_owner=X/nekkora_portal_owner,nekkora_portal=X/nekkora_portal_owner}
+ portal_resolve_session(uuid,text)                                                                                                         | 9c5d2f42c823a6f4370fedb6b0ddfac0 | {nekkora_portal_owner=X/nekkora_portal_owner}
+(6 rows)
+
+                         afirma                          
+---------------------------------------------------------
+ ok: as 6 funcoes do portal continuam com o owner da 013
+(1 row)
+

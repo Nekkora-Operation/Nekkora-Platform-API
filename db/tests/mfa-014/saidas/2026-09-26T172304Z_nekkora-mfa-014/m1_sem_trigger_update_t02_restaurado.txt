@@ -1,0 +1,280 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+             afirma              
+---------------------------------
+ ok: papel real nekkora_platform
+(1 row)
+
+=== sem contexto: nenhuma linha das tabelas novas
+                             afirma                              
+-----------------------------------------------------------------
+ ok: sem nekkora.organization_id: nada visivel nas tabelas novas
+(1 row)
+
+SET
+                         afirma                          
+---------------------------------------------------------
+ ok: contexto O2: so o fator de W; o de X (O1) invisivel
+(1 row)
+
+SET
+=== INSERT em user_sessions
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] sessao nova exige marcador de MFA e CSRF, sem step-up nem revogacao
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] sessao nova exige marcador de MFA e CSRF, sem step-up nem revogacao
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] sessao nova exige fator de MFA confirmado e ativo
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] sessao nova exige marcador de MFA e CSRF, sem step-up nem revogacao
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] sessao nova exige marcador de MFA e CSRF, sem step-up nem revogacao
+BEGIN
+INSERT 0 1
+                          afirma                          
+----------------------------------------------------------
+ ok: sessao com marcador, CSRF e fator confirmado: aceita
+(1 row)
+
+=== UPDATE em user_sessions (na sessao recem-criada)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] prazo absoluto da sessao nao pode ser estendido
+NOTICE:  rejeitado como esperado [23514] identidade, marcador de MFA e CSRF da sessao sao imutaveis
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] identidade, marcador de MFA e CSRF da sessao sao imutaveis
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] identidade, marcador de MFA e CSRF da sessao sao imutaveis
+UPDATE 1
+UPDATE 1
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] step-up so avanca, e so em sessao nao revogada
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] step-up so avanca, e so em sessao nao revogada
+UPDATE 1
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] sessao revogada nao pode ser reabilitada nem ter a revogacao alterada
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] sessao revogada nao pode ser reabilitada nem ter a revogacao alterada
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] step-up so avanca, e so em sessao nao revogada
+                 afirma                 
+----------------------------------------
+ ok: sessao revogada permanece revogada
+(1 row)
+
+ROLLBACK
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+=== fator TOTP
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_sessions
+BEGIN
+UPDATE 1
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+NOTICE:  rejeitado como esperado [P0001] passo TOTP aceito so aumenta (factor_id=10000000-0000-00f1-0000-000000000101)
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+NOTICE:  rejeitado como esperado [P0001] passo TOTP aceito so aumenta (factor_id=10000000-0000-00f1-0000-000000000101)
+UPDATE 1
+NOTICE:  rejeitado como esperado [P0001] segredo e confirmacao de fator confirmado sao imutaveis (factor_id=10000000-0000-00f1-0000-000000000101)
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+NOTICE:  rejeitado como esperado [P0001] segredo e confirmacao de fator confirmado sao imutaveis (factor_id=10000000-0000-00f1-0000-000000000101)
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+NOTICE:  rejeitado como esperado [P0001] origem do fator de MFA e imutavel (factor_id=10000000-0000-00f1-0000-000000000101)
+UPDATE 1
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+NOTICE:  rejeitado como esperado [P0001] fator de MFA desabilitado e imutavel (factor_id=10000000-0000-00f1-0000-000000000101)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] sessao nova exige fator de MFA confirmado e ativo
+ROLLBACK
+NOTICE:  rejeitado como esperado [23505] duplicate key value violates unique constraint "ux_user_mfa_factors_um_ativo"
+      espera_erro      
+-----------------------
+ ok: rejeitado [23505]
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+=== desafio
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_mfa_factors
+BEGIN
+INSERT 0 1
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] new row for relation "auth_challenges" violates check constraint "auth_challenges_check"
+NOTICE:  rejeitado como esperado [23514] new row for relation "auth_challenges" violates check constraint "auth_challenges_check2"
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+UPDATE 1
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+NOTICE:  rejeitado como esperado [P0001] tentativas do desafio so aumentam (challenge_id=10000000-0000-00d1-0000-000000000001)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] new row for relation "auth_challenges" violates check constraint "auth_challenges_attempts_check"
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+NOTICE:  rejeitado como esperado [P0001] hashes do desafio ativo sao imutaveis (challenge_id=10000000-0000-00d1-0000-000000000001)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] new row for relation "auth_challenges" violates check constraint "auth_challenges_check2"
+UPDATE 1
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+NOTICE:  rejeitado como esperado [P0001] desafio consumido ou invalidado e imutavel (challenge_id=10000000-0000-00d1-0000-000000000001)
+ROLLBACK
+=== codigos de recuperacao e auditoria
+BEGIN
+INSERT 0 1
+      espera_erro      
+-----------------------
+ ok: rejeitado [23503]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23503] insert or update on table "user_mfa_recovery_codes" violates foreign key constraint "user_mfa_recovery_codes_organization_id_user_id_factor_id_fkey"
+UPDATE 1
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+NOTICE:  rejeitado como esperado [P0001] codigo de recuperacao usado ou invalidado e imutavel (code_id=10000000-0000-00d2-0000-000000000001)
+INSERT 0 1
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] new row for relation "mfa_events" violates check constraint "mfa_events_check"
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table mfa_events
+ROLLBACK
+NOTICE:  rejeitado como esperado [42501] permission denied for table mfa_events
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table auth_challenges

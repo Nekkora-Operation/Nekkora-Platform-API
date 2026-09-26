@@ -1,0 +1,336 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+CREATE TABLE
+INSERT 0 30
+              afirma               
+-----------------------------------
+ ok: 30 tokens distintos recebidos
+(1 row)
+
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+=== O1: equipe, clientes, workspaces
+BEGIN
+SET
+ equipe 
+--------
+ 
+(1 row)
+
+INSERT 0 3
+INSERT 0 6
+COMMIT
+=== O1: contas externas, vinculos, concessoes, sessoes principais
+BEGIN
+SET
+ externo 
+---------
+ 
+(1 row)
+
+ externo 
+---------
+ 
+(1 row)
+
+ externo 
+---------
+ 
+(1 row)
+
+ externo 
+---------
+ 
+(1 row)
+
+ externo 
+---------
+ 
+(1 row)
+
+ externo 
+---------
+ 
+(1 row)
+
+ externo 
+---------
+ 
+(1 row)
+
+ externo 
+---------
+ 
+(1 row)
+
+ externo 
+---------
+ 
+(1 row)
+
+ externo 
+---------
+ 
+(1 row)
+
+ externo 
+---------
+ 
+(1 row)
+
+ externo 
+---------
+ 
+(1 row)
+
+ externo 
+---------
+ 
+(1 row)
+
+ externo 
+---------
+ 
+(1 row)
+
+ externo 
+---------
+ 
+(1 row)
+
+ externo 
+---------
+ 
+(1 row)
+
+ sessao 
+--------
+ 
+(1 row)
+
+ sessao 
+--------
+ 
+(1 row)
+
+ sessao 
+--------
+ 
+(1 row)
+
+ sessao 
+--------
+ 
+(1 row)
+
+ sessao 
+--------
+ 
+(1 row)
+
+ sessao 
+--------
+ 
+(1 row)
+
+ sessao 
+--------
+ 
+(1 row)
+
+ sessao 
+--------
+ 
+(1 row)
+
+ sessao 
+--------
+ 
+(1 row)
+
+ sessao 
+--------
+ 
+(1 row)
+
+ sessao 
+--------
+ 
+(1 row)
+
+COMMIT
+=== O1: Worker, Agent, associacoes (WS1, WS2, WS3, WSi)
+BEGIN
+SET
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 4
+COMMIT
+=== O1: automacoes e execucoes (e14, e16, e17 com created_at identico)
+BEGIN
+SET
+ automacao | automacao | automacao | automacao | automacao | automacao 
+-----------+-----------+-----------+-----------+-----------+-----------
+           |           |           |           |           | 
+(1 row)
+
+ execucao | execucao | execucao | execucao | execucao | execucao | execucao | execucao | execucao | execucao | execucao | execucao | execucao 
+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------+----------
+          |          |          |          |          |          |          |          |          |          |          |          | 
+(1 row)
+
+ inicia 
+--------
+ 
+(1 row)
+
+ termina 
+---------
+ 
+(1 row)
+
+ inicia 
+--------
+ 
+(1 row)
+
+ termina 
+---------
+ 
+(1 row)
+
+ inicia 
+--------
+ 
+(1 row)
+
+ termina 
+---------
+ 
+(1 row)
+
+ inicia 
+--------
+ 
+(1 row)
+
+ termina 
+---------
+ 
+(1 row)
+
+ inicia 
+--------
+ 
+(1 row)
+
+COMMIT
+=== O2: equipe, cliente C3, conta W (WS7), execucao
+BEGIN
+SET
+ equipe 
+--------
+ 
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+ externo 
+---------
+ 
+(1 row)
+
+ automacao 
+-----------
+ 
+(1 row)
+
+ execucao 
+----------
+ 
+(1 row)
+
+COMMIT
+=== O3: equipe, cliente C5, conta R (WS8), execucao (organizacao suspensa em seguida)
+BEGIN
+SET
+ equipe 
+--------
+ 
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+ externo 
+---------
+ 
+(1 row)
+
+ automacao 
+-----------
+ 
+(1 row)
+
+ execucao 
+----------
+ 
+(1 row)
+
+COMMIT
+=== O4: equipe, cliente C7, conta K (WS9), execucao (concorrencia 7c)
+BEGIN
+SET
+ equipe 
+--------
+ 
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+ externo 
+---------
+ 
+(1 row)
+
+ automacao 
+-----------
+ 
+(1 row)
+
+ execucao 
+----------
+ 
+(1 row)
+
+COMMIT
+=== estados finais da fixture: WS4 e C4 suspensos (O1), O3 suspensa
+BEGIN
+SET
+UPDATE 1
+UPDATE 1
+COMMIT
+BEGIN
+SET
+UPDATE 1
+COMMIT
+      resultado       
+----------------------
+ fixture platform: ok
+(1 row)
+

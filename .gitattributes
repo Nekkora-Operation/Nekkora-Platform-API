@@ -1,2 +1,4 @@
 # Scripts shell precisam de LF (bash falha com CRLF); core.autocrlf=true converteria no checkout.
 *.sh text eol=lf
+# Migrations: conteudo LF no repositorio e no disco (o hash revisado de cada migration refere-se ao LF).
+db/migrations/*.sql text eol=lf

@@ -7,3 +7,7 @@ services:
   postgres:
     container_name: ${TESTE_CONTAINER:?defina TESTE_CONTAINER (use o run.sh)}
     command: ["postgres", "-c", "cluster_name=nekkora-regressao-isolada"]
+    # Migrations escolhidas EXPLICITAMENTE pelo run.sh (copia da lista testada), no lugar do
+    # ./db/migrations inteiro do docker-compose.yml: o repositorio passou a ter migrations posteriores.
+    volumes:
+      - ${TESTE_MIGRACOES:?defina TESTE_MIGRACOES (use o run.sh)}:/docker-entrypoint-initdb.d:ro

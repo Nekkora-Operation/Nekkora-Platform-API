@@ -1,0 +1,19 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+                    afirma                    
+----------------------------------------------
+ ok: papel real nekkora_portal (sem SET ROLE)
+(1 row)
+
+                                    ok                                    
+--------------------------------------------------------------------------
+ ok: caso conta: chamada liberada sem erro (a resolucao ja tinha passado)
+(1 row)
+
+ERROR:  FALHA DE ASSERCAO: caso conta: leitura apos a mudanca confirmada entre resolucao e leitura = 0 linha(s)
+CONTEXT:  PL/pgSQL function pg_temp_4.afirma(boolean,text) line 4 at RAISE

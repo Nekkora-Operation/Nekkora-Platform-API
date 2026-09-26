@@ -1,0 +1,7 @@
+== mutacao aplicada de proposito (teste do runner): m3_toque_antes_da_validacao.sql
+DO
+      resultado      | presente 
+---------------------+----------
+ mutacao m3 aplicada | t
+(1 row)
+

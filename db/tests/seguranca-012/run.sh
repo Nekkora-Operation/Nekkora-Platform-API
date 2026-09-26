@@ -30,6 +30,19 @@ docker volume inspect "$VOLUME" >/dev/null 2>&1 && falha "volume $VOLUME ja exis
 docker container inspect "$TESTE_CONTAINER" >/dev/null 2>&1 && falha "container $TESTE_CONTAINER ja existe"
 
 mkdir -p "$SAIDA"
+# Migrations testadas por esta suite: 001-012, escolhidas explicitamente. O repositorio pode ter
+# migrations posteriores (ex.: 014); elas NAO entram nesta instalacao. Copia montada no entrypoint
+# por caminho RELATIVO a raiz do repositorio (o Compose resolve a partir do docker-compose.yml).
+MIGRACOES=()
+for n in $(seq -w 1 12); do
+    f=("$REPO"/db/migrations/0${n}_*.sql)
+    [ -f "${f[0]}" ] && [ ${#f[@]} -eq 1 ] || falha "migration 0$n ausente ou ambigua"
+    MIGRACOES+=("${f[0]}")
+done
+MONT_REL="db/tests/seguranca-012/saidas/$(basename "$SAIDA")/migracoes_montadas"
+mkdir -p "$REPO/$MONT_REL"
+cp "${MIGRACOES[@]}" "$REPO/$MONT_REL/"
+export TESTE_MIGRACOES="./$MONT_REL"
 compose() {
     POSTGRES_PORT="$PORTA" docker compose -p "$PROJETO" -f "$REPO/docker-compose.yml" -f "$AQUI/compose.teste.yml" "$@"
 }
@@ -63,6 +76,7 @@ consulta() { docker exec "$TESTE_CONTAINER" psql -X -At -d nekkora -U "$1" -c "$
     echo "projeto=$PROJETO container=$TESTE_CONTAINER volume=$VOLUME porta=$PORTA"
     docker version --format 'docker={{.Server.Version}}'
     echo "compose=$(docker compose version --short)"
+    echo "migracoes_montadas:"; (cd "$REPO/$MONT_REL" && sha256sum 0*.sql | sed 's/^/  /')
 } > "$SAIDA/ambiente.txt"
 
 echo ">> subindo stack isolada $PROJETO"

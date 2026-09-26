@@ -1,0 +1,7 @@
+== mutacao aplicada de proposito (teste do runner): m2_leitura_sem_reconferencia.sql
+DO
+      resultado      | presente | sem_conta 
+---------------------+----------+-----------
+ mutacao m2 aplicada | t        | t
+(1 row)
+

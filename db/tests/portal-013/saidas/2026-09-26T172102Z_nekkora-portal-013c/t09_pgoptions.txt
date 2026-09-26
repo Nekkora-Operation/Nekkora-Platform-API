@@ -1,0 +1,7 @@
+PGOPTIONS -c log_error_verbosity=verbose -> FATAL: permission denied to set parameter "log_error_verbosity"
+PGOPTIONS -c log_min_error_statement=error -> FATAL: permission denied to set parameter "log_min_error_statement"
+PGOPTIONS -c log_parameter_max_length=-1 -> FATAL: permission denied to set parameter "log_parameter_max_length"
+PGOPTIONS -c log_statement=all -> FATAL: permission denied to set parameter "log_statement"
+PGOPTIONS -c log_min_duration_statement=0 -> FATAL: permission denied to set parameter "log_min_duration_statement"
+PGOPTIONS -c log_min_duration_sample=0 -> FATAL: permission denied to set parameter "log_min_duration_sample"
+PGOPTIONS -c log_transaction_sample_rate=1 -> FATAL: permission denied to set parameter "log_transaction_sample_rate"

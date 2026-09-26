@@ -1,0 +1,13 @@
+nekkora_ingestion|super=f|login=t|bypassrls=f|inherit=t|createrole=f|createdb=f|config=-
+nekkora_platform|super=f|login=t|bypassrls=f|inherit=t|createrole=f|createdb=f|config=-
+nekkora_portal_owner|super=f|login=f|bypassrls=f|inherit=t|createrole=f|createdb=f|config=-
+nekkora_portal|super=f|login=t|bypassrls=f|inherit=t|createrole=f|createdb=f|config=log_error_verbosity=terse;log_min_error_statement=panic;log_parameter_max_length=0;log_statement=none;log_min_duration_statement=-1;log_min_duration_sample=-1;log_transaction_sample_rate=0
+nekkora_provisioning_owner|super=f|login=f|bypassrls=f|inherit=t|createrole=f|createdb=f|config=-
+nekkora_provisioning|super=f|login=t|bypassrls=f|inherit=t|createrole=f|createdb=f|config=-
+nekkora_retention_executor|super=f|login=t|bypassrls=f|inherit=t|createrole=f|createdb=f|config=-
+nekkora_retention_owner|super=f|login=f|bypassrls=f|inherit=t|createrole=f|createdb=f|config=-
+nekkora_retention_tables_owner|super=f|login=f|bypassrls=f|inherit=t|createrole=f|createdb=f|config=-
+nekkora_scheduler_owner|super=f|login=f|bypassrls=f|inherit=t|createrole=f|createdb=f|config=-
+nekkora_scheduler|super=f|login=t|bypassrls=f|inherit=t|createrole=f|createdb=f|config=-
+nekkora|super=t|login=t|bypassrls=t|inherit=t|createrole=t|createdb=t|config=-
+dbconfig|-|nekkora_portal|log_error_verbosity=terse;log_min_error_statement=panic;log_parameter_max_length=0;log_statement=none;log_min_duration_statement=-1;log_min_duration_sample=-1;log_transaction_sample_rate=0

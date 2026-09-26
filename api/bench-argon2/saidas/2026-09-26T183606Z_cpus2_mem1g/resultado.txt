@@ -1,0 +1,40 @@
+perfil de referencia: eclipse-temurin:21-jre-alpine --cpus=2 --memory=1g --memory-swap=1g, -XX:MaxRAMPercentage=75
+host: Docker Desktop | 16 CPUs | 16353226752 bytes | kernel 6.18.33.2-microsoft-standard-WSL2
+data: 2026-09-26T18:36:22Z
+
+perfil m=19456 KiB t=2 p=1 | cpus=200000 100000 memoria_limite=1073741824
+sequencial hash_real  ms: p50=37.5 p95=50.8 max=56.6 (n=40)
+sequencial ficticio   ms: p50=39.4 p95=50.6 max=59.4 (n=40)
+4 simultaneos         ms: p50=99.4 p95=144.8 max=153.9 | vazao=40.6 verificacoes/s
+12 chegadas (4+fila 8, espera 2 s): concluidas=12 recusadas_503=0 p95_concluidas=290.1 ms max=290.1 ms
+memoria container: pico=294 MiB | heap_max_jvm=742 MiB
+cpu.stat antes: usage_usec 1158459 user_usec 952601 system_usec 205858 nice_usec 0 nr_periods 9 nr_throttled 0 throttled_usec 0 nr_bursts 0 burst_usec 0
+cpu.stat depois: usage_usec 8420418 user_usec 7685114 system_usec 735304 nice_usec 0 nr_periods 61 nr_throttled 16 throttled_usec 588372 nr_bursts 0 burst_usec 0
+
+perfil m=47104 KiB t=1 p=1 | cpus=200000 100000 memoria_limite=1073741824
+sequencial hash_real  ms: p50=62.2 p95=82.7 max=85.9 (n=40)
+sequencial ficticio   ms: p50=62.8 p95=75.7 max=87.7 (n=40)
+4 simultaneos         ms: p50=239.2 p95=360.7 max=404.1 | vazao=17.2 verificacoes/s
+12 chegadas (4+fila 8, espera 2 s): concluidas=12 recusadas_503=0 p95_concluidas=615.5 ms max=615.5 ms
+memoria container: pico=653 MiB | heap_max_jvm=742 MiB
+cpu.stat antes: usage_usec 1171480 user_usec 955990 system_usec 215489 nice_usec 0 nr_periods 9 nr_throttled 0 throttled_usec 0 nr_bursts 0 burst_usec 0
+cpu.stat depois: usage_usec 14200451 user_usec 12563008 system_usec 1637443 nice_usec 0 nr_periods 105 nr_throttled 24 throttled_usec 2084934 nr_bursts 0 burst_usec 0
+
+perfil m=65536 KiB t=3 p=1 | cpus=200000 100000 memoria_limite=1073741824
+sequencial hash_real  ms: p50=180.5 p95=224.1 max=230.9 (n=40)
+sequencial ficticio   ms: p50=185.9 p95=223.6 max=286.7 (n=40)
+4 simultaneos         ms: p50=543.1 p95=695.6 max=739.4 | vazao=7.3 verificacoes/s
+12 chegadas (4+fila 8, espera 2 s): concluidas=12 recusadas_503=0 p95_concluidas=1470.9 ms max=1470.9 ms
+memoria container: pico=738 MiB | heap_max_jvm=742 MiB
+cpu.stat antes: usage_usec 1996223 user_usec 1699487 system_usec 296735 nice_usec 0 nr_periods 15 nr_throttled 0 throttled_usec 0 nr_bursts 0 burst_usec 0
+cpu.stat depois: usage_usec 37525958 user_usec 36010351 system_usec 1515606 nice_usec 0 nr_periods 280 nr_throttled 82 throttled_usec 12985258 nr_bursts 0 burst_usec 0
+
+perfil m=131072 KiB t=3 p=1 | cpus=200000 100000 memoria_limite=1073741824
+sequencial hash_real  ms: p50=398.7 p95=502.1 max=522.5 (n=40)
+sequencial ficticio   ms: p50=417.3 p95=512.9 max=541.2 (n=40)
+4 simultaneos         ms: p50=1428.7 p95=1921.1 max=2202.7 | vazao=2.6 verificacoes/s
+12 chegadas (4+fila 8, espera 2 s): concluidas=8 recusadas_503=4 p95_concluidas=2071.6 ms max=2071.6 ms
+memoria container: pico=801 MiB | heap_max_jvm=742 MiB
+cpu.stat antes: usage_usec 2377982 user_usec 2036529 system_usec 341453 nice_usec 0 nr_periods 20 nr_throttled 0 throttled_usec 0 nr_bursts 0 burst_usec 0
+cpu.stat depois: usage_usec 85358665 user_usec 82513642 system_usec 2845023 nice_usec 0 nr_periods 647 nr_throttled 179 throttled_usec 29402655 nr_bursts 0 burst_usec 0
+

@@ -1,0 +1,3 @@
+permissions removidas=0 acrescentadas=1 linhas_antes=22
+role_permissions removidas=0 acrescentadas=1 linhas_antes=39
+user_sessions removidas=480 acrescentadas=480 linhas_antes=660

@@ -1,0 +1,34 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+            afirma             
+-------------------------------
+ ok: papel real nekkora_portal
+(1 row)
+
+                         afirma                         
+--------------------------------------------------------
+ ok: X (sessao com MFA): portal_list_workspaces = {WS1}
+(1 row)
+
+                    afirma                     
+-----------------------------------------------
+ ok: portal_list_executions sem erro com a 014
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_mfa_factors
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_mfa_recovery_codes
+NOTICE:  rejeitado como esperado [42501] permission denied for table auth_challenges
+                   afirma                    
+---------------------------------------------
+ ok: acesso direto negado as 4 tabelas novas
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table mfa_events
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_sessions

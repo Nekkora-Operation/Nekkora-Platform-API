@@ -1,0 +1,1 @@
+event_id,organization_id,workspace_id,execution_id,agent_id,sequence,event_type,occurred_at,received_at,payload,fingerprint,purge_category,purged_at,purged_by_user_id,purge_run_id

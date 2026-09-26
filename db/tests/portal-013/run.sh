@@ -47,6 +47,19 @@ if docker ps --format '{{.Ports}}' | grep -q ":$PORTA->"; then falha "porta $POR
 if (exec 3<>"/dev/tcp/127.0.0.1/$PORTA") 2>/dev/null; then falha "porta $PORTA ja em uso no host"; fi
 
 mkdir -p "$SAIDA" "$MUT"
+# Migrations testadas por esta suite: 001-013, escolhidas explicitamente. O repositorio pode ter
+# migrations posteriores (ex.: 014); elas NAO entram nesta instalacao. Copia montada no entrypoint
+# por caminho RELATIVO a raiz do repositorio (o Compose resolve a partir do docker-compose.yml).
+MIGRACOES=()
+for n in $(seq -w 1 13); do
+    f=("$REPO"/db/migrations/0${n}_*.sql)
+    [ -f "${f[0]}" ] && [ ${#f[@]} -eq 1 ] || falha "migration 0$n ausente ou ambigua"
+    MIGRACOES+=("${f[0]}")
+done
+MONT_REL="db/tests/portal-013/saidas/$(basename "$SAIDA")/migracoes_montadas"
+mkdir -p "$REPO/$MONT_REL"
+cp "${MIGRACOES[@]}" "$REPO/$MONT_REL/"
+export TESTE_MIGRACOES="./$MONT_REL"
 compose() {
     POSTGRES_PORT="$PORTA" docker compose -p "$PROJETO" -f "$REPO/docker-compose.yml" -f "$AQUI/compose.teste.yml" "$@"
 }
@@ -121,6 +134,7 @@ marcador_de() { sed -n "s/^$1=//p" "$2"; }
     echo "projeto=$PROJETO container=$TESTE_CONTAINER volume=$VOLUME rede=$REDE porta=$PORTA"
     docker version --format 'docker={{.Server.Version}}'
     echo "compose=$(docker compose version --short)"
+    echo "migracoes_montadas:"; (cd "$REPO/$MONT_REL" && sha256sum 0*.sql | sed 's/^/  /')
 } > "$SAIDA/ambiente.txt"
 
 # ============================== instalacao limpa 001-013 ==============================
@@ -138,7 +152,7 @@ done
 grep -qE "ERROR|FATAL" "$SAIDA/aplicacao_entrypoint.txt" && falha "erro na aplicacao das migrations"
 [ "$(grep -c 'running /docker-entrypoint-initdb.d' "$SAIDA/aplicacao_entrypoint.txt")" = 13 ] || falha "esperadas 13 migrations aplicadas"
 diff <(grep -o 'initdb.d/[0-9]*_[a-z_]*\.sql' "$SAIDA/aplicacao_entrypoint.txt" | sed 's|initdb.d/||') \
-     <(cd "$REPO/db/migrations" && ls -1 0*.sql) > /dev/null || falha "ordem/conjunto de migrations aplicado difere de db/migrations"
+     <(cd "$REPO/$MONT_REL" && ls -1 0*.sql) > /dev/null || falha "ordem/conjunto de migrations aplicado difere da lista montada (001-013)"
 [ "$(consulta nekkora 'SHOW cluster_name')" = nekkora-portal-013-isolada ] || falha "cluster_name inesperado"
 echo "server_version=$(consulta nekkora 'SHOW server_version')" >> "$SAIDA/ambiente.txt"
 
@@ -147,11 +161,11 @@ roda nekkora t00_catalogo.sql
 echo ">> base de referencia nekkora_ref com 001-012 (mesmo cluster isolado) e diff de catalogo"
 {
     consulta nekkora "CREATE DATABASE nekkora_ref"
-    for f in $(cd "$REPO/db/migrations" && ls -1 0*.sql | grep -v '^013_'); do
+    for f in $(cd "$REPO/$MONT_REL" && ls -1 0*.sql | grep -v '^013_'); do
         echo "== $f"
         # pelo stdin, a partir do mesmo arquivo do repositorio (sem caminho de container na linha de comando:
         # no Git Bash a conversao automatica de caminhos o corromperia)
-        docker exec -i "$TESTE_CONTAINER" psql -X -q -v ON_ERROR_STOP=1 -U nekkora -d nekkora_ref < "$REPO/db/migrations/$f" 2>&1
+        docker exec -i "$TESTE_CONTAINER" psql -X -q -v ON_ERROR_STOP=1 -U nekkora -d nekkora_ref < "$REPO/$MONT_REL/$f" 2>&1
     done
 } > "$SAIDA/01_ref_001_012.txt" 2>&1 || falha "aplicacao de 001-012 na base de referencia falhou"
 grep -qE "ERROR|FATAL" "$SAIDA/01_ref_001_012.txt" && falha "erro ao aplicar 001-012 em nekkora_ref"

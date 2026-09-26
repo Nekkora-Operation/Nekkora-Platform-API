@@ -1,0 +1,1 @@
+usage_id,organization_id,resource_code,usage_date,records_count,bytes_count,status,consolidated_at

@@ -1,0 +1,48 @@
+# Portal externo - configuracao. Segredos SO por ambiente: NEKKORA_PORTAL_DB_URL, NEKKORA_PORTAL_DB_SENHA.
+# Credencial exclusiva do nekkora_portal; este processo NAO recebe as credenciais do nekkora_platform.
+spring:
+  application:
+    name: nekkora-portal
+  main:
+    banner-mode: off
+  data:
+    redis:
+      host: ${NEKKORA_REDIS_HOST:localhost}
+      port: ${NEKKORA_REDIS_PORT:6379}
+      timeout: 500ms
+      connect-timeout: 500ms
+
+server:
+  port: ${NEKKORA_PORTA:8082}
+  forward-headers-strategy: none
+  error:
+    whitelabel:
+      enabled: false
+    include-message: never
+    include-stacktrace: never
+    include-exception: false
+    include-binding-errors: never
+  tomcat:
+    accesslog:
+      enabled: false
+
+nekkora:
+  trusted-proxies: ${NEKKORA_PROXIES_CONFIAVEIS:127.0.0.1/32,::1/128}
+  database:
+    url: ${NEKKORA_PORTAL_DB_URL}
+    user: ${NEKKORA_PORTAL_DB_USUARIO:nekkora_portal}
+    password: ${NEKKORA_PORTAL_DB_SENHA}
+    max-pool-size: ${NEKKORA_PORTAL_DB_POOL:10}
+  limits:
+    r7-capacity: 60
+    r7-per-second: 2
+
+logging:
+  level:
+    root: INFO
+    org.springframework.web: WARN
+    org.springframework.jdbc: WARN
+    org.apache.catalina: WARN
+    com.zaxxer.hikari: WARN
+    org.postgresql: WARN
+    io.lettuce: WARN

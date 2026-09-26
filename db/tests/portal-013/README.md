@@ -30,7 +30,7 @@ Cada script declara o seu papel e confere `current_user`/`session_user`. As cham
 
 ## Ordem
 
-1. **Instalação:** entrypoint com as 13 migrations, sem ERROR, na ordem de `db/migrations`.
+1. **Instalação:** entrypoint com as 13 migrations, sem ERROR. Desde 2026-09-26, 001–013 são **escolhidas explicitamente** e montadas a partir de `saidas/<execução>/migracoes_montadas` (`TESTE_MIGRACOES`); a 014 e as posteriores não entram. As asserções não mudaram.
 2. **Catálogo:**
    - `t00_catalogo` confere o contrato exato;
    - `nekkora_ref` recebe 001–012 no mesmo cluster, e o diff de catálogo contra a base com a 013 precisa ter **só acréscimos relacionados ao portal**;
@@ -71,5 +71,5 @@ Cada script declara o seu papel e confere `current_user`/`session_user`. As cham
 
 - A restauração de `nekkora.fn_organization_id` no ramo `EXCEPTION` das funções não é observável isoladamente de fora: o rollback da (sub)transação que recebe o erro também a desfaz. O teste prova o efeito observável.
 - As asserções usam funções em `pg_temp` (privilégio `TEMP` de `PUBLIC`), como a suíte da 012. Se `TEMP` for revogado, o harness precisa de outro meio.
-- Com a 013 em `db/migrations/`, a suíte histórica `db/tests/seguranca-012/` (que exige exatamente 12 migrations no entrypoint) deixa de passar neste checkout. Ela **não foi alterada**.
+- ~~Com a 013 em `db/migrations/`, a suíte histórica `db/tests/seguranca-012/` deixa de passar neste checkout.~~ Resolvido em 2026-09-26: as duas suítes montam uma lista explícita de migrations, sem mudança nas asserções, e voltaram a passar (execuções oficiais registradas em `docs/relatorios/2026-09-26-validacao-api-v1.md`).
 - A suíte SQL não prova nada sobre o processo Spring (log de exceções, `log_parameter_max_length_on_error` na conexão, cookies). `t09c` mostra que o CONTEXT **enviado ao cliente** contém o valor de bind quando o próprio papel liga o parâmetro.

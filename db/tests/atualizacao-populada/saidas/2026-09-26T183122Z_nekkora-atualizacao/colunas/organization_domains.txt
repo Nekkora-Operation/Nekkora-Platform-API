@@ -1,0 +1,1 @@
+domain_id,organization_id,domain_normalized,status,verified_at,created_at,updated_at

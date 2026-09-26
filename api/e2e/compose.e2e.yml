@@ -1,0 +1,89 @@
+# Stack E2E ISOLADA (nome de projeto proprio, rede propria, sem volume nomeado): nunca a stack principal
+# (nekkora-postgres / 5432). Todos os segredos chegam pelo ambiente do run.sh (aleatorios por execucao); nada
+# versionado. So o nginx (origem unica) e o PostgreSQL (fixture declarada do cliente E2E) publicam porta, e
+# apenas em 127.0.0.1.
+name: ${E2E_PROJETO:?defina E2E_PROJETO}
+
+networks:
+  e2e:
+    ipam:
+      config:
+        - subnet: 10.251.47.0/24
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nekkora
+      POSTGRES_USER: nekkora
+      POSTGRES_PASSWORD: ${E2E_PG_SUPER_SENHA:?}
+    command: ["postgres", "-c", "cluster_name=nekkora-e2e"]
+    volumes:
+      - ${E2E_MIGRACOES:?}:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:${E2E_PG_PORTA:-55444}:5432"
+    networks:
+      e2e:
+        ipv4_address: 10.251.47.20
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nekkora -d nekkora"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    networks:
+      e2e:
+        ipv4_address: 10.251.47.21
+
+  platform:
+    build:
+      context: ..
+      dockerfile: e2e/Dockerfile
+      args:
+        JAR: nekkora-platform/target/nekkora-platform-0.1.0-SNAPSHOT.jar
+    environment:
+      NEKKORA_DB_URL: jdbc:postgresql://postgres:5432/nekkora
+      NEKKORA_DB_SENHA: ${E2E_PLATFORM_SENHA:?}
+      NEKKORA_REDIS_HOST: redis
+      NEKKORA_ORIGEM_PUBLICA: https://localhost:${E2E_PORTA:-55443}
+      NEKKORA_PROXIES_CONFIAVEIS: 10.251.47.10/32
+      NEKKORA_MFA_CHAVE_ID: k1
+      NEKKORA_MFA_CHAVES: ${E2E_MFA_CHAVES:?}
+      NEKKORA_HMAC_ID: h1
+      NEKKORA_HMAC_CHAVE: ${E2E_HMAC_CHAVE:?}
+    networks:
+      e2e:
+        ipv4_address: 10.251.47.30
+
+  # Processo, datasource e papel PROPRIOS (nekkora_portal): nenhuma variavel da Platform chega aqui.
+  portal:
+    build:
+      context: ..
+      dockerfile: e2e/Dockerfile
+      args:
+        JAR: nekkora-portal/target/nekkora-portal-0.1.0-SNAPSHOT.jar
+    environment:
+      NEKKORA_PORTAL_DB_URL: jdbc:postgresql://postgres:5432/nekkora
+      NEKKORA_PORTAL_DB_SENHA: ${E2E_PORTAL_SENHA:?}
+      NEKKORA_REDIS_HOST: redis
+      NEKKORA_PROXIES_CONFIAVEIS: 10.251.47.10/32
+    networks:
+      e2e:
+        ipv4_address: 10.251.47.31
+
+  nginx:
+    image: nginx:1.29-alpine
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${E2E_TLS:?}:/etc/nginx/tls:ro
+    ports:
+      - "127.0.0.1:${E2E_PORTA:-55443}:443"
+    depends_on:
+      - platform
+      - portal
+    networks:
+      e2e:
+        ipv4_address: 10.251.47.10

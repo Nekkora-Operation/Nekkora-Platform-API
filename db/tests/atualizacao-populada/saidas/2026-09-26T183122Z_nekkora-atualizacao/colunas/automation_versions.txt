@@ -1,0 +1,1 @@
+automation_version_id,organization_id,workspace_id,automation_id,version_number,status,command_json,created_by_membership_id,published_by_membership_id,published_at,created_at,updated_at

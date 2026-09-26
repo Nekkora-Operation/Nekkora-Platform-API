@@ -1,0 +1,38 @@
+pg_restore: error: COPY failed for table "automation_versions": ERROR:  function is_valid_relative_entrypoint(text) does not exist
+LINE 20:         AND is_valid_relative_entrypoint(command_json ->> 'e...
+                     ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+QUERY:  
+    SELECT (
+        (command_json ? 'contract_version')
+        AND (command_json ? 'artifact')
+        AND (command_json ? 'runtime')
+        AND (command_json ? 'entrypoint')
+        AND (command_json ? 'arguments')
+        AND (command_json ? 'parameters')
+        AND (command_json ? 'secret_bindings')
+        AND (command_json -> 'contract_version') = to_jsonb(1)
+        AND jsonb_typeof(command_json -> 'artifact') = 'object'
+        AND jsonb_typeof(command_json -> 'artifact' -> 'reference') = 'string'
+        AND length(btrim(command_json -> 'artifact' ->> 'reference')) > 0
+        AND jsonb_typeof(command_json -> 'artifact' -> 'sha256') = 'string'
+        AND (command_json -> 'artifact' ->> 'sha256') ~ '^[0-9a-f]{64}$'
+        AND jsonb_typeof(command_json -> 'runtime') = 'string'
+        AND length(btrim(command_json ->> 'runtime')) > 0
+        AND jsonb_typeof(command_json -> 'entrypoint') = 'string'
+        AND length(btrim(command_json ->> 'entrypoint')) > 0
+        AND is_valid_relative_entrypoint(command_json ->> 'entrypoint')
+        AND jsonb_typeof(command_json -> 'arguments') = 'array'
+        AND CASE WHEN jsonb_typeof(command_json -> 'arguments') = 'array' THEN
+                NOT EXISTS (
+                    SELECT 1 FROM jsonb_array_elements(command_json -> 'arguments') AS elem
+                    WHERE jsonb_typeof(elem) <> 'string'
+                )
+            ELSE FALSE
+            END
+        AND jsonb_typeof(command_json -> 'parameters') = 'object'
+        AND jsonb_typeof(command_json -> 'secret_bindings') = 'object'
+    ) IS TRUE;
+
+CONTEXT:  SQL function "is_valid_command_contract" during inlining
+COPY automation_versions, line 1: "6964e2e2-5d82-4e5c-8abc-022105e7e852	aaaaaaaa-0000-4000-8000-000000000001	aaaaaaaa-0000-4000-8000-00..."

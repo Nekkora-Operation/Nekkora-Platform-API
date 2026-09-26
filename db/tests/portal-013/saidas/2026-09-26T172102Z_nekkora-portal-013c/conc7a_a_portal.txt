@@ -1,0 +1,36 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+                    afirma                    
+----------------------------------------------
+ ok: papel real nekkora_portal (sem SET ROLE)
+(1 row)
+
+BEGIN
+                        afirma                         
+-------------------------------------------------------
+ ok: A: 1a leitura com a concessao ativa = 7 execucoes
+(1 row)
+
+MARCADOR_A_LEITURA1=2026-09-26 17:21:38.640627+00
+ pg_sleep 
+----------
+ 
+(1 row)
+
+MARCADOR_A_LEITURA2=2026-09-26 17:21:44.647796+00
+                                 afirma                                  
+-------------------------------------------------------------------------
+ ok: A: 2a leitura NA MESMA transacao, depois do commit da revogacao = 0
+(1 row)
+
+COMMIT
+                                            afirma                                             
+-----------------------------------------------------------------------------------------------
+ ok: A: nova transacao depois da revogacao: list_workspaces = 0 (sessao valida, sem concessao)
+(1 row)
+
