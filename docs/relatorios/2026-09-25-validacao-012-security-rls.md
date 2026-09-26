@@ -4,16 +4,16 @@
 **Escopo:** implementação e validação da migration de segurança (papéis por serviço, privilégios mínimos, funções privilegiadas encapsuladas, provisionamento atômico, RLS por organização, contextos de sessão, retirada do papel substituído).
 **Base aprovada:** `2026-09-25-contratos-funcoes-rls.md` (rev. 4), `2026-09-25-matriz-privilegios-001-011.md` (rev. 5), `2026-09-25-preparacao-seguranca-postgres.md`. A implementação partiu do contrato rev. 3 e da matriz rev. 4; as revisões seguintes registram as duas mudanças aprovadas durante ela (§3).
 **Fora de escopo:** API, ativação do expurgo e requisitos de infraestrutura (TLS, `pg_hba`, senhas, backup).
-**Status:** implementada e validada pelo autor nos cenários abaixo. **Ainda não revisada de forma independente nem encerrada.** Cópia canônica no repositório: `docs/relatorios/2026-09-25-validacao-012-security-rls.md`.
+**Status:** implementada, validada nos cenários abaixo e com **revisão independente encerrada** em 2026-09-25, dentro da cobertura documentada (§10, §10.1). A revisão foi feita por inspeção do código e das saídas, sem reexecução dos testes Docker pelo revisor. **Integrada à `main`** e enviada a `origin/main` (`dadf7c8`). As pendências do §7 seguem abertas e separadas. Cópia canônica no repositório: `docs/relatorios/2026-09-25-validacao-012-security-rls.md`.
 
 ## 1. Ambiente e revisão
 
 | Item | Valor |
 |---|---|
 | Repositório | `C:\Users\nicol\nekkora\nekkora-platform`, commit base `df6640d` (`main` = `origin/main` = `Nekkora-Operation/Nekkora-Platform-API`) |
-| Arquivos | `db/migrations/012_security_rls.sql`; `db/bootstrap/001_organizacao_interna_nekkora.sql` (procedimento inicial, §6.2); `db/tests/seguranca-012/` (runner, 25 scripts, README, saídas); nota de escopo no README de `db/tests/regressao-renomeacao/`; este relatório em `docs/relatorios/`. Commit dedicado no branch `feat/012-security-rls` (§1.1) |
+| Arquivos | `db/migrations/012_security_rls.sql`; `db/bootstrap/001_organizacao_interna_nekkora.sql` (procedimento inicial, §6.2); `db/tests/seguranca-012/` (runner, 25 scripts, README, saídas); nota de escopo no README de `db/tests/regressao-renomeacao/`; este relatório em `docs/relatorios/`. Commit dedicado no branch `feat/012-security-rls` (§1.1), depois integrado à `main` (§1.2) |
 | Encerramento da regressão | Testes e relatório já na `main`, pelo responsável. As duas stacks descartáveis (`nekkora-regressao`, `nekkora-regressao-r2`) foram removidas depois de confirmar as 49 saídas em `origin/main`: container, volume e rede removidos um a um, pelo nome exato, sem `down -v` |
-| Execuções da suíte (todas preservadas em `db/tests/seguranca-012/saidas/`) | **`2026-09-25T223250Z_nekkora-seg-012c`**: **execução de referência atual**, com a suíte corrigida após a revisão (asserções que abortam, §10) e a 012 com os invariantes ampliados; stack `nekkora-seg-012c`, porta 55452. **`2026-09-25T191906Z_nekkora-seg-012b`**: referência anterior à revisão, com o procedimento inicial de `db/bootstrap` (organização interna + staff + 5 limites). Stack `nekkora-seg-012b`, porta 55451. **`2026-09-25T184518Z_nekkora-seg-012`**: válida, anterior à criação do bootstrap (seed sem limites para a organização interna); resultados idênticos por arquivo. Stack `nekkora-seg-012`, porta 55450, mantida para revisão. **`2026-09-25T184124Z_nekkora-seg-012_INVALIDA-fixture-s02`**: **inválida**, preservada como evidência do defeito de fixture (§6.1). Todas com 001–012 pelo entrypoint, PostgreSQL 16.15, `cluster_name=nekkora-regressao-isolada` |
+| Execuções da suíte (todas preservadas em `db/tests/seguranca-012/saidas/`) | **`2026-09-25T223250Z_nekkora-seg-012c`**: **execução de referência atual**, com a suíte corrigida após a revisão (asserções que abortam, §10) e a 012 com os invariantes ampliados. **`2026-09-25T191906Z_nekkora-seg-012b`**: referência anterior à revisão, com o procedimento inicial de `db/bootstrap` (organização interna + staff + 5 limites). **`2026-09-25T184518Z_nekkora-seg-012`**: válida, anterior à criação do bootstrap (seed sem limites para a organização interna); resultados idênticos por arquivo. As três stacks correspondentes (`nekkora-seg-012`, `012b`, `012c`) foram **removidas** depois do encerramento da revisão (§1.2); as evidências permanecem versionadas. **`2026-09-25T184124Z_nekkora-seg-012_INVALIDA-fixture-s02`**: **inválida**, preservada como evidência do defeito de fixture (§6.1). Todas com 001–012 pelo entrypoint, PostgreSQL 16.15, `cluster_name=nekkora-regressao-isolada` |
 | Stack principal | Recriada do zero **depois** do commit da 012 (instalação limpa, §9). Antes disso, continuava em 001–011 |
 | Ambiente de desenvolvimento | `nekkora-seg-dev` (porta 55440), usado para iterar e removido ao final. Nenhuma evidência deste relatório vem dele |
 
@@ -25,7 +25,13 @@ Branch `feat/012-security-rls`, a partir de `df6640d`. Conteúdo:
 - a suíte `db/tests/seguranca-012/` com **todas** as saídas, incluindo a execução `_INVALIDA-fixture-s02`, identificada no nome do diretório e no README;
 - este relatório.
 
-Nada foi enviado ao remoto. O hash deste commit fica registrado no §9, no commit seguinte, porque um commit não pode conter o próprio hash.
+Na época, nada foi enviado ao remoto. O hash deste commit (`44a4d44`) está registrado no §9, que entrou no commit seguinte, porque um commit não pode conter o próprio hash.
+
+### 1.2 Integração e limpeza (após o encerramento da revisão)
+
+- **Integração:** a `main` avançou por fast-forward até `feat/012-security-rls`, porque não tinha divergido de `df6640d`. Commits: `44a4d44` (012, bootstrap, suíte, relatório), `598c67f` (instalação limpa), `51e2496` (precisões), `f7f5a28` (asserções e invariantes ampliados), `7ab7754` (proteção do runner), `5d82cb6` (execução única e encerramento), `dadf7c8` (registro de resíduo do teste de proteção). O responsável enviou a `main` a `origin/main` (`dadf7c8`).
+- **Evidências versionadas:** 224 saídas da suíte (incluindo as 33 da execução `_INVALIDA-fixture-s02`), os testes do runner, o teste de proteção e a instalação limpa.
+- **Limpeza:** removidas somente as três stacks descartáveis de revisão (`nekkora-seg-012`, `nekkora-seg-012b`, `nekkora-seg-012c`): container, volume e rede de cada uma, pelo nome exato, depois de conferir que o rótulo de projeto batia. Também foi removido um volume anônimo vazio, resíduo do teste de proteção do runner (§10.1; registrado em `04_limpeza.txt`). Resta apenas a base principal `nekkora-platform`.
 
 ## 2. O que a 012 faz
 
@@ -325,16 +331,17 @@ Com contexto ausente ou divergente, a trigger de origem da 011 não enxerga a ex
 1. **Atualização de uma base já populada (001–011 com dados) para a 012: não exercitada.** A base principal foi **recriada** (instalação limpa, §9), por decisão do responsável, porque os dados antigos foram montados fora do fluxo de provisionamento. Ninguém testou aplicar a 012 sobre dados pré-existentes. Nesse cenário, por exemplo, uma organização sem as cinco revisões de limite ficaria fail-closed, e o `nekkora_app` precisaria estar ocioso no momento do `DROP ROLE`.
 2. **Inclusão de uma inserção ainda não confirmada no fechamento (`close_usage_day`):** aberta. Testável com fixture controlada, sem esperar a meia-noite (§5.2).
 3. **Retentativa na virada real do dia:** aberta, cenário temporal distinto (§5.2).
-3. **Infraestrutura** (preparação §6): senhas/rotação, `pg_hba` `hostssl` + `scram-sha-256`, `statement_timeout`/`idle_in_transaction_session_timeout` por papel, identidade de backup. Nenhum item aplicado.
-4. **Ativação do expurgo:** continua sem `EXECUTE` para nenhum papel.
-5. **Suíte da regressão da renomeação:** encerrada com a 012 (nota no README). O `run.sh` dela aborta ao encontrar 12 migrations.
-6. **Revisão independente da 012 e deste relatório:** pendente. A stack `nekkora-seg-012` fica no ar até ela terminar; `nekkora-seg-012b` também.
+4. **Infraestrutura** (preparação §6): senhas/rotação, `pg_hba` `hostssl` + `scram-sha-256`, `statement_timeout`/`idle_in_transaction_session_timeout` por papel, identidade de backup. Nenhum item aplicado.
+5. **Ativação do expurgo:** continua sem `EXECUTE` para nenhum papel.
+6. **Suíte da regressão da renomeação:** encerrada com a 012 (nota no README). O `run.sh` dela aborta ao encontrar 12 migrations.
+7. ~~Revisão independente da 012 e deste relatório~~ — **encerrada** dentro da cobertura documentada (§10, §10.1). As stacks de revisão foram removidas (§1.2).
+8. **Controles operacionais antes de produção:** credenciais, TLS/`pg_hba`, reset do pool, backups com restauração isolada, identidade de backup, timeouts e observabilidade. Organizados em `2026-09-25-seguranca-operacional-postgres.md`.
 
 ## 8. Conclusão
 
 Nos cenários executados, a 012 aplica sem erro sobre 001–011, e o catálogo instalado coincide com a matriz aprovada: 145 privilégios de tabela, 15 de coluna e 12 funções, com diferença zero nos dois sentidos, mais os acréscimos e interpretações registrados no §3. Cada serviço executa o próprio fluxo com o próprio papel. Operações não concedidas, organização divergente e contexto ausente ou malformado são rejeitados, com o mecanismo identificado. O contexto de requisição, **quando definido por `SET LOCAL`**, não sobrevive entre transações da mesma conexão. Um `SET` de sessão vaza para a transação seguinte (I09); evitar isso cabe ao backend e ao pool. O contexto de função é salvo e restaurado sem afetar o guard de categoria. Provisionamento e bootstrap são atômicos. As duas corridas testadas resolvem pelo lock, com resultado correto. O expurgo continua desativado.
 
-Do ponto de vista do autor, a 012 está **apta para revisão independente**, com as pendências do §7. Ela ainda **não** está revisada nem encerrada. Esta validação **não** declara cobertura exaustiva nem conformidade LGPD, e não substitui os requisitos de infraestrutura. RLS está validada nos cenários acima, que usam papéis reais e políticas de fato habilitadas; não é uma prova de isolamento para toda consulta futura da API.
+A revisão independente da 012 foi **encerrada** dentro da cobertura documentada (§10, §10.1), e a 012 está integrada à `main`. As pendências do §7 seguem abertas e separadas. Esta validação **não** declara cobertura exaustiva nem conformidade LGPD, e não substitui os requisitos de infraestrutura. RLS está validada nos cenários acima, que usam papéis reais e políticas de fato habilitadas; não é uma prova de isolamento para toda consulta futura da API.
 
 ## 9. Recriação da base principal (instalação limpa)
 
