@@ -1,0 +1,31 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma            
+-----------------------------
+ ok: papel nekkora_ingestion
+(1 row)
+
+BEGIN
+SET
+INSERT 0 4
+COMMIT
+BEGIN
+SET
+INSERT 0 4
+INSERT 0 3
+       afirma        
+---------------------
+ ok: 8 eventos em O1
+(1 row)
+
+      afirma      
+------------------
+ ok: 3 logs em O1
+(1 row)
+
+COMMIT

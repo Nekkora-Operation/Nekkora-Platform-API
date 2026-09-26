@@ -1,0 +1,96 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+                    afirma                    
+----------------------------------------------
+ ok: papel real nekkora_portal (sem SET ROLE)
+(1 row)
+
+=== (a) sentinelas de contexto
+SET
+SET
+                     afirma                     
+------------------------------------------------
+ ok: chamada com sentinelas: resultado identico
+(1 row)
+
+                             afirma                              
+-----------------------------------------------------------------
+ ok: sucesso: fn_organization_id restaurado ao valor do chamador
+(1 row)
+
+                    afirma                    
+----------------------------------------------
+ ok: sucesso: nekkora.organization_id intacto
+(1 row)
+
+DO
+                              afirma                              
+------------------------------------------------------------------
+ ok: NK401 capturado pelo chamador: fn_organization_id restaurado
+(1 row)
+
+                   afirma                   
+--------------------------------------------
+ ok: NK401: nekkora.organization_id intacto
+(1 row)
+
+BEGIN
+SET
+SAVEPOINT
+ERROR:  parametro de consulta do portal invalido
+CONTEXT:  PL/pgSQL function public.portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer) line 17 at RAISE
+ROLLBACK
+                      afirma                      |                   e22023                    
+--------------------------------------------------+---------------------------------------------
+ ok: chamada dentro da transacao falhou com 22023 | ok: 22023 - p_limit = 0 dentro de transacao
+(1 row)
+
+                                  afirma                                  
+--------------------------------------------------------------------------
+ ok: 22023 dentro de transacao: fn_organization_id do chamador preservado
+(1 row)
+
+                                afirma                                 
+-----------------------------------------------------------------------
+ ok: mesma transacao: nova chamada ok e sentinela SET LOCAL restaurada
+(1 row)
+
+COMMIT
+                      afirma                       
+---------------------------------------------------
+ ok: depois do COMMIT: valor de sessao do chamador
+(1 row)
+
+RESET
+RESET
+=== (b) sombreamento em pg_temp pelo proprio portal
+CREATE TABLE
+SELECT 1
+CREATE TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE OPERATOR
+CREATE TYPE
+                                        afirma                                        
+--------------------------------------------------------------------------------------
+ ok: com tabelas, funcoes, operador e tipo homonimos em pg_temp: resultados identicos
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+                               nk401                                
+--------------------------------------------------------------------
+ ok: NK401 - com sombras em pg_temp: sessao revogada continua NK401
+(1 row)
+

@@ -1,0 +1,390 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+                    afirma                    
+----------------------------------------------
+ ok: papel real nekkora_portal (sem SET ROLE)
+(1 row)
+
+                             afirma                              
+-----------------------------------------------------------------
+ ok: USAGE em public efetivo (as negativas abaixo valem com ele)
+(1 row)
+
+=== inventario de relacoes de public
+SELECT 45
+ kind | count 
+------+-------
+ r    |    45
+(1 row)
+
+                     afirma                     
+------------------------------------------------
+ ok: 45 tabelas em public (inventario completo)
+(1 row)
+
+=== SELECT / INSERT / UPDATE / DELETE / TRUNCATE em cada tabela -> 42501
+NOTICE:  rejeitado como esperado [42501] permission denied for table permissions
+NOTICE:  rejeitado como esperado [42501] permission denied for table role_permissions
+NOTICE:  rejeitado como esperado [42501] permission denied for table roles
+NOTICE:  rejeitado como esperado [42501] permission denied for table agent_credentials
+NOTICE:  rejeitado como esperado [42501] permission denied for table agents
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_schedule_occurrences
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_schedule_revisions
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_schedules
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_version_bindings
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_version_parameter_bindings
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_version_secret_bindings
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_versions
+NOTICE:  rejeitado como esperado [42501] permission denied for table automations
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_memberships
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grant_approvals
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grant_reviews
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grants
+NOTICE:  rejeitado como esperado [42501] permission denied for table clients
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_invitations
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_provisioning_events
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_domains
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_memberships
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_purge_runs
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_resource_limit_revisions
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_role_assignments
+NOTICE:  rejeitado como esperado [42501] permission denied for table organizations
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_sessions
+NOTICE:  rejeitado como esperado [42501] permission denied for table users
+NOTICE:  rejeitado como esperado [42501] permission denied for table worker_workspace_assignments
+NOTICE:  rejeitado como esperado [42501] permission denied for table workers
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_configuration_events
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_parameter_values
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_parameters
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_role_assignments
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_secrets
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspaces
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_credentials
+NOTICE:  rejeitado como esperado [42501] permission denied for table password_reset_tokens
+NOTICE:  rejeitado como esperado [42501] permission denied for table email_verification_tokens
+NOTICE:  rejeitado como esperado [42501] permission denied for table execution_events
+NOTICE:  rejeitado como esperado [42501] permission denied for table logs
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_usage_daily
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_retention_policy_revisions
+NOTICE:  rejeitado como esperado [42501] permission denied for table executions
+NOTICE:  rejeitado como esperado [42501] permission denied for table worker_agent_assignments
+              afirma              
+----------------------------------
+ ok: SELECT negado nas 45 tabelas
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table permissions
+NOTICE:  rejeitado como esperado [42501] permission denied for table role_permissions
+NOTICE:  rejeitado como esperado [42501] permission denied for table roles
+NOTICE:  rejeitado como esperado [42501] permission denied for table agent_credentials
+NOTICE:  rejeitado como esperado [42501] permission denied for table agents
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_schedule_occurrences
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_schedule_revisions
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_schedules
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_version_bindings
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_version_parameter_bindings
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_version_secret_bindings
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_versions
+NOTICE:  rejeitado como esperado [42501] permission denied for table automations
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_memberships
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grant_approvals
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grant_reviews
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grants
+NOTICE:  rejeitado como esperado [42501] permission denied for table clients
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_invitations
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_provisioning_events
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_domains
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_memberships
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_purge_runs
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_resource_limit_revisions
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_role_assignments
+NOTICE:  rejeitado como esperado [42501] permission denied for table organizations
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_sessions
+NOTICE:  rejeitado como esperado [42501] permission denied for table users
+NOTICE:  rejeitado como esperado [42501] permission denied for table worker_workspace_assignments
+NOTICE:  rejeitado como esperado [42501] permission denied for table workers
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_configuration_events
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_parameter_values
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_parameters
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_role_assignments
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_secrets
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspaces
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_credentials
+NOTICE:  rejeitado como esperado [42501] permission denied for table password_reset_tokens
+NOTICE:  rejeitado como esperado [42501] permission denied for table email_verification_tokens
+NOTICE:  rejeitado como esperado [42501] permission denied for table execution_events
+NOTICE:  rejeitado como esperado [42501] permission denied for table logs
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_usage_daily
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_retention_policy_revisions
+NOTICE:  rejeitado como esperado [42501] permission denied for table executions
+NOTICE:  rejeitado como esperado [42501] permission denied for table worker_agent_assignments
+              afirma              
+----------------------------------
+ ok: INSERT negado nas 45 tabelas
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table permissions
+NOTICE:  rejeitado como esperado [42501] permission denied for table role_permissions
+NOTICE:  rejeitado como esperado [42501] permission denied for table roles
+NOTICE:  rejeitado como esperado [42501] permission denied for table agent_credentials
+NOTICE:  rejeitado como esperado [42501] permission denied for table agents
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_schedule_occurrences
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_schedule_revisions
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_schedules
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_version_bindings
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_version_parameter_bindings
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_version_secret_bindings
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_versions
+NOTICE:  rejeitado como esperado [42501] permission denied for table automations
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_memberships
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grant_approvals
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grant_reviews
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grants
+NOTICE:  rejeitado como esperado [42501] permission denied for table clients
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_invitations
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_provisioning_events
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_domains
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_memberships
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_purge_runs
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_resource_limit_revisions
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_role_assignments
+NOTICE:  rejeitado como esperado [42501] permission denied for table organizations
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_sessions
+NOTICE:  rejeitado como esperado [42501] permission denied for table users
+NOTICE:  rejeitado como esperado [42501] permission denied for table worker_workspace_assignments
+NOTICE:  rejeitado como esperado [42501] permission denied for table workers
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_configuration_events
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_parameter_values
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_parameters
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_role_assignments
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_secrets
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspaces
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_credentials
+NOTICE:  rejeitado como esperado [42501] permission denied for table password_reset_tokens
+NOTICE:  rejeitado como esperado [42501] permission denied for table email_verification_tokens
+NOTICE:  rejeitado como esperado [42501] permission denied for table execution_events
+NOTICE:  rejeitado como esperado [42501] permission denied for table logs
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_usage_daily
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_retention_policy_revisions
+NOTICE:  rejeitado como esperado [42501] permission denied for table executions
+NOTICE:  rejeitado como esperado [42501] permission denied for table worker_agent_assignments
+              afirma              
+----------------------------------
+ ok: UPDATE negado nas 45 tabelas
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table permissions
+NOTICE:  rejeitado como esperado [42501] permission denied for table role_permissions
+NOTICE:  rejeitado como esperado [42501] permission denied for table roles
+NOTICE:  rejeitado como esperado [42501] permission denied for table agent_credentials
+NOTICE:  rejeitado como esperado [42501] permission denied for table agents
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_schedule_occurrences
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_schedule_revisions
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_schedules
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_version_bindings
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_version_parameter_bindings
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_version_secret_bindings
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_versions
+NOTICE:  rejeitado como esperado [42501] permission denied for table automations
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_memberships
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grant_approvals
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grant_reviews
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grants
+NOTICE:  rejeitado como esperado [42501] permission denied for table clients
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_invitations
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_provisioning_events
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_domains
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_memberships
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_purge_runs
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_resource_limit_revisions
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_role_assignments
+NOTICE:  rejeitado como esperado [42501] permission denied for table organizations
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_sessions
+NOTICE:  rejeitado como esperado [42501] permission denied for table users
+NOTICE:  rejeitado como esperado [42501] permission denied for table worker_workspace_assignments
+NOTICE:  rejeitado como esperado [42501] permission denied for table workers
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_configuration_events
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_parameter_values
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_parameters
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_role_assignments
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_secrets
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspaces
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_credentials
+NOTICE:  rejeitado como esperado [42501] permission denied for table password_reset_tokens
+NOTICE:  rejeitado como esperado [42501] permission denied for table email_verification_tokens
+NOTICE:  rejeitado como esperado [42501] permission denied for table execution_events
+              afirma              
+----------------------------------
+ ok: DELETE negado nas 45 tabelas
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table logs
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_usage_daily
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_retention_policy_revisions
+NOTICE:  rejeitado como esperado [42501] permission denied for table executions
+NOTICE:  rejeitado como esperado [42501] permission denied for table worker_agent_assignments
+NOTICE:  rejeitado como esperado [42501] permission denied for table permissions
+NOTICE:  rejeitado como esperado [42501] permission denied for table role_permissions
+NOTICE:  rejeitado como esperado [42501] permission denied for table roles
+NOTICE:  rejeitado como esperado [42501] permission denied for table agent_credentials
+NOTICE:  rejeitado como esperado [42501] permission denied for table agents
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_schedule_occurrences
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_schedule_revisions
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_schedules
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_version_bindings
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_version_parameter_bindings
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_version_secret_bindings
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_versions
+NOTICE:  rejeitado como esperado [42501] permission denied for table automations
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_memberships
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grant_approvals
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grant_reviews
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grants
+NOTICE:  rejeitado como esperado [42501] permission denied for table clients
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_invitations
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_provisioning_events
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_domains
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_memberships
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_purge_runs
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_resource_limit_revisions
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_role_assignments
+NOTICE:  rejeitado como esperado [42501] permission denied for table organizations
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_sessions
+NOTICE:  rejeitado como esperado [42501] permission denied for table users
+NOTICE:  rejeitado como esperado [42501] permission denied for table worker_workspace_assignments
+NOTICE:  rejeitado como esperado [42501] permission denied for table workers
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_configuration_events
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_parameter_values
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_parameters
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_role_assignments
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_secrets
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspaces
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_credentials
+NOTICE:  rejeitado como esperado [42501] permission denied for table password_reset_tokens
+NOTICE:  rejeitado como esperado [42501] permission denied for table email_verification_tokens
+NOTICE:  rejeitado como esperado [42501] permission denied for table execution_events
+NOTICE:  rejeitado como esperado [42501] permission denied for table logs
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_usage_daily
+NOTICE:  rejeitado como esperado [42501] permission denied for table organization_retention_policy_revisions
+NOTICE:  rejeitado como esperado [42501] permission denied for table executions
+NOTICE:  rejeitado como esperado [42501] permission denied for table worker_agent_assignments
+               afirma               
+------------------------------------
+ ok: TRUNCATE negado nas 45 tabelas
+(1 row)
+
+            afirma             
+-------------------------------
+ ok: SELECT negado nas 0 views
+(1 row)
+
+               afirma                
+-------------------------------------
+ ok: nextval negado nas 0 sequencias
+(1 row)
+
+ERROR:  permission denied for table user_sessions
+                         afirma                         
+--------------------------------------------------------
+ ok: COPY public.user_sessions TO STDOUT negado (42501)
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_sessions
+      espera_erro      |      espera_erro      
+-----------------------+-----------------------
+ ok: rejeitado [42501] | ok: rejeitado [42501]
+(1 row)
+
+=== EXECUTE: funcoes internas do portal e todas as SECURITY DEFINER fora das 4 publicas -> 42501
+NOTICE:  rejeitado como esperado [42501] permission denied for table execution_events
+SELECT 13
+                                  sig                                  
+-----------------------------------------------------------------------
+ assign_received_at_and_lock_barrier(uuid,integer)
+ close_usage_day(uuid,integer,date)
+ create_schedule_occurrence(uuid,uuid,uuid,timestamp with time zone)
+ portal_authorized_workspaces(uuid,uuid,uuid,timestamp with time zone)
+ portal_resolve_session(uuid,text)
+ process_schedule_occurrence(uuid,uuid,boolean)
+ provision_first_org_admin(uuid,uuid,uuid,text,uuid)
+ provision_organization(uuid,text,text,uuid,resource_limit_input[])
+ provision_resource_limit(uuid,integer,smallint,bigint,uuid)
+ provision_retention_policy(uuid,integer,smallint,integer,uuid)
+ purge_expired_records(uuid,integer,uuid,integer)
+ reconsolidate_usage_day(uuid,integer,date)
+ set_schedule_status(uuid,uuid,smallint,uuid)
+(13 rows)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for function purge_expired_records
+NOTICE:  rejeitado como esperado [42501] permission denied for function assign_received_at_and_lock_barrier
+NOTICE:  rejeitado como esperado [42501] permission denied for function close_usage_day
+NOTICE:  rejeitado como esperado [42501] permission denied for function provision_first_org_admin
+NOTICE:  rejeitado como esperado [42501] permission denied for function reconsolidate_usage_day
+NOTICE:  rejeitado como esperado [42501] permission denied for function process_schedule_occurrence
+NOTICE:  rejeitado como esperado [42501] permission denied for function create_schedule_occurrence
+NOTICE:  rejeitado como esperado [42501] permission denied for function set_schedule_status
+NOTICE:  rejeitado como esperado [42501] permission denied for function provision_organization
+NOTICE:  rejeitado como esperado [42501] permission denied for function provision_resource_limit
+NOTICE:  rejeitado como esperado [42501] permission denied for function provision_retention_policy
+NOTICE:  rejeitado como esperado [42501] permission denied for function portal_resolve_session
+NOTICE:  rejeitado como esperado [42501] permission denied for function portal_authorized_workspaces
+                                                      afirma                                                      
+------------------------------------------------------------------------------------------------------------------
+ ok: EXECUTE negado em 13 funcoes (2 internas do portal + as 11 SECURITY DEFINER da 011/012, inclusive o expurgo)
+(1 row)
+
+               afirma                
+-------------------------------------
+ ok: o expurgo esta entre as negadas
+(1 row)
+
+=== CREATE, membership e elevacao de papel
+NOTICE:  rejeitado como esperado [42501] permission denied for schema public
+NOTICE:  rejeitado como esperado [42501] permission denied for schema public
+NOTICE:  rejeitado como esperado [42501] permission denied for schema public
+NOTICE:  rejeitado como esperado [42501] permission denied for database nekkora
+      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      
+-----------------------+-----------------------+-----------------------+-----------------------
+ ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied to set role "nekkora_portal_owner"
+NOTICE:  rejeitado como esperado [42501] permission denied to set role "nekkora_platform"
+NOTICE:  rejeitado como esperado [42501] permission denied to set role "nekkora_ingestion"
+NOTICE:  rejeitado como esperado [42501] permission denied to set role "nekkora_scheduler"
+NOTICE:  rejeitado como esperado [42501] permission denied to set role "nekkora_provisioning"
+NOTICE:  rejeitado como esperado [42501] permission denied to set role "nekkora_retention_executor"
+NOTICE:  rejeitado como esperado [42501] permission denied to set role "nekkora_scheduler_owner"
+NOTICE:  rejeitado como esperado [42501] permission denied to set role "nekkora_provisioning_owner"
+NOTICE:  rejeitado como esperado [42501] permission denied to set role "nekkora_retention_owner"
+NOTICE:  rejeitado como esperado [42501] permission denied to set role "nekkora_retention_tables_owner"
+                                                      afirma                                                      
+------------------------------------------------------------------------------------------------------------------
+ ok: SET ROLE negado para os 11 papeis de servico/proprietarios (inclusive nekkora_portal_owner) e o de migration
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied to set role "nekkora"
+NOTICE:  rejeitado como esperado [42501] permission denied to set session authorization "nekkora"
+NOTICE:  rejeitado como esperado [42501] permission denied to grant role "nekkora_portal_owner"
+NOTICE:  rejeitado como esperado [42501] permission denied to grant role "nekkora_portal"
+NOTICE:  rejeitado como esperado [42501] permission denied to alter role
+NOTICE:  rejeitado como esperado [42501] permission denied to alter role
+NOTICE:  rejeitado como esperado [42501] permission denied to alter role
+NOTICE:  rejeitado como esperado [42501] permission denied to create role
+NOTICE:  rejeitado como esperado [42501] permission denied for function portal_resolve_session
+NOTICE:  rejeitado como esperado [42501] must be owner of function portal_list_workspaces
+      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      
+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------
+ ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501]
+(1 row)
+
+                            afirma                            
+--------------------------------------------------------------
+ ok: nekkora_portal nao e membro de nenhum papel privilegiado
+(1 row)
+

@@ -1,0 +1,13 @@
+data_utc=2026-09-26T04:48:05Z
+commit=0a333db16e86bfd3ff8f1246bcf91a3563c87d24
+branch=main
+arvore_limpa=nao
+git_status_porcelain:
+  ?? db/migrations/013_portal_externo.sql
+  ?? db/tests/portal-013/
+  ?? db/tests/portal-8-2/
+migration_013=db/migrations/013_portal_externo.sql sha256=c6192bff305f3888710ef9430751452b7a48a5bc7078691a16e16ddebb4c14d9
+projeto=nekkora-portal-013 container=nekkora-portal-013-postgres volume=nekkora-portal-013_nekkora_postgres_data rede=nekkora-portal-013_default porta=55513
+docker=29.7.2
+compose=5.3.1
+server_version=16.15

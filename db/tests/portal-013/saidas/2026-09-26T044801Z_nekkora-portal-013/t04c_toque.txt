@@ -1,0 +1,59 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+                    afirma                    
+----------------------------------------------
+ ok: papel real nekkora_portal (sem SET ROLE)
+(1 row)
+
+=== xtoq: ultima escrita ha 61 s -> 1a chamada escreve; 2a chamada logo depois nao escreve
+           afirma            
+-----------------------------
+ ok: xtoq: 1a chamada valida
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+           afirma            
+-----------------------------
+ ok: xtoq: 2a chamada valida
+(1 row)
+
+MARCADOR_T1A=2026-09-26 04:48:25.506374+00
+MARCADOR_T1B=2026-09-26 04:48:25.521944+00
+MARCADOR_T2A=2026-09-26 04:48:27.024559+00
+=== xfut: last_seen_at no futuro -> chamada valida, sem retrocesso
+          afirma          
+--------------------------
+ ok: xfut: chamada valida
+(1 row)
+
+=== xp: sessao valida, parametro invalido -> 22023 (mensagem fixa) e nenhum toque
+ERROR:  parametro de consulta do portal invalido
+CONTEXT:  PL/pgSQL function public.portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer) line 17 at RAISE
+         e22023          
+-------------------------
+ ok: 22023 - p_limit = 0
+(1 row)
+
+ERROR:  parametro de consulta do portal invalido
+CONTEXT:  PL/pgSQL function public.portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer) line 17 at RAISE
+                           e22023                           
+------------------------------------------------------------
+ ok: 22023 - p_limit = 101 (acima do maximo provisorio 100)
+(1 row)
+
+ERROR:  parametro de consulta do portal invalido
+CONTEXT:  PL/pgSQL function public.portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer) line 17 at RAISE
+                    e22023                     
+-----------------------------------------------
+ ok: 22023 - cursor incompleto (so created_at)
+(1 row)
+

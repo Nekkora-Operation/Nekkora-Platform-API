@@ -1,0 +1,23 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+         c_observacao          | pid |     usename      | state  | wait_event_type |  wait_event   |                            query                             
+-------------------------------+-----+------------------+--------+-----------------+---------------+--------------------------------------------------------------
+ 2026-09-26 04:48:54.2724+00   | 635 | nekkora_platform | active | Timeout         | PgSleep       | SELECT pg_sleep(8);
+ 2026-09-26 04:48:54.272406+00 | 642 | nekkora_portal   | active | Lock            | transactionid | SELECT count(*) AS n, coalesce(string_agg(q.workspace_id::te
+(2 rows)
+
+ bloqueado |    usename     | bloqueado_por 
+-----------+----------------+---------------
+       642 | nekkora_portal | {635}
+(1 row)
+
+                                          afirma                                          
+------------------------------------------------------------------------------------------
+ ok: sessao de nekkora_portal em espera de lock, bloqueada por sessao de nekkora_platform
+(1 row)
+

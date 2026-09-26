@@ -1,0 +1,99 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+               afirma                
+-------------------------------------
+ ok: sessao do superusuario de teste
+(1 row)
+
+GRANT
+SET
+                              afirma                               
+-------------------------------------------------------------------
+ ok: current_user = nekkora_portal_owner (via SET ROLE, declarado)
+(1 row)
+
+SET
+=== leitura permitida (controle): colunas da allowlist, sob RLS da organizacao do contexto
+                                   afirma                                    
+-----------------------------------------------------------------------------
+ ok: owner le as 13 execucoes de O1 (so a organizacao de fn_organization_id)
+(1 row)
+
+                        afirma                        
+------------------------------------------------------
+ ok: owner nao ve sessoes de O2 com contexto O1 (RLS)
+(1 row)
+
+=== colunas e tabelas fora da allowlist -> 42501
+NOTICE:  rejeitado como esperado [42501] permission denied for table execution_events
+NOTICE:  rejeitado como esperado [42501] permission denied for table execution_events
+NOTICE:  rejeitado como esperado [42501] permission denied for table execution_events
+NOTICE:  rejeitado como esperado [42501] permission denied for table executions
+NOTICE:  rejeitado como esperado [42501] permission denied for table executions
+NOTICE:  rejeitado como esperado [42501] permission denied for table executions
+NOTICE:  rejeitado como esperado [42501] permission denied for table executions
+NOTICE:  rejeitado como esperado [42501] permission denied for table executions
+NOTICE:  rejeitado como esperado [42501] permission denied for table executions
+      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      
+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------
+ ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table users
+NOTICE:  rejeitado como esperado [42501] permission denied for table users
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspaces
+NOTICE:  rejeitado como esperado [42501] permission denied for table automations
+NOTICE:  rejeitado como esperado [42501] permission denied for table organizations
+NOTICE:  rejeitado como esperado [42501] permission denied for table clients
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grants
+NOTICE:  rejeitado como esperado [42501] permission denied for table logs
+NOTICE:  rejeitado como esperado [42501] permission denied for table workspace_secrets
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_credentials
+NOTICE:  rejeitado como esperado [42501] permission denied for table automation_schedules
+NOTICE:  rejeitado como esperado [42501] permission denied for table workers
+NOTICE:  rejeitado como esperado [42501] permission denied for table agents
+      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      
+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------
+ ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501]
+(1 row)
+
+=== escrita fora de user_sessions.last_seen_at -> 42501
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_sessions
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_sessions
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_sessions
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_sessions
+NOTICE:  rejeitado como esperado [42501] permission denied for table user_sessions
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grants
+NOTICE:  rejeitado como esperado [42501] permission denied for table client_workspace_grants
+NOTICE:  rejeitado como esperado [42501] permission denied for table users
+NOTICE:  rejeitado como esperado [42501] permission denied for function purge_expired_records
+      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      |      espera_erro      
+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------+-----------------------
+ ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501] | ok: rejeitado [42501]
+(1 row)
+
+=== RLS de escrita do owner: last_seen_at so na organizacao do contexto (WITH CHECK)
+BEGIN
+ROLLBACK
+                                         afirma                                          
+-----------------------------------------------------------------------------------------
+ ok: owner com contexto O1 nao alcanca sessoes de O2 nem para toque (0 linhas; desfeito)
+(1 row)
+
+RESET
+                            afirma                             
+---------------------------------------------------------------
+ ok: owner sem contexto: nenhuma linha visivel (falha fechado)
+(1 row)
+
+RESET
+     afirma     
+----------------
+ ok: RESET ROLE
+(1 row)
+

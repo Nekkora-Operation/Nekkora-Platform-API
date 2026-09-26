@@ -1,0 +1,256 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+                    afirma                    
+----------------------------------------------
+ ok: papel real nekkora_portal (sem SET ROLE)
+(1 row)
+
+=== X (C1, concessao so em WS1)
+                afirma                 
+---------------------------------------
+ ok: X: portal_list_workspaces = {WS1}
+(1 row)
+
+                                             afirma                                             
+------------------------------------------------------------------------------------------------
+ ok: X: execucoes = as 7 de WS1, em created_at DESC, execution_id DESC (empate e17 > e16 > e14)
+(1 row)
+
+                                 afirma                                 
+------------------------------------------------------------------------
+ ok: X: p_workspace_id = WS2 (mesmo cliente, outro vinculo) -> 0 linhas
+(1 row)
+
+                         afirma                          
+---------------------------------------------------------
+ ok: X: p_workspace_id = WS3 (outro cliente) -> 0 linhas
+(1 row)
+
+                      afirma                       
+---------------------------------------------------
+ ok: X: p_workspace_id = WSi (interno) -> 0 linhas
+(1 row)
+
+                           afirma                            
+-------------------------------------------------------------
+ ok: X: p_workspace_id = WS7 (outra organizacao) -> 0 linhas
+(1 row)
+
+                     afirma                      
+-------------------------------------------------
+ ok: X: p_workspace_id = WS1 (concedido) -> as 7
+(1 row)
+
+cursor apontando para execucao de WS2 (e22): so pagina, continua sob a concessao de X
+              afirma               
+-----------------------------------
+ ok: Y: execucoes = e22, e21 (WS2)
+(1 row)
+
+                                          afirma                                          
+------------------------------------------------------------------------------------------
+ ok: X com cursor (created_at, id) de e22 (WS2): so execucoes de WS1 anteriores ao cursor
+(1 row)
+
+detalhe e eventos de execucoes fora da concessao de X: 0 linhas (sem revelar existencia)
+                      afirma                       
+---------------------------------------------------
+ ok: X: portal_get_execution(e21, WS2) -> 0 linhas
+(1 row)
+
+                        afirma                        
+------------------------------------------------------
+ ok: X: portal_get_execution(e31, WS3/C2) -> 0 linhas
+(1 row)
+
+                      afirma                       
+---------------------------------------------------
+ ok: X: portal_get_execution(e41, WSi) -> 0 linhas
+(1 row)
+
+                                   afirma                                    
+-----------------------------------------------------------------------------
+ ok: X: portal_get_execution(e51, WS4 de C1, sem concessao de X) -> 0 linhas
+(1 row)
+
+                      afirma                      
+--------------------------------------------------
+ ok: X: portal_get_execution(e71, O2) -> 0 linhas
+(1 row)
+
+                                           afirma                                            
+---------------------------------------------------------------------------------------------
+ ok: X: portal_get_execution(id inexistente) -> 0 linhas (mesma resposta que fora do escopo)
+(1 row)
+
+                      afirma                      
+--------------------------------------------------
+ ok: X: portal_get_execution(e12, WS1) -> 1 linha
+(1 row)
+
+                 afirma                  
+-----------------------------------------
+ ok: X: eventos de e21 (WS2) -> 0 linhas
+(1 row)
+
+                   afirma                   
+--------------------------------------------
+ ok: X: eventos de e31 (WS3/C2) -> 0 linhas
+(1 row)
+
+                                  afirma                                   
+---------------------------------------------------------------------------
+ ok: X: eventos de e15 = PROCESS_STARTED, PROCESS_SUCCEEDED (por sequence)
+(1 row)
+
+=== Y (C1, concessao so em WS2): simetrico
+                afirma                 
+---------------------------------------
+ ok: Y: portal_list_workspaces = {WS2}
+(1 row)
+
+                 afirma                  
+-----------------------------------------
+ ok: Y: p_workspace_id = WS1 -> 0 linhas
+(1 row)
+
+                      afirma                       
+---------------------------------------------------
+ ok: Y: portal_get_execution(e11, WS1) -> 0 linhas
+(1 row)
+
+                 afirma                  
+-----------------------------------------
+ ok: Y: eventos de e15 (WS1) -> 0 linhas
+(1 row)
+
+              afirma              
+----------------------------------
+ ok: Y: eventos de e21 (WS2) -> 2
+(1 row)
+
+=== Z (C2, WS3): nada de C1
+                afirma                 
+---------------------------------------
+ ok: Z: portal_list_workspaces = {WS3}
+(1 row)
+
+          afirma          
+--------------------------
+ ok: Z: execucoes = {e31}
+(1 row)
+
+                afirma                 
+---------------------------------------
+ ok: Z: p_workspace_id = WS1 (C1) -> 0
+(1 row)
+
+                  afirma                   
+-------------------------------------------
+ ok: Z: portal_get_execution(e11, C1) -> 0
+(1 row)
+
+             afirma              
+---------------------------------
+ ok: Z: eventos de e13 (C1) -> 0
+(1 row)
+
+=== outras organizacoes
+                   afirma                   
+--------------------------------------------
+ ok: W (O2): portal_list_workspaces = {WS7}
+(1 row)
+
+            afirma             
+-------------------------------
+ ok: W (O2): execucoes = {e71}
+(1 row)
+
+                     afirma                     
+------------------------------------------------
+ ok: W (O2): portal_get_execution(e11, O1) -> 0
+(1 row)
+
+                   afirma                   
+--------------------------------------------
+ ok: K (O4): portal_list_workspaces = {WS9}
+(1 row)
+
+=== organizacao alegada errada: a sessao nao e encontrada -> NK401 (as 4 funcoes)
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+                                nk401                                
+---------------------------------------------------------------------
+ ok: NK401 - token de X com p_organization_id = O2 (list_workspaces)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer) line 12 at SQL statement
+                      nk401                      
+-------------------------------------------------
+ ok: NK401 - token de X com O2 (list_executions)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_get_execution(uuid,text,uuid) line 10 at SQL statement
+                                nk401                                 
+----------------------------------------------------------------------
+ ok: NK401 - token de X com O2 e id de execucao de O2 (get_execution)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_execution_events(uuid,text,uuid) line 10 at SQL statement
+                         nk401                         
+-------------------------------------------------------
+ ok: NK401 - token de X com O2 (list_execution_events)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+                         nk401                          
+--------------------------------------------------------
+ ok: NK401 - token de W (O2) com p_organization_id = O1
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+                       nk401                        
+----------------------------------------------------
+ ok: NK401 - token de X com organizacao inexistente
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 15 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+                       nk401                       
+---------------------------------------------------
+ ok: NK401 - token de X com p_organization_id NULL
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+               nk401                
+------------------------------------
+ ok: NK401 - token de K (O4) com O1
+(1 row)
+

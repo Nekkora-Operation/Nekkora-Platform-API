@@ -1,0 +1,808 @@
+The files belonging to this database system will be owned by user "postgres".
+This user must also own the server process.
+
+The database cluster will be initialized with locale "en_US.utf8".
+The default database encoding has accordingly been set to "UTF8".
+The default text search configuration will be set to "english".
+
+Data page checksums are disabled.
+
+fixing permissions on existing directory /var/lib/postgresql/data ... ok
+creating subdirectories ... ok
+selecting dynamic shared memory implementation ... posix
+selecting default max_connections ... 100
+selecting default shared_buffers ... 128MB
+selecting default time zone ... UTC
+creating configuration files ... ok
+running bootstrap script ... ok
+sh: locale: not found
+2026-09-26 04:48:07.133 UTC [36] WARNING:  no usable system locales were found
+performing post-bootstrap initialization ... ok
+initdb: warning: enabling "trust" authentication for local connections
+initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+syncing data to disk ... ok
+
+
+Success. You can now start the database server using:
+
+    pg_ctl -D /var/lib/postgresql/data -l logfile start
+
+waiting for server to start....2026-09-26 04:48:07.627 UTC [42] LOG:  starting PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+2026-09-26 04:48:07.629 UTC [42] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-09-26 04:48:07.635 UTC [45] LOG:  database system was shut down at 2026-09-26 04:48:07 UTC
+2026-09-26 04:48:07.639 UTC [42] LOG:  database system is ready to accept connections
+ done
+server started
+CREATE DATABASE
+
+
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/001_initial.sql
+CREATE EXTENSION
+CREATE TABLE
+COMMENT
+CREATE TABLE
+COMMENT
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE INDEX
+CREATE INDEX
+COMMENT
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+
+
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/002_identity.sql
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE INDEX
+CREATE INDEX
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE INDEX
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE INDEX
+
+
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/003_access_control.sql
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE TABLE
+CREATE TABLE
+COMMENT
+CREATE TABLE
+INSERT 0 9
+INSERT 0 4
+INSERT 0 9
+INSERT 0 5
+INSERT 0 3
+INSERT 0 1
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+CREATE INDEX
+CREATE INDEX
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE INDEX
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE INDEX
+CREATE INDEX
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE INDEX
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE INDEX
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+
+
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/004_workers_agents.sql
+INSERT 0 5
+INSERT 0 5
+CREATE TABLE
+COMMENT
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE INDEX
+CREATE INDEX
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE INDEX
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE INDEX
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE INDEX
+
+
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/005_automations_versions.sql
+INSERT 0 2
+INSERT 0 4
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE TABLE
+COMMENT
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE INDEX
+
+
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/006_executions.sql
+ALTER TABLE
+ALTER TABLE
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+
+
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/007_events_logs.sql
+DO
+ALTER TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE TABLE
+COMMENT
+CREATE INDEX
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE INDEX
+CREATE INDEX
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+
+
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/008_parametros_secrets.sql
+INSERT 0 4
+INSERT 0 8
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TABLE
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE INDEX
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE INDEX
+CREATE INDEX
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TABLE
+CREATE INDEX
+CREATE TABLE
+CREATE INDEX
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE FUNCTION
+
+
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/009_agendamentos.sql
+INSERT 0 2
+INSERT 0 4
+CREATE FUNCTION
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE INDEX
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+ALTER TABLE
+UPDATE 0
+ALTER TABLE
+ALTER TABLE
+COMMENT
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+CREATE INDEX
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+
+
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/010_recursos_limites_retencao.sql
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+CREATE INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE INDEX
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE TRIGGER
+ALTER TABLE
+ALTER TABLE
+COMMENT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+
+
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/011_fechamento_expurgo.sql
+DO
+REVOKE
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+CREATE TRIGGER
+CREATE TRIGGER
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+COMMENT
+COMMENT
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+COMMENT
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+COMMENT
+COMMENT
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DROP TRIGGER
+CREATE TRIGGER
+DROP TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER FUNCTION
+ALTER FUNCTION
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+REVOKE
+GRANT
+REVOKE
+
+
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/012_security_rls.sql
+BEGIN
+ALTER DEFAULT PRIVILEGES
+DO
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+CREATE TYPE
+DO
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+REVOKE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+DO
+DO
+DO
+COMMIT
+
+
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/013_portal_externo.sql
+BEGIN
+DO
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+ALTER ROLE
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+DO
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+GRANT
+GRANT
+GRANT
+GRANT
+DO
+COMMIT
+
+
+waiting for server to shut down...2026-09-26 04:48:09.035 UTC [42] LOG:  received fast shutdown request
+.2026-09-26 04:48:09.036 UTC [42] LOG:  aborting any active transactions
+2026-09-26 04:48:09.039 UTC [42] LOG:  background worker "logical replication launcher" (PID 48) exited with exit code 1
+2026-09-26 04:48:09.039 UTC [43] LOG:  shutting down
+2026-09-26 04:48:09.041 UTC [43] LOG:  checkpoint starting: shutdown immediate
+2026-09-26 04:48:09.142 UTC [43] LOG:  checkpoint complete: wrote 1193 buffers (7.3%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.023 s, sync=0.074 s, total=0.103 s; sync files=552, longest=0.002 s, average=0.001 s; distance=7306 kB, estimate=7306 kB; lsn=0/1C19CB8, redo lsn=0/1C19CB8
+2026-09-26 04:48:09.149 UTC [42] LOG:  database system is shut down
+ done
+server stopped
+
+PostgreSQL init process complete; ready for start up.
+
+2026-09-26 04:48:09.255 UTC [1] LOG:  starting PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+2026-09-26 04:48:09.255 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2026-09-26 04:48:09.256 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+2026-09-26 04:48:09.258 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-09-26 04:48:09.263 UTC [84] LOG:  database system was shut down at 2026-09-26 04:48:09 UTC
+2026-09-26 04:48:09.281 UTC [1] LOG:  database system is ready to accept connections
+2026-09-26 04:48:21.649 UTC [297] ERROR:  permission denied for table user_sessions
+2026-09-26 04:48:22.344 UTC [318] ERROR:  sessao do portal invalida
+2026-09-26 04:48:22.345 UTC [318] ERROR:  sessao do portal invalida
+2026-09-26 04:48:22.345 UTC [318] ERROR:  sessao do portal invalida
+2026-09-26 04:48:22.346 UTC [318] ERROR:  sessao do portal invalida
+2026-09-26 04:48:22.346 UTC [318] ERROR:  sessao do portal invalida
+2026-09-26 04:48:22.347 UTC [318] ERROR:  sessao do portal invalida
+2026-09-26 04:48:22.347 UTC [318] ERROR:  sessao do portal invalida
+2026-09-26 04:48:22.348 UTC [318] ERROR:  sessao do portal invalida
+2026-09-26 04:48:23.077 UTC [332] ERROR:  parametro de consulta do portal invalido
+2026-09-26 04:48:23.077 UTC [332] ERROR:  parametro de consulta do portal invalido
+2026-09-26 04:48:23.078 UTC [332] ERROR:  parametro de consulta do portal invalido
+2026-09-26 04:48:23.079 UTC [332] ERROR:  parametro de consulta do portal invalido
+2026-09-26 04:48:23.079 UTC [332] ERROR:  parametro de consulta do portal invalido
+2026-09-26 04:48:23.392 UTC [339] ERROR:  parametro de consulta do portal invalido
+2026-09-26 04:48:23.422 UTC [339] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.139 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.140 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.140 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.141 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.141 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.142 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.144 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.145 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.145 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.146 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.147 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.148 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.149 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.149 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.150 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.151 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.151 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.152 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.152 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.153 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.157 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.158 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.158 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.159 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.160 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.161 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.162 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:24.162 UTC [360] ERROR:  sessao do portal invalida
+2026-09-26 04:48:27.037 UTC [395] ERROR:  parametro de consulta do portal invalido
+2026-09-26 04:48:27.039 UTC [395] ERROR:  parametro de consulta do portal invalido
+2026-09-26 04:48:27.040 UTC [395] ERROR:  parametro de consulta do portal invalido
+2026-09-26 04:48:28.409 UTC [437] FATAL:  permission denied to set parameter "log_error_verbosity"
+2026-09-26 04:48:28.664 UTC [444] FATAL:  permission denied to set parameter "log_min_error_statement"
+2026-09-26 04:48:28.897 UTC [451] FATAL:  permission denied to set parameter "log_parameter_max_length"
+2026-09-26 04:48:29.134 UTC [458] FATAL:  permission denied to set parameter "log_statement"
+2026-09-26 04:48:29.388 UTC [466] FATAL:  permission denied to set parameter "log_min_duration_statement"
+2026-09-26 04:48:29.653 UTC [473] FATAL:  permission denied to set parameter "log_min_duration_sample"
+2026-09-26 04:48:29.893 UTC [480] FATAL:  permission denied to set parameter "log_transaction_sample_rate"
+2026-09-26 04:48:30.247 UTC [487] ERROR:  sessao do portal invalida
+2026-09-26 04:48:31.764 UTC [494] ERROR:  sessao do portal invalida
+2026-09-26 04:48:31.764 UTC [494] CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+	SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+	PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+	unnamed portal with parameters: $1 = '10000000-0000-0000-0000-000000000001', $2 = 'MARCADORLOGJFBGiP8npOCFjtr3gxra0KyibUhNVHLA'
+2026-09-26 04:48:31.764 UTC [494] STATEMENT:  SELECT count(*) FROM public.portal_list_workspaces($1::uuid, $2) 
+2026-09-26 04:48:33.900 UTC [529] ERROR:  sessao do portal invalida
+2026-09-26 04:48:49.885 UTC [628] ERROR:  sessao do portal invalida
+2026-09-26 04:48:58.117 UTC [642] ERROR:  sessao do portal invalida
+2026-09-26 04:49:14.040 UTC [1122] ERROR:  FALHA DE ASSERCAO: passo 6: list_workspaces identico ao baseline
+2026-09-26 04:49:16.909 UTC [1206] ERROR:  sessao do portal invalida
+2026-09-26 04:49:16.910 UTC [1206] ERROR:  FALHA DE ASSERCAO: chamada deveria ter sucesso (SQLSTATE NK401): passo 3: list_workspaces sem erro
+2026-09-26 04:49:21.084 UTC [1325] ERROR:  FALHA DE ASSERCAO: caso conta: leitura apos a mudanca confirmada entre resolucao e leitura = 0 linha(s)
+2026-09-26 04:49:23.303 UTC [1388] ERROR:  FALHA DE ASSERCAO: caso vinculo: leitura apos a mudanca confirmada entre resolucao e leitura = 0 linha(s)
+2026-09-26 04:49:25.500 UTC [1445] ERROR:  FALHA DE ASSERCAO: caso cliente: leitura apos a mudanca confirmada entre resolucao e leitura = 0 linha(s)
+2026-09-26 04:49:27.651 UTC [1501] ERROR:  FALHA DE ASSERCAO: caso org: leitura apos a mudanca confirmada entre resolucao e leitura = 0 linha(s)
+2026-09-26 04:49:38.091 UTC [1827] ERROR:  sessao do portal invalida
+2026-09-26 04:49:38.092 UTC [1827] ERROR:  sessao do portal invalida
+2026-09-26 04:49:38.093 UTC [1827] ERROR:  sessao do portal invalida
+2026-09-26 04:49:38.093 UTC [1827] ERROR:  sessao do portal invalida
+2026-09-26 04:49:38.094 UTC [1827] ERROR:  sessao do portal invalida
+2026-09-26 04:49:38.094 UTC [1827] ERROR:  sessao do portal invalida
+2026-09-26 04:49:38.097 UTC [1827] ERROR:  sessao do portal invalida
+2026-09-26 04:49:38.098 UTC [1827] ERROR:  sessao do portal invalida
+2026-09-26 04:49:38.099 UTC [1827] ERROR:  sessao do portal invalida
+2026-09-26 04:49:38.109 UTC [1827] ERROR:  FALHA DE ASSERCAO: esperado NK401, obtido SQLSTATE 00000: sessao inativa ha 16 min (ws)
+2026-09-26 04:49:39.863 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.864 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.864 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.865 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.866 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.866 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.870 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.871 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.871 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.872 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.874 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.875 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.875 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.876 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.877 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.877 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.878 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.879 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.879 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.880 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.884 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.885 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.886 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.887 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.888 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.889 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.890 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:39.890 UTC [1884] ERROR:  sessao do portal invalida
+2026-09-26 04:49:41.024 UTC [1913] ERROR:  sessao do portal invalida
+2026-09-26 04:49:41.024 UTC [1913] CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+	SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+	PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+	unnamed portal with parameters: $1 = '10000000-0000-0000-0000-000000000001', $2 = 'MARCADORLOGkUT4MgqsEwMhQguU9U1PJm0f5sicQk2A'
+2026-09-26 04:49:43.583 UTC [1962] ERROR:  sessao do portal invalida

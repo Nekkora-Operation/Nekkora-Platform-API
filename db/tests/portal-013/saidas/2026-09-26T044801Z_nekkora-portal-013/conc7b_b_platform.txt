@@ -1,0 +1,23 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+BEGIN
+SET
+UPDATE 1
+COMMIT
+MARCADOR_B_INICIO=2026-09-26 04:48:43.390303+00
+MARCADOR_B_COMMIT=2026-09-26 04:48:49.379631+00
+                               afirma                               
+--------------------------------------------------------------------
+ ok: B: a revogacao da sessao esperou o lock da requisicao em curso
+(1 row)
+

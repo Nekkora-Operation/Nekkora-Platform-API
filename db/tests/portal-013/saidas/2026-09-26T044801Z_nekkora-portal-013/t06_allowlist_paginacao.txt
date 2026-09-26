@@ -1,0 +1,154 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+                    afirma                    
+----------------------------------------------
+ ok: papel real nekkora_portal (sem SET ROLE)
+(1 row)
+
+=== (a) conteudo completo devolvido a X (inclusive e13, que tem error_summary, exit_code e payload-marcador na base)
+             workspace_id             | name 
+--------------------------------------+------
+ 10000000-0000-0003-0000-000000000001 | WS1
+(1 row)
+
+             execution_id             |             workspace_id             |            automation_id             | automation_name |       created_at       |          started_at           |          finished_at          |    duration     | status | status_reason 
+--------------------------------------+--------------------------------------+--------------------------------------+-----------------+------------------------+-------------------------------+-------------------------------+-----------------+--------+---------------
+ 10000000-0000-000a-0000-000000000015 | 10000000-0000-0003-0000-000000000001 | 10000000-0000-0008-0000-000000000001 | Automacao 1     | 2026-09-26 04:38:20+00 | 2026-09-26 04:48:20.145974+00 | 2026-09-26 04:48:21.147041+00 | 00:00:01.001067 |      4 |             1
+ 10000000-0000-000a-0000-000000000017 | 10000000-0000-0003-0000-000000000001 | 10000000-0000-0008-0000-000000000001 | Automacao 1     | 2026-09-26 04:28:20+00 |                               |                               |                 |      1 |              
+ 10000000-0000-000a-0000-000000000016 | 10000000-0000-0003-0000-000000000001 | 10000000-0000-0008-0000-000000000001 | Automacao 1     | 2026-09-26 04:28:20+00 |                               |                               |                 |      1 |              
+ 10000000-0000-000a-0000-000000000014 | 10000000-0000-0003-0000-000000000001 | 10000000-0000-0008-0000-000000000001 | Automacao 1     | 2026-09-26 04:28:20+00 |                               |                               |                 |      1 |              
+ 10000000-0000-000a-0000-000000000013 | 10000000-0000-0003-0000-000000000001 | 10000000-0000-0008-0000-000000000001 | Automacao 1     | 2026-09-26 04:18:20+00 | 2026-09-26 04:48:20.142406+00 | 2026-09-26 04:48:21.14365+00  | 00:00:01.001244 |      5 |             3
+ 10000000-0000-000a-0000-000000000012 | 10000000-0000-0003-0000-000000000001 | 10000000-0000-0008-0000-000000000001 | Automacao 1     | 2026-09-26 04:08:20+00 | 2026-09-26 04:48:20.155757+00 |                               |                 |      3 |              
+ 10000000-0000-000a-0000-000000000011 | 10000000-0000-0003-0000-000000000001 | 10000000-0000-0008-0000-000000000001 | Automacao 1     | 2026-09-26 03:58:20+00 |                               |                               |                 |      1 |              
+(7 rows)
+
+             execution_id             |             workspace_id             |            automation_id             | automation_name |       created_at       |          started_at           |         finished_at          |    duration     | status | status_reason 
+--------------------------------------+--------------------------------------+--------------------------------------+-----------------+------------------------+-------------------------------+------------------------------+-----------------+--------+---------------
+ 10000000-0000-000a-0000-000000000013 | 10000000-0000-0003-0000-000000000001 | 10000000-0000-0008-0000-000000000001 | Automacao 1     | 2026-09-26 04:18:20+00 | 2026-09-26 04:48:20.142406+00 | 2026-09-26 04:48:21.14365+00 | 00:00:01.001244 |      5 |             3
+(1 row)
+
+ event_type |          received_at          
+------------+-------------------------------
+          1 | 2026-09-26 04:48:20.438485+00
+          3 | 2026-09-26 04:48:20.438868+00
+(2 rows)
+
+                                    afirma                                    
+------------------------------------------------------------------------------
+ ok: list_executions de X: nenhuma linha contem marcador, e-mail ou argumento
+(1 row)
+
+                                            afirma                                             
+-----------------------------------------------------------------------------------------------
+ ok: eventos de e13 (FAILED): so event_type e received_at, sem payload/exit_code/error_summary
+(1 row)
+
+                               afirma                               
+--------------------------------------------------------------------
+ ok: e13: codigos FAILED/PROCESS_FAILED (a API mapeia para rotulos)
+(1 row)
+
+=== (b) paginacao keyset de X com limite 2: e15 | e17 e16 (empate) | e14 e13 | e12 e11
+                                    p1                                     |                                    p2                                     |                                    p3                                     |                  p4                  | p5_n 
+---------------------------------------------------------------------------+---------------------------------------------------------------------------+---------------------------------------------------------------------------+--------------------------------------+------
+ 10000000-0000-000a-0000-000000000015,10000000-0000-000a-0000-000000000017 | 10000000-0000-000a-0000-000000000016,10000000-0000-000a-0000-000000000014 | 10000000-0000-000a-0000-000000000013,10000000-0000-000a-0000-000000000012 | 10000000-0000-000a-0000-000000000011 | 0
+(1 row)
+
+                                                          afirma                                                           
+---------------------------------------------------------------------------------------------------------------------------
+ ok: paginas de 2: [e15,e17] [e16,e14] [e13,e12] [e11] [] - empate de created_at atravessa a pagina sem perder nem repetir
+(1 row)
+
+                            afirma                             
+---------------------------------------------------------------
+ ok: concatenacao das paginas = listagem completa, mesma ordem
+(1 row)
+
+repeticao da pagina 2 com o mesmo cursor: estavel
+                  afirma                  
+------------------------------------------
+ ok: mesmo cursor, mesma pagina (estavel)
+(1 row)
+
+=== limite de pagina (maximo provisorio 100, 8.7)
+          afirma          
+--------------------------
+ ok: p_limit = 100 aceito
+(1 row)
+
+         afirma         
+------------------------
+ ok: p_limit = 1 aceito
+(1 row)
+
+ERROR:  parametro de consulta do portal invalido
+CONTEXT:  PL/pgSQL function public.portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer) line 17 at RAISE
+          e22023           
+---------------------------
+ ok: 22023 - p_limit = 101
+(1 row)
+
+ERROR:  parametro de consulta do portal invalido
+CONTEXT:  PL/pgSQL function public.portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer) line 17 at RAISE
+         e22023          
+-------------------------
+ ok: 22023 - p_limit = 0
+(1 row)
+
+ERROR:  parametro de consulta do portal invalido
+CONTEXT:  PL/pgSQL function public.portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer) line 17 at RAISE
+            e22023            
+------------------------------
+ ok: 22023 - p_limit negativo
+(1 row)
+
+ERROR:  parametro de consulta do portal invalido
+CONTEXT:  PL/pgSQL function public.portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer) line 17 at RAISE
+          e22023          
+--------------------------
+ ok: 22023 - p_limit NULL
+(1 row)
+
+ERROR:  parametro de consulta do portal invalido
+CONTEXT:  PL/pgSQL function public.portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer) line 17 at RAISE
+                     e22023                      
+-------------------------------------------------
+ ok: 22023 - cursor incompleto (so execution_id)
+(1 row)
+
+=== filtros so restringem o conjunto autorizado
+               afirma               
+------------------------------------
+ ok: p_status = {SUCCEEDED}: so e15
+(1 row)
+
+                    afirma                    
+----------------------------------------------
+ ok: p_status = {PENDING}: e17, e16, e14, e11
+(1 row)
+
+                         afirma                         
+--------------------------------------------------------
+ ok: p_status com todos os codigos: continua so WS1 (7)
+(1 row)
+
+                                  afirma                                   
+---------------------------------------------------------------------------
+ ok: p_from = created_at do grupo empatado (inclusivo): e15, e17, e16, e14
+(1 row)
+
+                               afirma                               
+--------------------------------------------------------------------
+ ok: p_to = created_at do grupo empatado (exclusivo): e13, e12, e11
+(1 row)
+
+                     afirma                      
+-------------------------------------------------
+ ok: p_workspace_id = WS2 com todos os status: 0
+(1 row)
+

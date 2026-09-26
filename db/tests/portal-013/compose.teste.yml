@@ -1,0 +1,11 @@
+# Override usado somente pelo run.sh desta pasta, junto com o docker-compose.yml da raiz do repositorio.
+# - container_name proprio (o da stack principal e fixo em nekkora-postgres);
+# - cluster_name marca o servidor como base isolada de teste do portal (os scripts de preparacao
+#   administrativa recusam rodar sem ele);
+# - o log do servidor vai para stderr (padrao da imagem) e e lido por "docker logs" no teste de logs.
+# Projeto, volume e porta vem do run.sh (-p, prefixo do volume, POSTGRES_PORT). As migrations 001-013
+# sao aplicadas pelo entrypoint a partir de ./db/migrations (mesmo mount da stack principal).
+services:
+  postgres:
+    container_name: ${TESTE_CONTAINER:?defina TESTE_CONTAINER (use o run.sh)}
+    command: ["postgres", "-c", "cluster_name=nekkora-portal-013-isolada"]

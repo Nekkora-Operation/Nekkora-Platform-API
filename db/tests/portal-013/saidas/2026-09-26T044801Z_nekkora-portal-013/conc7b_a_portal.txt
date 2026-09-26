@@ -1,0 +1,30 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+                    afirma                    
+----------------------------------------------
+ ok: papel real nekkora_portal (sem SET ROLE)
+(1 row)
+
+BEGIN
+                               afirma                               
+--------------------------------------------------------------------
+ ok: A: requisicao validada (7 execucoes) e linha da sessao travada
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+                                           afirma                                           
+--------------------------------------------------------------------------------------------
+ ok: A: ainda dentro da mesma transacao, a sessao segue valida (a revogacao esta esperando)
+(1 row)
+
+COMMIT
+MARCADOR_A_COMMIT=2026-09-26 04:48:49.377795+00

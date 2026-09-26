@@ -1,0 +1,22 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+                    afirma                    
+----------------------------------------------
+ ok: papel real nekkora_portal (sem SET ROLE)
+(1 row)
+
+                                     ok                                     
+----------------------------------------------------------------------------
+ ok: caso vinculo: chamada liberada sem erro (a resolucao ja tinha passado)
+(1 row)
+
+                                           afirma                                           
+--------------------------------------------------------------------------------------------
+ ok: caso vinculo: leitura apos a mudanca confirmada entre resolucao e leitura = 0 linha(s)
+(1 row)
+

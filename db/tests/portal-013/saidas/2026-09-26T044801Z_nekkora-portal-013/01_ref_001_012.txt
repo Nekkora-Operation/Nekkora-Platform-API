@@ -1,0 +1,13 @@
+CREATE DATABASE
+== 001_initial.sql
+== 002_identity.sql
+== 003_access_control.sql
+== 004_workers_agents.sql
+== 005_automations_versions.sql
+== 006_executions.sql
+== 007_events_logs.sql
+== 008_parametros_secrets.sql
+== 009_agendamentos.sql
+== 010_recursos_limites_retencao.sql
+== 011_fechamento_expurgo.sql
+== 012_security_rls.sql

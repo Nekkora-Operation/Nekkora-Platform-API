@@ -1,0 +1,15 @@
+== entrypoint (migrations aplicadas / erros)
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/001_initial.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/002_identity.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/003_access_control.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/004_workers_agents.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/005_automations_versions.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/006_executions.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/007_events_logs.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/008_parametros_secrets.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/009_agendamentos.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/010_recursos_limites_retencao.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/011_fechamento_expurgo.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/012_security_rls.sql
+/usr/local/bin/docker-entrypoint.sh: running /docker-entrypoint-initdb.d/013_portal_externo.sql
+PostgreSQL init process complete; ready for start up.

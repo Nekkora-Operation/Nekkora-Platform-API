@@ -1,0 +1,12 @@
+== antes (scratchpad/principal_antes.txt)
+2026-09-26T04:01:36Z
+container=3c612d040167a9e3b6d0adf93b0098c5ca1249dafcec35856dcfe8b49f99875c created=2026-09-25T21:03:29.19494106Z image=sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea restarts=0
+volume=nekkora-platform_nekkora_postgres_data created=2026-09-25T21:03:29Z mount=/var/lib/docker/volumes/nekkora-platform_nekkora_postgres_data/_data
+livre nekkora-portal-013-postgres
+livre vol
+livre net
+porta 55513 livre
+== depois
+2026-09-26T04:50:12Z
+container=3c612d040167a9e3b6d0adf93b0098c5ca1249dafcec35856dcfe8b49f99875c created=2026-09-25T21:03:29.19494106Z image=sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea restarts=0
+volume=nekkora-platform_nekkora_postgres_data created=2026-09-25T21:03:29Z mount=/var/lib/docker/volumes/nekkora-platform_nekkora_postgres_data/_data

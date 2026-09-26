@@ -1,0 +1,274 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+                    afirma                    
+----------------------------------------------
+ ok: papel real nekkora_portal (sem SET ROLE)
+(1 row)
+
+=== formato do token (validado antes do hash)
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 15 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+            nk401             
+------------------------------
+ ok: NK401 - sem token (NULL)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 15 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+          nk401          
+-------------------------
+ ok: NK401 - token curto
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 15 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+           nk401           
+---------------------------
+ ok: NK401 - 44 caracteres
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 15 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+                           nk401                           
+-----------------------------------------------------------
+ ok: NK401 - 43 caracteres com caractere fora do base64url
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 15 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+                                       nk401                                       
+-----------------------------------------------------------------------------------
+ ok: NK401 - 43 caracteres base64url nao canonico para 32 bytes (ultimo caractere)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 15 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+                               nk401                               
+-------------------------------------------------------------------
+ ok: NK401 - hash SHA-256 de um token valido usado como credencial
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+                     nk401                      
+------------------------------------------------
+ ok: NK401 - formato valido, sessao inexistente
+(1 row)
+
+=== sessao revogada, expirada (12 h), inativa (> 15 min) - nas 4 funcoes
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+              nk401               
+----------------------------------
+ ok: NK401 - sessao revogada (ws)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+                                     nk401                                     
+-------------------------------------------------------------------------------
+ ok: NK401 - sessao com prazo absoluto de 12 h vencido, atividade recente (ws)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+                   nk401                   
+-------------------------------------------
+ ok: NK401 - sessao inativa ha 16 min (ws)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer) line 12 at SQL statement
+              nk401               
+----------------------------------
+ ok: NK401 - sessao revogada (ex)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer) line 12 at SQL statement
+                                     nk401                                     
+-------------------------------------------------------------------------------
+ ok: NK401 - sessao com prazo absoluto de 12 h vencido, atividade recente (ex)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer) line 12 at SQL statement
+                   nk401                   
+-------------------------------------------
+ ok: NK401 - sessao inativa ha 16 min (ex)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_get_execution(uuid,text,uuid) line 10 at SQL statement
+               nk401               
+-----------------------------------
+ ok: NK401 - sessao revogada (get)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_get_execution(uuid,text,uuid) line 10 at SQL statement
+                                     nk401                                      
+--------------------------------------------------------------------------------
+ ok: NK401 - sessao com prazo absoluto de 12 h vencido, atividade recente (get)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_get_execution(uuid,text,uuid) line 10 at SQL statement
+                   nk401                    
+--------------------------------------------
+ ok: NK401 - sessao inativa ha 16 min (get)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_execution_events(uuid,text,uuid) line 10 at SQL statement
+              nk401               
+----------------------------------
+ ok: NK401 - sessao revogada (ev)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_execution_events(uuid,text,uuid) line 10 at SQL statement
+                                     nk401                                     
+-------------------------------------------------------------------------------
+ ok: NK401 - sessao com prazo absoluto de 12 h vencido, atividade recente (ev)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_execution_events(uuid,text,uuid) line 10 at SQL statement
+                   nk401                   
+-------------------------------------------
+ ok: NK401 - sessao inativa ha 16 min (ev)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+                        nk401                        
+-----------------------------------------------------
+ ok: NK401 - sessao inativa ha 15 min e 5 s (limite)
+(1 row)
+
+=== conta, vinculo, cliente, organizacao
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 49 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+                    nk401                     
+----------------------------------------------
+ ok: NK401 - conta interna (account_type = 1)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 49 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+                     nk401                     
+-----------------------------------------------
+ ok: NK401 - conta suspensa (users.status = 3)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 49 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+               nk401               
+-----------------------------------
+ ok: NK401 - e-mail nao verificado
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 49 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+                            nk401                             
+--------------------------------------------------------------
+ ok: NK401 - vinculo suspenso (client_memberships.status = 3)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 49 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+                       nk401                       
+---------------------------------------------------
+ ok: NK401 - cliente suspenso (clients.status = 2)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 49 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_workspaces(uuid,text) line 10 at SQL statement
+                 nk401                 
+---------------------------------------
+ ok: NK401 - organizacao suspensa (O3)
+(1 row)
+
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 49 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer) line 12 at SQL statement
+                         nk401                          
+--------------------------------------------------------
+ ok: NK401 - organizacao suspensa (O3), list_executions
+(1 row)
+
+=== autenticacao antes da validacao de parametros: sessao invalida + p_limit invalido -> NK401 (nao 22023)
+ERROR:  sessao do portal invalida
+CONTEXT:  PL/pgSQL function public.portal_resolve_session(uuid,text) line 32 at RAISE
+SQL statement "SELECT r.o_user_id, r.o_client_membership_id, r.o_t                  FROM public.portal_resolve_session(p_organization_id, p_session_token) r"
+PL/pgSQL function public.portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer) line 12 at SQL statement
+                    nk401                    
+---------------------------------------------
+ ok: NK401 - sessao revogada com p_limit = 0
+(1 row)
+
+=== controle: limite interno da janela de inatividade (14 min) continua valido
+                         afirma                          
+---------------------------------------------------------
+ ok: sessao com ultima atividade ha 14 min: valida (WS1)
+(1 row)
+

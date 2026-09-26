@@ -1,0 +1,211 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+=== papeis novos
+       rolname        | rolsuper | rolcanlogin | rolinherit | rolcreaterole | rolcreatedb | rolreplication | rolbypassrls | rolconnlimit 
+----------------------+----------+-------------+------------+---------------+-------------+----------------+--------------+--------------
+ nekkora_portal       | f        | t           | t          | f             | f           | f              | f            |           -1
+ nekkora_portal_owner | f        | f           | t          | f             | f           | f              | f            |           -1
+(2 rows)
+
+                        afirma                        
+------------------------------------------------------
+ ok: nekkora_portal: LOGIN, sem atributo privilegiado
+(1 row)
+
+                            afirma                            
+--------------------------------------------------------------
+ ok: nekkora_portal_owner: NOLOGIN, sem atributo privilegiado
+(1 row)
+
+                                     afirma                                     
+--------------------------------------------------------------------------------
+ ok: nenhuma membership envolvendo qualquer papel nekkora*, em qualquer sentido
+(1 row)
+
+=== configuracoes de papel (pg_db_role_setting) - exatamente as sete do desenho + reforco
+     papel      | setdatabase |                                                                                           setconfig                                                                                            
+----------------+-------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ nekkora_portal |           0 | {log_error_verbosity=terse,log_min_error_statement=panic,log_parameter_max_length=0,log_statement=none,log_min_duration_statement=-1,log_min_duration_sample=-1,log_transaction_sample_rate=0}
+(1 row)
+
+                                       afirma                                        
+-------------------------------------------------------------------------------------
+ ok: nekkora_portal: exatamente as 7 configuracoes de log, globais (setdatabase = 0)
+(1 row)
+
+                                      afirma                                      
+----------------------------------------------------------------------------------
+ ok: nenhuma outra configuracao (por banco ou do owner) que sobreponha as globais
+(1 row)
+
+=== schema e banco
+        papel         | usage | create_public | create_banco | temp 
+----------------------+-------+---------------+--------------+------
+ nekkora_portal       | t     | f             | f            | t
+ nekkora_portal_owner | t     | f             | f            | t
+(2 rows)
+
+                                          afirma                                          
+------------------------------------------------------------------------------------------
+ ok: USAGE em public verdadeiro e CREATE (schema e banco) falso para os dois papeis novos
+(1 row)
+
+                                             afirma                                              
+-------------------------------------------------------------------------------------------------
+ ok: USAGE EXPLICITO (nspacl) aos dois papeis, sem GRANT OPTION e sem outro privilegio no schema
+(1 row)
+
+=== funcoes do portal
+                                                                  funcao                                                                   |        owner         | prosecdef | provolatile |              proconfig              |                                       proacl                                        |                                                                                                                             resultado                                                                                                                             
+-------------------------------------------------------------------------------------------------------------------------------------------+----------------------+-----------+-------------+-------------------------------------+-------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ portal_authorized_workspaces(uuid,uuid,uuid,timestamp with time zone)                                                                     | nekkora_portal_owner | f         | s           | {"search_path=pg_catalog, pg_temp"} | {nekkora_portal_owner=X/nekkora_portal_owner}                                       | SETOF uuid
+ portal_get_execution(uuid,text,uuid)                                                                                                      | nekkora_portal_owner | t         | v           | {"search_path=pg_catalog, pg_temp"} | {nekkora_portal_owner=X/nekkora_portal_owner,nekkora_portal=X/nekkora_portal_owner} | TABLE(execution_id uuid, workspace_id uuid, automation_id uuid, automation_name text, created_at timestamp with time zone, started_at timestamp with time zone, finished_at timestamp with time zone, duration interval, status smallint, status_reason smallint)
+ portal_list_execution_events(uuid,text,uuid)                                                                                              | nekkora_portal_owner | t         | v           | {"search_path=pg_catalog, pg_temp"} | {nekkora_portal_owner=X/nekkora_portal_owner,nekkora_portal=X/nekkora_portal_owner} | TABLE(event_type smallint, received_at timestamp with time zone)
+ portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer) | nekkora_portal_owner | t         | v           | {"search_path=pg_catalog, pg_temp"} | {nekkora_portal_owner=X/nekkora_portal_owner,nekkora_portal=X/nekkora_portal_owner} | TABLE(execution_id uuid, workspace_id uuid, automation_id uuid, automation_name text, created_at timestamp with time zone, started_at timestamp with time zone, finished_at timestamp with time zone, duration interval, status smallint, status_reason smallint)
+ portal_list_workspaces(uuid,text)                                                                                                         | nekkora_portal_owner | t         | v           | {"search_path=pg_catalog, pg_temp"} | {nekkora_portal_owner=X/nekkora_portal_owner,nekkora_portal=X/nekkora_portal_owner} | TABLE(workspace_id uuid, name text)
+ portal_resolve_session(uuid,text)                                                                                                         | nekkora_portal_owner | f         | v           | {"search_path=pg_catalog, pg_temp"} | {nekkora_portal_owner=X/nekkora_portal_owner}                                       | record
+(6 rows)
+
+CREATE TABLE
+INSERT 0 6
+SELECT 6
+                             afirma                              
+-----------------------------------------------------------------
+ ok: exatamente as 6 funcoes portal_* (e nenhuma outra do owner)
+(1 row)
+
+                                                                             afirma                                                                             
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+ ok: owner nekkora_portal_owner, SECURITY DEFINER so nas 4 publicas, volatilidade, search_path=pg_catalog, pg_temp e colunas de retorno (allowlist 11.5) exatos
+(1 row)
+
+                                                       afirma                                                       
+--------------------------------------------------------------------------------------------------------------------
+ ok: ACL das funcoes: EXECUTE so do owner e, nas 4 publicas, do nekkora_portal (sem GRANT OPTION); nada para PUBLIC
+(1 row)
+
+                              afirma                              
+------------------------------------------------------------------
+ ok: nenhuma funcao do portal usa OFFSET (codigo sem comentarios)
+(1 row)
+
+                               afirma                               
+--------------------------------------------------------------------
+ ok: nenhuma funcao do portal le ou escreve nekkora.organization_id
+(1 row)
+
+                                    afirma                                    
+------------------------------------------------------------------------------
+ ok: limite de pagina provisorio = 100 (decisao do responsavel, pendente 8.7)
+(1 row)
+
+=== funcoes SECURITY DEFINER executaveis pelo portal e expurgo
+                                                                  funcao                                                                   |        owner         
+-------------------------------------------------------------------------------------------------------------------------------------------+----------------------
+ portal_list_workspaces(uuid,text)                                                                                                         | nekkora_portal_owner
+ portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer) | nekkora_portal_owner
+ portal_get_execution(uuid,text,uuid)                                                                                                      | nekkora_portal_owner
+ portal_list_execution_events(uuid,text,uuid)                                                                                              | nekkora_portal_owner
+(4 rows)
+
+                                 afirma                                 
+------------------------------------------------------------------------
+ ok: o portal executa exatamente as 4 funcoes SECURITY DEFINER publicas
+(1 row)
+
+                                   afirma                                    
+-----------------------------------------------------------------------------
+ ok: sem EXECUTE do expurgo (purge_expired_records) para os papeis do portal
+(1 row)
+
+funcoes SECURITY INVOKER de public executaveis pelo portal via PUBLIC (001-011; rodam com os privilegios do chamador):
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          invoker_via_public                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ allocate_automation_version_number(), allocate_workspace_parameter_value_number(), armor(bytea), armor(bytea,text[],text[]), assert_automation_version_is_draft(uuid), assert_single_category_per_transaction(uuid,integer), audit_automation_version_binding_delete(), audit_automation_version_parameter_binding(), audit_automation_version_secret_binding(), audit_workspace_parameter_insert(), audit_workspace_parameter_update(), audit_workspace_parameter_value_insert(), audit_workspace_secret_insert(), audit_workspace_secret_update(), close_pending_occurrences_on_suspend(), crypt(text,text), dearmor(text), decrypt(bytea,bytea,text), decrypt_iv(bytea,bytea,bytea,text), digest(bytea,text), digest(text,text), encrypt(bytea,bytea,text), encrypt_iv(bytea,bytea,bytea,text), enforce_automation_schedule_transition(), enforce_automation_version_draft_creation(), enforce_automation_version_parameter_binding(), enforce_automation_version_secret_binding(), enforce_binding_mutation_in_draft(), enforce_execution_creation_prerequisites(), enforce_execution_event_agent_origin(), enforce_execution_reservation_prerequisites(), enforce_log_historical_origin(), enforce_org_admin_presence(), enforce_org_role_assignment_bootstrap(), enforce_publication_bindings_consistency(), enforce_redaction_or_reject(), enforce_resource_limit_revision_creation(), enforce_retention_policy_revision_creation(), enforce_schedule_revision_creation(), enforce_usage_daily_born_open(), enforce_worker_registration_capacity(), finalize_schedule_occurrence_on_execution_insert(), gen_random_bytes(integer), gen_salt(text), gen_salt(text,integer), get_effective_resource_limit(uuid,integer), get_retention_policy_at(uuid,integer,timestamp with time zone), hmac(bytea,bytea,text), hmac(text,text,text), is_command_bindings_consistent(jsonb,uuid), is_valid_command_contract(jsonb), is_valid_cron_expression(text), is_valid_event_payload(smallint,jsonb), is_valid_log_payload(smallint,jsonb), is_valid_relative_entrypoint(text), materialize_schedule_occurrence(), pgp_armor_headers(text), pgp_key_id(bytea), pgp_pub_decrypt(bytea,bytea), pgp_pub_decrypt(bytea,bytea,text), pgp_pub_decrypt(bytea,bytea,text,text), pgp_pub_decrypt_bytea(bytea,bytea), pgp_pub_decrypt_bytea(bytea,bytea,text), pgp_pub_decrypt_bytea(bytea,bytea,text,text), pgp_pub_encrypt(text,bytea), pgp_pub_encrypt(text,bytea,text), pgp_pub_encrypt_bytea(bytea,bytea), pgp_pub_encrypt_bytea(bytea,bytea,text), pgp_sym_decrypt(bytea,text), pgp_sym_decrypt(bytea,text,text), pgp_sym_decrypt_bytea(bytea,text), pgp_sym_decrypt_bytea(bytea,text,text), pgp_sym_encrypt(text,text), pgp_sym_encrypt(text,text,text), pgp_sym_encrypt_bytea(bytea,text), pgp_sym_encrypt_bytea(bytea,text,text), prevent_agent_credential_origin_change(), prevent_agent_origin_change(), prevent_automation_origin_change(), prevent_automation_version_change(), prevent_client_workspace_grant_change(), prevent_delete(), prevent_execution_mutation(), prevent_identity_reassignment(), prevent_occurrence_mutation(), prevent_org_role_assignment_change(), prevent_truncate(), prevent_update(), prevent_usage_origin_change(), prevent_worker_agent_assignment_origin_change(), prevent_worker_agent_end_during_execution(), prevent_worker_origin_change(), prevent_worker_workspace_assignment_origin_change(), prevent_workspace_parameter_change(), prevent_workspace_role_assignment_change(), prevent_workspace_secret_change(), public.gen_random_uuid(), set_updated_at()
+(1 row)
+
+=== privilegios de tabela/coluna/sequencia do portal (deve ser vazio)
+ relname | relkind 
+---------+---------
+(0 rows)
+
+                                                         afirma                                                          
+-------------------------------------------------------------------------------------------------------------------------
+ ok: nekkora_portal sem nenhum privilegio de tabela, view, coluna ou sequencia em public (efetivo, inclusive via PUBLIC)
+(1 row)
+
+=== privilegios por coluna do owner: diferenca simetrica com o desenho (4.1)
+CREATE TABLE
+INSERT 0 59
+SELECT 59
+ lado | tabela | coluna | priv 
+------+--------+--------+------
+(0 rows)
+
+                                              afirma                                              
+--------------------------------------------------------------------------------------------------
+ ok: owner: privilegios de coluna identicos ao desenho (58 colunas SELECT + UPDATE(last_seen_at))
+(1 row)
+
+                                                 afirma                                                 
+--------------------------------------------------------------------------------------------------------
+ ok: owner sem privilegio de tabela inteira (so por coluna), sem INSERT/DELETE/TRUNCATE e sem sequencia
+(1 row)
+
+                                                    afirma                                                    
+--------------------------------------------------------------------------------------------------------------
+ ok: owner sem payload, error_summary, exit_code, command_snapshot, e-mail, nome, description, logs e secrets
+(1 row)
+
+=== RLS e politicas
+        tablename        |           policyname           |  cmd   | permissive |         roles          |                                                  qual                                                   |                                               with_check                                                
+-------------------------+--------------------------------+--------+------------+------------------------+---------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------
+ automations             | portal_function_context        | SELECT | PERMISSIVE | {nekkora_portal_owner} | (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) | 
+ client_memberships      | portal_function_context        | SELECT | PERMISSIVE | {nekkora_portal_owner} | (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) | 
+ client_workspace_grants | portal_function_context        | SELECT | PERMISSIVE | {nekkora_portal_owner} | (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) | 
+ clients                 | portal_function_context        | SELECT | PERMISSIVE | {nekkora_portal_owner} | (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) | 
+ execution_events        | portal_function_context        | SELECT | PERMISSIVE | {nekkora_portal_owner} | (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) | 
+ executions              | portal_function_context        | SELECT | PERMISSIVE | {nekkora_portal_owner} | (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) | 
+ organizations           | portal_function_context        | SELECT | PERMISSIVE | {nekkora_portal_owner} | (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) | 
+ user_sessions           | portal_function_context        | SELECT | PERMISSIVE | {nekkora_portal_owner} | (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) | 
+ user_sessions           | portal_function_context_update | UPDATE | PERMISSIVE | {nekkora_portal_owner} | (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) | (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+ users                   | portal_function_context        | SELECT | PERMISSIVE | {nekkora_portal_owner} | (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) | 
+ workspaces              | portal_function_context        | SELECT | PERMISSIVE | {nekkora_portal_owner} | (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) | 
+(11 rows)
+
+                                                                 afirma                                                                 
+----------------------------------------------------------------------------------------------------------------------------------------
+ ok: owner: 10 politicas FOR SELECT portal_function_context + 1 FOR UPDATE em user_sessions (USING = WITH CHECK), so fn_organization_id
+(1 row)
+
+                       afirma                       
+----------------------------------------------------
+ ok: nenhuma politica para nekkora_portal ou PUBLIC
+(1 row)
+
+                             afirma                             
+----------------------------------------------------------------
+ ok: 42 tabelas com RLS ENABLE + FORCE (inalterado desde a 012)
+(1 row)
+
+                   afirma                    
+---------------------------------------------
+ ok: 81 politicas da 012 intactas (contagem)
+(1 row)
+
+=== proprietario das tabelas e visoes (o owner do portal nao e dono de nada alem das 6 funcoes)
+                                      afirma                                       
+-----------------------------------------------------------------------------------
+ ok: papeis do portal nao possuem relacao, tipo, schema; o LOGIN nao possui funcao
+(1 row)
+
+                          afirma                           
+-----------------------------------------------------------
+ ok: nenhuma view em public (o portal nao usa views na v1)
+(1 row)
+

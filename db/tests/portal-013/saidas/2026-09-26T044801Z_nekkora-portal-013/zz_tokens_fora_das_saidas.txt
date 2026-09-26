@@ -1,0 +1,1 @@
+nenhum dos 31 tokens de sessao aparece nas saidas nem no log do servidor

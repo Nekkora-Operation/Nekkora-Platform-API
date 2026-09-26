@@ -1,0 +1,22 @@
+7a sessao A (portal): exit=0
+7a: leitura1=2026-09-26 04:48:34.83354+00 < commit_revogacao=2026-09-26 04:48:36.857053+00 < leitura2=2026-09-26 04:48:40.840388+00 (mesma transacao do portal)
+7b sessao A (portal): exit=0
+7b sessao B (platform): exit=0
+7b: commit_portal=2026-09-26 04:48:49.377795+00 <= commit_revogacao=2026-09-26 04:48:49.379631+00
+7b-rev sessao A (platform): exit=0
+7b-rev sessao B (portal): exit=0
+conc7c_controle: coordenador exit=0, portal exit=0, platform exit=0
+conc7c_conta: coordenador exit=0, portal exit=0, platform exit=0
+conc7c_vinculo: coordenador exit=0, portal exit=0, platform exit=0
+conc7c_cliente: coordenador exit=0, portal exit=0, platform exit=0
+conc7c_org: coordenador exit=0, portal exit=0, platform exit=0
+conc7c_concessao: coordenador exit=0, portal exit=0, platform exit=0
+conc7c_workspace: coordenador exit=0, portal exit=0, platform exit=0
+m2_7c_conta: coordenador exit=0, portal exit=3, platform exit=0
+m2_7c_vinculo: coordenador exit=0, portal exit=3, platform exit=0
+m2_7c_cliente: coordenador exit=0, portal exit=3, platform exit=0
+m2_7c_org: coordenador exit=0, portal exit=3, platform exit=0
+m2_7c_funcao_final_conta: coordenador exit=0, portal exit=0, platform exit=0
+m2_7c_funcao_final_vinculo: coordenador exit=0, portal exit=0, platform exit=0
+m2_7c_funcao_final_cliente: coordenador exit=0, portal exit=0, platform exit=0
+m2_7c_funcao_final_org: coordenador exit=0, portal exit=0, platform exit=0

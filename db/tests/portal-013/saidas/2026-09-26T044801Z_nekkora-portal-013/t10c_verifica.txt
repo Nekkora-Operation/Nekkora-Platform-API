@@ -1,0 +1,27 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+                               afirma                                
+---------------------------------------------------------------------
+ ok: concessao de Ra continua revogada depois da reativacao da conta
+(1 row)
+
+                  afirma                   
+-------------------------------------------
+ ok: sessao antiga de Ra continua revogada
+(1 row)
+
+                                                 afirma                                                  
+---------------------------------------------------------------------------------------------------------
+ ok: sessao nova de Ra: last_seen_at avancou (sessao valida sem recurso autorizado conta como atividade)
+(1 row)
+
+                                       afirma                                        
+-------------------------------------------------------------------------------------
+ ok: last_access_at nulo em todas as concessoes (o portal nunca o escreve - opcao A)
+(1 row)
+

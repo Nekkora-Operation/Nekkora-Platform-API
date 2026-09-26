@@ -1,0 +1,22 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+BEGIN
+SET
+UPDATE 1
+ pg_sleep 
+----------
+ 
+(1 row)
+
+COMMIT
+MARCADOR_REVOGACAO_COMMIT=2026-09-26 04:48:58.115799+00

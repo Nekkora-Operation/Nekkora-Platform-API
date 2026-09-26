@@ -1,0 +1,7 @@
+== mutacao aplicada de proposito (teste do runner): m1b_fn_org_do_chamador.sql
+DO
+      resultado       | presente 
+----------------------+----------
+ mutacao m1b aplicada | t
+(1 row)
+

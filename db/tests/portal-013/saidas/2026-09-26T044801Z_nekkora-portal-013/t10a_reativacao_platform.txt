@@ -1,0 +1,38 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+BEGIN
+SET
+UPDATE 1
+UPDATE 1
+COMMIT
+BEGIN
+SET
+UPDATE 1
+COMMIT
+BEGIN
+SET
+UPDATE 1
+INSERT 0 1
+COMMIT
+SET
+NOTICE:  rejeitado como esperado [P0001] concessao revogada e imutavel (grant_id=10000000-0000-00c3-0000-000000000116)
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+                    afirma                     
+-----------------------------------------------
+ ok: Ra reativada; concessao continua revogada
+(1 row)
+

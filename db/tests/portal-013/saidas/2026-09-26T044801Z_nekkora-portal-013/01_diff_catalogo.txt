@@ -1,0 +1,104 @@
+7a8,33
+> colacl|automations|automation_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|automations|name|nekkora_portal_owner|SELECT|grant=f
+> colacl|automations|organization_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|automations|workspace_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_memberships|client_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_memberships|client_membership_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_memberships|organization_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_memberships|status|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_memberships|user_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|approved_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|client_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|client_membership_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|expires_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|grant_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|next_review_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|organization_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|revoked_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|starts_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|status|nekkora_portal_owner|SELECT|grant=f
+> colacl|client_workspace_grants|workspace_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|clients|client_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|clients|organization_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|clients|status|nekkora_portal_owner|SELECT|grant=f
+> colacl|execution_events|event_type|nekkora_portal_owner|SELECT|grant=f
+> colacl|execution_events|execution_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|execution_events|organization_id|nekkora_portal_owner|SELECT|grant=f
+11a38,49
+> colacl|execution_events|received_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|execution_events|sequence|nekkora_portal_owner|SELECT|grant=f
+> colacl|execution_events|workspace_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|executions|automation_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|executions|created_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|executions|execution_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|executions|finished_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|executions|organization_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|executions|started_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|executions|status_reason|nekkora_portal_owner|SELECT|grant=f
+> colacl|executions|status|nekkora_portal_owner|SELECT|grant=f
+> colacl|executions|workspace_id|nekkora_portal_owner|SELECT|grant=f
+15a54,74
+> colacl|organizations|organization_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|organizations|status|nekkora_portal_owner|SELECT|grant=f
+> colacl|user_sessions|created_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|user_sessions|expires_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|user_sessions|last_seen_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|user_sessions|last_seen_at|nekkora_portal_owner|UPDATE|grant=f
+> colacl|user_sessions|organization_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|user_sessions|revoked_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|user_sessions|session_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|user_sessions|session_token_hash|nekkora_portal_owner|SELECT|grant=f
+> colacl|user_sessions|user_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|users|account_type|nekkora_portal_owner|SELECT|grant=f
+> colacl|users|email_verified_at|nekkora_portal_owner|SELECT|grant=f
+> colacl|users|organization_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|users|status|nekkora_portal_owner|SELECT|grant=f
+> colacl|users|user_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|workspaces|client_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|workspaces|name|nekkora_portal_owner|SELECT|grant=f
+> colacl|workspaces|organization_id|nekkora_portal_owner|SELECT|grant=f
+> colacl|workspaces|status|nekkora_portal_owner|SELECT|grant=f
+> colacl|workspaces|workspace_id|nekkora_portal_owner|SELECT|grant=f
+1033a1093,1102
+> fnacl|portal_authorized_workspaces(uuid,uuid,uuid,timestamp with time zone)|nekkora_portal_owner|EXECUTE|grant=f
+> fnacl|portal_get_execution(uuid,text,uuid)|nekkora_portal_owner|EXECUTE|grant=f
+> fnacl|portal_get_execution(uuid,text,uuid)|nekkora_portal|EXECUTE|grant=f
+> fnacl|portal_list_execution_events(uuid,text,uuid)|nekkora_portal_owner|EXECUTE|grant=f
+> fnacl|portal_list_execution_events(uuid,text,uuid)|nekkora_portal|EXECUTE|grant=f
+> fnacl|portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer)|nekkora_portal_owner|EXECUTE|grant=f
+> fnacl|portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer)|nekkora_portal|EXECUTE|grant=f
+> fnacl|portal_list_workspaces(uuid,text)|nekkora_portal_owner|EXECUTE|grant=f
+> fnacl|portal_list_workspaces(uuid,text)|nekkora_portal|EXECUTE|grant=f
+> fnacl|portal_resolve_session(uuid,text)|nekkora_portal_owner|EXECUTE|grant=f
+1172a1242,1247
+> fn|portal_authorized_workspaces(uuid,uuid,uuid,timestamp with time zone)|owner=nekkora_portal_owner|secdef=f|vol=s|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=SETOF uuid|md5=ea611c2b70d0732629ee843f03d1317c
+> fn|portal_get_execution(uuid,text,uuid)|owner=nekkora_portal_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(execution_id uuid, workspace_id uuid, automation_id uuid, automation_name text, created_at timestamp with time zone, started_at timestamp with time zone, finished_at timestamp with time zone, duration interval, status smallint, status_reason smallint)|md5=8b8ccad78e9c7728f819dc48ddf8cef1
+> fn|portal_list_execution_events(uuid,text,uuid)|owner=nekkora_portal_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(event_type smallint, received_at timestamp with time zone)|md5=28e01cae33a8a988f454f9bfbb8ab926
+> fn|portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer)|owner=nekkora_portal_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(execution_id uuid, workspace_id uuid, automation_id uuid, automation_name text, created_at timestamp with time zone, started_at timestamp with time zone, finished_at timestamp with time zone, duration interval, status smallint, status_reason smallint)|md5=90f622312c83a9904273be68dac2063b
+> fn|portal_list_workspaces(uuid,text)|owner=nekkora_portal_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(workspace_id uuid, name text)|md5=1e63acfe8934620580ae5767fb6fda4f
+> fn|portal_resolve_session(uuid,text)|owner=nekkora_portal_owner|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=record|md5=9c5d2f42c823a6f4370fedb6b0ddfac0
+1337a1413,1414
+> nspacl|public|nekkora_portal_owner|USAGE|grant=f
+> nspacl|public|nekkora_portal|USAGE|grant=f
+1358a1436
+> pol|automations|portal_function_context|SELECT|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=
+1360a1439
+> pol|client_memberships|portal_function_context|SELECT|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=
+1366a1446
+> pol|client_workspace_grants|portal_function_context|SELECT|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=
+1368a1449
+> pol|clients|portal_function_context|SELECT|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=
+1375a1457
+> pol|execution_events|portal_function_context|SELECT|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=
+1377a1460
+> pol|executions|portal_function_context|SELECT|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=
+1399a1483
+> pol|organizations|portal_function_context|SELECT|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=
+1411a1496,1497
+> pol|user_sessions|portal_function_context_update|UPDATE|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+> pol|user_sessions|portal_function_context|SELECT|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=
+1413a1500
+> pol|users|portal_function_context|SELECT|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=
+1431a1519
+> pol|workspaces|portal_function_context|SELECT|PERMISSIVE|{nekkora_portal_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=

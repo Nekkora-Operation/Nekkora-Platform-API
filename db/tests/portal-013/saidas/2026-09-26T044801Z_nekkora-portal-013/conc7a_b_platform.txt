@@ -1,0 +1,22 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+BEGIN
+SET
+UPDATE 1
+COMMIT
+MARCADOR_B_COMMIT=2026-09-26 04:48:36.857053+00
+                                          afirma                                           
+-------------------------------------------------------------------------------------------
+ ok: B: a revogacao da concessao nao esperou a transacao do portal (sem lock de concessao)
+(1 row)
+

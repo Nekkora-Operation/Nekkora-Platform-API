@@ -1,7 +1,7 @@
 # Mini relatório — preparação da autenticação e autorização da API Nekkora
 
 **Data:** 2026-09-25  
-**Status:** regras (Seções 2–7) e fluxo de dois contextos **aprovados** em 2026-09-25; decisões da Seção 8 registradas no §11 (parte fechada, parte pendente). O desenho da 8.2 foi aprovado em 2026-09-25 e aguarda a execução dos seus testes. Nenhuma API foi implementada nesta etapa.  
+**Status:** regras (Seções 2–7) e fluxo de dois contextos **aprovados** em 2026-09-25; decisões da Seção 8 registradas no §11 (parte fechada, parte pendente). O desenho da 8.2 foi aprovado em 2026-09-25; em 2026-09-26 a 8.2 foi **fechada para a camada de banco** (`2026-09-26-validacao-013-portal-externo.md`), sem aprovação da migration para merge/produção. Nenhuma API foi implementada nesta etapa.  
 **Stack definida:** Java com Spring Boot, conforme a direção aprovada para a Platform API (`Radiant-Relatorio-Decisoes-Aprovadas-2026-09-24.md`, §2).  
 **Base:** migrations 001–012 e decisões aprovadas sobre identidade, RBAC, concessões externas e isolamento por organização.
 
@@ -148,12 +148,12 @@ Após aprovar as regras e fechar as decisões da Seção 8, a implementação de
 6. Auditoria/observabilidade de decisões negadas conforme a escolha da Seção 8.
 7. Testes automatizados e de integração com PostgreSQL real, RLS habilitada e os papéis aprovados — incluindo cross-tenant, revogação, timing de login e pool reuse.
 
-O desenho de contexto de busca e autorização já está aprovado (§11.1). A parte do portal externo (item 5) segue o desenho aprovado da 8.2 (`2026-09-25-desenho-portal-externo-8-2.md`) e não começa antes de a suíte desse desenho passar, com o teste negativo de troca de contexto.
+O desenho de contexto de busca e autorização já está aprovado (§11.1). A parte do portal externo (item 5) segue o desenho aprovado da 8.2 (`2026-09-25-desenho-portal-externo-8-2.md`) e não começa antes de a suíte desse desenho passar, com o teste negativo de troca de contexto. **Situação 2026-09-26:** a suíte passou (`2026-09-26-validacao-013-portal-externo.md`); a implementação Spring do portal começa depois da revisão da migration e da suíte.
 
 ## 10. Ordem de trabalho
 
 1. ~~Aprovar as regras das Seções 2–7 e o fluxo de dois contextos da Seção 3~~: **concluído em 2026-09-25** (§11.1).
-2. Fechar as decisões ainda pendentes da Seção 8 (§11.2): limites e MFA (8.6); rotas, códigos, tamanho de página e cookie (8.7); parâmetros do Argon2id (8.10). Executar os testes do desenho da 8.2, com o teste negativo de troca de contexto. Já decididos: seletor de organização (8.1), sessão inclusive portal (8.3), catálogo externo v1 (8.9, §11.5) e desenho do portal (8.2, aprovado; fecha com os testes).
+2. Fechar as decisões ainda pendentes da Seção 8 (§11.2): limites e MFA (8.6); rotas, códigos, tamanho de página e cookie (8.7); parâmetros do Argon2id (8.10). Os testes do desenho da 8.2 foram executados e passaram (2026-09-26); falta revisar a migration e a suíte. Já decididos: seletor de organização (8.1), sessão inclusive portal (8.3), catálogo externo v1 (8.9, §11.5) e portal (8.2, fechada para a camada de banco em 2026-09-26).
 3. Montar a matriz endpoint/operação × papel ou concessão × escopo de recurso e conteúdo publicado.
 4. Implementar autenticação/autorização na Platform API em Java com Spring Boot.
 5. Validar a integração com RLS usando papéis reais e provar que revogações são respeitadas nas requisições subsequentes.
@@ -180,7 +180,7 @@ Nenhuma migration ou configuração de produção é alterada por este relatóri
 | Item | Situação | Decisão |
 |---|---|---|
 | 8.1 Seletor da organização | **Fechada (v1)** | `organization_id` como identificador público na rota. UUID não é segredo. Slug ou subdomínio fica para depois, porque exigiria resolver o identificador sem busca global sob RLS. Links de convite, verificação e redefinição também carregam esse contexto |
-| 8.2 Papel do portal externo | **Desenho aprovado (alternativa 2); fecha após os testes** | Identidade **e processo** próprios para o portal. O processo do portal **não** tem as credenciais do `nekkora_platform`. Desenho em `2026-09-25-desenho-portal-externo-8-2.md` (D1–D7 aprovadas em 2026-09-25). Resumo: o papel `nekkora_portal` só tem `USAGE` em `public` e `EXECUTE` em quatro funções `SECURITY DEFINER` (owner `nekkora_portal_owner`, `NOLOGIN`, com `SELECT` por coluna), sem privilégio de tabela ou view; a função recebe o **token bruto** da sessão, calcula o hash no banco e deriva conta, vínculo e concessões, sem aceitar IDs de escopo do chamador; o comando de leitura reconfere conta, vínculo, organização, cliente, concessão e workspace no mesmo snapshot; nenhum GUC funciona como barreira, porque um contexto em parâmetro customizado pode ser redefinido pelo próprio papel. **Registro de acesso:** `last_access_at` **não** é atualizado na v1 (opção A). **Critério para fechar:** a suíte do §7 do desenho, com o **teste negativo de troca de contexto**, passando com os papéis reais. A migration definitiva espera esse resultado |
+| 8.2 Papel do portal externo | **Fechada para a camada de banco (2026-09-26)**; migration não aprovada para merge/produção; portal incompleto | Identidade **e processo** próprios para o portal. O processo do portal **não** tem as credenciais do `nekkora_platform`. Desenho em `2026-09-25-desenho-portal-externo-8-2.md` (D1–D7 aprovadas em 2026-09-25). Resumo: o papel `nekkora_portal` recebe só `USAGE` em `public` e `EXECUTE` em quatro funções `SECURITY DEFINER` (owner `nekkora_portal_owner`, `NOLOGIN`, com `SELECT` por coluna) — as únicas funções privilegiadas acessíveis a ele; as `SECURITY INVOKER` antigas seguem executáveis por `PUBLIC`, sem acesso a tabela —, sem privilégio de tabela ou view; a função recebe o **token bruto** da sessão, calcula o hash no banco e deriva conta, vínculo e concessões, sem aceitar IDs de escopo do chamador; o comando de leitura reconfere conta, vínculo, organização, cliente, concessão e workspace no mesmo snapshot; nenhum GUC funciona como barreira, porque um contexto em parâmetro customizado pode ser redefinido pelo próprio papel. **Registro de acesso:** `last_access_at` **não** é atualizado na v1 (opção A). **Critério para fechar:** a suíte do §7 do desenho, com o **teste negativo de troca de contexto**, passando com os papéis reais. A migration definitiva espera esse resultado. **Fechamento (2026-09-26):** critério atendido (`2026-09-26-validacao-013-portal-externo.md`), com a cobertura documentada, não exaustiva. Pendentes: revisão direta da migration e da suíte; código Spring do portal; integração da Platform (proteção dos logs da aplicação, formato do hash gravado no login, reset explícito da conexão no pool); decisões 8.6, 8.7 e 8.10 antes das rotas de autenticação; atualização de uma base populada; limite definitivo de página |
 | 8.3 Sessão | **Fechada** (área interna e portal) | Formato: token opaco aleatório de **32 bytes em base64url** (43 caracteres), guardado como **SHA-256 em hex minúsculo** em `user_sessions`, com o mesmo contrato na Platform e no portal (D2 do desenho da 8.2). Enviado em cookie `Secure`, `HttpOnly`, `SameSite=Lax`, com proteção CSRF nas operações que alteram estado; domínio e atributos finais do cookie ficam na 8.7. Política (detalhada em **§11.4**): prazo absoluto de **12 h**; inatividade de **30 min** (interna) e **15 min** (portal, contas externas); até **10 sessões** ativas por conta; logout, "encerrar todas" e revogação na troca de senha, na recuperação e na suspensão. Login e logout externos ficam nos endpoints da Platform (D4) |
 | 8.4 Revogação contínua | **Fechada** | Revalidar sessão, conta, vínculo e concessão a cada requisição. Token autocontido sem consulta ao estado atual não atende |
 | 8.5 `last_seen_at` | **Fechada** | No máximo **1 escrita por minuto** por sessão, por `UPDATE` condicional e atômico. **Tolerância registrada:** a sessão pode ser encerrada por inatividade **até 1 minuto antes** do limite exato de 30 min. Detalhe em **§11.4** |
@@ -197,8 +197,10 @@ Nenhuma migration ou configuração de produção é alterada por este relatóri
   - 8.6 limites: rate limiting;
   - 8.7 rotas: contrato HTTP, tamanho de página, domínio e atributos do cookie;
   - 8.10 parâmetros: hash fictício e login;
-  - testes da 8.2 com os papéis reais (§7 do desenho): portal do cliente.
+  - portal do cliente: revisão da migration 013 e da suíte, código Spring e integração da Platform (os testes da 8.2 passaram em 2026-09-26);
+  - atualização de uma base populada para a 013.
 - **Migration do portal (8.2):** o desenho está aprovado, mas a migration definitiva só é escrita depois de a suíte do desenho passar, com o teste negativo de troca de contexto, numa base de teste isolada.
+  - **2026-09-26:** a candidata `db/migrations/013_portal_externo.sql` passou a suíte (`2026-09-26-validacao-013-portal-externo.md`); a 8.2 está fechada para a camada de banco; a migration **não** está aprovada para merge nem produção até a revisão direta dos arquivos.
 
 ### 11.4 Política de sessão e `last_seen_at` (8.3/8.5, aprovada em 2026-09-25)
 
@@ -278,4 +280,4 @@ A revogação grava `revoked_at` só onde ele ainda é nulo (idempotente). Nenhu
 - Evento com payload sensível, desconhecido ou redigido: nada do payload chega ao portal.
 - IDs válidos de outra concessão em rota ou query não mudam o escopo nem revelam se o recurso existe.
 
-**Pendências ligadas, fora da 8.9:** tamanho máximo da página (8.7). A identidade do portal e o registro de acesso foram decididos no desenho da 8.2: funções autenticadas por sessão, sem views, e `last_access_at` não atualizado na v1. Falta executar os testes desse desenho.
+**Pendências ligadas, fora da 8.9:** tamanho máximo da página (8.7). A identidade do portal e o registro de acesso foram decididos no desenho da 8.2: funções autenticadas por sessão, sem views, e `last_access_at` não atualizado na v1. Os testes desse desenho passaram em 2026-09-26 (`2026-09-26-validacao-013-portal-externo.md`).

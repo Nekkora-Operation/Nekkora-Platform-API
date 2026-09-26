@@ -1,0 +1,11 @@
+linhas 001-012: 3142
+linhas 001-013: 3230
+removidas/alteradas (<): 0
+acrescentadas (>): 88
+acrescentadas sem relacao com o portal: 0
+por tipo:
+     59 colacl
+      6 fn
+     10 fnacl
+      2 nspacl
+     11 pol
