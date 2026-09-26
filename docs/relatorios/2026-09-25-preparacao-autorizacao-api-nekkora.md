@@ -1,7 +1,7 @@
 # Mini relatório — preparação da autenticação e autorização da API Nekkora
 
 **Data:** 2026-09-25  
-**Status:** regras (Seções 2–7) e fluxo de dois contextos **aprovados** em 2026-09-25; decisões da Seção 8 registradas no §11 (parte fechada, parte pendente, incluindo o desenho da 8.2). Nenhuma API foi implementada nesta etapa.  
+**Status:** regras (Seções 2–7) e fluxo de dois contextos **aprovados** em 2026-09-25; decisões da Seção 8 registradas no §11 (parte fechada, parte pendente). O desenho da 8.2 foi aprovado em 2026-09-25 e aguarda a execução dos seus testes. Nenhuma API foi implementada nesta etapa.  
 **Stack definida:** Java com Spring Boot, conforme a direção aprovada para a Platform API (`Radiant-Relatorio-Decisoes-Aprovadas-2026-09-24.md`, §2).  
 **Base:** migrations 001–012 e decisões aprovadas sobre identidade, RBAC, concessões externas e isolamento por organização.
 
@@ -148,12 +148,12 @@ Após aprovar as regras e fechar as decisões da Seção 8, a implementação de
 6. Auditoria/observabilidade de decisões negadas conforme a escolha da Seção 8.
 7. Testes automatizados e de integração com PostgreSQL real, RLS habilitada e os papéis aprovados — incluindo cross-tenant, revogação, timing de login e pool reuse.
 
-O desenho de contexto de busca e autorização já está aprovado (§11.1). A parte do portal externo (item 5) não começa antes de fechar o desenho da 8.2, com o teste negativo de troca de contexto.
+O desenho de contexto de busca e autorização já está aprovado (§11.1). A parte do portal externo (item 5) segue o desenho aprovado da 8.2 (`2026-09-25-desenho-portal-externo-8-2.md`) e não começa antes de a suíte desse desenho passar, com o teste negativo de troca de contexto.
 
 ## 10. Ordem de trabalho
 
 1. ~~Aprovar as regras das Seções 2–7 e o fluxo de dois contextos da Seção 3~~: **concluído em 2026-09-25** (§11.1).
-2. Fechar as decisões ainda pendentes da Seção 8 (§11.2): desenho da 8.2 com o teste negativo de troca de contexto, que também fecha a inatividade do portal; limites e MFA (8.6); rotas, códigos e tamanho de página (8.7); parâmetros do Argon2id (8.10). Já decididos: seletor de organização (8.1) e catálogo externo v1 (8.9, §11.5).
+2. Fechar as decisões ainda pendentes da Seção 8 (§11.2): limites e MFA (8.6); rotas, códigos, tamanho de página e cookie (8.7); parâmetros do Argon2id (8.10). Executar os testes do desenho da 8.2, com o teste negativo de troca de contexto. Já decididos: seletor de organização (8.1), sessão inclusive portal (8.3), catálogo externo v1 (8.9, §11.5) e desenho do portal (8.2, aprovado; fecha com os testes).
 3. Montar a matriz endpoint/operação × papel ou concessão × escopo de recurso e conteúdo publicado.
 4. Implementar autenticação/autorização na Platform API em Java com Spring Boot.
 5. Validar a integração com RLS usando papéis reais e provar que revogações são respeitadas nas requisições subsequentes.
@@ -180,8 +180,8 @@ Nenhuma migration ou configuração de produção é alterada por este relatóri
 | Item | Situação | Decisão |
 |---|---|---|
 | 8.1 Seletor da organização | **Fechada (v1)** | `organization_id` como identificador público na rota. UUID não é segredo. Slug ou subdomínio fica para depois, porque exigiria resolver o identificador sem busca global sob RLS. Links de convite, verificação e redefinição também carregam esse contexto |
-| 8.2 Papel do portal externo | **Direção escolhida (b); desenho pendente** | Identidade **e processo** próprios para o portal, com papel somente de leitura e acesso a *views* do conteúdo publicado. Exige migration e testes próprios. As views restringem **por cliente e concessão ativa**; filtrar só por organização não basta. O processo do portal **não** tem as credenciais do `nekkora_platform`. **Por que continua pendente:** na aplicação, o fluxo é validar a sessão no banco e derivar o contexto do vínculo encontrado, nunca de um ID do navegador. Mas um contexto de cliente guardado num parâmetro customizado **não é barreira independente no banco**: o PostgreSQL aceita parâmetros de dois componentes, e `set_config` permite a qualquer papel defini-los durante a transação. Então o papel do portal **não pode** conseguir ler dados de outro cliente só por definir outro contexto. **Critério para fechar:** o desenho das views precisa incluir um **teste negativo direto**: mesmo tentando trocar o contexto de cliente, a identidade do portal não consegue ler dados de outra concessão. **Também pendente nesta camada:** registro de acesso (`client_workspace_grants.last_access_at`). O papel somente leitura do portal **não** ganha escrita implícita; a forma de registrar acesso, se houver, é decidida no desenho da 8.2 |
-| 8.3 Sessão | **Fechada para a área interna; duração do portal pendente** | Formato: token opaco aleatório, guardado como hash em `user_sessions`, enviado em cookie `Secure`, `HttpOnly`, `SameSite=Lax`, com proteção CSRF nas operações que alteram estado. Política (detalhada em **§11.4**): prazo absoluto de **12 h**; inatividade de **30 min** (interna); até **10 sessões** ativas por conta; logout, "encerrar todas" e revogação na troca de senha, na recuperação e na suspensão. **Pendente:** inatividade do portal externo (proposta: 15 min), a fechar junto com o desenho da 8.2 |
+| 8.2 Papel do portal externo | **Desenho aprovado (alternativa 2); fecha após os testes** | Identidade **e processo** próprios para o portal. O processo do portal **não** tem as credenciais do `nekkora_platform`. Desenho em `2026-09-25-desenho-portal-externo-8-2.md` (D1–D7 aprovadas em 2026-09-25). Resumo: o papel `nekkora_portal` só tem `USAGE` em `public` e `EXECUTE` em quatro funções `SECURITY DEFINER` (owner `nekkora_portal_owner`, `NOLOGIN`, com `SELECT` por coluna), sem privilégio de tabela ou view; a função recebe o **token bruto** da sessão, calcula o hash no banco e deriva conta, vínculo e concessões, sem aceitar IDs de escopo do chamador; o comando de leitura reconfere conta, vínculo, organização, cliente, concessão e workspace no mesmo snapshot; nenhum GUC funciona como barreira, porque um contexto em parâmetro customizado pode ser redefinido pelo próprio papel. **Registro de acesso:** `last_access_at` **não** é atualizado na v1 (opção A). **Critério para fechar:** a suíte do §7 do desenho, com o **teste negativo de troca de contexto**, passando com os papéis reais. A migration definitiva espera esse resultado |
+| 8.3 Sessão | **Fechada** (área interna e portal) | Formato: token opaco aleatório de **32 bytes em base64url** (43 caracteres), guardado como **SHA-256 em hex minúsculo** em `user_sessions`, com o mesmo contrato na Platform e no portal (D2 do desenho da 8.2). Enviado em cookie `Secure`, `HttpOnly`, `SameSite=Lax`, com proteção CSRF nas operações que alteram estado; domínio e atributos finais do cookie ficam na 8.7. Política (detalhada em **§11.4**): prazo absoluto de **12 h**; inatividade de **30 min** (interna) e **15 min** (portal, contas externas); até **10 sessões** ativas por conta; logout, "encerrar todas" e revogação na troca de senha, na recuperação e na suspensão. Login e logout externos ficam nos endpoints da Platform (D4) |
 | 8.4 Revogação contínua | **Fechada** | Revalidar sessão, conta, vínculo e concessão a cada requisição. Token autocontido sem consulta ao estado atual não atende |
 | 8.5 `last_seen_at` | **Fechada** | No máximo **1 escrita por minuto** por sessão, por `UPDATE` condicional e atômico. **Tolerância registrada:** a sessão pode ser encerrada por inatividade **até 1 minuto antes** do limite exato de 30 min. Detalhe em **§11.4** |
 | 8.6 Proteção contra abuso | **Base fechada; limites pendentes** | Rate limiting e limite de tentativas **obrigatórios**. **Sem bloqueio permanente acionável só por tentativas anônimas**, para evitar negação de serviço contra contas. **Pendente:** limites exatos e MFA |
@@ -192,14 +192,13 @@ Nenhuma migration ou configuração de produção é alterada por este relatóri
 
 ### 11.3 O que isso destrava e o que ainda bloqueia
 
-- **Destravado:** revisão detalhada do fluxo de autenticação e sessão (8.1, 8.3 para a área interna, 8.4, 8.5, 8.7 base, 8.8).
+- **Destravado:** revisão detalhada do fluxo de autenticação e sessão (8.1, 8.3 inclusive portal, 8.4, 8.5, 8.7 base, 8.8); desenho do portal externo (8.2, aprovado).
 - **Ainda bloqueia partes da implementação:**
-  - 8.3 inatividade do portal externo: fecha junto com a 8.2;
   - 8.6 limites: rate limiting;
-  - 8.7 rotas: contrato HTTP;
+  - 8.7 rotas: contrato HTTP, tamanho de página, domínio e atributos do cookie;
   - 8.10 parâmetros: hash fictício e login;
-  - desenho da 8.2 (teste negativo de troca de contexto e registro de acesso): portal do cliente. O catálogo (8.9) já está fechado e é entrada desse desenho.
-- **Migration do portal (8.2):** só deve ser desenhada depois de definir como as views identificam o cliente autorizado sem confiar em IDs do navegador **e** sem depender de um parâmetro que o próprio papel do portal possa redefinir. O desenho só é aceito com o teste negativo de troca de contexto.
+  - testes da 8.2 com os papéis reais (§7 do desenho): portal do cliente.
+- **Migration do portal (8.2):** o desenho está aprovado, mas a migration definitiva só é escrita depois de a suíte do desenho passar, com o teste negativo de troca de contexto, numa base de teste isolada.
 
 ### 11.4 Política de sessão e `last_seen_at` (8.3/8.5, aprovada em 2026-09-25)
 
@@ -209,7 +208,7 @@ Nenhuma migration ou configuração de produção é alterada por este relatóri
 |---|---|
 | Prazo absoluto | **12 horas**, gravado em `expires_at` na criação e **nunca renovado** |
 | Inatividade (área interna) | **30 minutos**. Só atividade autenticada válida renova esta janela, e nunca além do prazo absoluto |
-| Inatividade (portal externo) | **Pendente**, com proposta de 15 min, a fechar com o desenho da 8.2 |
+| Inatividade (portal externo) | **15 minutos** para contas externas (`account_type = 2`), com a mesma tolerância de até 1 min e o mesmo prazo absoluto. Conta como atividade toda requisição com sessão válida, mesmo que o recurso pedido não esteja autorizado. O toque em `last_seen_at` é feito pela função do portal, como owner (desenho da 8.2, D3/D7) |
 | Sessões simultâneas | Até **10 ativas por conta**. Ao exceder, revoga-se a **sessão ativa mais antiga**; a entrada nova não é rejeitada. Escopo por conta, porque o schema não tem coluna de dispositivo |
 | `last_seen_at` | No máximo **uma escrita por minuto** por sessão. Pode encerrar a sessão por inatividade **até 1 minuto antes** do limite exato |
 
@@ -243,7 +242,7 @@ A revogação grava `revoked_at` só onde ele ainda é nulo (idempotente). Nenhu
 
 **Escopo efetivo:** **vínculo externo × workspace da concessão** (`client_workspace_grants` liga `client_membership_id` a `workspace_id`), não o cliente sozinho. Duas pessoas do mesmo cliente podem ter workspaces diferentes.
 
-**Filtro de autorização comum a todas as linhas** (revalidado a cada requisição, no servidor): conta externa, sessão e `client_membership` ativos; organização ativa; `clients.status = 1`; workspace pertencente ao cliente; concessão do **próprio vínculo** para **aquele workspace** com `status = 2` e `approved_at` preenchido, `starts_at` alcançado, `expires_at` ausente ou futuro e `next_review_at` futuro. Filtrar só por organização ou só por cliente não basta.
+**Filtro de autorização comum a todas as linhas** (revalidado a cada requisição, no servidor): conta externa, sessão e `client_membership` ativos; organização ativa; `clients.status = 1`; workspace pertencente ao cliente **e ativo** (`workspaces.status = 1`, acrescentado pela D5 do desenho da 8.2); concessão do **próprio vínculo** para **aquele workspace** com `status = 2` e `approved_at` preenchido, `starts_at` alcançado, `expires_at` ausente ou futuro e `next_review_at` futuro. Filtrar só por organização ou só por cliente não basta.
 
 | Recurso | Campos retornados | Finalidade | Filtro adicional |
 |---|---|---|---|
@@ -279,4 +278,4 @@ A revogação grava `revoked_at` só onde ele ainda é nulo (idempotente). Nenhu
 - Evento com payload sensível, desconhecido ou redigido: nada do payload chega ao portal.
 - IDs válidos de outra concessão em rota ou query não mudam o escopo nem revelam se o recurso existe.
 
-**Pendências ligadas, fora da 8.9:** tamanho máximo da página (8.7); registro de acesso `last_access_at` e o próprio desenho das views/identidade do portal (8.2).
+**Pendências ligadas, fora da 8.9:** tamanho máximo da página (8.7). A identidade do portal e o registro de acesso foram decididos no desenho da 8.2: funções autenticadas por sessão, sem views, e `last_access_at` não atualizado na v1. Falta executar os testes desse desenho.
