@@ -32,7 +32,7 @@ A RLS da 012 filtra tabelas tenant pelo contexto de organização; sem contexto,
 
 ### 3.1 Login
 
-1. A requisição informa um seletor explícito de organização. Ele é uma alegação de escopo para a busca, não uma credencial nem autorização. O formato do seletor ainda será decidido na Seção 8.
+1. A requisição informa um seletor explícito de organização. Ele é uma alegação de escopo para a busca, não uma credencial nem autorização. Na v1, o seletor é o `organization_id` na rota (decisão 8.1, §11.2).
 2. A aplicação Spring Boot inicia uma **transação de busca, somente leitura**, e define `nekkora.organization_id` a partir desse seletor (mecanismo da Seção 6).
 3. Sob esse escopo, busca a conta e a credencial pelo par organização + e-mail normalizado. Não faz lookup global por e-mail.
 4. Valida o hash da senha, status ACTIVE e e-mail verificado. Depois da validação, usa a organização lida da conta como identidade autorizada e confere que corresponde ao seletor usado na busca.
@@ -46,7 +46,7 @@ Uma alegação de organização incorreta apenas escopa a leitura para outra org
 2. A aplicação inicia transação, estabelece o contexto de busca e localiza user_sessions pelo hash do token dentro daquele tenant.
 3. Confere que a sessão encontrada pertence à organização indicada, e revalida a sessão, a conta, o vínculo e a autorização atual. A identidade efetiva vem dos registros encontrados, não do seletor enviado pelo cliente.
 4. Após essa validação, executa a autorização da ação e do recurso. Nenhuma leitura ou escrita de negócio ocorre antes dela.
-5. Atualiza last_seen_at segundo a política de frequência que será fechada na Seção 8.
+5. Atualiza `last_seen_at` no máximo uma vez por minuto, com o instante capturado por `clock_timestamp()` depois do lock da sessão (decisão 8.5, §11.4).
 6. Encerra a transação. Depois do `COMMIT` ou `ROLLBACK`, fora da transação, a conexão é limpa com `DISCARD ALL` antes de voltar ao pool (C5 do relatório operacional). Isso **não acontece sozinho**: o HikariCP, pool padrão do Spring Boot, não tem gancho para executar SQL na devolução da conexão. É preciso um mecanismo explícito, como um wrapper de `DataSource`/`Connection` que execute `DISCARD ALL` na devolução ou um pooler externo com consulta de reset. Como o `DISCARD ALL` também desaloca os *prepared statements* do servidor, que o pgJDBC passa a usar depois do `prepareThreshold`, a convivência dos dois precisa ser provada em teste de integração (item 9.7).
 
 ### 3.3 Verificação de e-mail, convite e redefinição de senha
@@ -148,12 +148,12 @@ Após aprovar as regras e fechar as decisões da Seção 8, a implementação de
 6. Auditoria/observabilidade de decisões negadas conforme a escolha da Seção 8.
 7. Testes automatizados e de integração com PostgreSQL real, RLS habilitada e os papéis aprovados — incluindo cross-tenant, revogação, timing de login e pool reuse.
 
-Não iniciar a implementação antes de aprovar o desenho de contexto de busca/autorização e o papel de banco do portal externo.
+O desenho de contexto de busca e autorização já está aprovado (§11.1). A parte do portal externo (item 5) não começa antes de fechar o desenho da 8.2, com o teste negativo de troca de contexto.
 
 ## 10. Ordem de trabalho
 
-1. Aprovar as regras das Seções 2–7 e o fluxo de dois contextos da Seção 3.
-2. Fechar as decisões da Seção 8, começando pelo seletor de organização e identidade do portal externo.
+1. ~~Aprovar as regras das Seções 2–7 e o fluxo de dois contextos da Seção 3~~: **concluído em 2026-09-25** (§11.1).
+2. Fechar as decisões ainda pendentes da Seção 8 (§11.2): desenho da 8.2 com o teste negativo de troca de contexto, que também fecha a inatividade do portal; limites e MFA (8.6); rotas e códigos (8.7); catálogo externo (8.9); parâmetros do Argon2id (8.10). O seletor de organização (8.1) já está decidido.
 3. Montar a matriz endpoint/operação × papel ou concessão × escopo de recurso e conteúdo publicado.
 4. Implementar autenticação/autorização na Platform API em Java com Spring Boot.
 5. Validar a integração com RLS usando papéis reais e provar que revogações são respeitadas nas requisições subsequentes.
