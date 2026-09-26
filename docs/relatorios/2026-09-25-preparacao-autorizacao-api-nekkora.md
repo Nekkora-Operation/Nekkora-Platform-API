@@ -153,7 +153,7 @@ O desenho de contexto de busca e autorização já está aprovado (§11.1). A pa
 ## 10. Ordem de trabalho
 
 1. ~~Aprovar as regras das Seções 2–7 e o fluxo de dois contextos da Seção 3~~: **concluído em 2026-09-25** (§11.1).
-2. Fechar as decisões ainda pendentes da Seção 8 (§11.2): desenho da 8.2 com o teste negativo de troca de contexto, que também fecha a inatividade do portal; limites e MFA (8.6); rotas e códigos (8.7); catálogo externo (8.9); parâmetros do Argon2id (8.10). O seletor de organização (8.1) já está decidido.
+2. Fechar as decisões ainda pendentes da Seção 8 (§11.2): desenho da 8.2 com o teste negativo de troca de contexto, que também fecha a inatividade do portal; limites e MFA (8.6); rotas, códigos e tamanho de página (8.7); parâmetros do Argon2id (8.10). Já decididos: seletor de organização (8.1) e catálogo externo v1 (8.9, §11.5).
 3. Montar a matriz endpoint/operação × papel ou concessão × escopo de recurso e conteúdo publicado.
 4. Implementar autenticação/autorização na Platform API em Java com Spring Boot.
 5. Validar a integração com RLS usando papéis reais e provar que revogações são respeitadas nas requisições subsequentes.
@@ -180,14 +180,14 @@ Nenhuma migration ou configuração de produção é alterada por este relatóri
 | Item | Situação | Decisão |
 |---|---|---|
 | 8.1 Seletor da organização | **Fechada (v1)** | `organization_id` como identificador público na rota. UUID não é segredo. Slug ou subdomínio fica para depois, porque exigiria resolver o identificador sem busca global sob RLS. Links de convite, verificação e redefinição também carregam esse contexto |
-| 8.2 Papel do portal externo | **Direção escolhida (b); desenho pendente** | Identidade **e processo** próprios para o portal, com papel somente de leitura e acesso a *views* do conteúdo publicado. Exige migration e testes próprios. As views restringem **por cliente e concessão ativa**; filtrar só por organização não basta. O processo do portal **não** tem as credenciais do `nekkora_platform`. **Por que continua pendente:** na aplicação, o fluxo é validar a sessão no banco e derivar o contexto do vínculo encontrado, nunca de um ID do navegador. Mas um contexto de cliente guardado num parâmetro customizado **não é barreira independente no banco**: o PostgreSQL aceita parâmetros de dois componentes, e `set_config` permite a qualquer papel defini-los durante a transação. Então o papel do portal **não pode** conseguir ler dados de outro cliente só por definir outro contexto. **Critério para fechar:** o desenho das views precisa incluir um **teste negativo direto**: mesmo tentando trocar o contexto de cliente, a identidade do portal não consegue ler dados de outra concessão |
+| 8.2 Papel do portal externo | **Direção escolhida (b); desenho pendente** | Identidade **e processo** próprios para o portal, com papel somente de leitura e acesso a *views* do conteúdo publicado. Exige migration e testes próprios. As views restringem **por cliente e concessão ativa**; filtrar só por organização não basta. O processo do portal **não** tem as credenciais do `nekkora_platform`. **Por que continua pendente:** na aplicação, o fluxo é validar a sessão no banco e derivar o contexto do vínculo encontrado, nunca de um ID do navegador. Mas um contexto de cliente guardado num parâmetro customizado **não é barreira independente no banco**: o PostgreSQL aceita parâmetros de dois componentes, e `set_config` permite a qualquer papel defini-los durante a transação. Então o papel do portal **não pode** conseguir ler dados de outro cliente só por definir outro contexto. **Critério para fechar:** o desenho das views precisa incluir um **teste negativo direto**: mesmo tentando trocar o contexto de cliente, a identidade do portal não consegue ler dados de outra concessão. **Também pendente nesta camada:** registro de acesso (`client_workspace_grants.last_access_at`). O papel somente leitura do portal **não** ganha escrita implícita; a forma de registrar acesso, se houver, é decidida no desenho da 8.2 |
 | 8.3 Sessão | **Fechada para a área interna; duração do portal pendente** | Formato: token opaco aleatório, guardado como hash em `user_sessions`, enviado em cookie `Secure`, `HttpOnly`, `SameSite=Lax`, com proteção CSRF nas operações que alteram estado. Política (detalhada em **§11.4**): prazo absoluto de **12 h**; inatividade de **30 min** (interna); até **10 sessões** ativas por conta; logout, "encerrar todas" e revogação na troca de senha, na recuperação e na suspensão. **Pendente:** inatividade do portal externo (proposta: 15 min), a fechar junto com o desenho da 8.2 |
 | 8.4 Revogação contínua | **Fechada** | Revalidar sessão, conta, vínculo e concessão a cada requisição. Token autocontido sem consulta ao estado atual não atende |
 | 8.5 `last_seen_at` | **Fechada** | No máximo **1 escrita por minuto** por sessão, por `UPDATE` condicional e atômico. **Tolerância registrada:** a sessão pode ser encerrada por inatividade **até 1 minuto antes** do limite exato de 30 min. Detalhe em **§11.4** |
 | 8.6 Proteção contra abuso | **Base fechada; limites pendentes** | Rate limiting e limite de tentativas **obrigatórios**. **Sem bloqueio permanente acionável só por tentativas anônimas**, para evitar negação de serviço contra contas. **Pendente:** limites exatos e MFA |
 | 8.7 Contrato HTTP | **Base fechada; rotas pendentes** | Cookie seguro; CSRF para escrita; CORS com origens permitidas explicitamente, **sem wildcard com credenciais**. **Pendente:** rotas e códigos exatos |
 | 8.8 Auditoria de negativas | **Fechada** | Log estruturado e sanitizado da aplicação (C10), **sem tabela nova** por enquanto. Registra decisão, ação e correlação; nunca senha, token, payload ou valores de secrets |
-| 8.9 Conteúdo externo | **Pendente** | Aguarda o catálogo de dados publicados para clientes (também pré-requisito das views da 8.2) |
+| 8.9 Conteúdo externo | **Fechada (catálogo v1)** | Catálogo mínimo em **§11.5**: só nome do workspace, nome e id da automação, execuções com horários, duração e rótulos de status/motivo, e eventos por tipo e `received_at`. Sem `exit_code`, mensagens livres, IDs de pessoas, Worker/Agent, comandos, parâmetros, payloads ou logs brutos. Escopo efetivo: **vínculo externo × workspace da concessão**. É entrada do desenho da 8.2. **Pendente (8.7):** tamanho máximo da página |
 | 8.10 Hash de senha | **Direção fechada; detalhes pendentes** | Argon2id como direção aprovada: `docs/relatorios/Radiant-Relatorio-Decisoes-Aprovadas-2026-09-24.md`, §13 ("hash irreversível e salt, direção Argon2id"). **Pendente:** parâmetros, formato versionado do hash e política de re-hash |
 
 ### 11.3 O que isso destrava e o que ainda bloqueia
@@ -198,7 +198,7 @@ Nenhuma migration ou configuração de produção é alterada por este relatóri
   - 8.6 limites: rate limiting;
   - 8.7 rotas: contrato HTTP;
   - 8.10 parâmetros: hash fictício e login;
-  - 8.9 e o pré-requisito da 8.2: portal do cliente.
+  - desenho da 8.2 (teste negativo de troca de contexto e registro de acesso): portal do cliente. O catálogo (8.9) já está fechado e é entrada desse desenho.
 - **Migration do portal (8.2):** só deve ser desenhada depois de definir como as views identificam o cliente autorizado sem confiar em IDs do navegador **e** sem depender de um parâmetro que o próprio papel do portal possa redefinir. O desenho só é aceito com o teste negativo de troca de contexto.
 
 ### 11.4 Política de sessão e `last_seen_at` (8.3/8.5, aprovada em 2026-09-25)
@@ -236,3 +236,47 @@ A revogação grava `revoked_at` só onde ele ainda é nulo (idempotente). Nenhu
 **Garantia da API e endurecimento futuro:** hoje o banco **não impede** alterações indevidas em `user_sessions`. Não há trigger: o `nekkora_platform` tem `UPDATE` em todas as colunas e poderia aumentar `expires_at`, limpar `revoked_at` ou fazer `last_seen_at` retroceder. Essas regras são **garantias da API**. Uma trigger que as imponha no banco fica registrada como **endurecimento futuro**, que exigiria migration própria e **não bloqueia** esta etapa.
 
 **Pendência relacionada, fora desta decisão:** retenção e limpeza das sessões expiradas ou revogadas. O `nekkora_platform` não tem `DELETE` em `user_sessions`; ver o C11 do relatório operacional.
+
+### 11.5 Catálogo de conteúdo externo v1 (8.9, aprovado em 2026-09-25)
+
+**Princípio:** minimização. O portal recebe só o necessário para acompanhar o serviço contratado. Conteúdo sem classificação explícita **não é publicado**. IDs aparecem como referência opaca e **nunca** autorizam nada.
+
+**Escopo efetivo:** **vínculo externo × workspace da concessão** (`client_workspace_grants` liga `client_membership_id` a `workspace_id`), não o cliente sozinho. Duas pessoas do mesmo cliente podem ter workspaces diferentes.
+
+**Filtro de autorização comum a todas as linhas** (revalidado a cada requisição, no servidor): conta externa, sessão e `client_membership` ativos; organização ativa; `clients.status = 1`; workspace pertencente ao cliente; concessão do **próprio vínculo** para **aquele workspace** com `status = 2` e `approved_at` preenchido, `starts_at` alcançado, `expires_at` ausente ou futuro e `next_review_at` futuro. Filtrar só por organização ou só por cliente não basta.
+
+| Recurso | Campos retornados | Finalidade | Filtro adicional |
+|---|---|---|---|
+| Workspace concedido | `workspaces.name` | Identificar o contexto do serviço | Só workspaces com concessão válida do vínculo |
+| Automação (referência na execução) | `automations.name`, `automation_id` | Identificar qual automação rodou. **Visíveis deliberadamente:** o nome é o nome interno, pois o schema não tem nome de exibição | Só automações de workspace concedido, e só como atributo das execuções listadas |
+| Lista de execuções | `execution_id`; `workspace_id` **só quando necessário** para escolher entre workspaces concedidos; referência da automação (acima); `created_at` (solicitada), `started_at` (início, nulo se não iniciou), `finished_at` (término); duração calculada no servidor; **rótulos** de `status` e `status_reason` | Acompanhar execuções e resultado | Execuções de workspace concedido. Filtros: workspace (dentre os concedidos), status e período. Ordenação `created_at DESC`, desempate por `execution_id`. Paginação **por cursor** (keyset), **sem `OFFSET`**. Tamanho máximo da página: 8.7 |
+| Detalhe da execução | Os mesmos campos da lista | Ver uma execução específica | Mesmo filtro. Um id de outra concessão não revela existência |
+| Eventos da execução | Rótulo de `event_type` e `received_at` | Linha do tempo do ciclo de vida | Eventos de execução visível. Ordenação por `sequence`. **`received_at`** (servidor), **não** `occurred_at` (relógio do Agent) |
+
+**Rótulos publicados:**
+- **`status`:** pendente, iniciando, em execução, concluída, falhou, cancelada.
+- **`status_reason`:** processo concluído, falha ao iniciar, falha no processo, cancelada antes do envio, cancelamento confirmado, prazo de fila excedido.
+- **`event_type`:** processo iniciado, concluído, falhou, falha ao iniciar, cancelado.
+
+**Fora da resposta, sempre:** `exit_code`; mensagens livres (`executions.error_summary` e `error_summary`/`error_code` de payload); qualquer campo de `payload`; logs (os três canais); `organization_id`, `client_id` e `client_membership_id`; IDs de pessoas (`requested_by_membership_id`, `authorized_by_membership_id`, `cancel_requested_by_membership_id`); `worker_id`, `agent_id` e associações; `pid`, `request_key`, `request_fingerprint`, `fingerprint`, `command_snapshot`, `automation_version_id`, `retry_of_execution_id`, `origin`, `schedule_occurrence_id`; `occurred_at`; `workspaces.description`; agendamentos (cron, fuso, revisões, ocorrências); Workers/Agents e credenciais; referências de secrets.
+
+**Decisões registradas:**
+1. Resultado: status mais motivo padronizado, **sem `exit_code`**.
+2. **Nenhuma mensagem livre na v1.** Publicar mensagem exigiria campo próprio, com origem controlada e sanitização definida.
+3. Eventos: os cinco tipos da 007, com rótulo e `received_at`, sem campo de payload.
+4. Logs: **nenhum canal** na v1. Evidência operacional futura seria um relatório sanitizado separado, com catálogo próprio.
+5. IDs: `execution_id` e `automation_id`; `workspace_id` só quando o vínculo tem mais de um workspace concedido.
+6. Agendamentos e metadados do workspace além do nome: excluídos.
+7. **Toda concessão ativa libera o mesmo catálogo v1.** Não há capacidades por concessão, e nenhuma mudança de schema é necessária antes da 8.2.
+8. **Redação:** como nenhum payload é publicado na v1, a redação de payload (011) **não altera** o que o portal mostra; `event_type` e `received_at` continuam visíveis. Se algum campo de payload entrar no catálogo no futuro, esta regra é revista.
+
+**Testes que este catálogo habilita (entram no desenho da 8.2):**
+- Mesmo cliente, duas pessoas: X com concessão no WS1, Y no WS2. **X não lê o WS2** (nem execução, nem evento, nem nome).
+- Clientes diferentes na mesma organização: a sessão do cliente A não lê nenhum registro nem campo exclusivo do cliente B.
+- Tentativa direta de trocar o contexto de cliente no banco: continua sem acesso (critério da 8.2).
+- Workspace interno; concessão pendente, suspensa, revogada, expirada ou com revisão vencida; cliente ou organização suspensos: nenhuma linha elegível.
+- Cada consulta retorna **exatamente** as colunas acima; campos proibidos não aparecem nem em mensagens de erro.
+- Evento com payload sensível, desconhecido ou redigido: nada do payload chega ao portal.
+- IDs válidos de outra concessão em rota ou query não mudam o escopo nem revelam se o recurso existe.
+
+**Pendências ligadas, fora da 8.9:** tamanho máximo da página (8.7); registro de acesso `last_access_at` e o próprio desenho das views/identidade do portal (8.2).
