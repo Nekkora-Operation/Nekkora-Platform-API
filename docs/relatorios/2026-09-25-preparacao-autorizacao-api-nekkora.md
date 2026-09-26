@@ -1,8 +1,8 @@
 # Mini relatório — preparação da autenticação e autorização da API Nekkora
 
 **Data:** 2026-09-25  
-**Status:** proposta para revisão. Nenhuma API foi implementada nesta etapa.  
-**Stack definida:** Java com Spring Boot, conforme a direção aprovada para a Platform API.  
+**Status:** regras (Seções 2–7) e fluxo de dois contextos **aprovados** em 2026-09-25; decisões da Seção 8 registradas no §11 (parte fechada, parte pendente, incluindo o desenho da 8.2). Nenhuma API foi implementada nesta etapa.  
+**Stack definida:** Java com Spring Boot, conforme a direção aprovada para a Platform API (`Radiant-Relatorio-Decisoes-Aprovadas-2026-09-24.md`, §2).  
 **Base:** migrations 001–012 e decisões aprovadas sobre identidade, RBAC, concessões externas e isolamento por organização.
 
 ## 1. Objetivo e limite
@@ -57,7 +57,7 @@ Não se presume lookup global. Uma função SECURITY DEFINER para resolver token
 
 ### 3.4 Respostas sem enumeração de contas
 
-Conta inexistente, senha incorreta, vínculo ausente e sessão inválida não devem gerar respostas que revelem qual condição ocorreu. Para conta inexistente, a aplicação também calcula a verificação de senha contra um hash fictício com o **mesmo algoritmo e parâmetros** dos hashes reais (Argon2id é a proposta; o schema não fixa algoritmo, porque `user_credentials.password_hash` só exige texto não vazio, e a escolha está no item 8.10), para evitar que a ausência da conta seja distinguida pelo tempo de resposta. Respostas genéricas, verificação de hash fictício e limites de tentativas são controles complementares; não prometem tempo matematicamente idêntico.
+Conta inexistente, senha incorreta, vínculo ausente e sessão inválida não devem gerar respostas que revelem qual condição ocorreu. Para conta inexistente, a aplicação também calcula a verificação de senha contra um hash fictício com o **mesmo algoritmo e parâmetros** dos hashes reais (Argon2id é a direção aprovada, §11; o schema não fixa algoritmo, porque `user_credentials.password_hash` só exige texto não vazio), para evitar que a ausência da conta seja distinguida pelo tempo de resposta. Respostas genéricas, verificação de hash fictício e limites de tentativas são controles complementares; não prometem tempo matematicamente idêntico.
 
 ## 4. Regras de autorização interna
 
@@ -123,6 +123,8 @@ A resposta externa usa uma lista permitida de campos e conteúdo publicado. Logs
 
 ## 8. Decisões técnicas ainda necessárias
 
+> As decisões tomadas em 2026-09-25 sobre os itens abaixo estão registradas no **§11**, que prevalece sobre as opções descritas aqui.
+
 1. **Seletor da organização:** formato público e como ele chega ao backend para login, sessão, convite, verificação e redefinição. Precisa mapear inequivocamente a organization_id antes da busca tenant-scoped. Domínio de e-mail não serve como seletor; slug/domínio legível exige resolução inequívoca sem lookup global de credenciais.
 2. **Papel do portal externo:** usar nekkora_platform e aceitar que a separação cliente/interno dependa da API, ou criar uma identidade de banco distinta, somente leitura e limitada a views dos dados publicados. Recomendação: papel separado com privilégios apenas sobre views apropriadas; por ser novo privilégio/RLS, exigiria migration e validação próprias. Um segundo pool dentro do mesmo processo Spring Boot, sozinho, não protege contra comprometimento daquele processo se ele puder usar ambas as credenciais.
 3. **Formato e duração da sessão:** cookie seguro ou outro mecanismo; duração, inatividade, renovação, sessões simultâneas e encerramento.
@@ -157,3 +159,44 @@ Não iniciar a implementação antes de aprovar o desenho de contexto de busca/a
 5. Validar a integração com RLS usando papéis reais e provar que revogações são respeitadas nas requisições subsequentes.
 
 Nenhuma migration ou configuração de produção é alterada por este relatório. Os testes pendentes da 011 e os controles operacionais antes de produção permanecem em trilhas separadas; o expurgo segue desativado até o contrato de fingerprint e retenção ser fechado.
+
+## 11. Registro de aprovação e decisões (2026-09-25)
+
+### 11.1 Aprovado
+
+- **Regras das Seções 2–7**, com uma precisão na §3.4: a resposta de login deve ser **indistinguível**, e o tempo de resposta deve ser **mitigado e testado**, sem promessa de tempos matematicamente iguais.
+- **Fluxo de dois contextos (§3):**
+  - na fase de busca, o seletor de organização **apenas limita a leitura sob RLS**. Não autoriza acesso, e essa fase **não lê dados de negócio nem grava**;
+  - depois de validar a credencial ou a sessão, a API confirma a organização registrada e só então autoriza a operação;
+  - o login separa a busca, somente leitura, da criação da sessão, feita em nova transação de leitura e escrita que **revalida a conta antes do `INSERT`**.
+- **Integração Spring Boot/PostgreSQL:**
+  - `set_config('nekkora.organization_id', ?, true)` parametrizado;
+  - principal e permissões reconstruídos a cada requisição;
+  - Spring MVC bloqueante;
+  - `DISCARD ALL` com **implementação explícita** e **teste de compatibilidade** com os *prepared statements* do pgJDBC.
+
+### 11.2 Decisões da Seção 8
+
+| Item | Situação | Decisão |
+|---|---|---|
+| 8.1 Seletor da organização | **Fechada (v1)** | `organization_id` como identificador público na rota. UUID não é segredo. Slug ou subdomínio fica para depois, porque exigiria resolver o identificador sem busca global sob RLS. Links de convite, verificação e redefinição também carregam esse contexto |
+| 8.2 Papel do portal externo | **Direção escolhida (b); desenho pendente** | Identidade **e processo** próprios para o portal, com papel somente de leitura e acesso a *views* do conteúdo publicado. Exige migration e testes próprios. As views restringem **por cliente e concessão ativa**; filtrar só por organização não basta. O processo do portal **não** tem as credenciais do `nekkora_platform`. **Por que continua pendente:** na aplicação, o fluxo é validar a sessão no banco e derivar o contexto do vínculo encontrado, nunca de um ID do navegador. Mas um contexto de cliente guardado num parâmetro customizado **não é barreira independente no banco**: o PostgreSQL aceita parâmetros de dois componentes, e `set_config` permite a qualquer papel defini-los durante a transação. Então o papel do portal **não pode** conseguir ler dados de outro cliente só por definir outro contexto. **Critério para fechar:** o desenho das views precisa incluir um **teste negativo direto**: mesmo tentando trocar o contexto de cliente, a identidade do portal não consegue ler dados de outra concessão |
+| 8.3 Sessão | **Formato fechado; durações pendentes** | Token opaco aleatório, guardado como hash em `user_sessions`, enviado em cookie `Secure`, `HttpOnly`, `SameSite=Lax`, com proteção CSRF nas operações que alteram estado. **Pendente:** duração absoluta e por inatividade |
+| 8.4 Revogação contínua | **Fechada** | Revalidar sessão, conta, vínculo e concessão a cada requisição. Token autocontido sem consulta ao estado atual não atende |
+| 8.5 `last_seen_at` | **Pendente** | Depende da tolerância de inatividade (8.3). Só depois dela se escolhe entre escrita por requisição e atualização em janela |
+| 8.6 Proteção contra abuso | **Base fechada; limites pendentes** | Rate limiting e limite de tentativas **obrigatórios**. **Sem bloqueio permanente acionável só por tentativas anônimas**, para evitar negação de serviço contra contas. **Pendente:** limites exatos e MFA |
+| 8.7 Contrato HTTP | **Base fechada; rotas pendentes** | Cookie seguro; CSRF para escrita; CORS com origens permitidas explicitamente, **sem wildcard com credenciais**. **Pendente:** rotas e códigos exatos |
+| 8.8 Auditoria de negativas | **Fechada** | Log estruturado e sanitizado da aplicação (C10), **sem tabela nova** por enquanto. Registra decisão, ação e correlação; nunca senha, token, payload ou valores de secrets |
+| 8.9 Conteúdo externo | **Pendente** | Aguarda o catálogo de dados publicados para clientes (também pré-requisito das views da 8.2) |
+| 8.10 Hash de senha | **Direção fechada; detalhes pendentes** | Argon2id como direção aprovada: `docs/relatorios/Radiant-Relatorio-Decisoes-Aprovadas-2026-09-24.md`, §13 ("hash irreversível e salt, direção Argon2id"). **Pendente:** parâmetros, formato versionado do hash e política de re-hash |
+
+### 11.3 O que isso destrava e o que ainda bloqueia
+
+- **Destravado:** revisão detalhada do fluxo de autenticação e sessão (8.1, 8.3 formato, 8.4, 8.7 base, 8.8).
+- **Ainda bloqueia partes da implementação:**
+  - 8.3 durações e 8.5: expiração;
+  - 8.6 limites: rate limiting;
+  - 8.7 rotas: contrato HTTP;
+  - 8.10 parâmetros: hash fictício e login;
+  - 8.9 e o pré-requisito da 8.2: portal do cliente.
+- **Migration do portal (8.2):** só deve ser desenhada depois de definir como as views identificam o cliente autorizado sem confiar em IDs do navegador **e** sem depender de um parâmetro que o próprio papel do portal possa redefinir. O desenho só é aceito com o teste negativo de troca de contexto.
