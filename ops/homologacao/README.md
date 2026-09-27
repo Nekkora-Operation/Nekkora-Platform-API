@@ -66,6 +66,16 @@ O runner para na primeira falha: sem nova tentativa, sem `repair`, sem `baseline
 
 Para liberar: `homologacao.sh recuperar <id>`, que obtém a trava no banco (senão recusa sem alterar nada), revoga, encerra as sessões, confere `0|0|0` e só então remove a trava local. Isso recupera o **migrador**. Se a instalação ficou incompleta, o ambiente **continua BLOQUEADO** até `homologacao.sh implantar <id>` concluir as versões pendentes. Procedimento completo em [IMPLANTACAO.md](IMPLANTACAO.md), §5.
 
+## Windows: checkout em caminho curto
+
+Algumas evidências têm até 142 caracteres a partir da raiz do repositório. Num diretório profundo, o checkout no Windows falha ("Filename too long"). Clone num caminho curto ou habilite caminhos longos:
+
+```sh
+git clone -c core.longpaths=true <url>          # ou, uma vez: git config --global core.longpaths true
+```
+
+Os `.sh` e as migrations são LF (`.gitattributes`). O sha256 autorizado em `implantacao/elevacao.txt` é o dos bytes LF versionados. Uma cópia com CRLF tem outro sha256, e a elevação é recusada.
+
 ## Recriar
 
 `destruir` e depois `criar`, que reproduz o ambiente do zero, com novos segredos. Os dados são sintéticos (fixture da H05), e nada precisa ser preservado.

@@ -1,0 +1,5 @@
+clone limpo de origin/main
+HEAD=9491a3e9c6e78f3fe7ccbe8a00708bb00ff1779d
+status: 1 alteracoes
+sha256 db/migrations/012 no clone: d3929cc76261debb47740bb0167d1e3438e00b14e01eca2a793716e5ce8321f4
+autorizado para 012 em elevacao.txt: fd758edfb66af9e6b1c17697ebeb2fd8ddf9ce22fa4673c358f28efa78d1fbd7

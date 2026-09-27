@@ -1,0 +1,5 @@
+clone limpo de origin/main com a correcao aplicada (sem commit)
+HEAD=9491a3e9c6e78f3fe7ccbe8a00708bb00ff1779d
+alteracoes:  M ops/homologacao/implantacao/elevacao.txt ?? ops/homologacao/saidas_criar.log 
+sha256 db/migrations/012 no clone: d3929cc76261debb47740bb0167d1e3438e00b14e01eca2a793716e5ce8321f4
+autorizado para 012: d3929cc76261debb47740bb0167d1e3438e00b14e01eca2a793716e5ce8321f4

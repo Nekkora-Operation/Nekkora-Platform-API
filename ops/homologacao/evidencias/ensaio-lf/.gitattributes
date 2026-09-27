@@ -1,0 +1,2 @@
+# Evidencia do ensaio pontual: esta variante PRECISA manter CRLF (bytes exatos apresentados ao runner).
+variante-crlf-*/migracoes/900_variante_crlf.sql -text

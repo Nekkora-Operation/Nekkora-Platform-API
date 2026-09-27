@@ -1,0 +1,4 @@
+== implantacao 2026-09-27T02:15:25.829Z (lista de elevacao: lista.txt)
+historico antes: 001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true
+FALHA: versao 900: sha256 44ea1f2fd3b46c4da343da7589761a1ed2422471aa28de47d52f0a26aaf6e899 diferente do autorizado (5e7e9277f6fc51061fa02be88a9f4df45a753242b0b3ed9c0b81aa8f861cc281); elevacao RECUSADA antes de conceder
+estado do migrador conferido limpo; trava liberada. Sem nova tentativa, sem repair, sem baseline.

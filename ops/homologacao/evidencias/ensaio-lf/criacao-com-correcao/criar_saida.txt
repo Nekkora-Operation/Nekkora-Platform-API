@@ -1,0 +1,29 @@
+== segredos e certificados (fora do Git: /c/Users/nicol/.nekkora/homologacao/ensaio-lf)
+== migrations 001-015 (copia imutavel desta execucao)
+== build (jars e imagens identificados por d608a96)
+== PostgreSQL e Redis
+== bootstrap (admin_cluster, socket local)
+== implantacao 001-015 pela identidade dedicada (elevacao so nas versoes declaradas)
+== implantacao 2026-09-27T02:13:27.229Z (lista de elevacao: elevacao.txt)
+historico antes: vazio
+-- 001_initial.sql (executeInTransaction=true)
+-- 002_identity.sql (executeInTransaction=true)
+-- 003_access_control.sql (executeInTransaction=true)
+-- 004_workers_agents.sql (executeInTransaction=true)
+-- 005_automations_versions.sql (executeInTransaction=true)
+-- 006_executions.sql (executeInTransaction=true)
+-- 007_events_logs.sql (executeInTransaction=true)
+-- 008_parametros_secrets.sql (executeInTransaction=true)
+-- 009_agendamentos.sql (executeInTransaction=true)
+-- 010_recursos_limites_retencao.sql (executeInTransaction=true)
+-- 011_fechamento_expurgo.sql (executeInTransaction=true, ELEVADA)
+-- 012_security_rls.sql (executeInTransaction=false, ELEVADA)
+-- 013_portal_externo.sql (executeInTransaction=false, ELEVADA)
+-- 014_mfa_sessoes.sql (executeInTransaction=false)
+-- 015_restauracao_logica.sql (executeInTransaction=false)
+estado final do migrador: 0 atributos elevados, 0 memberships, 0 sessoes
+historico depois: 001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true
+== implantacao OK
+== senhas dos servicos (verificadores SCRAM)
+== Platform, Portal e gateway
+AMBIENTE ensaio-lf CRIADO: https://homologacao.nekkora.test:55643 (publicado em 127.0.0.1). Proximo passo: homologacao.sh testar ensaio-lf

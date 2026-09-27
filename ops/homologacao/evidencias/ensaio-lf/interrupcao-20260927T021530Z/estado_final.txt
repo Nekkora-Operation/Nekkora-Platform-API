@@ -1,0 +1,4 @@
+historico do Flyway identico ao inicio: sim
+tabela/linha da versao 900: 0
+estado do migrador: 0|0|0; trava: ausente
+Portal pelo gateway depois da volta do banco (NK401 esperado): 401

@@ -1,0 +1,15 @@
+diff --git a/ops/homologacao/implantacao/elevacao.txt b/ops/homologacao/implantacao/elevacao.txt
+index 3b4377d..59f3177 100644
+--- a/ops/homologacao/implantacao/elevacao.txt
++++ b/ops/homologacao/implantacao/elevacao.txt
+@@ -9,6 +9,9 @@
+ #   013: CREATE ROLE; com papeis pre-criados, ALTER ROLE (inclusive ALTER ROLE nekkora_portal SET log_*)
+ # Autorizacao valida para a HOMOLOGACAO isolada (decisao do responsavel, 2026-09-26); nao se estende a producao.
+ # Versao ou sha256 novo so entra aqui com medicao e revisao.
++# 012: sha256 dos bytes LF versionados. O valor anterior (fd758edf...) era o de uma copia de trabalho com CRLF, de mesmo
++# conteudo SQL; num checkout limpo (LF, .gitattributes) a elevacao da 012 era recusada. A comparacao segue estrita por
++# bytes, com um unico sha256 por versao.
+ 011 38a509845cb4459311b7edfda135ad1ca46203af7387fa45f1e356b200e87ef9
+-012 fd758edfb66af9e6b1c17697ebeb2fd8ddf9ce22fa4673c358f28efa78d1fbd7
++012 d3929cc76261debb47740bb0167d1e3438e00b14e01eca2a793716e5ce8321f4
+ 013 c6192bff305f3888710ef9430751452b7a48a5bc7078691a16e16ddebb4c14d9

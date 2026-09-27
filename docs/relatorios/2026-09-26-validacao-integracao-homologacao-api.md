@@ -1,9 +1,27 @@
 # Integração da API v1 e preparação da homologação
 
-**Data:** 2026-09-26 — **revisão 4**, com os dois ajustes pedidos na quarta revisão do responsável.
-**Estado:** entregue **para revisão do mecanismo concreto** (scripts e evidências). Não é validação de ambiente de produção nem liberação para produção.
-**Integração:** `main` = `d608a96eea7e5eef5cc6ea6deee8d0c05b79e299`, publicada por fast-forward.
-**Mudanças desta missão:** branch `feat/homologacao` (a partir de `d608a96`), **sem commit**, aguardando a revisão.
+**Data:** 2026-09-26 — **revisão 4 aprovada e encerrada**, com a correção de reprodutibilidade da 012 (§0).
+**Estado:** **homologação isolada encerrada.** Não é validação de ambiente de produção nem liberação para produção.
+**Integração:** a API v1 (`d608a96`) e a homologação (`9491a3e`) foram publicadas na `main` por fast-forward. A correção da 012 entra por um commit próprio (§0).
+
+## 0. Encerramento
+
+- **Revisão:** a revisão r4 foi **encerrada sem bloqueio** pelo responsável. Foi uma revisão **estática e independente**: leitura do código, das evidências e do manifesto do pacote (sha256 do ZIP conferido, manifesto sem divergências, sintaxe dos 7 scripts). **O revisor não reexecutou Docker nem PostgreSQL.** As execuções são as registradas aqui.
+- **Os dois achados da r4 estão resolvidos:**
+  - **perda da trava:** as ações administrativas usam a própria sessão que detém o lock, e as conexões novas do Flyway conferem o backend esperado no `initSql` (I9a–c);
+  - **código de saída do `implantar`:** preserva a falha do runner e devolve 7 quando a conferência final recusa a liberação (I10).
+- **Limites mantidos:**
+  - uma conexão do Flyway já aberta pode concluir a migration em curso depois de perder a sessão da trava (I9a; um novo executor recusa enquanto ela existe);
+  - a aprovação vale **só para a homologação isolada**, dentro da cobertura registrada, e não se estende a produção.
+- **Correção de reprodutibilidade depois da integração** (achado na conferência do commit contra o pacote r4):
+  - **Achado:** a `elevacao.txt` autorizava a 012 pelo sha256 `fd758edf…`, que é o de uma cópia de trabalho com **CRLF**. O repositório guarda a 012 em LF, e o `.gitattributes` impõe LF no checkout. Num clone limpo da `main` (`9491a3e`), a 012 tem sha256 `d3929cc7…`, e o `criar` **recusava a elevação da 012 antes de conceder**. O controle falhou fechado, sem risco de segurança, mas a homologação não era reproduzível a partir da `main`.
+  - **Correção:** a linha 012 da `elevacao.txt` passou a ter o sha256 completo dos bytes LF versionados (`d3929cc76261debb47740bb0167d1e3438e00b14e01eca2a793716e5ce8321f4`), e a cópia de trabalho local da 012 foi normalizada para LF, com o SQL idêntico. A checagem continua **estrita por bytes**: sem normalização na comparação e com um único sha256 por versão.
+  - **Ensaio** (`evidencias/ensaio-lf-antes/` e `evidencias/ensaio-lf/`), com clones limpos de `origin/main` em `9491a3e`:
+    - **sem a correção:** 001–011 aplicadas e a 012 recusada antes de conceder (código 2), com o migrador `0|0|0` e o ambiente BLOQUEADO por instalação incompleta. O defeito foi reproduzido;
+    - **com a correção** (só a linha da `elevacao.txt`; patch nas evidências): criação completa, 001–015 com sucesso, elevação só em 011, 012 e 013 com o sha256 autorizado em cada janela, migrador `0|0|0` ao fim de cada janela e no final, `flyway validate` OK e ambiente **LIBERADO**;
+    - **hash divergente continua recusado:** a **I1** (sha256 errado) passou. Um ensaio pontual apresentou ao runner uma versão autorizada pelos bytes LF, mas entregue com CRLF e mesmo conteúdo SQL. Ela foi **recusada antes de conceder** (código 2), sem janela, com migrador `0|0|0` e histórico inalterado.
+  - **Hashes históricos:** as evidências anteriores a esta correção (hml02, hml03, ensaio-controles, ensaio-r3, ensaio-i8, ensaio-r4, ensaio-i8b, mapa de privilégios) e o relatório da API v1 registram `fd758edf…` para a 012. Esses valores ficam preservados como foram gerados: correspondiam à cópia de trabalho CRLF, de mesmo conteúdo SQL. O `hml03` também foi criado dessa cópia, com o registro de migrations dele consistente com ela, e continua LIBERADO.
+  - **Windows e caminhos longos:** algumas evidências têm até 142 caracteres a partir da raiz do repositório. Num diretório profundo, o checkout no Windows falha sem `core.longpaths`. Orientação no README: clonar num caminho curto ou usar `git clone -c core.longpaths=true`.
 
 **O que mudou na revisão 4** (só os caminhos afetados; I1–I7 foram repetidos porque todos passam pelas ações agora cercadas):
 - **Perda da sessão da trava:** antes, só a sessão `TRAVA_PG` segurava o lock, e as ações usavam outras conexões. Agora:
@@ -106,7 +124,7 @@ Detalhes em `ops/homologacao/IMPLANTACAO.md`.
 
 | Controle | Mecanismo | Evidência | Resultado |
 |---|---|---|---|
-| Versões e checksums autorizados | `elevacao.txt` = versão + sha256; sha256 diferente → recusa antes de conceder | Criação de `hml03`/`ensaio-controles` (sha256 em cada janela); **I1** | OK |
+| Versões e checksums autorizados | `elevacao.txt` = versão + sha256 dos bytes versionados (LF); sha256 diferente → recusa antes de conceder, sem normalizar fim de linha | Criação de `hml03`/`ensaio-controles` (sha256 em cada janela); **I1**; clone limpo com a correção da 012 e variante CRLF recusada (§0) | OK |
 | Exclusão de implantações **e recuperações** simultâneas | **Trava no banco:** advisory lock de sessão único no cluster do ambiente (`pg_try_advisory_lock(20260926, 1)`), disputado por `implantar.sh` (usado por `criar` e `implantar`) e por `recuperar`. É obtido **antes de qualquer ação** e segurado até o fim, cobrindo a janela inteira. Quem não obtém sai sem elevar, revogar, encerrar sessões nem remover containers. A trava local e a pré-condição `0\|0\|0` continuam como camadas adicionais | **I6** (5 rodadas de largada simultânea antes da elevação, com travas locais diferentes. Em todas, só um prosseguiu. O perdedor saiu com código 3 e uma única linha de registro, sem janela e sem trava local. O vencedor seguiu elevado e terminou pela falha de ensaio, `division by zero`, não por conexão encerrada); **I7** (`recuperar` durante implantação ativa: recusado sem alterar nada, e o migrador seguiu elevado até o fim normal do runner); **I2**/**I3** (segunda implantação com o primeiro já elevado, com a mesma trava local e com outra: recusada pela trava no banco) | OK |
 | Encerramento das conexões e conferência final | Depois de cada janela e no fim: revogar atributos, encerrar sessões do migrador, conferir `0\|0\|0`; só então liberar a trava | `janelas_de_elevacao.txt` de `hml03`; **I4** (sessão órfã encerrada pela recuperação) | OK |
 | **Perda da sessão da trava** | Ações privilegiadas só pela própria sessão da trava, que antes confere o lock; cada conexão do Flyway confere no `initSql` o lock com o backend da execução; perdida a trava, o runner para (código 6) sem revogar nem encerrar sessões e mantém a trava local; o `recuperar` também age pela sessão da trava | **I9a** (Flyway de A em execução: B obteve a trava, viu `1\|0\|1` e saiu sem agir; A terminou a migration em curso e parou com código 6 sem revogar); **I9b** (A parado logo antes de conceder: B entrou, elevou e executou; A retomou na janela de B e parou com código 6 sem conceder, revogar nem encerrar; B terminou normalmente, com a própria revogação conferida); **I9c** (A elevado, depois da conferência pontual, com outro executor dono da trava: Flyway de A recusado na conexão pelo `initSql`, nenhuma migration) | OK |
@@ -177,8 +195,8 @@ O estado residual real que essa rodada deixou foi recuperado pelo `recuperar` co
 | Gate | Situação | Motivo / próxima ação |
 |---|---|---|
 | Integração da API v1 à `main` | **Encerrado** | `d608a96` em `origin/main` |
-| Homologação isolada reproduzível | **Pronta para revisão do mecanismo** | Revisar `ops/homologacao/` e as evidências; depois versionar em `feat/homologacao` |
-| Flyway / credencial de migration dedicada | **Direção aceita para a homologação; fechamento pendente da revisão dos ajustes da revisão 4** | Exclusão compartilhada no banco (I6, I7), liberação em duas partes (I8), perda da sessão da trava (I9) e código de saída do `implantar` (I10) implementados e ensaiados, junto com I1–I5. Não se estende a produção |
+| Homologação isolada reproduzível | **Encerrado** | Revisão r4 encerrada sem bloqueio; versionada na `main`. Reprodução a partir de clone limpo conferida depois da correção da 012 (§0) |
+| Flyway / credencial de migration dedicada | **Encerrado para a homologação isolada** (não se estende a produção) | Exclusão compartilhada no banco (I6, I7), liberação em duas partes (I8), perda da sessão da trava (I9) e código de saída do `implantar` (I10) implementados e ensaiados, junto com I1–I5. Não se estende a produção |
 | Backup e restauração (operação) | Aberto | A 015 foi abrangida pelo encerramento da revisão r3. Continuam os gates operacionais: identidade e rotina de backup em produção, retenção e ensaio periódico de restauração, procedimento para backup antigo |
 | E-mail real | Aberto | Missão própria |
 | *Break-glass* de MFA | Aberto | Missão própria |
@@ -212,11 +230,12 @@ HOMOLOG_CONFIRMA_DESTRUIR=ensaio-y ops/homologacao/homologacao.sh destruir ensai
 ops/homologacao/homologacao.sh criar hml04 && ops/homologacao/homologacao.sh testar hml04
 ```
 
-## 10. Arquivos desta missão (branch `feat/homologacao`, sem commit)
+## 10. Arquivos desta missão (versionados: `9491a3e` e o commit da correção da 012)
 
 - **Novos:**
   - `ops/homologacao/`: compose, `pg_hba`, gateway, implantação (`implantar.sh`, `elevacao.txt`), `homologacao.sh`, `lib/`, `testes/` (inclusive `interrupcao.sh` e `instalacao_incompleta.sh`), SQL, README, `IMPLANTACAO.md`, `exemplo.env`, evidências oficiais;
   - `api/nekkora-platform/src/test/java/com/nekkora/platform/auth/crypto/PhcTool.java` (só teste);
   - este relatório.
+- **Correção posterior:** a linha 012 de `ops/homologacao/implantacao/elevacao.txt` (hash LF), com as evidências `ensaio-lf-antes/` e `ensaio-lf/` e as notas de encerramento.
 - **Modificado:** `db/tests/atualizacao-populada/README.md`.
 - **Não modificados:** migrations 001–015, código de produção da API e a stack principal.

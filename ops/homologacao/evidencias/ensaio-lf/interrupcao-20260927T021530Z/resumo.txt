@@ -1,0 +1,2 @@
+caso|resultado|detalhe
+I1|OK|sha256 diferente do autorizado: recusado antes de conceder (rc=2), nenhuma janela aberta, estado limpo, trava liberada

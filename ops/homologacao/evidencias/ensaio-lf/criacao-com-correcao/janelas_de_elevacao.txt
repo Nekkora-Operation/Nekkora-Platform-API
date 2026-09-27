@@ -1,0 +1,6 @@
+2026-09-27T02:14:02.232Z inicio versao=011 SUPERUSER concedido (sha256 38a509845cb4459311b7edfda135ad1ca46203af7387fa45f1e356b200e87ef9 autorizado)
+2026-09-27T02:14:06.902Z fim    versao=011 SUPERUSER revogado, sessoes encerradas, estado conferido (0|0|0) [fim da versao 011]
+2026-09-27T02:14:07.473Z inicio versao=012 SUPERUSER concedido (sha256 d3929cc76261debb47740bb0167d1e3438e00b14e01eca2a793716e5ce8321f4 autorizado)
+2026-09-27T02:14:12.183Z fim    versao=012 SUPERUSER revogado, sessoes encerradas, estado conferido (0|0|0) [fim da versao 012]
+2026-09-27T02:14:12.801Z inicio versao=013 SUPERUSER concedido (sha256 c6192bff305f3888710ef9430751452b7a48a5bc7078691a16e16ddebb4c14d9 autorizado)
+2026-09-27T02:14:17.811Z fim    versao=013 SUPERUSER revogado, sessoes encerradas, estado conferido (0|0|0) [fim da versao 013]

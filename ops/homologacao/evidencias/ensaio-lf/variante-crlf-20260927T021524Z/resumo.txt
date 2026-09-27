@@ -1,0 +1,8 @@
+sha256 LF autorizado : 5e7e9277f6fc51061fa02be88a9f4df45a753242b0b3ed9c0b81aa8f861cc281
+sha256 CRLF entregue : 44ea1f2fd3b46c4da343da7589761a1ed2422471aa28de47d52f0a26aaf6e899
+conteudo igual fora o fim de linha: True
+runner rc=2
+janela aberta: nao
+migrador: 0|0|0
+historico inalterado: sim
+FALHA: versao 900: sha256 44ea1f2fd3b46c4da343da7589761a1ed2422471aa28de47d52f0a26aaf6e899 diferente do autorizado (5e7e9277f6fc51061fa02be88a9f4df45a753242b0b3ed9c0b81aa8f861cc281); elevacao RECUSADA antes de conceder

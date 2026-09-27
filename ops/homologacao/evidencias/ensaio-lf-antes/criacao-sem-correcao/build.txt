@@ -1,0 +1,75 @@
+ Image nekkora-homologacao-platform:d608a96 Building 
+ Image nekkora-homologacao-portal:d608a96 Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 1.38kB 0.0s done
+#1 DONE 0.0s
+
+#2 [platform internal] load build definition from Dockerfile
+#2 transferring dockerfile: 524B 0.0s done
+#2 DONE 0.0s
+
+#3 [platform internal] load metadata for docker.io/library/eclipse-temurin:21-jre-alpine
+#3 DONE 0.0s
+
+#4 [portal internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [platform 1/3] FROM docker.io/library/eclipse-temurin:21-jre-alpine@sha256:51ab5e3302e7141ce665ca3ea85e8b5cd648eafbc3c0c90dd79d6537684e4555
+#5 resolve docker.io/library/eclipse-temurin:21-jre-alpine@sha256:51ab5e3302e7141ce665ca3ea85e8b5cd648eafbc3c0c90dd79d6537684e4555 0.0s done
+#5 resolve docker.io/library/eclipse-temurin:21-jre-alpine@sha256:51ab5e3302e7141ce665ca3ea85e8b5cd648eafbc3c0c90dd79d6537684e4555 0.0s done
+#5 DONE 0.0s
+
+#6 [platform internal] load build context
+#6 ...
+
+#7 [portal internal] load build context
+#7 transferring context: 35.59MB 3.8s done
+#7 DONE 3.8s
+
+#8 [portal 2/3] RUN addgroup -S nekkora && adduser -S -G nekkora -H nekkora
+#8 CACHED
+
+#6 [platform internal] load build context
+#6 ...
+
+#9 [portal 3/3] COPY --chown=root:root nekkora-portal/target/nekkora-portal-0.1.0-SNAPSHOT.jar /app/app.jar
+#9 DONE 0.1s
+
+#6 [platform internal] load build context
+#6 transferring context: 46.85MB 4.4s done
+#6 DONE 4.4s
+
+#10 [platform 3/3] COPY --chown=root:root nekkora-platform/target/nekkora-platform-0.1.0-SNAPSHOT.jar /app/app.jar
+#10 DONE 0.2s
+
+#11 [portal] exporting to image
+#11 exporting layers
+#11 exporting layers 1.1s done
+#11 exporting manifest sha256:40ede6295fbf838450c313d92d7784a5317ceeca1b9a334f770430e5a06bf50f 0.0s done
+#11 exporting config sha256:017288ed987c00c920f8794a5acaf50fa612e78ffd147e801d51d33ae2dbbe0b 0.0s done
+#11 exporting attestation manifest sha256:ad6c11aaf7a46489e6ddde1525c3e101dee67718b9c680381fbaa5723606bbb5 0.0s done
+#11 exporting manifest list sha256:4723035473ecd41b56981f6c09b5eb350462d76d30036c4482c99b40fa76f683 0.0s done
+#11 naming to docker.io/library/nekkora-homologacao-portal:d608a96 done
+#11 unpacking to docker.io/library/nekkora-homologacao-portal:d608a96
+#11 unpacking to docker.io/library/nekkora-homologacao-portal:d608a96 0.2s done
+#11 DONE 1.4s
+
+#12 [portal] resolving provenance for metadata file
+#12 DONE 0.0s
+
+#13 [platform] exporting to image
+#13 exporting layers 1.3s done
+#13 exporting manifest sha256:ef8984225a285f453cd0ccc30aac44a987bc01f4cb0b51a9094bfb68ded91526 0.0s done
+#13 exporting config sha256:cbbddb7d4f54f8268d747a1e5f560ac3a129bc74c82aa2390e2691197a8d1d2c 0.0s done
+#13 exporting attestation manifest sha256:3226359e3f03ca2ffe35c4bfbb6b344d9a464215f480078ee335d2c74c7b3ad3 0.0s done
+#13 exporting manifest list sha256:48ca69c6d2f78b16e5c9ad1a87bb17e023109fc737bafeff550beec9438b8541 0.0s done
+#13 naming to docker.io/library/nekkora-homologacao-platform:d608a96 done
+#13 unpacking to docker.io/library/nekkora-homologacao-platform:d608a96
+#13 unpacking to docker.io/library/nekkora-homologacao-platform:d608a96 0.2s done
+#13 DONE 1.6s
+
+#14 [platform] resolving provenance for metadata file
+#14 DONE 0.0s
+ Image nekkora-homologacao-platform:d608a96 Built 
+ Image nekkora-homologacao-portal:d608a96 Built 
