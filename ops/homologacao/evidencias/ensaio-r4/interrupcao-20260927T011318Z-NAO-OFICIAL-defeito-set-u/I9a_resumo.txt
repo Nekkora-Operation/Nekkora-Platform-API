@@ -1,0 +1,4 @@
+pid do backend da trava derrubado: 
+runner A vivo depois da queda: nao
+B: rc=1; A: rc=1
+estado do migrador ao fim de A (antes de recuperar): 0|0|0

@@ -1,0 +1,2 @@
+ERROR:  permission denied to alter role
+DETAIL:  Only roles with the SUPERUSER attribute may change the SUPERUSER attribute.

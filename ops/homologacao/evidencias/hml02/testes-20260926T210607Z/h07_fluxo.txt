@@ -1,0 +1,17 @@
+OK    H07.prep sessao para a fase Redis fora esperado=200 obtido=200
+OK    H07.01 Redis fora: CSRF de pre-autenticacao -> 503 esperado=503 obtido=503
+OK    H07.02 Redis fora: corpo generico esperado={'error': 'service_unavailable'} obtido={'error': 'service_unavailable'}
+OK    H07.03 Redis fora: leitura autenticada (Platform) segue esperado=200 obtido=200
+OK    H07.04 Redis fora: escrita autenticada comum -> 503 esperado=503 obtido=503
+OK    H07.05 Redis fora: revoke-all segue (reduz acesso) esperado=204 obtido=204
+OK    H07.06 Redis fora: sessao revogada esperado=401 obtido=401
+OK    H07.prep logins novos para a fase R7 esperado=(200, 200, 200) obtido=(200, 200, 200)
+OK    H07.07 cota R7 da sessao esgotada (sessao valida, depois 429 rate_limited da aplicacao) esperado=True obtido=True
+OK    H07.08 controle: escrita comum com a cota esgotada -> 429 com Retry-After esperado=True obtido=True
+OK    H07.09 logout com a cota esgotada esperado=204 obtido=204
+OK    H07.10 logout revogou de fato esperado=401 obtido=401
+OK    H07.11 cota R7 esgotada na sessao do revoke-all (sessao valida, depois 429) esperado=True obtido=True
+OK    H07.12 revoke-all com a cota esgotada esperado=204 obtido=204
+OK    H07.13 revoke-all revogou a outra sessao da conta esperado=401 obtido=401
+OK    H07.14 logout sem sessao: idempotente (204) esperado=204 obtido=204
+OK    H07.15 revoke-all sem sessao: 401 esperado=401 obtido=401

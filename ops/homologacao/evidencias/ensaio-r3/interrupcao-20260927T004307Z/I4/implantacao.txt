@@ -1,0 +1,13 @@
+== implantacao 2026-09-27T00:44:21.685Z (lista de elevacao: lista_autorizada.txt)
+historico antes: 001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true
+-- 900_pausa_ensaio.sql (executeInTransaction=true, ELEVADA)
+ Container nekkora-homologacao-ensaio-r3-flyway-run-77da2cb7a5ce Creating 
+ Container nekkora-homologacao-ensaio-r3-flyway-run-77da2cb7a5ce Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 16 migrations (execution time 00:00.082s)
+Current version of schema "public": 015
+Migrating schema "public" to version "900 - pausa ensaio"
+

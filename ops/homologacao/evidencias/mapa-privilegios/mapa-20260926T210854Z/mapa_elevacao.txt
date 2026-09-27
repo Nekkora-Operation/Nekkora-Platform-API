@@ -1,0 +1,16 @@
+migration|aplica_sem_elevacao|primeiro_erro
+001_initial.sql|sim|-
+002_identity.sql|sim|-
+003_access_control.sql|sim|-
+004_workers_agents.sql|sim|-
+005_automations_versions.sql|sim|-
+006_executions.sql|sim|-
+007_events_logs.sql|sim|-
+008_parametros_secrets.sql|sim|-
+009_agendamentos.sql|sim|-
+010_recursos_limites_retencao.sql|sim|-
+011_fechamento_expurgo.sql|NAO|ERROR:  permission denied to create role
+012_security_rls.sql|NAO|ERROR:  permission denied to create role
+013_portal_externo.sql|NAO|ERROR:  permission denied to create role
+014_mfa_sessoes.sql|sim|-
+015_restauracao_logica.sql|sim|-

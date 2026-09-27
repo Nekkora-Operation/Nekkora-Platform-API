@@ -1,0 +1,7 @@
+caso|resultado|detalhe
+I9a|FALHA|janela nao abriu
+I9a|FALHA|B rc=1, A rc=1, A vivo=nao, estado=0|0|0 (ver I9a*)
+I9b|FALHA|B nao elevou
+I9b|FALHA|A rc=6, B rc=1, B vivo=nao, estado=0|0|0 (ver I9b*)
+I9c|OK|conferencia pontual aprovada e a sessao da trava cai logo depois, com outro executor ja dono da trava: o Flyway de A foi recusado na conexao pelo initSql (nenhuma migration executada); A PAROU com codigo 6 sem revogar a elevacao; 'recuperar' limpou
+I10|OK|runner concluido (implantacao OK) com a conferencia final recusada (registro de migrations divergente): implantar retornou 7 (diferente de zero); com o registro restaurado: implantar retornou 0 e LIBERADO

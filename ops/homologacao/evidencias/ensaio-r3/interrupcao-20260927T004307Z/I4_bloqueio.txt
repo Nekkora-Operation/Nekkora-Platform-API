@@ -1,0 +1,11 @@
+depois do kill -9 e do docker kill: estado do migrador 1|0|1; trava local presente; trava no banco ocupada: 0
+-- homologacao.sh estado:
+BLOQUEIO: trava local de implantacao presente (pid=937 host=Nicolly inicio=2026-09-27T00:44:21.666Z id=ensaio-r3)
+BLOQUEIO: migrador_nekkora com estado '1|0|1' (atributos elevados|memberships|sessoes ativas)
+BLOQUEADO
+rc=1
+-- homologacao.sh testar (tem de recusar):
+BLOQUEIO: migrador_nekkora com estado '1|0|1' (atributos elevados|memberships|sessoes ativas)
+BLOQUEADO
+ERRO: ambiente BLOQUEADO: testes e liberacao recusados (homologacao.sh recuperar ensaio-r3)
+rc=1

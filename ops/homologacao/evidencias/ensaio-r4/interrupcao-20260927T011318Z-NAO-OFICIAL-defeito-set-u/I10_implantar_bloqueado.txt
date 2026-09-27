@@ -1,0 +1,10 @@
+== implantacao 2026-09-27T01:18:23.490Z (lista de elevacao: elevacao.txt)
+historico antes: 001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true
+estado final do migrador: 0 atributos elevados, 0 memberships, 0 sessoes
+historico depois: 001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true
+== implantacao OK
+-- liberacao depois da implantacao:
+migrador recuperado: sem trava local, trava no banco livre, migrador 0|0|0
+BLOQUEIO: conjunto de migrations do ambiente ausente ou diferente do registrado na criacao
+BLOQUEADO
+ERRO: implantacao concluida, mas a conferencia final recusou a liberacao: ambiente BLOQUEADO

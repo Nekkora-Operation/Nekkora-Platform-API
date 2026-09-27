@@ -1,0 +1,1 @@
+FALHA: implantacao interrompida neste host (trava local /c/Users/nicol/nekkora/nekkora-platform/ops/homologacao/saidas/ensaio-r4/implantacao.trava: pid=1471 host=Nicolly inicio=2026-09-27T01:20:38.672Z id=ensaio-r4). Nada foi feito. homologacao.sh recuperar ensaio-r4

@@ -1,0 +1,3 @@
+pid do backend da trava de A derrubado: 3399
+trava do novo vencedor (ensaio): obtida (backend 3465)
+A: rc=6; estado ao fim de A: 1|0|0; linhas 900 no historico: 0

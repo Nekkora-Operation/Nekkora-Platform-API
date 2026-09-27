@@ -25,7 +25,7 @@ Requisitos: Docker, Git Bash/Linux/macOS e Python 3. As imagens `postgres:16-alp
 4. **Flyway:**
    - `migrate` sem baseline **precisa falhar** ("non-empty schema"), sem deixar histórico nem mudar o catálogo;
    - depois vêm `baseline -baselineVersion=012`, `migrate` (013, 014, 015), `validate` e `info`;
-   - configuração: `sqlMigrationPrefix` vazio, separador `_` (os arquivos são `NNN_nome.sql`), `executeInTransaction=false` (cada migration já é atômica pelo próprio `BEGIN`/`COMMIT`), `postgresql.transactional.lock=false`, `baselineOnMigrate=false`.
+   - configuração: `sqlMigrationPrefix` vazio, separador `_` (os arquivos são `NNN_nome.sql`), `executeInTransaction=false` (as migrations aplicadas aqui, 013–015, são atômicas pelo próprio `BEGIN`/`COMMIT`), `postgresql.transactional.lock=false`, `baselineOnMigrate=false`.
 5. **Depois da atualização:**
    - **catálogo** igual ao de uma instalação limpa 001–015, exceto a tabela `flyway_schema_history`. De 012 para 015, a única linha de 001–012 alterada tem que ser o `search_path` de `is_valid_command_contract` (asserção);
    - **dados:** cada linha anterior permanece idêntica, exceto o previsto pela 014 (a permissão `identity.mfa.reset`, a concessão dela ao ORG_ADMIN e `revoked_at` preenchido nas sessões que o tinham nulo). A comparação de `user_sessions` é linha a linha: só `revoked_at` muda, e só de nulo para preenchido;
@@ -33,6 +33,13 @@ Requisitos: Docker, Git Bash/Linux/macOS e Python 3. As imagens `postgres:16-alp
    - **segredos:** nenhum token ou CSRF nas saídas nem no log do servidor;
    - **restauração lógica da cópia atualizada** (backup gerado depois da 015): `pg_restore --exit-on-error` passa, com contagens por tabela idênticas;
    - **origem intacta:** mesmos dados, mesmo catálogo, sem histórico do Flyway.
+
+## Correção (2026-09-26, missão de homologação)
+
+A versão anterior deste README dizia que "cada migration já é atômica pelo próprio `BEGIN`/`COMMIT`". Isso só vale para **012–015**: as migrations **001–011 não têm `BEGIN`/`COMMIT`**.
+- **Este ensaio continua correto:** o baseline é 012 e ele só aplica 013–015.
+- **Numa instalação nova pelo Flyway,** `executeInTransaction=false` aplicaria 001–011 em autocommit. Uma falha no meio deixaria estado parcial **e** `success=false` no histórico (medido).
+- **A implantação da homologação** (`ops/homologacao/implantacao/implantar.sh`) escolhe o modo por arquivo: `true` para 001–011 e `false` para as que têm `BEGIN` próprio.
 
 ## Credencial
 

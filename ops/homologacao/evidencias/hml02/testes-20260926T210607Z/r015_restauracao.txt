@@ -1,0 +1,4 @@
+backup: pg_dump -Fc e pg_dumpall --roles-only --no-role-passwords como backup_nekkora (580999 bytes)
+restauracao completa (pg_restore --create --exit-on-error): rc=0
+catalogo identico (3517 linhas), inclusive donos migrador_nekkora e os owners protegidos
+dados identicos: 50 tabelas, 177 linhas

@@ -1,0 +1,17 @@
+gateway HTTPS com a CA da homologacao: 200
+gateway: cadeia verificada (Verify return code 0), TLSv1.3
+gateway recusa TLS 1.1
+admin verify-full (CA correta): tls=true TLSv1.3
+texto claro (sslmode=disable): psql: error: connection to server at "postgres" (10.252.10.10), port 5432 failed: FATAL:  pg_hba.conf rejects connection for host "10.252.10.31", user "admin_cl
+CA errada: psql: error: connection to server at "postgres" (10.252.10.10), port 5432 failed: SSL error: certificate verify failed
+nome do servidor diferente do certificado: psql: error: connection to server at "10.252.10.10", port 5432 failed: server certificate for "postgres" (and 1 other name) does not match host name "10.252.10.
+senha errada: psql: error: connection to server at "postgres" (10.252.10.10), port 5432 failed: FATAL:  password authentication failed for user "admin_cluster"
+papel da Platform fora do proprio container: psql: error: connection to server at "postgres" (10.252.10.10), port 5432 failed: FATAL:  pg_hba.conf rejects connection for host "10.252.10.31", user "nekkora_
+rede interna sem saida (pg_isready 1.1.1.1:443): rc=2
+Redis sem TLS: Error: Connection reset by peer
+Redis TLS anonimo: NOAUTH Authentication required.
+Redis TLS usuario platform: PONG
+platform em chave fora de nk:*: NOPERM No permissions to access a key
+platform FLUSHALL: NOPERM User platform has no permissions to run the 'flushall' command
+portal em chave de CSRF da Platform: NOPERM No permissions to access a key
+application.yml: nenhum segredo com valor padrao

@@ -1,0 +1,2 @@
+2026-09-27T00:43:50.251Z inicio versao=900 SUPERUSER concedido (sha256 b8592c865a8e8812ae8237f39d988f110f0a50df254c3d50181020f39604ced7 autorizado)
+2026-09-27T00:44:19.960Z fim    versao=900 SUPERUSER revogado, sessoes encerradas, estado conferido (0|0|0) [falha]

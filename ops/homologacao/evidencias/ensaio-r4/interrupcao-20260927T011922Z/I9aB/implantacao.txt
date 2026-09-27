@@ -1,0 +1,2 @@
+== implantacao 2026-09-27T01:23:57.766Z (lista de elevacao: lista_i6.txt)
+FALHA: pre-condicao - estado do migrador '1|0|1' (esperado 0|0|0: sem atributo elevado, sem membership, sem sessao ativa; residuo de implantacao interrompida). Nada foi feito.

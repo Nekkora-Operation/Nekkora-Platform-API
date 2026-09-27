@@ -1,0 +1,26 @@
+OK    H05.01 CSRF pre-autenticacao pelo gateway esperado=200 obtido=200
+OK    H05.02 cookie __Host-nekkora_pre: Secure, HttpOnly, Path=/, SameSite=Strict, sem Domain esperado=True obtido=True
+OK    H05.03 externo: primeiro acesso com cadastro de MFA (Platform) esperado=200 obtido=200
+OK    H05.04 cookie __Host-nekkora_session: Secure, HttpOnly, Path=/, SameSite=Lax, sem Domain esperado=True obtido=True
+OK    H05.05 externo: /me na Platform esperado=200 obtido=200
+OK    H05.06 Portal (outro processo) aceita o cookie: lista de workspaces esperado=200 obtido=200
+OK    H05.07 so o workspace concedido esperado=['17d79be3-d2f5-43b9-9dd5-50a46a2145b4'] obtido=['17d79be3-d2f5-43b9-9dd5-50a46a2145b4']
+OK    H05.08 execucoes do workspace concedido esperado=True obtido=True
+OK    H05.09 detalhe da execucao concedida esperado=200 obtido=200
+OK    H05.10 execucao de outro cliente da mesma organizacao: 404 esperado=404 obtido=404
+OK    H05.11 organizacao B pela URL com sessao de A (Portal): 401 esperado=401 obtido=401
+OK    H05.12 organizacao B pela URL com sessao de A (Platform): 401 esperado=401 obtido=401
+OK    H05.13 Portal so GET: POST -> 404 esperado=404 obtido=404
+OK    H05.14 externo da organizacao B: login com MFA esperado=200 obtido=200
+OK    H05.15 B ve so o proprio workspace esperado=['8f3df3bf-8ebc-4843-88cb-b57e586d33f1'] obtido=['8f3df3bf-8ebc-4843-88cb-b57e586d33f1']
+OK    H05.16 B nao le execucao de A: 401 (org da sessao) esperado=401 obtido=401
+OK    H05.17 interno da organizacao A: login com MFA esperado=200 obtido=200
+OK    H05.18 interno: /me esperado=200 obtido=200
+OK    H05.19 logout na Platform esperado=204 obtido=204
+OK    H05.20 cookie apos logout: Portal 401 esperado=401 obtido=401
+OK    H05.21 cookie apos logout: Platform 401 esperado=401 obtido=401
+OK    H05.22 segundo login (mfa_required + verificacao) esperado=200 obtido=200
+OK    H05.23 revoke-all sem CSRF: 403 esperado=403 obtido=403
+OK    H05.24 revoke-all com Origin estranho: 403 esperado=403 obtido=403
+OK    H05.25 revoke-all valido esperado=204 obtido=204
+OK    H05.26 apos revoke-all: Portal 401 esperado=401 obtido=401

@@ -1,0 +1,2 @@
+== implantacao 2026-09-26T21:36:49.516Z (lista de elevacao: elevacao.txt)
+FALHA: pre-condicao - estado do migrador '1|0|0' (esperado 0|0|0: sem atributo elevado, sem membership, sem sessao ativa; sessao ativa = possivel implantacao de outro host). Nada foi feito.

@@ -1,0 +1,12 @@
+/c/Users/nicol/nekkora/nekkora-platform/ops/homologacao/testes/interrupcao.sh: line 113:  1471 Killed                     ( exec env "$@" HOMOLOG_ELEVACAO_ARQ="$lista" HOMOLOG_AUTORIZA_ELEVACAO=1 HOMOLOG_MIGRACOES="$(cygpath -m "$M")" HOMOLOG_MIGRACOES_HOST="$M" HOMOLOG_EVID="$EV/$caso" bash "$AQUI/implantacao/implantar.sh" > "$EV/${caso}_saida.txt" 2>&1 )
+depois do kill -9 e do docker kill: estado do migrador 1|0|1; trava local presente; trava no banco ocupada: 0
+-- homologacao.sh estado:
+BLOQUEIO: trava local de implantacao presente (pid=1471 host=Nicolly inicio=2026-09-27T01:20:38.672Z id=ensaio-r4)
+BLOQUEIO: migrador_nekkora com estado '1|0|1' (atributos elevados|memberships|sessoes ativas)
+BLOQUEADO
+rc=1
+-- homologacao.sh testar (tem de recusar):
+BLOQUEIO: migrador_nekkora com estado '1|0|1' (atributos elevados|memberships|sessoes ativas)
+BLOQUEADO
+ERRO: ambiente BLOQUEADO: testes e liberacao recusados (homologacao.sh recuperar ensaio-r4)
+rc=1

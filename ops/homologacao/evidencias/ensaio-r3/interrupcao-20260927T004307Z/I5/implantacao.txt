@@ -1,0 +1,97 @@
+== implantacao 2026-09-27T00:44:51.706Z (lista de elevacao: lista_autorizada.txt)
+historico antes: 001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true
+-- 900_pausa_ensaio.sql (executeInTransaction=true, ELEVADA)
+ Container nekkora-homologacao-ensaio-r3-flyway-run-0a6e0739f7ad Creating 
+ Container nekkora-homologacao-ensaio-r3-flyway-run-0a6e0739f7ad Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 16 migrations (execution time 00:00.084s)
+Current version of schema "public": 015
+Migrating schema "public" to version "900 - pausa ensaio"
+ERROR: Unable to rollback transaction
+org.postgresql.util.PSQLException: This connection has been closed.
+	at org.postgresql.jdbc.PgConnection.checkClosed(PgConnection.java:1009)
+	at org.postgresql.jdbc.PgConnection.rollback(PgConnection.java:1016)
+	at org.flywaydb.core.internal.jdbc.TransactionalExecutionTemplate.execute(TransactionalExecutionTemplate.java:75)
+	at org.flywaydb.core.internal.command.DbMigrate.applyMigrations(DbMigrate.java:282)
+	at org.flywaydb.core.internal.command.DbMigrate.migrateGroup(DbMigrate.java:255)
+	at org.flywaydb.core.internal.command.DbMigrate.lambda$migrateAll$0(DbMigrate.java:153)
+	at org.flywaydb.database.postgresql.PostgreSQLAdvisoryLockTemplate.execute(PostgreSQLAdvisoryLockTemplate.java:77)
+	at org.flywaydb.database.postgresql.PostgreSQLAdvisoryLockTemplate.execute(PostgreSQLAdvisoryLockTemplate.java:64)
+	at org.flywaydb.database.postgresql.PostgreSQLConnection.lock(PostgreSQLConnection.java:105)
+	at org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory.lock(JdbcTableSchemaHistory.java:164)
+	at org.flywaydb.core.internal.command.DbMigrate.migrateAll(DbMigrate.java:153)
+	at org.flywaydb.core.internal.command.DbMigrate.migrate(DbMigrate.java:104)
+	at org.flywaydb.core.Flyway.lambda$migrate$3(Flyway.java:246)
+	at org.flywaydb.core.FlywayExecutor.execute(FlywayExecutor.java:234)
+	at org.flywaydb.core.FlywayExecutor.execute(FlywayExecutor.java:118)
+	at org.flywaydb.core.Flyway.migrate(Flyway.java:187)
+	at org.flywaydb.commandline.Main.executeOperation(Main.java:294)
+	at org.flywaydb.commandline.Main.executeFlyway(Main.java:208)
+	at org.flywaydb.commandline.Main.main(Main.java:135)
+ERROR: Unable to restore autocommit to original value for connection
+org.postgresql.util.PSQLException: This connection has been closed.
+	at org.postgresql.jdbc.PgConnection.checkClosed(PgConnection.java:1009)
+	at org.postgresql.jdbc.PgConnection.setAutoCommit(PgConnection.java:938)
+	at org.flywaydb.core.internal.jdbc.TransactionalExecutionTemplate.execute(TransactionalExecutionTemplate.java:90)
+	at org.flywaydb.core.internal.command.DbMigrate.applyMigrations(DbMigrate.java:282)
+	at org.flywaydb.core.internal.command.DbMigrate.migrateGroup(DbMigrate.java:255)
+	at org.flywaydb.core.internal.command.DbMigrate.lambda$migrateAll$0(DbMigrate.java:153)
+	at org.flywaydb.database.postgresql.PostgreSQLAdvisoryLockTemplate.execute(PostgreSQLAdvisoryLockTemplate.java:77)
+	at org.flywaydb.database.postgresql.PostgreSQLAdvisoryLockTemplate.execute(PostgreSQLAdvisoryLockTemplate.java:64)
+	at org.flywaydb.database.postgresql.PostgreSQLConnection.lock(PostgreSQLConnection.java:105)
+	at org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory.lock(JdbcTableSchemaHistory.java:164)
+	at org.flywaydb.core.internal.command.DbMigrate.migrateAll(DbMigrate.java:153)
+	at org.flywaydb.core.internal.command.DbMigrate.migrate(DbMigrate.java:104)
+	at org.flywaydb.core.Flyway.lambda$migrate$3(Flyway.java:246)
+	at org.flywaydb.core.FlywayExecutor.execute(FlywayExecutor.java:234)
+	at org.flywaydb.core.FlywayExecutor.execute(FlywayExecutor.java:118)
+	at org.flywaydb.core.Flyway.migrate(Flyway.java:187)
+	at org.flywaydb.commandline.Main.executeOperation(Main.java:294)
+	at org.flywaydb.commandline.Main.executeFlyway(Main.java:208)
+	at org.flywaydb.commandline.Main.main(Main.java:135)
+ERROR: Migration of schema "public" to version "900 - pausa ensaio" failed! Changes successfully rolled back.
+ERROR: Unable to release PostgreSQL advisory lock
+org.postgresql.util.PSQLException: This connection has been closed.
+	at org.postgresql.jdbc.PgConnection.checkClosed(PgConnection.java:1009)
+	at org.postgresql.jdbc.PgConnection.prepareStatement(PgConnection.java:1859)
+	at org.postgresql.jdbc.PgConnection.prepareStatement(PgConnection.java:534)
+	at org.flywaydb.core.internal.jdbc.JdbcTemplate.prepareStatement(JdbcTemplate.java:332)
+	at org.flywaydb.core.internal.jdbc.JdbcTemplate.queryForBoolean(JdbcTemplate.java:155)
+	at org.flywaydb.database.postgresql.PostgreSQLAdvisoryLockTemplate.unlock(PostgreSQLAdvisoryLockTemplate.java:107)
+	at org.flywaydb.database.postgresql.PostgreSQLAdvisoryLockTemplate.execute(PostgreSQLAdvisoryLockTemplate.java:69)
+	at org.flywaydb.database.postgresql.PostgreSQLConnection.lock(PostgreSQLConnection.java:105)
+	at org.flywaydb.core.internal.schemahistory.JdbcTableSchemaHistory.lock(JdbcTableSchemaHistory.java:164)
+	at org.flywaydb.core.internal.command.DbMigrate.migrateAll(DbMigrate.java:153)
+	at org.flywaydb.core.internal.command.DbMigrate.migrate(DbMigrate.java:104)
+	at org.flywaydb.core.Flyway.lambda$migrate$3(Flyway.java:246)
+	at org.flywaydb.core.FlywayExecutor.execute(FlywayExecutor.java:234)
+	at org.flywaydb.core.FlywayExecutor.execute(FlywayExecutor.java:118)
+	at org.flywaydb.core.Flyway.migrate(Flyway.java:187)
+	at org.flywaydb.commandline.Main.executeOperation(Main.java:294)
+	at org.flywaydb.commandline.Main.executeFlyway(Main.java:208)
+	at org.flywaydb.commandline.Main.main(Main.java:135)
+ERROR: Failed to execute script 900_pausa_ensaio.sql
+---------------------------------------------
+SQL State  : 08006
+Error Code : 0
+Message    : An I/O error occurred while sending to the backend.
+Location   : /flyway/sql/900_pausa_ensaio.sql (/flyway/sql/900_pausa_ensaio.sql)
+Line       : 2
+Statement  : Run Flyway with -X option to see the actual statement causing the problem
+
+Caused by: Failed to execute script 900_pausa_ensaio.sql
+---------------------------------------------
+SQL State  : 08006
+Error Code : 0
+Message    : An I/O error occurred while sending to the backend.
+Location   : /flyway/sql/900_pausa_ensaio.sql (/flyway/sql/900_pausa_ensaio.sql)
+Line       : 2
+Statement  : Run Flyway with -X option to see the actual statement causing the problem
+
+Caused by: org.postgresql.util.PSQLException: FATAL: terminating connection due to administrator command
+
+FALHA: migration 900_pausa_ensaio.sql
+FALHA NA REVOGACAO OU NA CONFERENCIA: elevacao residual possivel. Trava MANTIDA (/c/Users/nicol/nekkora/nekkora-platform/ops/homologacao/saidas/ensaio-r3/implantacao.trava). Ambiente BLOQUEADO ate 'homologacao.sh recuperar ensaio-r3'.

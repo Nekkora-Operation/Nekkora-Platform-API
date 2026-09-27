@@ -1,0 +1,13 @@
+== recuperacao 2026-09-27T01:27:49Z (independente do runner)
+antes (migrador):
+  BLOQUEIO: trava local de implantacao presente (pid=2651 host=Nicolly inicio=2026-09-27T01:27:11.314Z id=ensaio-i8b)
+  BLOQUEIO: migrador_nekkora com estado '1|0|0' (atributos elevados|memberships|sessoes ativas)
+trava no banco obtida: nenhuma implantacao ou recuperacao ativa
+revogacao e encerramento das sessoes do migrador executados pela sessao da trava
+estado do migrador depois da revogacao: 0|0|0
+trava local removida (estado conferido)
+depois (migrador):
+  migrador recuperado: sem trava local, trava no banco livre, migrador 0|0|0
+depois (ambiente):
+  BLOQUEIO: instalacao incompleta ou divergente (faltam: 011 012 013 014 015; nao esperadas: nenhuma)
+RESULTADO: migrador recuperado; ambiente CONTINUA BLOQUEADO (ver 'depois (ambiente)'; instalacao incompleta -> homologacao.sh implantar ensaio-i8b)

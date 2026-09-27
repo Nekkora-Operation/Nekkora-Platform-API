@@ -1,0 +1,14 @@
+== implantacao 2026-09-27T01:28:06.936Z (lista de elevacao: elevacao.txt)
+historico antes: 001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true
+-- 011_fechamento_expurgo.sql (executeInTransaction=true, ELEVADA)
+-- 012_security_rls.sql (executeInTransaction=false, ELEVADA)
+-- 013_portal_externo.sql (executeInTransaction=false, ELEVADA)
+-- 014_mfa_sessoes.sql (executeInTransaction=false)
+-- 015_restauracao_logica.sql (executeInTransaction=false)
+estado final do migrador: 0 atributos elevados, 0 memberships, 0 sessoes
+historico depois: 001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true
+== implantacao OK
+-- liberacao depois da implantacao:
+migrador recuperado: sem trava local, trava no banco livre, migrador 0|0|0
+ambiente apto: versoes 001-015 todas com sucesso, conjunto integro, flyway validate OK
+LIBERADO

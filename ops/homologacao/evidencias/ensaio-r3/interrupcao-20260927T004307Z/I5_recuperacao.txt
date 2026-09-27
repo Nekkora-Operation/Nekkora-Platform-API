@@ -1,0 +1,13 @@
+== recuperacao 2026-09-27T00:45:00Z (independente do runner)
+antes (migrador):
+  BLOQUEIO: trava local de implantacao presente (pid=1421 host=Nicolly inicio=2026-09-27T00:44:51.688Z id=ensaio-r3)
+  BLOQUEIO: migrador_nekkora com estado '1|0|0' (atributos elevados|memberships|sessoes ativas)
+trava no banco obtida: nenhuma implantacao ou recuperacao ativa
+sessoes do migrador encerradas: 0
+estado do migrador depois da revogacao: 0|0|0
+trava local removida (estado conferido)
+depois (migrador):
+  migrador recuperado: sem trava local, trava no banco livre, migrador 0|0|0
+depois (ambiente):
+  ambiente apto: versoes 001-015 todas com sucesso, conjunto integro, flyway validate OK
+RESULTADO: migrador recuperado; ambiente LIBERADO

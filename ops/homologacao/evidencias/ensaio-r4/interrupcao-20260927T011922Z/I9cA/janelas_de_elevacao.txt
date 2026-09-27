@@ -1,0 +1,2 @@
+2026-09-27T01:24:42.667Z inicio versao=900 SUPERUSER concedido (sha256 aca21b4bd1b5e2f74d73cecb68e7ce22f3456378393704e0a22f653ddcee5dd4 autorizado)
+2026-09-27T01:24:47.668Z TRAVA NO BANCO PERDIDA versao=900 - sem revogacao por este executor; trava local mantida

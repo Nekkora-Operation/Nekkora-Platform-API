@@ -1,0 +1,6 @@
+2026-09-26T21:05:17.446Z inicio versao=011 SUPERUSER concedido
+2026-09-26T21:05:21.100Z fim    versao=011 SUPERUSER revogado e conferido
+2026-09-26T21:05:21.518Z inicio versao=012 SUPERUSER concedido
+2026-09-26T21:05:25.189Z fim    versao=012 SUPERUSER revogado e conferido
+2026-09-26T21:05:25.614Z inicio versao=013 SUPERUSER concedido
+2026-09-26T21:05:29.192Z fim    versao=013 SUPERUSER revogado e conferido

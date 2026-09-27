@@ -1,0 +1,3 @@
+BLOQUEIO: trava local de implantacao presente (pid=1943 host=Nicolly inicio=2026-09-27T01:21:15.892Z id=ensaio-r4)
+BLOQUEIO: migrador_nekkora com estado '1|0|0' (atributos elevados|memberships|sessoes ativas)
+BLOQUEADO

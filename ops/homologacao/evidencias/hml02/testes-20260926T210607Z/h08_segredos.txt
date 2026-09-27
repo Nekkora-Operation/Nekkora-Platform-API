@@ -1,0 +1,3 @@
+controle positivo: marcador plantado encontrado pelo detector
+marcadores: 107 (segredos sinteticos vistos pelo cliente, senhas e chaves do ambiente); logs de gateway, Platform, Portal, PostgreSQL e Redis: 2589 linhas
+linhas de log com marcador: 0; arquivos de evidencia com marcador: 0 (testes) + 0 (criacao)

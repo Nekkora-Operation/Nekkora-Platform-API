@@ -1,0 +1,5 @@
+== implantacao 2026-09-27T01:25:53.501Z (lista de elevacao: lista_autorizada.txt)
+historico antes: 001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true
+-- 900_pausa_ensaio.sql (executeInTransaction=true, ELEVADA)
+FALHA: migration 900_pausa_ensaio.sql
+TRAVA NO BANCO PERDIDA (depois de: migration 900_pausa_ensaio.sql): nenhuma acao adicional - sem revogar e sem encerrar sessoes, que podem ser de outro executor. Trava local MANTIDA (/c/Users/nicol/nekkora/nekkora-platform/ops/homologacao/saidas/ensaio-r4/implantacao.trava). Ambiente BLOQUEADO ate 'homologacao.sh recuperar ensaio-r4'.

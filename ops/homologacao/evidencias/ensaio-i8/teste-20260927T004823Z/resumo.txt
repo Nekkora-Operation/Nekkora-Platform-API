@@ -1,0 +1,7 @@
+passo|resultado|detalhe
+1|OK|criacao interrompida (kill -9 no criar e no runner, docker kill no Flyway) com a janela da 011 aberta
+2|OK|estado BLOQUEADO depois da interrupcao (2 bloqueio(s) do migrador)
+3|OK|recuperar: migrador recuperado (0|0|0, rc=0), ambiente CONTINUA BLOQUEADO: faltam: 011 012 013 014 015
+4|OK|com o migrador recuperado, estado continua BLOQUEADO so pela instalacao incompleta; testar recusado
+5|OK|postgres parado: consultas falharam e o estado BLOQUEOU (nao liberou por ausencia de resposta)
+6|OK|implantar aplicou as pendentes (5 versao(oes)) com revogacao conferida; estado LIBERADO (001-015, flyway validate)

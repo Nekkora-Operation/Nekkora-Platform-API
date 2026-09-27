@@ -1,0 +1,2 @@
+OK    H06.prep logins em A e em B esperado=(200, 200) obtido=(200, 200)
+OK    H06.01 leituras alternadas A/B corretas e sessao de B recusada em A (15 ciclos) esperado=True obtido=True

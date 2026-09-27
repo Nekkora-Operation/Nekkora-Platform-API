@@ -1,0 +1,1 @@
+LIBERADO: sem trava, migrador sem elevacao/membership/sessao, historico sem falha

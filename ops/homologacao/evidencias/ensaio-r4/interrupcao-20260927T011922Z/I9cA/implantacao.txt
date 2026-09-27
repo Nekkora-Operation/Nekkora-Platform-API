@@ -1,0 +1,24 @@
+== implantacao 2026-09-27T01:24:40.514Z (lista de elevacao: lista_i6.txt)
+historico antes: 001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true
+-- 900_pausa_ensaio.sql (executeInTransaction=true, ELEVADA)
+ Container nekkora-homologacao-ensaio-r4-flyway-run-6eff1421988f Creating 
+ Container nekkora-homologacao-ensaio-r4-flyway-run-6eff1421988f Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+ERROR: Failed to execute script 
+-------------------------
+SQL State  : P0001
+Error Code : 0
+Message    : ERROR: implantacao sem a trava no banco (esperada a sessao 1700)
+  Where: PL/pgSQL function inline_code_block line 1 at RAISE
+Location   :  ()
+Line       : 1
+Statement  : Run Flyway with -X option to see the actual statement causing the problem
+
+Caused by: org.postgresql.util.PSQLException: ERROR: implantacao sem a trava no banco (esperada a sessao 1700)
+  Where: PL/pgSQL function inline_code_block line 1 at RAISE
+
+FALHA: migration 900_pausa_ensaio.sql
+TRAVA NO BANCO PERDIDA (depois de: migration 900_pausa_ensaio.sql): nenhuma acao adicional - sem revogar e sem encerrar sessoes, que podem ser de outro executor. Trava local MANTIDA (/c/Users/nicol/nekkora/nekkora-platform/ops/homologacao/saidas/ensaio-r4/interrupcao-20260927T011922Z/I9c_trava_A). Ambiente BLOQUEADO ate 'homologacao.sh recuperar ensaio-r4'.

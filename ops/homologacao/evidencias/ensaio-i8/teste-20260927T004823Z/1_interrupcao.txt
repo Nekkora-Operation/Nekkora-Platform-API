@@ -1,0 +1,4 @@
+janela da 011 aberta antes do kill: 1; container do Flyway em execucao: 1
+PID do criar: 257; PID do runner (trava): 812
+janelas:
+2026-09-27T00:49:17.744Z inicio versao=011 SUPERUSER concedido (sha256 38a509845cb4459311b7edfda135ad1ca46203af7387fa45f1e356b200e87ef9 autorizado)

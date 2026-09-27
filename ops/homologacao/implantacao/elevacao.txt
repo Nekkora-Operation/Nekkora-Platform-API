@@ -1,0 +1,14 @@
+# Versoes AUTORIZADAS a elevacao temporaria (SUPERUSER) da identidade de implantacao migrador_nekkora, cada uma com o
+# sha256 EXATO do arquivo autorizado (conteudo LF, como em db/migrations). O runner recusa elevar uma versao cujo arquivo
+# tenha outro sha256, e recusa elevar qualquer versao fora desta lista.
+#
+# Medicao (ops/homologacao/mapa_privilegios.sh, tambem com os papeis pre-criados pelo bootstrap), nos caminhos ensaiados,
+# com as migrations atuais e sem memberships em papeis protegidos:
+#   011: CREATE ROLE; com papeis pre-criados, ALTER ... OWNER TO nekkora_retention_tables_owner exige SET ROLE
+#   012: CREATE ROLE; com papeis pre-criados, ALTER ROLE (atributos de papeis protegidos)
+#   013: CREATE ROLE; com papeis pre-criados, ALTER ROLE (inclusive ALTER ROLE nekkora_portal SET log_*)
+# Autorizacao valida para a HOMOLOGACAO isolada (decisao do responsavel, 2026-09-26); nao se estende a producao.
+# Versao ou sha256 novo so entra aqui com medicao e revisao.
+011 38a509845cb4459311b7edfda135ad1ca46203af7387fa45f1e356b200e87ef9
+012 fd758edfb66af9e6b1c17697ebeb2fd8ddf9ce22fa4673c358f28efa78d1fbd7
+013 c6192bff305f3888710ef9430751452b7a48a5bc7078691a16e16ddebb4c14d9

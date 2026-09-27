@@ -1,0 +1,5 @@
+== implantacao 2026-09-27T00:45:15.905Z (lista de elevacao: lista_i6.txt)
+historico antes: 001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true
+-- 900_pausa_ensaio.sql (executeInTransaction=true, ELEVADA)
+FALHA: migration 900_pausa_ensaio.sql
+estado do migrador conferido limpo; trava liberada. Sem nova tentativa, sem repair, sem baseline.

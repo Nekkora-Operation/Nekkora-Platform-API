@@ -1,0 +1,2 @@
+caso|resultado|detalhe
+I5|OK|banco parado na janela: a sessao da trava caiu junto; o runner PAROU com codigo 6 (trava perdida) sem tentar revogar por outra conexao e manteve a trava local; com o banco de volta, elevacao residual detectada e ambiente BLOQUEADO ate 'recuperar', que liberou com 0|0|0

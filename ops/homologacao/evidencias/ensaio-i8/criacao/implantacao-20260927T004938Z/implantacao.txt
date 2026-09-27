@@ -1,0 +1,67 @@
+== implantacao 2026-09-27T00:49:39.097Z (lista de elevacao: elevacao.txt)
+historico antes: 001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true
+-- 011_fechamento_expurgo.sql (executeInTransaction=true, ELEVADA)
+ Container nekkora-homologacao-ensaio-i8-flyway-run-48698c8706d2 Creating 
+ Container nekkora-homologacao-ensaio-i8-flyway-run-48698c8706d2 Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 15 migrations (execution time 00:00.070s)
+Current version of schema "public": 010
+Migrating schema "public" to version "011 - fechamento expurgo"
+Successfully applied 1 migration to schema "public", now at version v011 (execution time 00:00.081s)
+-- 012_security_rls.sql (executeInTransaction=false, ELEVADA)
+ Container nekkora-homologacao-ensaio-i8-flyway-run-37f4937ba6d8 Creating 
+ Container nekkora-homologacao-ensaio-i8-flyway-run-37f4937ba6d8 Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 15 migrations (execution time 00:00.076s)
+Current version of schema "public": 011
+Migrating schema "public" to version "012 - security rls" [non-transactional]
+Successfully applied 1 migration to schema "public", now at version v012 (execution time 00:00.179s)
+-- 013_portal_externo.sql (executeInTransaction=false, ELEVADA)
+ Container nekkora-homologacao-ensaio-i8-flyway-run-16cac4dac39c Creating 
+ Container nekkora-homologacao-ensaio-i8-flyway-run-16cac4dac39c Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 15 migrations (execution time 00:00.078s)
+Current version of schema "public": 012
+Migrating schema "public" to version "013 - portal externo" [non-transactional]
+Successfully applied 1 migration to schema "public", now at version v013 (execution time 00:00.087s)
+-- 014_mfa_sessoes.sql (executeInTransaction=false)
+ Container nekkora-homologacao-ensaio-i8-flyway-run-b01c4058f532 Creating 
+ Container nekkora-homologacao-ensaio-i8-flyway-run-b01c4058f532 Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 15 migrations (execution time 00:00.077s)
+Current version of schema "public": 013
+Migrating schema "public" to version "014 - mfa sessoes" [non-transactional]
+Successfully applied 1 migration to schema "public", now at version v014 (execution time 00:00.116s)
+-- 015_restauracao_logica.sql (executeInTransaction=false)
+ Container nekkora-homologacao-ensaio-i8-flyway-run-d38dea8368f4 Creating 
+ Container nekkora-homologacao-ensaio-i8-flyway-run-d38dea8368f4 Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 15 migrations (execution time 00:00.086s)
+Current version of schema "public": 014
+Migrating schema "public" to version "015 - restauracao logica" [non-transactional]
+Successfully applied 1 migration to schema "public", now at version v015 (execution time 00:00.201s)
+ Container nekkora-homologacao-ensaio-i8-flyway-run-befba5630465 Creating 
+ Container nekkora-homologacao-ensaio-i8-flyway-run-befba5630465 Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 15 migrations (execution time 00:00.080s)
+estado final do migrador: 0 atributos elevados, 0 memberships, 0 sessoes
+historico depois: 001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true
+== implantacao OK

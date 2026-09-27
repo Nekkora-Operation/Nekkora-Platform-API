@@ -1,0 +1,9 @@
+== recuperacao 2026-09-26T21:37:47Z (independente do runner)
+antes:
+  BLOQUEIO: trava de implantacao presente (pid=1296 host=Nicolly inicio=2026-09-26T21:37:38.307Z id=ensaio-controles)
+  BLOQUEIO: migrador_nekkora com estado '1|0|0' (atributos elevados|memberships|sessoes ativas)
+sessoes do migrador encerradas: 0
+estado do migrador depois da revogacao: 0|0|0
+trava removida (estado conferido)
+depois:
+  LIBERADO: sem trava, migrador sem elevacao/membership/sessao, historico sem falha

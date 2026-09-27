@@ -1,0 +1,41 @@
+== implantacao 2026-09-27T00:45:51.102Z (lista de elevacao: lista_i6.txt)
+historico antes: 001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true
+-- 900_pausa_ensaio.sql (executeInTransaction=true, ELEVADA)
+ Container nekkora-homologacao-ensaio-r3-flyway-run-a18e812c87e6 Creating 
+ Container nekkora-homologacao-ensaio-r3-flyway-run-a18e812c87e6 Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 16 migrations (execution time 00:00.083s)
+Current version of schema "public": 015
+Migrating schema "public" to version "900 - pausa ensaio"
++----------+
+| pg_sleep |
++----------+
+|          |
++----------+
+
+ERROR: Migration of schema "public" to version "900 - pausa ensaio" failed! Changes successfully rolled back.
+ERROR: Failed to execute script 900_pausa_ensaio.sql
+---------------------------------------------
+SQL State  : 22012
+Error Code : 0
+Message    : ERROR: division by zero
+Location   : /flyway/sql/900_pausa_ensaio.sql (/flyway/sql/900_pausa_ensaio.sql)
+Line       : 3
+Statement  : Run Flyway with -X option to see the actual statement causing the problem
+
+Caused by: Failed to execute script 900_pausa_ensaio.sql
+---------------------------------------------
+SQL State  : 22012
+Error Code : 0
+Message    : ERROR: division by zero
+Location   : /flyway/sql/900_pausa_ensaio.sql (/flyway/sql/900_pausa_ensaio.sql)
+Line       : 3
+Statement  : Run Flyway with -X option to see the actual statement causing the problem
+
+Caused by: org.postgresql.util.PSQLException: ERROR: division by zero
+
+FALHA: migration 900_pausa_ensaio.sql
+estado do migrador conferido limpo; trava liberada. Sem nova tentativa, sem repair, sem baseline.

@@ -1,0 +1,28 @@
+ Container nekkora-homologacao-ensaio-controles-flyway-run-9aa0833173e2 Creating 
+ Container nekkora-homologacao-ensaio-controles-flyway-run-9aa0833173e2 Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Schema version: 015
+
++-----------+---------+---------------------------+------+---------------------+---------+----------+
+| Category  | Version | Description               | Type | Installed On        | State   | Undoable |
++-----------+---------+---------------------------+------+---------------------+---------+----------+
+| Versioned | 001     | initial                   | SQL  | 2026-09-26 21:32:24 | Success | No       |
+| Versioned | 002     | identity                  | SQL  | 2026-09-26 21:32:27 | Success | No       |
+| Versioned | 003     | access control            | SQL  | 2026-09-26 21:32:30 | Success | No       |
+| Versioned | 004     | workers agents            | SQL  | 2026-09-26 21:32:33 | Success | No       |
+| Versioned | 005     | automations versions      | SQL  | 2026-09-26 21:32:36 | Success | No       |
+| Versioned | 006     | executions                | SQL  | 2026-09-26 21:32:39 | Success | No       |
+| Versioned | 007     | events logs               | SQL  | 2026-09-26 21:32:43 | Success | No       |
+| Versioned | 008     | parametros secrets        | SQL  | 2026-09-26 21:32:45 | Success | No       |
+| Versioned | 009     | agendamentos              | SQL  | 2026-09-26 21:32:48 | Success | No       |
+| Versioned | 010     | recursos limites retencao | SQL  | 2026-09-26 21:32:51 | Success | No       |
+| Versioned | 011     | fechamento expurgo        | SQL  | 2026-09-26 21:32:54 | Success | No       |
+| Versioned | 012     | security rls              | SQL  | 2026-09-26 21:33:00 | Success | No       |
+| Versioned | 013     | portal externo            | SQL  | 2026-09-26 21:33:06 | Success | No       |
+| Versioned | 014     | mfa sessoes               | SQL  | 2026-09-26 21:33:11 | Success | No       |
+| Versioned | 015     | restauracao logica        | SQL  | 2026-09-26 21:33:14 | Success | No       |
++-----------+---------+---------------------------+------+---------------------+---------+----------+
+

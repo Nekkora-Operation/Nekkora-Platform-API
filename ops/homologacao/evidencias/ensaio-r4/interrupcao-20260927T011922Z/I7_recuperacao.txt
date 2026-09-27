@@ -1,0 +1,5 @@
+== recuperacao 2026-09-27T01:23:21Z (independente do runner)
+antes (migrador):
+  BLOQUEIO: implantacao ou recuperacao em andamento (trava no banco ocupada)
+  BLOQUEIO: migrador_nekkora com estado '1|0|1' (atributos elevados|memberships|sessoes ativas)
+RECUSADO: implantacao ou outra recuperacao ativa (trava no banco ocupada) ou banco sem resposta. Nada foi alterado.

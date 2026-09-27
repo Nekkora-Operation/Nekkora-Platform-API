@@ -1,0 +1,1 @@
+FALHA: implantacao em andamento ou interrompida (trava /c/Users/nicol/nekkora/nekkora-platform/ops/homologacao/saidas/ensaio-controles/implantacao.trava: pid=629 host=Nicolly inicio=2026-09-26T21:36:13.669Z id=ensaio-controles). Nada foi feito. Se nao ha runner ativo: homologacao.sh recuperar ensaio-controles

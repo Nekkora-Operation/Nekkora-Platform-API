@@ -1,0 +1,7 @@
+(a) criar com id em uso: recusado (ERRO: ja existe /c/Users/nicol/nekkora/nekkora-platform/ops/homologacao/saidas/hml02 (id em uso))
+(b) checksum divergente: implantacao recusada (/c/Users/nicol/.nekkora/homologacao/hml02/teste/h09b.txt:flyway validate falhou)
+(c) falha simulada (sem elevacao): implantacao parou (rc=2), sem nova tentativa
+(d) falha simulada dentro da janela de elevacao: parou; janela: inicio versao=900 SUPERUSER concedido fim    versao=900 SUPERUSER revogado e conferido 
+historico do Flyway identico ao de antes (versoes, sucesso, checksums); sem linha 900
+tabela do ensaio ausente (rollback)
+runner sem repair, baseline ou clean (baselineOnMigrate=false, cleanDisabled=true)

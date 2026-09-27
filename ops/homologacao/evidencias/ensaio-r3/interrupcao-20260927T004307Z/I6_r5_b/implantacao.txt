@@ -1,0 +1,1 @@
+FALHA: outra implantacao ou recuperacao ativa (trava no banco ocupada) ou banco sem resposta. Nada foi feito: nenhuma elevacao, revogacao ou encerramento de sessao.

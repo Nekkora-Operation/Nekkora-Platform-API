@@ -1,0 +1,4 @@
+conexoes fisicas da Platform observadas: 1
+transacoes com set_config(nekkora.organization_id): 85
+DISCARD ALL na devolucao ao pool: 85
+contexto seguido de nova transacao/contexto sem DISCARD ALL na mesma conexao: 0

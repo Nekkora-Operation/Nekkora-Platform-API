@@ -1,0 +1,43 @@
+309a310,319
+> col|flyway_schema_history|checksum|integer|notnull=f|default=|gen=
+> col|flyway_schema_history|description|character varying(200)|notnull=t|default=|gen=
+> col|flyway_schema_history|execution_time|integer|notnull=t|default=|gen=
+> col|flyway_schema_history|installed_by|character varying(100)|notnull=t|default=|gen=
+> col|flyway_schema_history|installed_on|timestamp without time zone|notnull=t|default=now()|gen=
+> col|flyway_schema_history|installed_rank|integer|notnull=t|default=|gen=
+> col|flyway_schema_history|script|character varying(1000)|notnull=t|default=|gen=
+> col|flyway_schema_history|success|boolean|notnull=t|default=|gen=
+> col|flyway_schema_history|type|character varying(20)|notnull=t|default=|gen=
+> col|flyway_schema_history|version|character varying(50)|notnull=f|default=|gen=
+763a774
+> con|flyway_schema_history|flyway_schema_history_pk|PRIMARY KEY (installed_rank)
+1375a1387
+> idx|CREATE INDEX flyway_schema_history_s_idx ON public.flyway_schema_history USING btree (success)
+1447a1460
+> idx|CREATE UNIQUE INDEX flyway_schema_history_pk ON public.flyway_schema_history USING btree (installed_rank)
+2125a2139,2159
+> relacl|flyway_schema_history_pk|INSTALADOR|DELETE|grant=f
+> relacl|flyway_schema_history_pk|INSTALADOR|INSERT|grant=f
+> relacl|flyway_schema_history_pk|INSTALADOR|REFERENCES|grant=f
+> relacl|flyway_schema_history_pk|INSTALADOR|SELECT|grant=f
+> relacl|flyway_schema_history_pk|INSTALADOR|TRIGGER|grant=f
+> relacl|flyway_schema_history_pk|INSTALADOR|TRUNCATE|grant=f
+> relacl|flyway_schema_history_pk|INSTALADOR|UPDATE|grant=f
+> relacl|flyway_schema_history_s_idx|INSTALADOR|DELETE|grant=f
+> relacl|flyway_schema_history_s_idx|INSTALADOR|INSERT|grant=f
+> relacl|flyway_schema_history_s_idx|INSTALADOR|REFERENCES|grant=f
+> relacl|flyway_schema_history_s_idx|INSTALADOR|SELECT|grant=f
+> relacl|flyway_schema_history_s_idx|INSTALADOR|TRIGGER|grant=f
+> relacl|flyway_schema_history_s_idx|INSTALADOR|TRUNCATE|grant=f
+> relacl|flyway_schema_history_s_idx|INSTALADOR|UPDATE|grant=f
+> relacl|flyway_schema_history|INSTALADOR|DELETE|grant=f
+> relacl|flyway_schema_history|INSTALADOR|INSERT|grant=f
+> relacl|flyway_schema_history|INSTALADOR|REFERENCES|grant=f
+> relacl|flyway_schema_history|INSTALADOR|SELECT|grant=f
+> relacl|flyway_schema_history|INSTALADOR|TRIGGER|grant=f
+> relacl|flyway_schema_history|INSTALADOR|TRUNCATE|grant=f
+> relacl|flyway_schema_history|INSTALADOR|UPDATE|grant=f
+3198a3233,3235
+> rel|flyway_schema_history_pk|i|owner=INSTALADOR|rls=f|force=f
+> rel|flyway_schema_history_s_idx|i|owner=INSTALADOR|rls=f|force=f
+> rel|flyway_schema_history|r|owner=INSTALADOR|rls=f|force=f

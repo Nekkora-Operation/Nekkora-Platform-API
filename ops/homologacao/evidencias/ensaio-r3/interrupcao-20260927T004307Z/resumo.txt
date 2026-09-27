@@ -1,0 +1,8 @@
+caso|resultado|detalhe
+I1|OK|sha256 diferente do autorizado: recusado antes de conceder (rc=2), nenhuma janela aberta, estado limpo, trava liberada
+I2|OK|segunda implantacao durante a janela recusada pela trava no banco (rc=3, nada feito); a primeira terminou pela falha de ensaio (rc=2) com revogacao conferida
+I3|OK|implantacao com outra trava local (outro host) recusada pela trava no banco, sem fazer nada; a primeira terminou limpa
+I4|OK|kill -9 do runner + docker kill do Flyway na janela: elevacao residual e trava detectadas; estado/testar/implantacao BLOQUEADOS; 'recuperar' revogou, encerrou sessoes, conferiu 0|0|0 e liberou; a trava no banco caiu com o processo; historico intacto
+I5|OK|banco parado na janela: runner terminou com FALHA NA REVOGACAO (rc=4) e manteve a trava; com o banco de volta, elevacao residual detectada e ambiente BLOQUEADO ate 'recuperar', que liberou com 0|0|0
+I6|OK|5 rodadas de largada simultanea antes da elevacao: r1:venceu=b r2:venceu=a r3:venceu=a r4:venceu=a r5:venceu=a; em todas, o perdedor saiu com rc=3 sem revogar, encerrar sessao nem abrir janela; o vencedor seguiu elevado depois disso e terminou pela falha de ensaio (division by zero), sem conexao encerrada
+I7|OK|recuperar durante implantacao ativa: RECUSADO pela trava no banco, nada alterado; o migrador seguiu elevado e a implantacao terminou pela falha de ensaio, sem conexao encerrada

@@ -1,0 +1,15 @@
+integracao: HEAD=d608a96eea7e5eef5cc6ea6deee8d0c05b79e299 origin/main=d608a96eea7e5eef5cc6ea6deee8d0c05b79e299
+imagem da API: commit d608a96 (fontes principais da API sem alteracao desde ele)
+/nekkora-homologacao-hml02-gateway-1 imagem=nginx:1.29-alpine id=sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de cpus=500000000 mem=134217728 rotulo=hml02 portas={"443/tcp":[{"HostIp":"127.0.0.1","HostPort":"55643"}]}
+/nekkora-homologacao-hml02-platform-1 imagem=nekkora-homologacao-platform:d608a96 id=sha256:020bdcec7e1fa8514f2e7e1647ec7e32b3487384f8f14741c718643dd85fb715 cpus=2000000000 mem=1073741824 rotulo=hml02 portas={}
+/nekkora-homologacao-hml02-portal-1 imagem=nekkora-homologacao-portal:d608a96 id=sha256:9ce183f4171e2cc0a897db56136b46d5de8119258ea0dd2bb2ac9508f4f8c4ef cpus=1000000000 mem=805306368 rotulo=hml02 portas={}
+/nekkora-homologacao-hml02-postgres-1 imagem=postgres:16-alpine id=sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea cpus=1000000000 mem=1073741824 rotulo=hml02 portas={}
+/nekkora-homologacao-hml02-redis-1 imagem=redis:7-alpine id=sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499 cpus=500000000 mem=268435456 rotulo=hml02 portas={}
+base postgres:16-alpine postgres@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+base redis:7-alpine redis@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+base nginx:1.29-alpine nginx@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de
+base flyway/flyway:11-alpine flyway/flyway@sha256:df06535dfd6559ae5f0628c4761013dfa4ea6a30cf6e34294931d8091f55a18f
+base eclipse-temurin:21-jre-alpine eclipse-temurin@sha256:51ab5e3302e7141ce665ca3ea85e8b5cd648eafbc3c0c90dd79d6537684e4555
+rede nekkora-homologacao-hml02_borda interna=false
+rede nekkora-homologacao-hml02_interna interna=true
+volume nekkora-homologacao-hml02_pgdata

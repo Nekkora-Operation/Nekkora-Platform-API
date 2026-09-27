@@ -1,0 +1,2 @@
+pid do backend da trava de A derrubado: 1510
+A: rc=6; B vivo quando A terminou: sim; estado nesse momento: 1|0|0; B: rc=2

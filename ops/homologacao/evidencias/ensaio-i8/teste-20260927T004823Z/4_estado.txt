@@ -1,0 +1,3 @@
+migrador recuperado: sem trava local, trava no banco livre, migrador 0|0|0
+BLOQUEIO: instalacao incompleta ou divergente (faltam: 011 012 013 014 015; nao esperadas: nenhuma)
+BLOQUEADO

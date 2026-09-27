@@ -1,0 +1,179 @@
+== implantacao 2026-09-27T00:41:53.635Z (lista de elevacao: elevacao.txt)
+historico antes: vazio
+-- 001_initial.sql (executeInTransaction=true)
+ Container nekkora-homologacao-ensaio-r3-flyway-run-45215e1296c2 Creating 
+ Container nekkora-homologacao-ensaio-r3-flyway-run-45215e1296c2 Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Schema history table "public"."flyway_schema_history" does not exist yet
+Successfully validated 15 migrations (execution time 00:00.067s)
+Creating Schema History table "public"."flyway_schema_history" ...
+Current version of schema "public": << Empty Schema >>
+Migrating schema "public" to version "001 - initial"
+Successfully applied 1 migration to schema "public", now at version v001 (execution time 00:00.052s)
+-- 002_identity.sql (executeInTransaction=true)
+ Container nekkora-homologacao-ensaio-r3-flyway-run-dad5db6cc5d6 Creating 
+ Container nekkora-homologacao-ensaio-r3-flyway-run-dad5db6cc5d6 Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 15 migrations (execution time 00:00.078s)
+Current version of schema "public": 001
+Migrating schema "public" to version "002 - identity"
+Successfully applied 1 migration to schema "public", now at version v002 (execution time 00:00.133s)
+-- 003_access_control.sql (executeInTransaction=true)
+ Container nekkora-homologacao-ensaio-r3-flyway-run-1592b2e88529 Creating 
+ Container nekkora-homologacao-ensaio-r3-flyway-run-1592b2e88529 Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 15 migrations (execution time 00:00.077s)
+Current version of schema "public": 002
+Migrating schema "public" to version "003 - access control"
+Successfully applied 1 migration to schema "public", now at version v003 (execution time 00:00.161s)
+-- 004_workers_agents.sql (executeInTransaction=true)
+ Container nekkora-homologacao-ensaio-r3-flyway-run-b3952d815892 Creating 
+ Container nekkora-homologacao-ensaio-r3-flyway-run-b3952d815892 Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 15 migrations (execution time 00:00.080s)
+Current version of schema "public": 003
+Migrating schema "public" to version "004 - workers agents"
+Successfully applied 1 migration to schema "public", now at version v004 (execution time 00:00.099s)
+-- 005_automations_versions.sql (executeInTransaction=true)
+ Container nekkora-homologacao-ensaio-r3-flyway-run-e1527ad65915 Creating 
+ Container nekkora-homologacao-ensaio-r3-flyway-run-e1527ad65915 Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 15 migrations (execution time 00:00.086s)
+Current version of schema "public": 004
+Migrating schema "public" to version "005 - automations versions"
+Successfully applied 1 migration to schema "public", now at version v005 (execution time 00:00.070s)
+-- 006_executions.sql (executeInTransaction=true)
+ Container nekkora-homologacao-ensaio-r3-flyway-run-3076f8c5091d Creating 
+ Container nekkora-homologacao-ensaio-r3-flyway-run-3076f8c5091d Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 15 migrations (execution time 00:00.093s)
+Current version of schema "public": 005
+Migrating schema "public" to version "006 - executions"
+Successfully applied 1 migration to schema "public", now at version v006 (execution time 00:00.072s)
+-- 007_events_logs.sql (executeInTransaction=true)
+ Container nekkora-homologacao-ensaio-r3-flyway-run-d4b235b0728b Creating 
+ Container nekkora-homologacao-ensaio-r3-flyway-run-d4b235b0728b Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 15 migrations (execution time 00:00.082s)
+Current version of schema "public": 006
+Migrating schema "public" to version "007 - events logs"
+Successfully applied 1 migration to schema "public", now at version v007 (execution time 00:00.079s)
+-- 008_parametros_secrets.sql (executeInTransaction=true)
+ Container nekkora-homologacao-ensaio-r3-flyway-run-336a3eb6ff02 Creating 
+ Container nekkora-homologacao-ensaio-r3-flyway-run-336a3eb6ff02 Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 15 migrations (execution time 00:00.077s)
+Current version of schema "public": 007
+Migrating schema "public" to version "008 - parametros secrets"
+Successfully applied 1 migration to schema "public", now at version v008 (execution time 00:00.145s)
+-- 009_agendamentos.sql (executeInTransaction=true)
+ Container nekkora-homologacao-ensaio-r3-flyway-run-0e8ab38a2cd6 Creating 
+ Container nekkora-homologacao-ensaio-r3-flyway-run-0e8ab38a2cd6 Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 15 migrations (execution time 00:00.080s)
+Current version of schema "public": 008
+Migrating schema "public" to version "009 - agendamentos"
+Successfully applied 1 migration to schema "public", now at version v009 (execution time 00:00.111s)
+-- 010_recursos_limites_retencao.sql (executeInTransaction=true)
+ Container nekkora-homologacao-ensaio-r3-flyway-run-de274a1edf9e Creating 
+ Container nekkora-homologacao-ensaio-r3-flyway-run-de274a1edf9e Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 15 migrations (execution time 00:00.081s)
+Current version of schema "public": 009
+Migrating schema "public" to version "010 - recursos limites retencao"
+Successfully applied 1 migration to schema "public", now at version v010 (execution time 00:00.072s)
+-- 011_fechamento_expurgo.sql (executeInTransaction=true, ELEVADA)
+ Container nekkora-homologacao-ensaio-r3-flyway-run-f3ebf39cce72 Creating 
+ Container nekkora-homologacao-ensaio-r3-flyway-run-f3ebf39cce72 Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 15 migrations (execution time 00:00.081s)
+Current version of schema "public": 010
+Migrating schema "public" to version "011 - fechamento expurgo"
+Successfully applied 1 migration to schema "public", now at version v011 (execution time 00:00.078s)
+-- 012_security_rls.sql (executeInTransaction=false, ELEVADA)
+ Container nekkora-homologacao-ensaio-r3-flyway-run-1d1317819825 Creating 
+ Container nekkora-homologacao-ensaio-r3-flyway-run-1d1317819825 Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 15 migrations (execution time 00:00.079s)
+Current version of schema "public": 011
+Migrating schema "public" to version "012 - security rls" [non-transactional]
+Successfully applied 1 migration to schema "public", now at version v012 (execution time 00:00.120s)
+-- 013_portal_externo.sql (executeInTransaction=false, ELEVADA)
+ Container nekkora-homologacao-ensaio-r3-flyway-run-4ed625f5fd37 Creating 
+ Container nekkora-homologacao-ensaio-r3-flyway-run-4ed625f5fd37 Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 15 migrations (execution time 00:00.093s)
+Current version of schema "public": 012
+Migrating schema "public" to version "013 - portal externo" [non-transactional]
+Successfully applied 1 migration to schema "public", now at version v013 (execution time 00:00.077s)
+-- 014_mfa_sessoes.sql (executeInTransaction=false)
+ Container nekkora-homologacao-ensaio-r3-flyway-run-6c888cacec4b Creating 
+ Container nekkora-homologacao-ensaio-r3-flyway-run-6c888cacec4b Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 15 migrations (execution time 00:00.079s)
+Current version of schema "public": 013
+Migrating schema "public" to version "014 - mfa sessoes" [non-transactional]
+Successfully applied 1 migration to schema "public", now at version v014 (execution time 00:00.112s)
+-- 015_restauracao_logica.sql (executeInTransaction=false)
+ Container nekkora-homologacao-ensaio-r3-flyway-run-97b59d00dabc Creating 
+ Container nekkora-homologacao-ensaio-r3-flyway-run-97b59d00dabc Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 15 migrations (execution time 00:00.078s)
+Current version of schema "public": 014
+Migrating schema "public" to version "015 - restauracao logica" [non-transactional]
+Successfully applied 1 migration to schema "public", now at version v015 (execution time 00:00.193s)
+ Container nekkora-homologacao-ensaio-r3-flyway-run-bee93244f067 Creating 
+ Container nekkora-homologacao-ensaio-r3-flyway-run-bee93244f067 Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 15 migrations (execution time 00:00.081s)
+estado final do migrador: 0 atributos elevados, 0 memberships, 0 sessoes
+historico depois: 001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true
+== implantacao OK

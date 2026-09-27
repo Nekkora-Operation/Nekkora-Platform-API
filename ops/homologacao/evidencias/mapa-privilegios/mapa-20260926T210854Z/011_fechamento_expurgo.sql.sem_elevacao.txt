@@ -1,0 +1,4 @@
+ERROR:  permission denied to create role
+DETAIL:  Only roles with the CREATEROLE attribute may create roles.
+CONTEXT:  SQL statement "CREATE ROLE nekkora_retention_tables_owner NOLOGIN"
+PL/pgSQL function inline_code_block line 4 at SQL statement
