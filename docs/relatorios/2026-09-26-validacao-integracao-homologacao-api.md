@@ -65,7 +65,7 @@
 |---|---|
 | Integração Git (Etapa A) | **Concluída.** `origin/main` e `origin/feat/api-v1` em `d608a96` (fast-forward `0a333db..d608a96`, sem merge e sem force). Conteúdo conferido contra o pacote revisado r3 |
 | Ambiente de homologação (Etapa B) | **Preparado e reproduzível** (`ops/homologacao/`). Ambiente da equipe `hml03` no ar (criado pelo runner da revisão 2), só em `127.0.0.1:55643`, com dados sintéticos e estado **LIBERADO pela liberação da revisão 3** (migrador recuperado e 001–015 com `flyway validate`) |
-| Identidade de implantação e Flyway (Etapa C) | **Direção aceita para a homologação isolada** (elevação temporária em 011–013), condicionada aos controles. Controles implementados e ensaiados (I1–I5 na revisão 2; I1–I8 na revisão 3; I1–I10 com os ajustes da revisão 4). **O gate só fecha após a revisão destes dois ajustes**, e não se estende a produção |
+| Identidade de implantação e Flyway (Etapa C) | **Direção aceita para a homologação isolada** (elevação temporária em 011–013), condicionada aos controles. Controles implementados e ensaiados (I1–I5 na revisão 2; I1–I8 na revisão 3; I1–I10 com os ajustes da revisão 4). **Encerrado para a homologação isolada, conforme §0** (em linha com a §7), e não se estende a produção |
 | Testes (Etapa D) | H01–H09 e R015 **OK** (execução de `hml02` com o runner da revisão 1); I1–I5 **OK** (runner da revisão 2); I1–I8 OK com o runner da revisão 3; **I1–I7, I9, I10 e I8 OK** com o runner da revisão 4, em ambientes descartáveis. Limites na §5 |
 | Liberação para produção | **Não.** Os gates da §7 continuam abertos |
 
@@ -220,7 +220,10 @@ O estado residual real que essa rodada deixou foi recuperado pelo `recuperar` co
 ## 9. Reprodução
 
 ```sh
-git switch feat/homologacao
+git switch main && git pull --ff-only                   # main publicada
+# ou, para reproduzir exatamente esta entrega:
+git switch --detach 0baea5be2f27cdd01e84d89900f32ef90d3220c0
+# no Windows, clone em caminho curto ou com: git clone -c core.longpaths=true <url>
 ops/homologacao/mapa_privilegios.sh                      # e MAPA_PAPEIS_PRECRIADOS=1
 ops/homologacao/homologacao.sh criar ensaio-x            # descartável
 ops/homologacao/homologacao.sh ensaio-interrupcao ensaio-x   # I1-I7, I9, I10 (ou so alguns: ... ensaio-x "I9 I10")
