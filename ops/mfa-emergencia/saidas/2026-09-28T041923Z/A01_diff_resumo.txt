@@ -1,0 +1,16 @@
+removidas (<): 1
+removidas fora do previsto: 0
+acrescentadas (>): 172
+acrescentadas fora do previsto: 0
+por tipo:
+      2 col
+     57 colacl
+      7 con
+      1 ext
+     29 fn
+     57 fnacl
+      1 idx
+      1 nsp
+      9 pol
+      1 rel
+      7 relacl

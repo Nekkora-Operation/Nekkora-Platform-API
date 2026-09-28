@@ -7,6 +7,8 @@
                        limitador Redis, erros genericos, log sanitizado.
     nekkora-platform - processo da Platform (papel nekkora_platform): autenticacao, MFA, sessoes, rotas internas.
     nekkora-portal   - processo do portal externo (papel nekkora_portal): so as 4 funcoes publicas da 013.
+    nekkora-ops      - recuperacao emergencial de MFA (016): verificador do IdP, emissor da CA operacional e CLI do
+                       operador (papel op_* por certificado). CANDIDATO, sem habilitacao em producao.
   Versoes: gerenciadas pelo spring-boot-starter-parent 4.1.1 (Spring Framework 7.0.9, Spring Security 7.1.1,
   Tomcat 11.0.24, pgJDBC 42.7.13, HikariCP 7.0.2, Lettuce 7.5.2, Testcontainers 2.0.5), mais Bouncy Castle 1.86.
 -->
@@ -28,6 +30,7 @@
 
     <modules>
         <module>nekkora-core</module>
+        <module>nekkora-ops</module>
         <module>nekkora-platform</module>
         <module>nekkora-portal</module>
     </modules>
@@ -49,6 +52,16 @@
                 <groupId>org.bouncycastle</groupId>
                 <artifactId>bcprov-jdk18on</artifactId>
                 <version>${bouncycastle.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcpkix-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.nekkora</groupId>
+                <artifactId>nekkora-ops</artifactId>
+                <version>${project.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

@@ -14,4 +14,9 @@ public final class LocalMailSender implements MailSender {
     public void send(Kind kind, UUID organization, String recipient, String tokenOrNull) {
         LOG.info("evento=mail.intencao tipo={} org={} entrega=nenhuma(local)", kind, organization);
     }
+
+    @Override
+    public void sendEmergencyNotice(Kind kind, UUID organization, String recipient, String confirmTokenOrNull, String contestTokenOrNull) {
+        LOG.info("evento=mail.intencao tipo={} org={} entrega=nenhuma(local)", kind, organization);
+    }
 }

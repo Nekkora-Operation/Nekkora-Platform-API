@@ -34,7 +34,8 @@ public class SecurityConfig {
     private static final String[] PUBLIC_POST_ROUTES = {
             "/api/v1/o/*/auth/login", "/api/v1/o/*/auth/mfa/enroll/start", "/api/v1/o/*/auth/mfa/enroll/confirm",
             "/api/v1/o/*/auth/mfa/verify", "/api/v1/o/*/auth/logout", "/api/v1/o/*/auth/password-reset/request",
-            "/api/v1/o/*/auth/password-reset/confirm", "/api/v1/o/*/auth/email-verification/confirm"};
+            "/api/v1/o/*/auth/password-reset/confirm", "/api/v1/o/*/auth/email-verification/confirm",
+            "/api/v1/o/*/auth/mfa-emergencia/aviso/confirmar", "/api/v1/o/*/auth/mfa-emergencia/aviso/contestar"};
 
     @Bean
     SecurityFilterChain apiSecurityFilterChain(HttpSecurity http, OrgTransactions tx, SessionRepository sessions, Limits limits, PreAuthCsrf pre,

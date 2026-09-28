@@ -1,0 +1,9 @@
+containers fora da validacao (antes = depois): identicos
+/nekkora-homologacao-hml03-gateway-1|2026-09-27T02:16:20.257659682Z|exited|2026-09-27T02:16:24.475970852Z
+/nekkora-homologacao-hml03-platform-1|2026-09-27T02:16:20.111715567Z|exited|2026-09-27T02:16:24.255839333Z
+/nekkora-homologacao-hml03-portal-1|2026-09-27T02:16:20.112620462Z|exited|2026-09-27T02:16:24.252141268Z
+/nekkora-homologacao-hml03-postgres-1|2026-09-27T02:16:19.998405428Z|exited|2026-09-27T02:16:20.501585776Z
+/nekkora-homologacao-hml03-redis-1|2026-09-27T02:16:19.99394157Z|exited|2026-09-27T02:16:20.47100743Z
+/nekkora-postgres|2026-09-25T21:03:29.19494106Z|running|2026-09-28T02:36:02.849560132Z
+migrations 001-015 diferentes de ca4033b: 0
+migrations 001-015 diferentes de origin/main: 0

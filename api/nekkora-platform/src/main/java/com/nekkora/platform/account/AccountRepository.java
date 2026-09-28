@@ -50,6 +50,25 @@ public final class AccountRepository {
                 rs.getBoolean("elegivel"), rs.getString("password_hash"), rs.getBoolean("tem_fator"));
     }
 
+    private static final String EFFECTIVE_ORG_ADMIN = """
+            FROM public.organization_role_assignments a
+            JOIN public.organization_memberships m ON m.organization_id = a.organization_id AND m.membership_id = a.membership_id
+            JOIN public.users u ON u.organization_id = m.organization_id AND u.user_id = m.user_id
+            JOIN public.roles r ON r.role_id = a.role_id
+            WHERE a.organization_id = ? AND a.status = 1 AND m.status = 2 AND u.status = 2 AND r.code = 'ORG_ADMIN'
+            """;
+
+    /** ORG_ADMIN efetivo (definicao da 003): atribuicao ativa, vinculo ativo, conta ativa. */
+    public boolean isEffectiveOrgAdmin(JdbcClient j, UUID org, UUID user) {
+        return j.sql("SELECT EXISTS (SELECT 1 " + EFFECTIVE_ORG_ADMIN + " AND m.user_id = ?)").param(org).param(user).query(Boolean.class).single();
+    }
+
+    /** E-mails dos demais ORG_ADMIN efetivos (exceto {@code except}). */
+    public java.util.List<String> effectiveOrgAdminEmails(JdbcClient j, UUID org, UUID except) {
+        return j.sql("SELECT DISTINCT u.email " + EFFECTIVE_ORG_ADMIN + " AND m.user_id <> ? ORDER BY 1").param(org).param(except)
+                .query(String.class).list();
+    }
+
     /** Lock da conta: primeiro lock de todo caminho que cria sessao ou muda credencial/fator/desafios/sessoes (§3.2). */
     public boolean lock(JdbcClient j, UUID org, UUID user) {
         return j.sql("SELECT 1 FROM public.users WHERE organization_id = ? AND user_id = ? FOR UPDATE").param(org).param(user)

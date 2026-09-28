@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.nekkora.core.db.OrgTransactions;
@@ -52,9 +53,16 @@ public class AccountController {
         return ResponseEntity.noContent().build();
     }
 
+    /** Corpo do reset administrativo: motivo codificado obrigatorio (016, D5). */
+    public record MfaReset(String reason) {
+    }
+
     @PostMapping("/api/v1/o/{org}/users/{user}/mfa/reset")
-    public ResponseEntity<Void> resetMfa(@PathVariable UUID org, @PathVariable UUID user, HttpServletRequest req) {
-        admin.resetMfa(org, SessionFilter.principal(req), SessionFilter.token(req), user);
+    public ResponseEntity<Void> resetMfa(@PathVariable UUID org, @PathVariable UUID user, @RequestBody(required = false) MfaReset body,
+                                         HttpServletRequest req) {
+        AdminService.ResetReason reason = AdminService.ResetReason.parse(body == null ? null : body.reason())
+                .orElseThrow(() -> ApiException.invalid("reason"));
+        admin.resetMfa(org, SessionFilter.principal(req), SessionFilter.token(req), user, reason);
         return ResponseEntity.noContent().build();
     }
 

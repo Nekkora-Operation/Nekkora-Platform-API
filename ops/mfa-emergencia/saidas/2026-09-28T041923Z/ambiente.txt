@@ -1,0 +1,45 @@
+data_utc=2026-09-28T04:19:23Z
+commit=ca4033b72cda25e2a6dc09cde537bb86191a3a99 branch=feat/mfa-emergencia
+contrato=docs/relatorios/2026-09-27-contrato-recuperacao-emergencial-mfa.md sha256=d22f3b6ca227dd5bf86dba191e8685e53cae382053076888f296eb0879264353
+migration_016_sha256=1245c180fc9d50c3552409ce360f721073989bb864fd1ce53bc7097c8e09d0bf
+git_status_porcelain:
+   M api/nekkora-platform/pom.xml
+   M api/nekkora-platform/src/main/java/com/nekkora/platform/account/AccountRepository.java
+   M api/nekkora-platform/src/main/java/com/nekkora/platform/admin/AdminService.java
+   M api/nekkora-platform/src/main/java/com/nekkora/platform/config/PlatformConfig.java
+   M api/nekkora-platform/src/main/java/com/nekkora/platform/config/SecurityConfig.java
+   M api/nekkora-platform/src/main/java/com/nekkora/platform/mail/LocalMailSender.java
+   M api/nekkora-platform/src/main/java/com/nekkora/platform/mail/MailSender.java
+   M api/nekkora-platform/src/main/java/com/nekkora/platform/mfa/MfaRepository.java
+   M api/nekkora-platform/src/main/java/com/nekkora/platform/web/AccountController.java
+   M api/nekkora-platform/src/main/java/com/nekkora/platform/web/Routes.java
+   M api/nekkora-platform/src/test/java/com/nekkora/platform/MfaConcurrencyIT.java
+   M api/nekkora-platform/src/test/java/com/nekkora/platform/PlatformTestBase.java
+   M api/nekkora-platform/src/test/java/com/nekkora/platform/SessionsAndAdministrationIT.java
+   M api/pom.xml
+  ?? api/e2e/email/
+  ?? api/nekkora-ops/
+  ?? api/nekkora-platform/paginas/
+  ?? api/nekkora-platform/src/main/java/com/nekkora/platform/emergency/
+  ?? api/nekkora-platform/src/main/java/com/nekkora/platform/web/EmergencyNoticeController.java
+  ?? api/nekkora-platform/src/test/java/com/nekkora/platform/EmergencyRecoveryFlowIT.java
+  ?? db/migrations/016_recuperacao_emergencial_mfa.sql
+  ?? db/tests/mfa-014/saidas/2026-09-26T160847Z_nekkora-mfa-014ens/
+  ?? db/tests/mfa-014/saidas/2026-09-26T160926Z_nekkora-mfa-014ens/
+  ?? db/tests/mfa-014/saidas/2026-09-26T161000Z_nekkora-mfa-014ens/
+  ?? db/tests/mfa-014/saidas/2026-09-26T161044Z_nekkora-mfa-014ens/
+  ?? db/tests/mfa-emergencia-016/
+  ?? db/tests/portal-013/saidas/2026-09-26T043635Z_nekkora-portal-013ens/
+  ?? db/tests/portal-013/saidas/2026-09-26T043648Z_nekkora-portal-013ens/
+  ?? db/tests/portal-013/saidas/2026-09-26T043722Z_nekkora-portal-013ens/
+  ?? db/tests/portal-013/saidas/2026-09-26T043911Z_nekkora-portal-013ens/
+  ?? db/tests/portal-013/saidas/2026-09-26T044135Z_nekkora-portal-013ens/
+  ?? db/tests/portal-013/saidas/2026-09-26T044322Z_nekkora-portal-013ens/
+  ?? db/tests/portal-013/saidas/2026-09-26T044517Z_nekkora-portal-013ens/
+  ?? db/tests/portal-8-2/
+  ?? db/tests/seguranca-012/saidas/2026-09-26T160015Z_nekkora-seg-012h/
+  ?? docs/relatorios/2026-09-27-mfa-emergencia-implementacao.md
+  ?? docs/relatorios/2026-09-27-mfa-emergencia-matriz-016.md
+  ?? ops/mfa-emergencia/
+docker=29.7.2
+openjdk version "21.0.12" 2026-07-21 LTS

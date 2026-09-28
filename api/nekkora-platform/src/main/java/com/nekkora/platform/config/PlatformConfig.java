@@ -177,6 +177,33 @@ public class PlatformConfig {
     }
 
     @Bean
+    com.nekkora.platform.emergency.EmergencyNotices emergencyNotices(OrgTransactions tx, MailSender mail) {
+        return new com.nekkora.platform.emergency.EmergencyNotices(tx, mail);
+    }
+
+    /**
+     * Emissao periodica dos avisos da recuperacao emergencial: DESLIGADA por padrao (candidato 016, sem producao antes
+     * da entrega real de e-mail validada - D3). Ligar so com {@code nekkora.emergency-notices.enabled=true}.
+     */
+    @Bean(destroyMethod = "shutdownNow")
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "nekkora.emergency-notices.enabled", havingValue = "true")
+    java.util.concurrent.ScheduledExecutorService emergencyNoticeDispatcher(com.nekkora.platform.emergency.EmergencyNotices notices) {
+        java.util.concurrent.ScheduledExecutorService s = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "avisos-mfa-emergencia");
+            t.setDaemon(true);
+            return t;
+        });
+        s.scheduleWithFixedDelay(() -> {
+            try {
+                notices.dispatchPending();
+            } catch (RuntimeException e) {
+                org.slf4j.LoggerFactory.getLogger(PlatformConfig.class).warn("evento=aviso_mfa_emergencia.ciclo_falhou");
+            }
+        }, 10, 10, java.util.concurrent.TimeUnit.SECONDS);
+        return s;
+    }
+
+    @Bean
     AdminService adminService(OrgTransactions tx, AccountRepository accounts, SessionRepository sessions, MfaRepository mfa, MailSender mail,
                               PlatformProperties p) {
         return new AdminService(tx, accounts, sessions, mfa, mail, p.session().stepUp());

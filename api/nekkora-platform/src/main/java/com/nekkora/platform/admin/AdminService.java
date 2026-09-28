@@ -104,13 +104,40 @@ public final class AdminService {
         });
     }
 
+    /** Motivo codificado e obrigatorio do reset administrativo (016, D5). Codigos permanentes de mfa_events.reason_code. */
+    public enum ResetReason {
+        DISPOSITIVO_PERDIDO(1), DISPOSITIVO_TROCADO(2), SUSPEITA_COMPROMETIMENTO(3), OUTRO(4);
+
+        private final short code;
+
+        ResetReason(int code) {
+            this.code = (short) code;
+        }
+
+        public short code() {
+            return code;
+        }
+
+        public static java.util.Optional<ResetReason> parse(String s) {
+            for (ResetReason r : values()) {
+                if (r.name().equals(s)) {
+                    return java.util.Optional.of(r);
+                }
+            }
+            return java.util.Optional.empty();
+        }
+    }
+
     /**
      * Reset administrativo de MFA (contrato, §3.4): permissao identity.mfa.reset; step-up com TOTP nos ultimos 5
      * min NA MESMA sessao (lido do banco, nao do principal do filtro); alvo diferente do ator; na mesma transacao,
-     * conta do alvo -> desafios -> fator/codigos -> sessoes; auditoria; aviso ao titular depois do commit.
+     * conta do alvo -> desafios -> fator/codigos -> sessoes; auditoria COM MOTIVO codificado (016, D5); aviso ao
+     * titular e, se o alvo for ORG_ADMIN, aos demais ORG_ADMIN, depois do commit.
      */
-    public void resetMfa(UUID org, ValidSession actor, String actorToken, UUID target) {
+    public void resetMfa(UUID org, ValidSession actor, String actorToken, UUID target, ResetReason reason) {
+        java.util.Objects.requireNonNull(reason);
         String[] email = new String[1];
+        java.util.List<String> otherAdmins = new java.util.ArrayList<>();
         runAdminAction(org, j -> {
             Failure f = authorize(j, org, actor, actorToken, "identity.mfa.reset", target);
             if (f != null) {
@@ -127,12 +154,18 @@ public final class AdminService {
             mfa.invalidateForAccount(j, target, null);
             mfa.disableFactor(j, target);
             sessions.revokeForAccount(j, target, null);
-            mfa.recordEvent(j, org, target, actor.userId(), MfaRepository.EV_RESET_ADMIN, correlation());
+            mfa.recordEvent(j, org, target, actor.userId(), MfaRepository.EV_RESET_ADMIN, correlation(), reason.code());
             email[0] = accounts.byId(j, org, target).map(AccountRepository.Account::email).orElse(null);
+            if (accounts.isEffectiveOrgAdmin(j, org, target)) {
+                otherAdmins.addAll(accounts.effectiveOrgAdminEmails(j, org, target));
+            }
             return null;
         });
         if (email[0] != null) {
             mail.send(MailSender.Kind.NOTICE_MFA_RESET, org, email[0], null);
+        }
+        for (String other : otherAdmins) {
+            mail.send(MailSender.Kind.NOTICE_MFA_RESET_ADMIN_TARGET, org, other, null);
         }
     }
 

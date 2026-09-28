@@ -32,6 +32,19 @@
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>
+        <!-- recuperacao emergencial (016): CLI/CA reais e banco com TLS + certificado so nos testes do fluxo completo -->
+        <dependency>
+            <groupId>com.nekkora</groupId>
+            <artifactId>nekkora-ops</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.nekkora</groupId>
+            <artifactId>nekkora-ops</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

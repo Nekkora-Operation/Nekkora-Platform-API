@@ -186,7 +186,7 @@ class MfaConcurrencyIT extends PlatformTestBase {
             assertThat(passwordLogin(pending, orgAdmin.id(), u).field("status")).isEqualTo("mfa_required");
             String code = code(u.id());
             int[] s = race(i, 150, () -> pending.post("/api/v1/o/" + orgAdmin.id() + "/auth/mfa/verify", "{\"code\":\"" + code + "\"}").status(),
-                    () -> a.post("/api/v1/o/" + orgAdmin.id() + "/users/" + u.id() + "/mfa/reset", null).status());
+                    () -> a.post("/api/v1/o/" + orgAdmin.id() + "/users/" + u.id() + "/mfa/reset", SessionsAndAdministrationIT.RESET_BODY).status());
             outcomes.merge("verify=" + s[0] + " reset=" + s[1], 1, Integer::sum);
             assertThat(s[1]).as("rodada %d: o reset sempre conclui", i).isEqualTo(204);
             assertThat(s[0]).isIn(200, 401);

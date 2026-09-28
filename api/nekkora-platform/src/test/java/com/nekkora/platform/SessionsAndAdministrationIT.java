@@ -18,6 +18,9 @@ import com.nekkora.core.token.Tokens;
  */
 class SessionsAndAdministrationIT extends PlatformTestBase {
 
+    /** Corpo do reset administrativo com o motivo codificado obrigatorio (016, D5). */
+    static final String RESET_BODY = "{\"reason\":\"DISPOSITIVO_PERDIDO\"}";
+
     private static Org org;
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -152,19 +155,19 @@ class SessionsAndAdministrationIT extends PlatformTestBase {
         firstLogin(t, org.id(), target);
         String route = "/api/v1/o/" + org.id() + "/users/" + target.id() + "/mfa/reset";
 
-        assertThat(a.post(route, null).status()).as("sem step-up").isEqualTo(403);
+        assertThat(a.post(route, RESET_BODY).status()).as("sem step-up").isEqualTo(403);
         assertThat(a.post("/api/v1/o/" + org.id() + "/auth/mfa/step-up", "{\"code\":\"000000\"}").status()).as("step-up com codigo errado").isEqualTo(403);
         assertThat(a.post("/api/v1/o/" + org.id() + "/auth/mfa/step-up", "{\"code\":\"" + code(admin.id()) + "\"}").status()).isEqualTo(204);
-        assertThat(a.post("/api/v1/o/" + org.id() + "/users/" + admin.id() + "/mfa/reset", null).status()).as("o proprio fator").isEqualTo(403);
+        assertThat(a.post("/api/v1/o/" + org.id() + "/users/" + admin.id() + "/mfa/reset", RESET_BODY).status()).as("o proprio fator").isEqualTo(403);
 
         TestUser regular = internalUser(org, true, 2);
         BrowserClient c = browser();
         firstLogin(c, org.id(), regular);
         c.post("/api/v1/o/" + org.id() + "/auth/mfa/step-up", "{\"code\":\"" + code(regular.id()) + "\"}");
-        assertThat(c.post(route, null).status()).as("sem identity.mfa.reset na matriz").isEqualTo(403);
+        assertThat(c.post(route, RESET_BODY).status()).as("sem identity.mfa.reset na matriz").isEqualTo(403);
 
         int notices = testMail.sent.size();
-        assertThat(a.post(route, null).status()).isEqualTo(204);
+        assertThat(a.post(route, RESET_BODY).status()).isEqualTo(204);
         assertThat(me(t)).as("sessoes do alvo revogadas").isEqualTo("401");
         assertThat(testMail.sent.subList(notices, testMail.sent.size())).anyMatch(m -> m.recipient().equals(target.email())
                 && m.kind() == MailSender.Kind.NOTICE_MFA_RESET);
@@ -181,7 +184,48 @@ class SessionsAndAdministrationIT extends PlatformTestBase {
         DB.asSuperuser("ALTER TABLE user_sessions DISABLE TRIGGER trg_user_sessions_prevent_reactivation",
                 "UPDATE user_sessions SET mfa_step_up_at = now() - interval '6 minutes' WHERE session_token_hash = '" + hashAdmin + "'",
                 "ALTER TABLE user_sessions ENABLE TRIGGER trg_user_sessions_prevent_reactivation");
-        assertThat(a.post("/api/v1/o/" + org.id() + "/users/" + target2.id() + "/mfa/reset", null).status()).as("step-up de 6 min: vencido").isEqualTo(403);
+        assertThat(a.post("/api/v1/o/" + org.id() + "/users/" + target2.id() + "/mfa/reset", RESET_BODY).status()).as("step-up de 6 min: vencido").isEqualTo(403);
+    }
+
+    /** 016, D5: motivo codificado obrigatorio e gravado; reset de outro ORG_ADMIN avisa os demais administradores. */
+    @Test
+    void adminMfaResetRequiresCodedReasonAndNotifiesOtherAdmins() throws Exception {
+        Org o = newOrganization();
+        TestUser admin = new TestUser(o.adminId(), o.adminEmail(), PASSWORD.toCharArray());
+        BrowserClient a = browser();
+        firstLogin(a, o.id(), admin);
+        // segundo ORG_ADMIN (atribuido pelo primeiro; preparacao declarada) e um terceiro, so para receber o aviso
+        TestUser admin2 = internalUser(o, true, 2);
+        TestUser admin3 = internalUser(o, true, 2);
+        for (TestUser u : java.util.List.of(admin2, admin3)) {
+            DB.asSuperuser("INSERT INTO organization_role_assignments (organization_id, membership_id, role_id, scope, status, assigned_by_membership_id) "
+                    + "SELECT '" + o.id() + "', m.membership_id, r.role_id, 1, 1, '" + o.adminMembership() + "' FROM organization_memberships m, roles r "
+                    + "WHERE m.user_id = '" + u.id() + "' AND r.code = 'ORG_ADMIN'");
+        }
+        firstLogin(browser(), o.id(), admin2);
+        assertThat(a.post("/api/v1/o/" + o.id() + "/auth/mfa/step-up", "{\"code\":\"" + code(admin.id()) + "\"}").status()).isEqualTo(204);
+        String route = "/api/v1/o/" + o.id() + "/users/" + admin2.id() + "/mfa/reset";
+        assertThat(a.post(route, null).status()).as("sem motivo").isEqualTo(400);
+        assertThat(a.post(route, "{}").status()).as("motivo ausente").isEqualTo(400);
+        assertThat(a.post(route, "{\"reason\":\"PORQUE_SIM\"}").status()).as("motivo fora da lista").isEqualTo(400);
+        assertThat(AuthenticationFlowIT.count("SELECT count(*) FROM user_mfa_factors WHERE user_id = '" + admin2.id() + "' AND disabled_at IS NULL"))
+                .as("nada muda sem motivo valido").isEqualTo(1);
+        int notices = testMail.sent.size();
+        assertThat(a.post(route, "{\"reason\":\"SUSPEITA_COMPROMETIMENTO\"}").status()).isEqualTo(204);
+        assertThat(AuthenticationFlowIT.count("SELECT count(*) FROM mfa_events WHERE user_id = '" + admin2.id() + "' AND event_type = 3 AND reason_code = 3"))
+                .isEqualTo(1);
+        var enviados = testMail.sent.subList(notices, testMail.sent.size());
+        assertThat(enviados).anyMatch(m -> m.recipient().equals(admin2.email()) && m.kind() == MailSender.Kind.NOTICE_MFA_RESET);
+        assertThat(enviados.stream().filter(m -> m.kind() == MailSender.Kind.NOTICE_MFA_RESET_ADMIN_TARGET).map(SentMessage::recipient).sorted().toList())
+                .as("demais ORG_ADMIN efetivos, sem o alvo").isEqualTo(java.util.stream.Stream.of(admin.email(), admin3.email()).sorted().toList());
+        assertThat(enviados).allMatch(m -> m.token() == null && m.contestToken() == null);
+
+        // alvo que nao e ORG_ADMIN: so o aviso ao titular
+        TestUser comum = internalUser(o, true, 2);
+        firstLogin(browser(), o.id(), comum);
+        int antes = testMail.sent.size();
+        assertThat(a.post("/api/v1/o/" + o.id() + "/users/" + comum.id() + "/mfa/reset", "{\"reason\":\"OUTRO\"}").status()).isEqualTo(204);
+        assertThat(testMail.sent.subList(antes, testMail.sent.size())).extracting(SentMessage::kind).containsExactly(MailSender.Kind.NOTICE_MFA_RESET);
     }
 
     @Test

@@ -1,0 +1,45 @@
+validacao 016 - 2026-09-28T04:25:04Z
+resultado=APROVADO (etapas com codigo diferente de 0: 0)
+--- codigos de saida por etapa
+etapa=1_suite_banco codigo_saida=0
+etapa=2_regressao_maven codigo_saida=0 detalhe=metodos_OK=134
+etapa=3_mutacoes codigo_saida=0 detalhe=detectadas=5_de_5
+etapa=4a_varredura codigo_saida=0
+etapa=4b_controle_positivo codigo_saida=0
+etapa=5_preservacao codigo_saida=0
+--- suite de banco
+A: 16 migrations; diff de catalogo: removidas (<): 1; acrescentadas (>): 172
+A: invariantes 012/013/014(adaptada)/016: OK
+B: organizacoes=3 usuarios=303 sessoes_ativas=300 concessoes=120 execucoes=900 eventos=450
+B: massa_mfa: fatores=60 codigos=180 eventos=82 resets_admin_sem_motivo=10 sessoes_mfa=60
+B: tabelas no instantaneo: 49; diff de dados: vazio; resets historicos sem motivo preservados: 10
+B: catalogo e schema ops identicos a instalacao limpa; invariantes OK; restauracao logica OK
+--- maven: 28 classes
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Tests run: 73, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Tests run: 44, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Tests run: 12, Failures: 0, Errors: 0, Skipped: 0
+--- mutacoes
+[mutacao] ops.operador_da_sessao(),ops.autorizar(uuid,smallint,timestamp with time zone) detectada por: expected: "RECUSA" but was: "OK"
+[mutacao] public.ops_mfa_execute(uuid) detectada por: [execucao com certificado revogado depois do snapshot] expected: "25N01" but was: "executou:OK"
+[mutacao] public.ops_mfa_execute(uuid) detectada por: [nenhum efeito parcial] expected: "1|2|1|1" but was: "0|0|0|0"
+[mutacao] ops.autorizar(uuid,smallint,timestamp with time zone) detectada por: expected: "RECUSA" but was: "OK"
+[mutacao] public.ops_notice_issue(uuid,text,text) detectada por: Expecting value to be true but was false
+--- varredura
+arquivos varridos: 39 (log bruto do Maven varrido a parte: 0 ocorrencias)
+achados: 0
+--- controle positivo da varredura
+tokens plantados: 200 (gerados por Tokens.newToken da v1)
+tokens detectados: 200; marcadores plantados: 5; detectados: 5
+achados na evidencia real antes do plantio: 0
+controle positivo: OK
+--- preservacao
+containers fora da validacao (antes = depois): identicos
+/nekkora-homologacao-hml03-gateway-1|2026-09-27T02:16:20.257659682Z|exited|2026-09-27T02:16:24.475970852Z
+/nekkora-homologacao-hml03-platform-1|2026-09-27T02:16:20.111715567Z|exited|2026-09-27T02:16:24.255839333Z
+/nekkora-homologacao-hml03-portal-1|2026-09-27T02:16:20.112620462Z|exited|2026-09-27T02:16:24.252141268Z
+/nekkora-homologacao-hml03-postgres-1|2026-09-27T02:16:19.998405428Z|exited|2026-09-27T02:16:20.501585776Z
+/nekkora-homologacao-hml03-redis-1|2026-09-27T02:16:19.99394157Z|exited|2026-09-27T02:16:20.47100743Z
+/nekkora-postgres|2026-09-25T21:03:29.19494106Z|running|2026-09-28T02:36:02.849560132Z
+migrations 001-015 diferentes de ca4033b: 0
+migrations 001-015 diferentes de origin/main: 0

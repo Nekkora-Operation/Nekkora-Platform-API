@@ -38,8 +38,8 @@ public final class Routes {
     public static Context csrfContext(HttpServletRequest req) {
         String r = routeSuffix(req);
         return switch (r) {
-            case "/auth/login", "/auth/password-reset/request", "/auth/password-reset/confirm", "/auth/email-verification/confirm" ->
-                    Context.PRE_AUTHENTICATION;
+            case "/auth/login", "/auth/password-reset/request", "/auth/password-reset/confirm", "/auth/email-verification/confirm",
+                 "/auth/mfa-emergencia/aviso/confirmar", "/auth/mfa-emergencia/aviso/contestar" -> Context.PRE_AUTHENTICATION;
             case "/auth/mfa/enroll/start", "/auth/mfa/enroll/confirm", "/auth/mfa/verify" -> Context.CHALLENGE;
             case "/auth/logout" -> Context.LOGOUT;
             default -> Context.SESSION;

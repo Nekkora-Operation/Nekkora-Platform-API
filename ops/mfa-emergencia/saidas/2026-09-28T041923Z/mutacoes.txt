@@ -1,0 +1,5 @@
+[mutacao] ops.operador_da_sessao(),ops.autorizar(uuid,smallint,timestamp with time zone) detectada por: expected: "RECUSA" but was: "OK"
+[mutacao] public.ops_mfa_execute(uuid) detectada por: [execucao com certificado revogado depois do snapshot] expected: "25N01" but was: "executou:OK"
+[mutacao] public.ops_mfa_execute(uuid) detectada por: [nenhum efeito parcial] expected: "1|2|1|1" but was: "0|0|0|0"
+[mutacao] ops.autorizar(uuid,smallint,timestamp with time zone) detectada por: expected: "RECUSA" but was: "OK"
+[mutacao] public.ops_notice_issue(uuid,text,text) detectada por: Expecting value to be true but was false

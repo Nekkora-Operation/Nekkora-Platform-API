@@ -245,7 +245,8 @@ public abstract class PlatformTestBase {
 
     // ------------------------------------------------------------------ e-mail em memoria
 
-    public record SentMessage(MailSender.Kind kind, UUID org, String recipient, String token) {
+    /** {@code token}: token unico (ou CONFIRMAR, nos avisos emergenciais); {@code contestToken}: CONTESTAR (so emergencial). */
+    public record SentMessage(MailSender.Kind kind, UUID org, String recipient, String token, String contestToken) {
     }
 
     public static final class TestMailSender implements MailSender {
@@ -253,7 +254,12 @@ public abstract class PlatformTestBase {
 
         @Override
         public void send(Kind kind, UUID organization, String recipient, String tokenOrNull) {
-            sent.add(new SentMessage(kind, organization, recipient, tokenOrNull));
+            sent.add(new SentMessage(kind, organization, recipient, tokenOrNull, null));
+        }
+
+        @Override
+        public void sendEmergencyNotice(Kind kind, UUID organization, String recipient, String confirmTokenOrNull, String contestTokenOrNull) {
+            sent.add(new SentMessage(kind, organization, recipient, confirmTokenOrNull, contestTokenOrNull));
         }
     }
 

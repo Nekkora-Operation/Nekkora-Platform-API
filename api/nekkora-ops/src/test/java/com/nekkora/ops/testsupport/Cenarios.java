@@ -1,0 +1,266 @@
+package com.nekkora.ops.testsupport;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+import com.nekkora.ops.cli.ExecutorAtos;
+import com.nekkora.ops.cli.ExecutorAtos.Classe;
+import com.nekkora.ops.cli.ExecutorAtos.Resultado;
+
+/**
+ * Cenarios reutilizaveis: equipe de operadores (papeis reais por certificado), alvo elegivel (cenario C) e conducao
+ * de uma solicitacao ate cada estado pelos caminhos reais. Avisos pela identidade de servico da Platform
+ * ({@code nekkora_platform}, com o contexto de requisicao), como a Platform faz.
+ */
+public final class Cenarios {
+
+    public static final Duration ESPERA = Duration.ofHours(24).plusMinutes(1);
+
+    private final OpsBanco db;
+
+    public Cenarios(OpsBanco db) {
+        this.db = db;
+    }
+
+    public record Equipe(OpsBanco.Operador verificador, OpsBanco.Operador aprovador, OpsBanco.Operador executor,
+                         ExecutorAtos v, ExecutorAtos a, ExecutorAtos e) {
+    }
+
+    /** Alvo: o ORG_ADMIN inicial da organizacao, com contato autorizado proprio e um segundo contato, ambos elegiveis. */
+    public record Alvo(OpsBanco.Org org, UUID titular, UUID fator, UUID contatoTitular, UUID segundoContato) {
+    }
+
+    public record Tokens(UUID destinatario, String confirmar, String contestar, boolean temConfirmar, boolean temContestar) {
+    }
+
+    public Equipe equipe() {
+        OpsBanco.Operador v = db.operador("ver", "VERIFICAR", "CONSULTAR", "CANCELAR");
+        OpsBanco.Operador a = db.operador("apr", "APROVAR", "CONSULTAR");
+        OpsBanco.Operador e = db.operador("exe", "EXECUTAR", "CONSULTAR");
+        return new Equipe(v, a, e, db.cli(v), db.cli(a), db.cli(e));
+    }
+
+    public Alvo alvo() {
+        OpsBanco.Org o = db.organizacao();
+        db.estadoDeAcesso(o.id(), o.admin(), o.adminFator());
+        UUID c1 = db.contatoElegivel(o, o.admin());
+        UUID c2 = db.contatoElegivel(o, null);
+        return new Alvo(o, o.admin(), o.adminFator(), c1, c2);
+    }
+
+    public UUID aberta(Equipe eq, Alvo al) {
+        Resultado r = eq.v().abrir(al.org().id(), al.titular(), al.contatoTitular());
+        assertThat(r.classe()).as("abrir: %s", r).isEqualTo(Classe.OK);
+        // o UUID vem do proprio resultado da CLI: nenhuma consulta administrativa para continuar
+        assertThat(r.solicitacao()).as("abrir devolve a solicitacao").isNotNull();
+        return r.solicitacao();
+    }
+
+    public UUID verificada(Equipe eq, Alvo al) {
+        UUID s = aberta(eq, al);
+        exigirOk(eq.v().verificar(s, true, al.segundoContato(), true), "verificar");
+        return s;
+    }
+
+    public UUID preAprovada(Equipe eq, Alvo al) {
+        UUID s = verificada(eq, al);
+        exigirOk(eq.a().preAprovar(s), "pre-aprovar");
+        return s;
+    }
+
+    /** Pre-aprovada, avisos emitidos e confirmacao do titular (instante = agora). */
+    public UUID confirmada(Equipe eq, Alvo al) {
+        UUID s = preAprovada(eq, al);
+        Tokens t = emitirAvisos(al.org().id()).stream().filter(x -> x.destinatario().equals(al.titular()) && x.temConfirmar()).findFirst().orElseThrow();
+        assertThat(confirmar(al.org().id(), t.confirmar())).as("confirmacao do titular").isTrue();
+        return s;
+    }
+
+    /** Confirmada, espera de 24 h cumprida (fixture temporal) e aprovacao final. */
+    public UUID aprovada(Equipe eq, Alvo al) {
+        UUID s = confirmada(eq, al);
+        db.recuarSolicitacao(s, ESPERA);
+        exigirOk(eq.a().aprovar(s), "aprovar");
+        return s;
+    }
+
+    public static void exigirOk(Resultado r, String ato) {
+        assertThat(r.classe()).as("%s: %s", ato, r).isEqualTo(Classe.OK);
+    }
+
+    // ------------------------------------------------------------------ Platform (nekkora_platform)
+
+    /** Emite os avisos pendentes da organizacao como a Platform: tokens brutos so aqui, hash no banco. */
+    public List<Tokens> emitirAvisos(UUID org) {
+        List<Tokens> out = new ArrayList<>();
+        try (Connection c = db.comoServico("nekkora_platform")) {
+            List<UUID> pendentes = new ArrayList<>();
+            try (PreparedStatement ps = c.prepareStatement("SELECT r_aviso, r_organizacao FROM public.ops_notice_pending(100)");
+                 ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    if (org.equals(rs.getObject(2, UUID.class))) {
+                        pendentes.add(rs.getObject(1, UUID.class));
+                    }
+                }
+            }
+            for (UUID aviso : pendentes) {
+                String conf = OpsBanco.tokenBruto();
+                String cont = OpsBanco.tokenBruto();
+                c.setAutoCommit(false);
+                try (PreparedStatement ps = c.prepareStatement(
+                        "SELECT r_emitido, r_confirmar, r_contestar, r_destinatario FROM public.ops_notice_issue(?, ?, ?)")) {
+                    ps.setObject(1, aviso);
+                    ps.setString(2, OpsBanco.sha256(conf));
+                    ps.setString(3, OpsBanco.sha256(cont));
+                    try (ResultSet rs = ps.executeQuery()) {
+                        rs.next();
+                        if (rs.getBoolean(1)) {
+                            out.add(new Tokens(rs.getObject(4, UUID.class), rs.getBoolean(2) ? conf : null, rs.getBoolean(3) ? cont : null,
+                                    rs.getBoolean(2), rs.getBoolean(3)));
+                        }
+                    }
+                }
+                c.commit();
+                c.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("emissao de avisos falhou (sqlstate " + e.getSQLState() + ")", e);
+        }
+        return out;
+    }
+
+    public boolean confirmar(UUID org, String bruto) {
+        return usarToken("ops_notice_confirm", org, org, bruto);
+    }
+
+    public boolean contestar(UUID org, String bruto) {
+        return usarToken("ops_notice_contest", org, org, bruto);
+    }
+
+    /** Uso de token como a Platform: contexto de requisicao {@code ctx} e organizacao da rota {@code org}. */
+    public boolean usarToken(String funcao, UUID ctx, UUID org, String bruto) {
+        try (Connection c = db.comoServico("nekkora_platform")) {
+            c.setAutoCommit(false);
+            try (PreparedStatement ps = c.prepareStatement("SELECT set_config('nekkora.organization_id', ?, true)")) {
+                ps.setString(1, ctx.toString());
+                ps.execute();
+            }
+            boolean r;
+            try (PreparedStatement ps = c.prepareStatement("SELECT public." + funcao + "(?, ?)")) {
+                ps.setObject(1, org);
+                ps.setString(2, bruto == null ? null : OpsBanco.sha256(bruto));
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    r = rs.getBoolean(1);
+                }
+            }
+            c.commit();
+            return r;
+        } catch (SQLException e) {
+            throw new IllegalStateException("uso de token falhou (sqlstate " + e.getSQLState() + ")", e);
+        }
+    }
+
+    /** Prova de controle de conta emitida pela Platform (sessao do titular da conta); devolve o codigo bruto. */
+    public String provaDeConta(UUID org, UUID usuario) {
+        String bruto = OpsBanco.tokenBruto();
+        try (Connection c = db.comoServico("nekkora_platform")) {
+            c.setAutoCommit(false);
+            try (PreparedStatement ps = c.prepareStatement("SELECT set_config('nekkora.organization_id', ?, true)")) {
+                ps.setString(1, org.toString());
+                ps.execute();
+            }
+            try (PreparedStatement ps = c.prepareStatement("SELECT public.ops_account_proof_issue(?, ?, ?)")) {
+                ps.setObject(1, org);
+                ps.setObject(2, usuario);
+                ps.setString(3, OpsBanco.sha256(bruto));
+                ps.execute();
+            }
+            c.commit();
+        } catch (SQLException e) {
+            throw new IllegalStateException("prova de conta falhou (sqlstate " + e.getSQLState() + ")", e);
+        }
+        return bruto;
+    }
+
+    /** O operador vincula a conta que controla (a CLI envia so o hash do codigo). */
+    public String vincularConta(OpsBanco.Operador o, String bruto) {
+        return comoOperador(o, "SELECT r_resultado FROM public.ops_link_platform_account(?)", OpsBanco.sha256(bruto));
+    }
+
+    /** Prova de contato emitida por um operador CADASTRAR (bootstrap); devolve o codigo bruto entregue pelo canal. */
+    public String provaDeContato(UUID contato) {
+        String bruto = OpsBanco.tokenBruto();
+        String r = db.cadastro("SELECT r_resultado FROM public.ops_contact_link_code_issue(?, ?)", String.class, contato, OpsBanco.sha256(bruto));
+        if (!"OK".equals(r)) {
+            throw new IllegalStateException("prova de contato recusada");
+        }
+        return bruto;
+    }
+
+    public String vincularContato(OpsBanco.Operador o, String bruto) {
+        return comoOperador(o, "SELECT r_resultado FROM public.ops_link_contact(?)", OpsBanco.sha256(bruto));
+    }
+
+    public String comoOperador(OpsBanco.Operador o, String sql, Object... params) {
+        try (var cred = db.credencial(o); Connection c = db.conectar(cred); PreparedStatement ps = c.prepareStatement(sql)) {
+            for (int i = 0; i < params.length; i++) {
+                ps.setObject(i + 1, params[i]);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getString(1);
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("ato do operador falhou (sqlstate " + e.getSQLState() + ")", e);
+        }
+    }
+
+    // ------------------------------------------------------------------ leituras de evidencia (superusuario, declaradas)
+
+    public String estado(UUID solicitacao) {
+        return db.valor(String.class, "SELECT ops.estado_nome(state) FROM ops.ops_mfa_recovery_requests WHERE request_id = ?", solicitacao);
+    }
+
+    public String encerramento(UUID solicitacao) {
+        return db.valor(String.class, "SELECT close_reason FROM ops.ops_mfa_recovery_requests WHERE request_id = ?", solicitacao);
+    }
+
+    public long resets(UUID solicitacao) {
+        return db.valor(Long.class, "SELECT count(*) FROM public.mfa_events WHERE ops_request_id = ?", solicitacao);
+    }
+
+    /** Fotografia do acesso da conta: fator ativo, codigos validos, desafios ativos, sessoes ativas. */
+    public String acesso(UUID org, UUID user) {
+        String sql = ("SELECT concat_ws('|', "
+                + "(SELECT count(*) FROM user_mfa_factors WHERE organization_id = ?1 AND user_id = ?2 AND disabled_at IS NULL), "
+                + "(SELECT count(*) FROM user_mfa_recovery_codes WHERE organization_id = ?1 AND user_id = ?2 AND used_at IS NULL AND invalidated_at IS NULL), "
+                + "(SELECT count(*) FROM auth_challenges WHERE organization_id = ?1 AND user_id = ?2 AND consumed_at IS NULL AND invalidated_at IS NULL), "
+                + "(SELECT count(*) FROM user_sessions WHERE organization_id = ?1 AND user_id = ?2 AND revoked_at IS NULL))")
+                .replace("?1", "'" + org + "'").replace("?2", "'" + user + "'");
+        return db.valor(String.class, sql);
+    }
+
+    /** Senha, papeis, vinculos, status e e-mail da conta (nao podem mudar com a recuperacao). */
+    public String identidade(UUID org, UUID user) {
+        String o = "'" + org + "'";
+        String u = "'" + user + "'";
+        return db.valor(String.class, "SELECT concat_ws('|', "
+                + "(SELECT password_hash || password_changed_at::text FROM user_credentials WHERE user_id = " + u + "), "
+                + "(SELECT status || email || coalesce(email_verified_at::text, '') FROM users WHERE user_id = " + u + "), "
+                + "(SELECT string_agg(status::text || membership_id::text, ',') FROM organization_memberships WHERE user_id = " + u + "), "
+                + "(SELECT string_agg(a.assignment_id::text || a.status || coalesce(a.revoked_at::text, ''), ',' ORDER BY a.assignment_id) "
+                + "   FROM organization_role_assignments a JOIN organization_memberships m USING (organization_id, membership_id) "
+                + "   WHERE a.organization_id = " + o + " AND m.user_id = " + u + "), "
+                + "(SELECT count(*) FROM client_memberships WHERE user_id = " + u + "), "
+                + "(SELECT count(*) FROM client_workspace_grants WHERE organization_id = " + o + "))");
+    }
+}

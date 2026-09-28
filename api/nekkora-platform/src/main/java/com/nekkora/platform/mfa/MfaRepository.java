@@ -160,7 +160,12 @@ public final class MfaRepository {
     }
 
     public void recordEvent(JdbcClient j, UUID org, UUID user, UUID actor, short kind, UUID correlation) {
-        j.sql("INSERT INTO public.mfa_events (organization_id, user_id, actor_user_id, event_type, correlation_id) VALUES (?, ?, ?, ?, ?)")
-                .param(org).param(user).param(actor).param(kind).param(correlation).update();
+        recordEvent(j, org, user, actor, kind, correlation, null);
+    }
+
+    /** {@code reason}: motivo codificado, obrigatorio no RESET_BY_ADMIN (016, D5); nulo nos demais tipos. */
+    public void recordEvent(JdbcClient j, UUID org, UUID user, UUID actor, short kind, UUID correlation, Short reason) {
+        j.sql("INSERT INTO public.mfa_events (organization_id, user_id, actor_user_id, event_type, correlation_id, reason_code) VALUES (?, ?, ?, ?, ?, ?)")
+                .param(org).param(user).param(actor).param(kind).param(correlation).param(reason).update();
     }
 }

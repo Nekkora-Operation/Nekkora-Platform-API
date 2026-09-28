@@ -1,0 +1,85 @@
+<!doctype html>
+<!--
+  Pagina estatica do aviso da recuperacao emergencial de MFA (016; contrato 6.1). CANDIDATA: nao e servida pela Platform
+  (fica fora de resources/static) e nao esta ligada a producao; a publicacao depende da entrega real de e-mail (D3).
+
+  Link do e-mail: <origem>/conta/aviso-mfa-emergencia.html?o=<organizacao>#a=confirmar&t=<token>
+  - o token fica no FRAGMENTO (nao vai ao servidor na abertura nem em Referer) e e retirado da barra logo ao abrir;
+  - ABRIR A PAGINA NAO CONFIRMA NEM CONTESTA: so o clique envia o POST explicito, com o CSRF de pre-autenticacao
+    (GET /api/v1/csrf) e a Origin do proprio site;
+  - a resposta publica e a mesma para qualquer recusa; nada de sessao e criado.
+-->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; form-action 'none'; base-uri 'none'">
+<title>Aviso de seguranca - Nekkora</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 36rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.5; color: #1a1a1a; }
+  button { font-size: 1rem; padding: .6rem 1.2rem; cursor: pointer; }
+  .aviso { background: #fff4e5; border-left: 4px solid #e08a00; padding: .8rem 1rem; }
+  [hidden] { display: none; }
+</style>
+</head>
+<body>
+<h1>Recuperacao de acesso da sua conta</h1>
+<p class="aviso">Um pedido de <strong>redefinicao do segundo fator (MFA)</strong> da sua conta esta em andamento pela equipe de
+  seguranca da Nekkora. Nada muda ao abrir esta pagina.</p>
+
+<section id="confirmar" hidden>
+  <p>Se foi <strong>voce</strong> quem pediu, confirme abaixo. A confirmacao so comprova que esta caixa de e-mail e sua; ela nao
+    aprova nem executa a redefinicao, que ainda passa por uma espera de 24 horas.</p>
+  <button type="button" data-rota="confirmar">Confirmo que fui eu</button>
+</section>
+
+<section id="contestar" hidden>
+  <p>Se voce <strong>nao reconhece</strong> este pedido, conteste: ele sera cancelado.</p>
+  <button type="button" data-rota="contestar">Nao reconheco este pedido</button>
+</section>
+
+<p id="resultado" role="status" hidden></p>
+
+<script>
+(function () {
+  var params = new URLSearchParams(location.search);
+  var frag = new URLSearchParams(location.hash.replace(/^#/, ''));
+  var org = params.get('o');
+  var acao = frag.get('a');
+  var token = frag.get('t');
+  // o token sai da barra de enderecos e do historico logo na abertura
+  history.replaceState(null, '', location.pathname + location.search);
+  var uuid = /^[0-9a-fA-F-]{36}$/;
+  var resultado = document.getElementById('resultado');
+  function mostrar(texto) { resultado.textContent = texto; resultado.hidden = false; }
+  if (!org || !uuid.test(org) || !token || (acao !== 'confirmar' && acao !== 'contestar')) {
+    mostrar('Link invalido ou incompleto.');
+    return;
+  }
+  document.getElementById(acao).hidden = false;
+  if (acao === 'confirmar') { document.getElementById('contestar').hidden = true; }
+  Array.prototype.forEach.call(document.querySelectorAll('button[data-rota]'), function (b) {
+    b.addEventListener('click', function () {
+      b.disabled = true;
+      fetch('/api/v1/csrf', { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (c) {
+          return fetch('/api/v1/o/' + org + '/auth/mfa-emergencia/aviso/' + b.getAttribute('data-rota'), {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': c.csrfToken },
+            body: JSON.stringify({ token: token })
+          });
+        })
+        .then(function (r) {
+          token = null;
+          mostrar(r.status === 204 ? 'Registrado. Obrigado.'
+            : 'Nao foi possivel registrar. O link pode ter vencido ou ja ter sido usado. Se voce nao reconhece o pedido, procure o suporte da Nekkora.');
+        })
+        .catch(function () { mostrar('Falha de comunicacao. Tente novamente em instantes.'); b.disabled = false; });
+    });
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.nekkora.ops.EstadosEPrazosIT
+-------------------------------------------------------------------------------
+Tests run: 10, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 14.11 s -- in com.nekkora.ops.EstadosEPrazosIT
