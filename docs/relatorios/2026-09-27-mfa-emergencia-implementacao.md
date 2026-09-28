@@ -1,12 +1,12 @@
 # Recuperação emergencial de MFA — implementação e validação (candidato)
 
-**Data:** 2026-09-27; **rodada 2** em 2026-09-28, com as correções dos cinco achados da revisão (§5d); **rodada 3** (revisão 4 do contrato e achados I-1–I-5 do inventário de locks) em 2026-09-28, §5f, com as correções da revisão dela na §5g, **sem commit**.
+**Data:** 2026-09-27; **rodada 2** em 2026-09-28, com as correções dos cinco achados da revisão (§5d); **rodada 3** (revisão 4 do contrato e achados I-1–I-5 do inventário de locks) em 2026-09-28, §5f, com as correções da revisão dela na §5g e o encerramento na §5h (commit `03bc72c`, publicado na `main`).
 **Branch:** `feat/mfa-emergencia`, sobre `ca4033b` (contrato aprovado, revisão 3 final; SHA-256 `d22f3b6ca227dd5bf86dba191e8685e53cae382053076888f296eb0879264353`).
 **Estado:**
 - **Candidato para revisão.** Não habilitado em produção.
-- **Achados da rodada 2 encerrados** na revisão estática de 2026-09-28 (§5e).
-- **Commit autorizado** do conjunto revisado na `feat/mfa-emergencia`, como candidata. **Sem push nem merge.**
-- Sem aprovação para produção nem para integração: as decisões do §5 e os gates do §7 continuam abertos.
+- **Achados da rodada 2 encerrados** na revisão estática de 2026-09-28 (§5e); rodada 2 commitada em `effa516`.
+- **Rodada 3 e achados da revisão dela encerrados** (§5h); conjunto revisado commitado em `03bc72c` na `feat/mfa-emergencia` e **publicado na `main`** (fast-forward `72057e7..03bc72c`, `origin/main`), por autorização do responsável (§5h).
+- Sem aprovação para produção: a 016 continua **candidata**, e os gates do §7 continuam abertos. Nenhuma aplicação em base persistente.
 - E-mail segue pausado; o foco é a API.
 - O checkpoint pausado `db0164c` (e-mail M365) **não** foi incorporado (`git merge-base --is-ancestor` negativo).
 
@@ -455,7 +455,15 @@ Antes dela, os testes direcionados passaram: `Revisao4TentativasIT` (16), `Mutac
 - **Precisões do revisor:**
   - na execução depois de expirar, a repetição retorna `ESTADO_INVALIDO`, mantendo `EXPIRADA` e sem reset. O teste confere isso; não é repetição do mesmo motivo;
   - o texto das definições colado na conversa foi conferido contra o arquivo do ZIP, que está completo e correto.
-- **Commit autorizado** do conjunto revisado na `feat/mfa-emergencia`, com a evidência oficial `2026-09-28T154847Z` (sem o log bruto do Maven, como na rodada 2). O conteúdo foi conferido contra o manifesto antes do commit; a única diferença posterior à revisão é esta nota (§5h).
+- **Commit** `03bc72c` na `feat/mfa-emergencia`, com o conjunto revisado e a evidência oficial `2026-09-28T154847Z` (sem o log bruto do Maven, como na rodada 2): 92 arquivos.
+  - Conferência contra o manifesto antes do commit: 39 dos 40 arquivos entregues idênticos a `repo/`, e os 52 arquivos de evidência idênticos a `evidencia/`.
+  - A única diferença foi o relatório, pela inserção desta nota (16 linhas acrescentadas, nenhuma removida).
+- **Publicação na `main`:**
+  - o texto de revisão autorizava o commit sem push nem merge; o responsável autorizou depois, em mensagem própria, subir o conteúdo para a `main`;
+  - feito por fast-forward, sem conflito: `main` e `origin/main` de `72057e7` para `03bc72c` (commits `ca4033b`, `effa516` e `03bc72c`);
+  - o repositório não tem workflows de CI (`.github/workflows` ausente), então o push não disparou aplicação de migrations nem deploy;
+  - o checkpoint `db0164c` (e-mail M365) não foi incorporado.
+- **Depois do commit:** só esta nota foi atualizada (commit e publicação), no pacote regenerado `mfa-emergencia-implementacao-<instante>` (§10).
 - **Continuam:** os limites documentados (§5f.4, §6) e os bloqueios de produção (§7). A aprovação não autoriza aplicação em bases persistentes, retomada do e-mail real nem frontend.
 
 ## 6. Limitações

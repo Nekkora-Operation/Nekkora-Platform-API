@@ -22,7 +22,7 @@ mkdir -p "$PKG/evidencia"
 cd "$REPO"
 # preexistentes nao rastreados (preservados, fora da entrega)
 PREEXISTENTE='^(api/e2e/email/|db/tests/portal-8-2/|.*/saidas/)'
-git ls-files --others --exclude-standard | grep -vE "$PREEXISTENTE" | sort > "$PKG/arquivos-novos.txt"
+{ git ls-files --others --exclude-standard | grep -vE "$PREEXISTENTE" || true; } | sort > "$PKG/arquivos-novos.txt"   # vazio quando tudo ja esta commitado
 git diff --name-only "$BASE" | sort > "$PKG/arquivos-alterados.txt"
 cat "$PKG/arquivos-alterados.txt" "$PKG/arquivos-novos.txt" | sort -u > "$PKG/arquivos-entregues.txt"
 {
