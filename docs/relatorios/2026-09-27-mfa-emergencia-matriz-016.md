@@ -9,6 +9,8 @@
 
 A migration confere esta matriz no próprio bloco final (§19 da 016), e a suíte `db/tests/mfa-emergencia-016` confere de novo na instalação limpa e na base atualizada.
 
+> **Revisão 4 (rodada 3, 2026-09-28):** os §1–§6 abaixo descrevem a revisão 3. As mudanças da revisão 4 estão no §7, e o inventário de locks completo e vigente está em `2026-09-28-mfa-emergencia-inventario-locks.md` (v3, §10). Onde os dois divergem, valem o §7 e o inventário.
+
 ## 1. Papéis
 
 | Papel | Tipo | Atributos | Membros | Uso |
@@ -176,3 +178,29 @@ Sem acesso a `user_credentials`, sem INSERT ou UPDATE em papéis e vínculos, se
 - **Exceção declarada:** `recuarAbertura` desloca só a abertura, `T_total` e a verificação, que a CHECK amarra à abertura + 24 h. A pré-aprovação, os avisos e os tokens ficam no instante real ("aberta há 50 h, pré-aprovada agora").
   - Serve só ao teste da confirmação tardia (`AvisosIT`).
   - As CHECKs continuam satisfeitas: `t_total = opened_at + 72 h`, verificação dentro de 24 h da abertura, e pré-aprovação depois da verificação e antes de `T_total`.
+
+## 7. Revisão 4 (rodada 3)
+
+**Papéis:** novo `nekkora_ops_intake` (LOGIN, serviço de registro de entrada), com `EXECUTE` só em `ops_intake_register` e `ops_intake_key_activate`. Sem acesso a tabelas nem a funções de operador. `nekkora_ops_mfa` passa a ter 21 funções de operador.
+
+**Tabelas novas em `ops`** (21 no total; mesmas regras de dono, privilégios, imutabilidade e bloqueio de DELETE/TRUNCATE):
+
+| Tabela | Conteúdo |
+|---|---|
+| `ops_intake_key_state` | Linha única: versão vigente, anterior e instante de ativação (transição de 25 h) |
+| `ops_intake_entries` | Entrada de uso único (60 min), mecanismo de comprovação, pseudônimos HMAC (vigente e, na transição, anterior), operador designado |
+| `ops_origin_buckets` | Um balde por `versão:pseudônimo`, só para serializar a contagem da cota |
+| `ops_mfa_callbacks` | Retorno pelo canal registrado: operador, contato, tipo e versão do canal, uso único, 60 min |
+| `ops_mfa_request_admins` | Fotografia dos considerados na verificação (fator ativo, passo TOTP, códigos, sessões) |
+| `ops_mfa_notice_results` | Histórico de cada resultado informado de uma tentativa (APLICADO, REPETIDO, ATRASADO, CONFLITANTE, TRANSICAO_INVALIDA, RECUPERACAO) |
+| `ops_mfa_approval_attempts` | Tentativas vigentes consideradas na aprovação final |
+
+**Funções públicas novas** (37 no total): `ops_mfa_callback_register` (operador, VERIFICAR); `ops_notice_claim`, `ops_notice_attempt_state`, `ops_notice_delivery_result`, `ops_notice_stalled`, `ops_notice_recover` (Platform); `ops_intake_register`, `ops_intake_key_activate` (entrada). Assinaturas alteradas: `ops_mfa_open(org, alvo, contato, entrada, retorno)`, `ops_mfa_verify(…, declaracao_demais)`, `ops_mfa_resend_notice(solicitacao, destinatario)`; `ops_notice_confirm/contest` devolvem a categoria interna.
+
+**Ordem global de locks:** organização → contas (alvo `FOR UPDATE`, considerados e destinatários `FOR SHARE`, juntos e crescentes, deduplicados) → estado das versões → baldes → entrada ou retorno → solicitação → tentativas → tokens → operadores. Cadastro de operadores, CA e ativação de versão começam fora dessa sequência; a autenticação trava uma conta e nada depois. Detalhe por caminho: inventário v3, §10.
+
+**FK retirada:** `ops_registry_events.organization_id → organizations` (I-3/I-4, decisão pontual). A coluna e o valor continuam gravados; a derivação e a validação da organização por função estão no inventário, §6.
+
+**Platform:** `confirmEmail` e `resetMfa` seguem as ordens de I-1 e I-5 (inventário §10.4).
+
+**Janelas:** 720 h (carência e organização) e 168 h (alvo), independentes do `TimeZone` da sessão.

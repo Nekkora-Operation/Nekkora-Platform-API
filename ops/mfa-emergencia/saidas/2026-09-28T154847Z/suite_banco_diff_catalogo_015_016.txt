@@ -1,0 +1,231 @@
+3a4,10
+> colacl|auth_challenges|consumed_at|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|auth_challenges|credential_hash|nekkora_ops_mfa_owner|UPDATE|grant=f
+> colacl|auth_challenges|invalidated_at|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|auth_challenges|invalidated_at|nekkora_ops_mfa_owner|UPDATE|grant=f
+> colacl|auth_challenges|organization_id|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|auth_challenges|pending_password_hash|nekkora_ops_mfa_owner|UPDATE|grant=f
+> colacl|auth_challenges|user_id|nekkora_ops_mfa_owner|SELECT|grant=f
+53a61,86
+> colacl|mfa_events|actor_user_id|nekkora_platform|INSERT|grant=f
+> colacl|mfa_events|correlation_id|nekkora_ops_mfa_owner|INSERT|grant=f
+> colacl|mfa_events|correlation_id|nekkora_platform|INSERT|grant=f
+> colacl|mfa_events|created_at|nekkora_platform|INSERT|grant=f
+> colacl|mfa_events|event_id|nekkora_platform|INSERT|grant=f
+> colacl|mfa_events|event_type|nekkora_ops_mfa_owner|INSERT|grant=f
+> colacl|mfa_events|event_type|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|mfa_events|event_type|nekkora_platform|INSERT|grant=f
+> colacl|mfa_events|ops_request_id|nekkora_ops_mfa_owner|INSERT|grant=f
+> colacl|mfa_events|ops_request_id|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|mfa_events|organization_id|nekkora_ops_mfa_owner|INSERT|grant=f
+> colacl|mfa_events|organization_id|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|mfa_events|organization_id|nekkora_platform|INSERT|grant=f
+> colacl|mfa_events|reason_code|nekkora_platform|INSERT|grant=f
+> colacl|mfa_events|user_id|nekkora_ops_mfa_owner|INSERT|grant=f
+> colacl|mfa_events|user_id|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|mfa_events|user_id|nekkora_platform|INSERT|grant=f
+> colacl|organization_memberships|membership_id|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|organization_memberships|organization_id|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|organization_memberships|status|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|organization_memberships|user_id|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|organization_role_assignments|membership_id|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|organization_role_assignments|organization_id|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|organization_role_assignments|role_id|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|organization_role_assignments|status|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|organizations|organization_id|nekkora_ops_mfa_owner|SELECT|grant=f
+54a88
+> colacl|organizations|status|nekkora_ops_mfa_owner|SELECT|grant=f
+55a90,105
+> colacl|organizations|updated_at|nekkora_ops_mfa_owner|UPDATE|grant=f
+> colacl|roles|code|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|roles|role_id|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|user_mfa_factors|confirmed_at|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|user_mfa_factors|disabled_at|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|user_mfa_factors|disabled_at|nekkora_ops_mfa_owner|UPDATE|grant=f
+> colacl|user_mfa_factors|factor_id|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|user_mfa_factors|last_used_step|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|user_mfa_factors|organization_id|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|user_mfa_factors|user_id|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|user_mfa_recovery_codes|invalidated_at|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|user_mfa_recovery_codes|invalidated_at|nekkora_ops_mfa_owner|UPDATE|grant=f
+> colacl|user_mfa_recovery_codes|organization_id|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|user_mfa_recovery_codes|used_at|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|user_mfa_recovery_codes|user_id|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|user_sessions|created_at|nekkora_ops_mfa_owner|SELECT|grant=f
+59a110
+> colacl|user_sessions|organization_id|nekkora_ops_mfa_owner|SELECT|grant=f
+60a112,113
+> colacl|user_sessions|revoked_at|nekkora_ops_mfa_owner|SELECT|grant=f
+> colacl|user_sessions|revoked_at|nekkora_ops_mfa_owner|UPDATE|grant=f
+63a117
+> colacl|user_sessions|user_id|nekkora_ops_mfa_owner|SELECT|grant=f
+64a119
+> colacl|users|account_type|nekkora_ops_mfa_owner|SELECT|grant=f
+66a122
+> colacl|users|organization_id|nekkora_ops_mfa_owner|SELECT|grant=f
+67a124
+> colacl|users|status|nekkora_ops_mfa_owner|SELECT|grant=f
+68a126,127
+> colacl|users|updated_at|nekkora_ops_mfa_owner|UPDATE|grant=f
+> colacl|users|user_id|nekkora_ops_mfa_owner|SELECT|grant=f
+328a388
+> col|mfa_events|ops_request_id|uuid|notnull=f|default=|gen=
+329a390
+> col|mfa_events|reason_code|smallint|notnull=f|default=|gen=
+783a845,847
+> con|mfa_events|mfa_events_ops_request_fk|FOREIGN KEY (ops_request_id, organization_id, user_id) REFERENCES ops.ops_mfa_recovery_requests(request_id, organization_id, target_user_id)
+> con|mfa_events|mfa_events_ops_request_id_key|UNIQUE (ops_request_id)
+> con|mfa_events|mfa_events_ops_request_tipo_4|CHECK (((event_type = 4) = (ops_request_id IS NOT NULL)))
+786a851,854
+> con|mfa_events|mfa_events_reason_code_check|CHECK ((reason_code = ANY (ARRAY[1, 2, 3, 4])))
+> con|mfa_events|mfa_events_reason_code_so_admin|CHECK (((reason_code IS NULL) OR (event_type = 3)))
+> con|mfa_events|mfa_events_reset_admin_exige_motivo|CHECK (((event_type <> 3) OR (reason_code IS NOT NULL))) NOT VALID
+> con|mfa_events|mfa_events_tipo_4_sem_ator|CHECK (((event_type <> 4) OR (actor_user_id IS NULL)))
+1014a1083
+> ext|sslinfo|1.2|schema=ops
+1133a1203,1275
+> fnacl|ops_account_proof_issue(uuid,uuid,text)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_account_proof_issue(uuid,uuid,text)|nekkora_platform|EXECUTE|grant=f
+> fnacl|ops_bootstrap_operator(text,text,text)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_ca_resolve_operator(text,text)|nekkora_ops_ca|EXECUTE|grant=f
+> fnacl|ops_ca_resolve_operator(text,text)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_contact_add(uuid,text,smallint,text,uuid,text,boolean)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_contact_add(uuid,text,smallint,text,uuid,text,boolean)|nekkora_ops_mfa|EXECUTE|grant=f
+> fnacl|ops_contact_change_channel(uuid,smallint,text,boolean,uuid,boolean)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_contact_change_channel(uuid,smallint,text,boolean,uuid,boolean)|nekkora_ops_mfa|EXECUTE|grant=f
+> fnacl|ops_contact_link_code_issue(uuid,text)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_contact_link_code_issue(uuid,text)|nekkora_ops_mfa|EXECUTE|grant=f
+> fnacl|ops_contact_remove(uuid,boolean,uuid,boolean)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_contact_remove(uuid,boolean,uuid,boolean)|nekkora_ops_mfa|EXECUTE|grant=f
+> fnacl|ops_intake_key_activate(integer)|nekkora_ops_intake|EXECUTE|grant=f
+> fnacl|ops_intake_key_activate(integer)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_intake_register(smallint,smallint,integer,text,integer,text,text)|nekkora_ops_intake|EXECUTE|grant=f
+> fnacl|ops_intake_register(smallint,smallint,integer,text,integer,text,text)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_link_contact(text)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_link_contact(text)|nekkora_ops_mfa|EXECUTE|grant=f
+> fnacl|ops_link_platform_account(text)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_link_platform_account(text)|nekkora_ops_mfa|EXECUTE|grant=f
+> fnacl|ops_link_remove(text,uuid)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_link_remove(text,uuid)|nekkora_ops_mfa|EXECUTE|grant=f
+> fnacl|ops_mfa_callback_register(uuid)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_mfa_callback_register(uuid)|nekkora_ops_mfa|EXECUTE|grant=f
+> fnacl|ops_mfa_cancel(uuid,text)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_mfa_cancel(uuid,text)|nekkora_ops_mfa|EXECUTE|grant=f
+> fnacl|ops_mfa_execute(uuid)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_mfa_execute(uuid)|nekkora_ops_mfa|EXECUTE|grant=f
+> fnacl|ops_mfa_final_approve(uuid)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_mfa_final_approve(uuid)|nekkora_ops_mfa|EXECUTE|grant=f
+> fnacl|ops_mfa_open(uuid,uuid,uuid,uuid,uuid)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_mfa_open(uuid,uuid,uuid,uuid,uuid)|nekkora_ops_mfa|EXECUTE|grant=f
+> fnacl|ops_mfa_preapprove(uuid)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_mfa_preapprove(uuid)|nekkora_ops_mfa|EXECUTE|grant=f
+> fnacl|ops_mfa_record_failure(uuid,text,text,text)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_mfa_record_failure(uuid,text,text,text)|nekkora_ops_mfa|EXECUTE|grant=f
+> fnacl|ops_mfa_resend_notice(uuid,uuid)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_mfa_resend_notice(uuid,uuid)|nekkora_ops_mfa|EXECUTE|grant=f
+> fnacl|ops_mfa_status(uuid)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_mfa_status(uuid)|nekkora_ops_mfa|EXECUTE|grant=f
+> fnacl|ops_mfa_verify(uuid,boolean,uuid,boolean,text)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_mfa_verify(uuid,boolean,uuid,boolean,text)|nekkora_ops_mfa|EXECUTE|grant=f
+> fnacl|ops_notice_attempt_state(uuid)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_notice_attempt_state(uuid)|nekkora_platform|EXECUTE|grant=f
+> fnacl|ops_notice_claim(uuid,uuid)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_notice_claim(uuid,uuid)|nekkora_platform|EXECUTE|grant=f
+> fnacl|ops_notice_confirm(uuid,text)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_notice_confirm(uuid,text)|nekkora_platform|EXECUTE|grant=f
+> fnacl|ops_notice_contest(uuid,text)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_notice_contest(uuid,text)|nekkora_platform|EXECUTE|grant=f
+> fnacl|ops_notice_delivery_result(uuid,smallint,text)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_notice_delivery_result(uuid,smallint,text)|nekkora_platform|EXECUTE|grant=f
+> fnacl|ops_notice_issue(uuid,text,text)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_notice_issue(uuid,text,text)|nekkora_platform|EXECUTE|grant=f
+> fnacl|ops_notice_pending(integer)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_notice_pending(integer)|nekkora_platform|EXECUTE|grant=f
+> fnacl|ops_notice_recover(uuid)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_notice_recover(uuid)|nekkora_platform|EXECUTE|grant=f
+> fnacl|ops_notice_stalled(integer)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_notice_stalled(integer)|nekkora_platform|EXECUTE|grant=f
+> fnacl|ops_operator_create(text,text,text)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_operator_create(text,text,text)|nekkora_ops_mfa|EXECUTE|grant=f
+> fnacl|ops_operator_disable(uuid)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_operator_disable(uuid)|nekkora_ops_mfa|EXECUTE|grant=f
+> fnacl|ops_operator_grant(uuid,text)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_operator_grant(uuid,text)|nekkora_ops_mfa|EXECUTE|grant=f
+> fnacl|ops_operator_revoke(uuid,text)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_operator_revoke(uuid,text)|nekkora_ops_mfa|EXECUTE|grant=f
+> fnacl|ops_register_certificate(text,text,text,text,numeric,timestamp with time zone,timestamp with time zone,timestamp with time zone,text)|nekkora_ops_ca|EXECUTE|grant=f
+> fnacl|ops_register_certificate(text,text,text,text,numeric,timestamp with time zone,timestamp with time zone,timestamp with time zone,text)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|ops_revoke_certificate(text,numeric)|nekkora_ops_ca|EXECUTE|grant=f
+> fnacl|ops_revoke_certificate(text,numeric)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+1307a1450,1486
+> fn|ops_account_proof_issue(uuid,uuid,text)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=timestamp with time zone|md5=ac1badb0678aa35da6da33ebde08ed7d
+> fn|ops_bootstrap_operator(text,text,text)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=uuid|md5=7dcf3512bcb046f45245cf252d0aa208
+> fn|ops_ca_resolve_operator(text,text)|owner=nekkora_ops_mfa_owner|secdef=t|vol=s|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=text|md5=3eb77af2294806e2f1ac601ebd428725
+> fn|ops_contact_add(uuid,text,smallint,text,uuid,text,boolean)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_resultado text, r_motivo text, r_contato uuid)|md5=385544333ab9edcf8417bfb216b5010f
+> fn|ops_contact_change_channel(uuid,smallint,text,boolean,uuid,boolean)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_resultado text, r_motivo text)|md5=05edc0ed1b3cb4869cbe1282ee8417cf
+> fn|ops_contact_link_code_issue(uuid,text)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_resultado text, r_motivo text, r_valido_ate timestamp with time zone)|md5=cef727a9cffc59018fea5c3d1c624d5e
+> fn|ops_contact_remove(uuid,boolean,uuid,boolean)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_resultado text, r_motivo text)|md5=0197cdfb84c8d1f9760eadc3fb83f046
+> fn|ops_intake_key_activate(integer)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(r_resultado text, r_motivo text)|md5=7045062baca1c287aea262acde5c5383
+> fn|ops_intake_register(smallint,smallint,integer,text,integer,text,text)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(r_resultado text, r_motivo text, r_entrada uuid, r_valido_ate timestamp with time zone)|md5=88e98a46162008fb45c41bf96621e38c
+> fn|ops_link_contact(text)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(r_resultado text, r_motivo text)|md5=a8026c7370913098b23e351647670893
+> fn|ops_link_platform_account(text)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(r_resultado text, r_motivo text)|md5=e55287f86b9401b534ef0e926b9f29c1
+> fn|ops_link_remove(text,uuid)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(r_resultado text, r_motivo text)|md5=ebd1c5f0d5c1a4da99d29c91b82a5d8f
+> fn|ops_mfa_callback_register(uuid)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_resultado text, r_motivo text, r_retorno uuid, r_valido_ate timestamp with time zone)|md5=7e9c097009d7447bbd49b33231556bda
+> fn|ops_mfa_cancel(uuid,text)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_resultado text, r_motivo text, r_solicitacao uuid, r_estado text)|md5=a4605618c515d265944f3d3e0d221c72
+> fn|ops_mfa_execute(uuid)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_resultado text, r_motivo text, r_solicitacao uuid, r_estado text)|md5=abe95d7978da9ad5f2af29465cbeb5c5
+> fn|ops_mfa_final_approve(uuid)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_resultado text, r_motivo text, r_solicitacao uuid, r_estado text)|md5=d3c444ebcfb160d9b6b67bbbae193029
+> fn|ops_mfa_open(uuid,uuid,uuid,uuid,uuid)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_resultado text, r_motivo text, r_solicitacao uuid, r_estado text)|md5=273229f91934f20f42b09eed0a89ae6f
+> fn|ops_mfa_preapprove(uuid)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_resultado text, r_motivo text, r_solicitacao uuid, r_estado text)|md5=baf425b9dc219ea70a1f9816dbbe585d
+> fn|ops_mfa_record_failure(uuid,text,text,text)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_resultado text, r_motivo text)|md5=108fcec40c8932b3d7bbc2d57295383a
+> fn|ops_mfa_resend_notice(uuid,uuid)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_resultado text, r_motivo text, r_solicitacao uuid, r_estado text)|md5=6885f04a4888359bf6554e7dc4241697
+> fn|ops_mfa_status(uuid)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=,lock_timeout=10s}|result=TABLE(r_resultado text, r_motivo text, r_solicitacao uuid, r_estado text, r_reset_registrado boolean, r_executada_em timestamp with time zone, r_prazo_total timestamp with time zone, r_confirmacao_aviso timestamp with time zone, r_aprovacao_final timestamp with time zone, r_encerramento text)|md5=c2d38763c37eee64fbfeb67e060fe39e
+> fn|ops_mfa_verify(uuid,boolean,uuid,boolean,text)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_resultado text, r_motivo text, r_solicitacao uuid, r_estado text)|md5=0e92dcba9f8050da5cbc2bfa55abdcc4
+> fn|ops_notice_attempt_state(uuid)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_estado smallint, r_claim uuid)|md5=94737ef8929f224b1d75830305fca997
+> fn|ops_notice_claim(uuid,uuid)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_estado smallint, r_minha boolean)|md5=9fee5cda6024362478f541a61b2c3d28
+> fn|ops_notice_confirm(uuid,text)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=text|md5=eb64f04f478105b0546b46396377d4f9
+> fn|ops_notice_contest(uuid,text)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=text|md5=8976f1d56748fa8f558fd1f4f51915a6
+> fn|ops_notice_delivery_result(uuid,smallint,text)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_resultado text, r_estado smallint)|md5=0bf61993fc45f3f5030d6c4f24859e53
+> fn|ops_notice_issue(uuid,text,text)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_emitido boolean, r_confirmar boolean, r_contestar boolean, r_tipo smallint, r_organizacao uuid, r_destinatario uuid, r_confirmar_ate timestamp with time zone, r_contestar_ate timestamp with time zone)|md5=a546ddd1ec449e3ee9bb29060498690a
+> fn|ops_notice_pending(integer)|owner=nekkora_ops_mfa_owner|secdef=t|vol=s|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(r_aviso uuid, r_organizacao uuid, r_destinatario uuid, r_tipo smallint)|md5=b1850e95456fce7815282d333bec3960
+> fn|ops_notice_recover(uuid)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_resultado text, r_estado smallint)|md5=c9fdfe2f221d091086986ac5d5772569
+> fn|ops_notice_stalled(integer)|owner=nekkora_ops_mfa_owner|secdef=t|vol=s|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(r_aviso uuid)|md5=85afaa71e883cbfd46705a6d5505358b
+> fn|ops_operator_create(text,text,text)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(r_resultado text, r_motivo text, r_operador uuid)|md5=c77542d73e1ab5fc993f080b95467000
+> fn|ops_operator_disable(uuid)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(r_resultado text, r_motivo text)|md5=a739a350e1ffd59f7fcf070dd98fa0d6
+> fn|ops_operator_grant(uuid,text)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(r_resultado text, r_motivo text)|md5=419ae20b2308abb4d9b48ba7036599a0
+> fn|ops_operator_revoke(uuid,text)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(r_resultado text, r_motivo text)|md5=b43e1bcc874c7161dbe184611c988d53
+> fn|ops_register_certificate(text,text,text,text,numeric,timestamp with time zone,timestamp with time zone,timestamp with time zone,text)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(r_resultado text, r_motivo text, r_certificado uuid)|md5=df5658aa21dd55273264f6c55b3b1e0d
+> fn|ops_revoke_certificate(text,numeric)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(r_resultado text, r_motivo text)|md5=eda46c0222465fe64fdf0fe3050074c0
+1445a1625
+> idx|CREATE UNIQUE INDEX mfa_events_ops_request_id_key ON public.mfa_events USING btree (ops_request_id)
+1517a1698
+> nsp|ops|owner=nekkora
+1522a1704
+> pol|auth_challenges|ops_function_context|ALL|PERMISSIVE|{nekkora_ops_mfa_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+1570a1753
+> pol|mfa_events|ops_function_context|ALL|PERMISSIVE|{nekkora_ops_mfa_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+1573a1757
+> pol|organization_memberships|ops_function_context|ALL|PERMISSIVE|{nekkora_ops_mfa_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+1581a1766
+> pol|organization_role_assignments|ops_function_context|ALL|PERMISSIVE|{nekkora_ops_mfa_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+1585a1771
+> pol|organizations|ops_function_context|ALL|PERMISSIVE|{nekkora_ops_mfa_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+1598a1785
+> pol|user_mfa_factors|ops_function_context|ALL|PERMISSIVE|{nekkora_ops_mfa_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+1599a1787
+> pol|user_mfa_recovery_codes|ops_function_context|ALL|PERMISSIVE|{nekkora_ops_mfa_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+1600a1789
+> pol|user_sessions|ops_function_context|ALL|PERMISSIVE|{nekkora_ops_mfa_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+1604a1794
+> pol|users|ops_function_context|ALL|PERMISSIVE|{nekkora_ops_mfa_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+2390a2581,2587
+> relacl|mfa_events_ops_request_id_key|nekkora|DELETE|grant=f
+> relacl|mfa_events_ops_request_id_key|nekkora|INSERT|grant=f
+> relacl|mfa_events_ops_request_id_key|nekkora|REFERENCES|grant=f
+> relacl|mfa_events_ops_request_id_key|nekkora|SELECT|grant=f
+> relacl|mfa_events_ops_request_id_key|nekkora|TRIGGER|grant=f
+> relacl|mfa_events_ops_request_id_key|nekkora|TRUNCATE|grant=f
+> relacl|mfa_events_ops_request_id_key|nekkora|UPDATE|grant=f
+2398d2594
+< relacl|mfa_events|nekkora_platform|INSERT|grant=f
+3239a3436
+> rel|mfa_events_ops_request_id_key|i|owner=nekkora|rls=f|force=f

@@ -15,8 +15,11 @@ public final class LocalMailSender implements MailSender {
         LOG.info("evento=mail.intencao tipo={} org={} entrega=nenhuma(local)", kind, organization);
     }
 
+    /** So a intencao: nunca aceite pelo transporte (a condicao de aprovacao do item 10 nunca e satisfeita com ela). */
     @Override
-    public void sendEmergencyNotice(Kind kind, UUID organization, String recipient, String confirmTokenOrNull, String contestTokenOrNull) {
+    public Outcome sendEmergencyNotice(Kind kind, UUID organization, String recipient, String confirmTokenOrNull, String contestTokenOrNull,
+                                       UUID attemptId) {
         LOG.info("evento=mail.intencao tipo={} org={} entrega=nenhuma(local)", kind, organization);
+        return Outcome.ENFILEIRADO;
     }
 }

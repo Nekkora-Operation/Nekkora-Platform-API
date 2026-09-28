@@ -31,14 +31,14 @@ public class EmergencyNoticeController {
     }
 
     @PostMapping("/api/v1/o/{org}/auth/mfa-emergencia/aviso/confirmar")
-    public ResponseEntity<Void> confirm(@PathVariable UUID org, @RequestBody(required = false) Token body) {
-        notices.confirm(org, body == null ? null : body.token());
+    public ResponseEntity<Void> confirm(@PathVariable UUID org, @RequestBody(required = false) Token body, HttpServletRequest req) {
+        notices.confirm(org, body == null ? null : body.token(), SessionFilter.limiterState(req));
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/api/v1/o/{org}/auth/mfa-emergencia/aviso/contestar")
-    public ResponseEntity<Void> contest(@PathVariable UUID org, @RequestBody(required = false) Token body) {
-        notices.contest(org, body == null ? null : body.token());
+    public ResponseEntity<Void> contest(@PathVariable UUID org, @RequestBody(required = false) Token body, HttpServletRequest req) {
+        notices.contest(org, body == null ? null : body.token(), SessionFilter.limiterState(req));
         return ResponseEntity.noContent().build();
     }
 

@@ -1,0 +1,4 @@
+tokens plantados: 200 (gerados por Tokens.newToken da v1)
+tokens detectados: 200; marcadores plantados: 5; detectados: 5
+achados na evidencia real antes do plantio: 0
+controle positivo: OK

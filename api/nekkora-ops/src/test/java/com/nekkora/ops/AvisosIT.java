@@ -148,12 +148,12 @@ class AvisosIT {
         UUID org = p.al().org().id();
         assertThat(C.confirmar(org, p.titular().confirmar())).isTrue();
         String instante = DB.valor(String.class, "SELECT notice_confirmed_at::text FROM ops.ops_mfa_recovery_requests WHERE request_id = ?", p.s());
-        Cenarios.exigirOk(p.eq().v().reenviarAviso(p.s()), "reenviar");
+        Cenarios.exigirOk(p.eq().v().reenviarAviso(p.s(), p.al().titular()), "reenviar");
         List<Cenarios.Tokens> novos = C.emitirAvisos(org);
         assertThat(novos).hasSize(1);
         assertThat(novos.get(0).temConfirmar()).as("nenhum CONFIRMAR depois da confirmacao").isFalse();
         assertThat(novos.get(0).temContestar()).isTrue();
-        assertThat(C.contestar(org, p.titular().contestar())).as("CONTESTAR anterior do titular invalidado pelo reenvio").isFalse();
+        assertThat(C.contestar(org, p.titular().contestar())).as("CONTESTAR anterior do titular invalidado pelo ACEITE do reenvio").isFalse();
         assertThat(C.confirmar(org, p.titular().confirmar())).isFalse();
         assertThat(DB.valor(String.class, "SELECT notice_confirmed_at::text FROM ops.ops_mfa_recovery_requests WHERE request_id = ?", p.s()))
                 .isEqualTo(instante);
@@ -164,10 +164,10 @@ class AvisosIT {
     }
 
     @Test
-    void reenvioAntesDaConfirmacaoInvalidaOTokenAnterior() {
+    void reenvioAntesDaConfirmacaoInvalidaOTokenAnteriorQuandoAceito() {
         Preparado p = preparado();
         UUID org = p.al().org().id();
-        Cenarios.exigirOk(p.eq().v().reenviarAviso(p.s()), "reenviar");
+        Cenarios.exigirOk(p.eq().v().reenviarAviso(p.s(), p.al().titular()), "reenviar");
         Cenarios.Tokens novo = C.emitirAvisos(org).get(0);
         assertThat(novo.temConfirmar()).isTrue();
         assertThat(C.confirmar(org, p.titular().confirmar())).as("CONFIRMAR anterior").isFalse();
@@ -184,10 +184,11 @@ class AvisosIT {
         assertThat(C.estado(p.s())).isEqualTo("PRE_APROVADA");
 
         Preparado q = preparado();
-        Cenarios.exigirOk(q.eq().v().reenviarAviso(q.s()), "reenviar");
+        Cenarios.exigirOk(q.eq().v().reenviarAviso(q.s(), q.al().titular()), "reenviar");
         Cenarios.exigirOk(q.eq().v().cancelar(q.s(), "SOLICITANTE_DESISTIU"), "cancelar");
         assertThat(C.emitirAvisos(q.al().org().id())).as("aviso de solicitacao terminal nao e emitido").isEmpty();
-        assertThat(DB.valor(Long.class, "SELECT count(*) FROM ops.ops_mfa_notices WHERE request_id = ? AND discarded", q.s())).isEqualTo(1);
+        assertThat(DB.valor(Long.class, "SELECT count(*) FROM ops.ops_mfa_notices WHERE request_id = ? AND state = 5 "
+                + "AND category = 'SOLICITACAO_ENCERRADA'", q.s())).isEqualTo(1);
     }
 
     @Test

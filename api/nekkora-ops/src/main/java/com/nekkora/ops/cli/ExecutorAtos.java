@@ -47,6 +47,24 @@ public final class ExecutorAtos {
         }
     }
 
+    /** Modo de abertura (revisao 4, item 4): registro de entrada com origem comprovada, ou retorno pelo canal registrado. */
+    public sealed interface Abertura permits Entrada, Retorno {
+        UUID id();
+    }
+
+    public record Entrada(UUID id) implements Abertura {
+    }
+
+    public record Retorno(UUID id) implements Abertura {
+    }
+
+    /** Declaracao dos demais ORG_ADMIN na verificacao (revisao 4, item 5): somente estes dois valores. */
+    public enum DemaisAdmins { NENHUM, TODOS_SEM_FATOR_E_CODIGOS_UTILIZAVEIS }
+
+    /** Registro do retorno pelo canal registrado: o id do retorno (uso unico, 60 min) para a abertura. */
+    public record RetornoRegistrado(Classe classe, String motivo, UUID retorno, String sqlstate) {
+    }
+
     /** Espera maxima por locks em cada ato (a consulta de reconciliacao tem o proprio limite, no banco). */
     static final String LOCK_TIMEOUT = "30s";
 
@@ -66,20 +84,60 @@ public final class ExecutorAtos {
 
     // ------------------------------------------------------------------ atos
 
-    public Resultado abrir(UUID org, UUID alvo, UUID contatoSolicitante) {
-        return rodar("ABRIR", null, "SELECT r_resultado, r_motivo, r_solicitacao, r_estado FROM public.ops_mfa_open(?, ?, ?)", ps -> {
+    public Resultado abrir(UUID org, UUID alvo, UUID contatoSolicitante, Abertura abertura) {
+        return rodar("ABRIR", null, "SELECT r_resultado, r_motivo, r_solicitacao, r_estado FROM public.ops_mfa_open(?, ?, ?, ?, ?)", ps -> {
             ps.setObject(1, org);
             ps.setObject(2, alvo);
             ps.setObject(3, contatoSolicitante);
+            ps.setObject(4, abertura instanceof Entrada e ? e.id() : null);
+            ps.setObject(5, abertura instanceof Retorno r ? r.id() : null);
         });
     }
 
-    public Resultado verificar(UUID solicitacao, boolean retornoOk, UUID segundoContato, boolean segundoOk) {
-        return rodar("VERIFICAR", solicitacao, "SELECT r_resultado, r_motivo, r_solicitacao, r_estado FROM public.ops_mfa_verify(?, ?, ?, ?)", ps -> {
+    /**
+     * Registra o retorno feito pelo canal registrado do contato (o verificador liga ou escreve e registra logo depois).
+     * Sem efeito irreversivel: numa falha ou resposta perdida, o operador registra outro retorno.
+     */
+    public RetornoRegistrado registrarRetorno(UUID contato) {
+        Connection c;
+        try {
+            c = abrirConexao();
+        } catch (SQLException e) {
+            log.registrar("REGISTRAR_RETORNO", null, "FALHA_CONFIRMADA", "CONEXAO_NAO_ESTABELECIDA", e.getSQLState(), "CONEXAO");
+            return new RetornoRegistrado(Classe.FALHA_CONFIRMADA, "CONEXAO_NAO_ESTABELECIDA", null, e.getSQLState());
+        }
+        try (c) {
+            c.setAutoCommit(false);
+            String resultado;
+            String motivo;
+            UUID id;
+            try (PreparedStatement ps = c.prepareStatement("SELECT r_resultado, r_motivo, r_retorno FROM public.ops_mfa_callback_register(?)")) {
+                ps.setObject(1, contato);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    resultado = rs.getString(1);
+                    motivo = rs.getString(2);
+                    id = rs.getObject(3, UUID.class);
+                }
+            }
+            c.commit();
+            Classe classe = "OK".equals(resultado) ? Classe.OK : Classe.RECUSA;
+            log.registrar("REGISTRAR_RETORNO", null, classe.name(), motivo, null, null);
+            return new RetornoRegistrado(classe, motivo, id, null);
+        } catch (SQLException e) {
+            Classe classe = conexaoPerdida(e) ? Classe.DESCONHECIDO : Classe.FALHA_CONFIRMADA;
+            log.registrar("REGISTRAR_RETORNO", null, classe.name(), "FALHA_TECNICA", e.getSQLState(), null);
+            return new RetornoRegistrado(classe, "FALHA_TECNICA", null, e.getSQLState());
+        }
+    }
+
+    public Resultado verificar(UUID solicitacao, boolean retornoOk, UUID segundoContato, boolean segundoOk, DemaisAdmins demais) {
+        return rodar("VERIFICAR", solicitacao, "SELECT r_resultado, r_motivo, r_solicitacao, r_estado FROM public.ops_mfa_verify(?, ?, ?, ?, ?)", ps -> {
             ps.setObject(1, solicitacao);
             ps.setBoolean(2, retornoOk);
             ps.setObject(3, segundoContato);
             ps.setBoolean(4, segundoOk);
+            ps.setString(5, demais == null ? null : demais.name());
         });
     }
 
@@ -95,8 +153,12 @@ public final class ExecutorAtos {
         return porSolicitacao("EXECUTAR", "ops_mfa_execute", solicitacao);
     }
 
-    public Resultado reenviarAviso(UUID solicitacao) {
-        return porSolicitacao("REENVIAR_AVISO", "ops_mfa_resend_notice", solicitacao);
+    /** Reenvio a um destinatario notificado (titular ou outro ORG_ADMIN), enquanto a solicitacao nao for terminal. */
+    public Resultado reenviarAviso(UUID solicitacao, UUID destinatario) {
+        return rodar("REENVIAR_AVISO", solicitacao, "SELECT r_resultado, r_motivo, r_solicitacao, r_estado FROM public.ops_mfa_resend_notice(?, ?)", ps -> {
+            ps.setObject(1, solicitacao);
+            ps.setObject(2, destinatario);
+        });
     }
 
     public Resultado cancelar(UUID solicitacao, String motivo) {
@@ -112,7 +174,9 @@ public final class ExecutorAtos {
             c.setAutoCommit(true);
             Status s = status(c, solicitacao);
             if ("TRAVA_NAO_OBTIDA".equals(s.motivo)) {
+                // contrato 7 (item 7): desconhecido, log local E alerta - tambem na consulta avulsa
                 log.registrar("CONSULTAR", solicitacao, "DESCONHECIDO", "TRAVA_NAO_OBTIDA", null, null);
+                log.alerta("CONSULTAR", solicitacao, "RESULTADO_DESCONHECIDO");
                 return new Resultado(solicitacao, Classe.DESCONHECIDO, "TRAVA_NAO_OBTIDA", null, Origem.BANCO, null, false);
             }
             Classe classe = "OK".equals(s.resultado) ? Classe.OK : Classe.RECUSA;
@@ -120,6 +184,7 @@ public final class ExecutorAtos {
             return new Resultado(solicitacao, classe, s.motivo, s.estado, Origem.BANCO, null, false);
         } catch (SQLException e) {
             log.registrar("CONSULTAR", solicitacao, "DESCONHECIDO", "CONSULTA_IMPOSSIVEL", e.getSQLState(), null);
+            log.alerta("CONSULTAR", solicitacao, "RESULTADO_DESCONHECIDO");
             return new Resultado(solicitacao, Classe.DESCONHECIDO, "CONSULTA_IMPOSSIVEL", null, Origem.CLI, e.getSQLState(), false);
         }
     }

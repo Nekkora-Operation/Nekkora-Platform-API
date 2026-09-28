@@ -20,8 +20,18 @@
 --
 -- Autoria: session_user, nunca parametro. Autorizacao por ato: depois dos locks, com v_agora = clock_timestamp()
 -- capturado depois deles - certificado lido pelo servidor, registro da CA vigente e nao revogado, operador ativo e
--- habilitado. Prazos do contrato fixos no codigo (72 h, 24 h, 60 min, 15 min, 30 dias, 7 dias); nenhum relogio vem
--- do chamador.
+-- habilitado. Prazos do contrato fixos no codigo, em horas (72 h, 24 h, 60 min, 15 min, 720 h, 168 h), independentes
+-- do fuso da sessao; nenhum relogio vem do chamador.
+--
+-- Revisao 4 proposta (consolidacao das decisoes do paragrafo 5, 2026-09-28; ver
+-- docs/relatorios/2026-09-28-mfa-emergencia-consolidacao-decisoes.md e ...-inventario-locks.md):
+--   * abertura so por ENTRADA com origem comprovada (registro de entrada de uso unico, pseudonimos HMAC, cota por
+--     origem de 3 em 24 h, rotacao de chave com transicao de 25 h) ou por RETORNO pelo canal registrado (sem cota);
+--   * declaracao dos demais ORG_ADMIN (NENHUM | TODOS_SEM_FATOR_E_CODIGOS_UTILIZAVEIS) com fotografia e reconferencia;
+--   * avisos como tentativas (seq, estados, reivindicacao de entrega, resultados idempotentes, reenvio por
+--     destinatario, 24 h desde o aceite do aviso de cada outro ORG_ADMIN, versoes registradas na aprovacao);
+--   * ordem global: organizacao -> contas (crescentes) -> estado das versoes -> baldes -> entrada/retorno ->
+--     solicitacao -> tentativas -> tokens -> operadores; achados I-2, I-3/I-4 e I-5 do inventario corrigidos.
 --
 -- ELEVACAO: exige superusuario (CREATE ROLE e CREATE EXTENSION sslinfo, extensao nao confiavel), como 011-013.
 --
@@ -42,12 +52,17 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nekkora_ops_ca') THEN
         CREATE ROLE nekkora_ops_ca LOGIN;
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nekkora_ops_intake') THEN
+        CREATE ROLE nekkora_ops_intake LOGIN;
+    END IF;
 END;
 $$;
 
 ALTER ROLE nekkora_ops_mfa_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
 ALTER ROLE nekkora_ops_mfa       NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
 ALTER ROLE nekkora_ops_ca        LOGIN   NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+-- Servico de registro de entrada (atendimento): so registra entradas e ativa versoes de chave (item 4).
+ALTER ROLE nekkora_ops_intake    LOGIN   NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
 
 -- === 2. Schema operacional e introspeccao TLS ===
 
@@ -164,8 +179,8 @@ CREATE INDEX ix_ops_operator_platform_accounts_org ON ops.ops_operator_platform_
 
 -- === 5. Contatos autorizados (D2) ===
 --
--- channel_set_at: quando o canal atual foi registrado (inclusao ou alteracao). Elegivel = ativo e canal registrado
--- ha pelo menos 30 dias. status: 1=ATIVO, 2=REMOVIDO (final). channel_type: 1=TELEFONE, 2=EMAIL.
+-- channel_set_at: quando o canal atual foi registrado (inclusao, inclusive na contratacao, ou alteracao). Elegivel =
+-- ativo e canal registrado ha pelo menos 720 horas completas (item 1). status: 1=ATIVO, 2=REMOVIDO (final). channel_type: 1=TELEFONE, 2=EMAIL.
 
 CREATE TABLE ops.org_authorized_contacts (
     contact_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -237,6 +252,70 @@ CREATE TABLE ops.ops_operator_contact_links (
 );
 CREATE INDEX ix_ops_operator_contact_links_org ON ops.ops_operator_contact_links (organization_id) WHERE removed_at IS NULL;
 
+-- === 5a. Entrada, versoes de chave, baldes e retorno (revisao 4, item 4) ===
+--
+-- A origem de uma ENTRADA so chega ao banco como PSEUDONIMO HMAC (hex de 64), calculado pelo servico de entrada com
+-- uma chave secreta que NUNCA chega ao banco. mechanism: 1=DESAFIO_EMAIL_IDA_E_VOLTA, 2=DESAFIO_TELEFONE_IDA_E_VOLTA
+-- (unicos mecanismos que comprovam controle da origem), 3=NAO_COMPROVADA (so inicia atendimento; nao abre solicitacao).
+-- channel_type: 1=TELEFONE, 2=EMAIL (como nos contatos).
+
+-- Estado das versoes de chave: linha unica. A ativacao de v+1 so e aceita 25 h depois da ativacao de v (24 h de janela
+-- da cota + 60 min de validade da entrada), e so o papel de entrada a faz.
+CREATE TABLE ops.ops_intake_key_state (
+    singleton        BOOLEAN PRIMARY KEY DEFAULT true CHECK (singleton),
+    current_version  INTEGER NOT NULL CHECK (current_version >= 1),
+    activated_at     TIMESTAMPTZ NOT NULL,
+    previous_version INTEGER CHECK (previous_version IS NULL OR previous_version = current_version - 1),
+    CHECK ((previous_version IS NULL) = (current_version = 1))
+);
+INSERT INTO ops.ops_intake_key_state (current_version, activated_at, previous_version) VALUES (1, clock_timestamp(), NULL);
+
+CREATE TABLE ops.ops_intake_entries (
+    entry_id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    channel_type           SMALLINT NOT NULL CHECK (channel_type IN (1, 2)),
+    mechanism              SMALLINT NOT NULL CHECK (mechanism IN (1, 2, 3)),
+    origin_version         INTEGER,
+    origin_pseudonym       TEXT CHECK (origin_pseudonym ~ '^[0-9a-f]{64}$'),
+    prev_version           INTEGER,
+    prev_pseudonym         TEXT CHECK (prev_pseudonym ~ '^[0-9a-f]{64}$'),
+    designated_operator_id UUID NOT NULL REFERENCES ops.ops_operators (operator_id),
+    created_at             TIMESTAMPTZ NOT NULL,
+    expires_at             TIMESTAMPTZ NOT NULL,
+    used_at                TIMESTAMPTZ,
+    used_request_id        UUID,
+    CHECK (expires_at = created_at + interval '60 minutes'),
+    CHECK ((mechanism = 3) = (origin_pseudonym IS NULL)),
+    CHECK ((origin_version IS NULL) = (origin_pseudonym IS NULL)),
+    CHECK ((prev_version IS NULL) = (prev_pseudonym IS NULL)),
+    CHECK (prev_version IS NULL OR (origin_version IS NOT NULL AND prev_version = origin_version - 1)),
+    CHECK (mechanism <> 1 OR channel_type = 2),
+    CHECK (mechanism <> 2 OR channel_type = 1),
+    CHECK ((used_at IS NULL) = (used_request_id IS NULL))
+);
+
+-- Baldes da cota por origem: so para travar (versao:pseudonimo). Sem FK.
+CREATE TABLE ops.ops_origin_buckets (
+    bucket_key TEXT PRIMARY KEY CHECK (bucket_key ~ '^[0-9]{1,9}:[0-9a-f]{64}$'),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+);
+
+-- Retorno pelo canal registrado: operador, contato, canal utilizado (tipo e versao = channel_set_at) e instante.
+CREATE TABLE ops.ops_mfa_callbacks (
+    callback_id     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL,
+    contact_id      UUID NOT NULL,
+    operator_id     UUID NOT NULL REFERENCES ops.ops_operators (operator_id),
+    channel_type    SMALLINT NOT NULL CHECK (channel_type IN (1, 2)),
+    channel_set_at  TIMESTAMPTZ NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL,
+    expires_at      TIMESTAMPTZ NOT NULL,
+    used_at         TIMESTAMPTZ,
+    used_request_id UUID,
+    FOREIGN KEY (organization_id, contact_id) REFERENCES ops.org_authorized_contacts (organization_id, contact_id),
+    CHECK (expires_at = created_at + interval '60 minutes'),
+    CHECK ((used_at IS NULL) = (used_request_id IS NULL))
+);
+
 -- === 6. Solicitacoes (contrato, secoes 6-8) ===
 --
 -- state: 1=SOLICITADA, 2=VERIFICADA, 3=PRE_APROVADA, 4=APROVADA, 5=EXECUTADA, 6=RECUSADA, 7=CANCELADA, 8=EXPIRADA.
@@ -268,6 +347,21 @@ CREATE TABLE ops.ops_mfa_recovery_requests (
     closed_at            TIMESTAMPTZ,
     closed_by            UUID REFERENCES ops.ops_operators (operator_id),
     close_reason         TEXT CHECK (close_reason ~ '^[A-Z_]{3,40}$'),
+    -- revisao 4, item 4: modo de abertura (1=ENTRADA com origem comprovada, 2=RETORNO pelo canal registrado)
+    open_mode            SMALLINT NOT NULL CHECK (open_mode IN (1, 2)),
+    intake_entry_id      UUID REFERENCES ops.ops_intake_entries (entry_id),
+    callback_id          UUID REFERENCES ops.ops_mfa_callbacks (callback_id),
+    origin_version       INTEGER,
+    origin_pseudonym     TEXT CHECK (origin_pseudonym ~ '^[0-9a-f]{64}$'),
+    prev_version         INTEGER,
+    prev_pseudonym       TEXT CHECK (prev_pseudonym ~ '^[0-9a-f]{64}$'),
+    -- revisao 4, item 5: declaracao dos demais ORG_ADMIN (1=NENHUM, 2=TODOS_SEM_FATOR_E_CODIGOS_UTILIZAVEIS)
+    other_admins_declaration SMALLINT CHECK (other_admins_declaration IN (1, 2)),
+    other_admins_captured_at TIMESTAMPTZ,
+    other_admins_count   INTEGER CHECK (other_admins_count >= 0),
+    -- revisao 4, item 10: sequencia das tentativas de aviso e a sequencia registrada na aprovacao final
+    notice_seq           INTEGER NOT NULL DEFAULT 0 CHECK (notice_seq >= 0),
+    notice_seq_at_approval INTEGER,
     UNIQUE (request_id, organization_id, target_user_id),
     FOREIGN KEY (organization_id, target_user_id) REFERENCES public.users (organization_id, user_id) ON DELETE RESTRICT,
     FOREIGN KEY (organization_id, target_user_id, approved_factor_id)
@@ -293,18 +387,58 @@ CREATE TABLE ops.ops_mfa_recovery_requests (
     CHECK (preapproved_at IS NULL OR (preapproved_at >= verified_at AND preapproved_at < t_total)),
     CHECK (notice_confirmed_at IS NULL OR (notice_confirmed_at >= preapproved_at AND notice_confirmed_at < t_total)),
     CHECK (final_approved_at IS NULL OR (final_approved_at >= notice_confirmed_at + interval '24 hours' AND final_approved_at < t_total)),
-    CHECK (executed_at IS NULL OR executed_at < least(t_total, final_approved_at + interval '60 minutes'))
+    CHECK (executed_at IS NULL OR executed_at < least(t_total, final_approved_at + interval '60 minutes')),
+    -- revisao 4
+    CHECK ((open_mode = 1) = (intake_entry_id IS NOT NULL)),
+    CHECK ((open_mode = 2) = (callback_id IS NOT NULL)),
+    CHECK ((open_mode = 1) = (origin_pseudonym IS NOT NULL)),
+    CHECK ((origin_version IS NULL) = (origin_pseudonym IS NULL)),
+    CHECK ((prev_version IS NULL) = (prev_pseudonym IS NULL)),
+    CHECK (prev_version IS NULL OR prev_version = origin_version - 1),
+    CHECK (state NOT IN (2, 3, 4, 5) OR other_admins_declaration IS NOT NULL),
+    CHECK ((other_admins_declaration IS NULL) = (other_admins_captured_at IS NULL)),
+    CHECK ((other_admins_declaration IS NULL) = (other_admins_count IS NULL)),
+    CHECK (other_admins_declaration IS NULL OR (other_admins_declaration = 1) = (other_admins_count = 0)),
+    CHECK (state NOT IN (4, 5) OR notice_seq_at_approval IS NOT NULL),
+    CHECK (notice_seq_at_approval IS NULL OR notice_seq_at_approval <= notice_seq)
 );
 -- exclusividade por alvo a partir de VERIFICADA (D6b)
 CREATE UNIQUE INDEX ux_ops_mfa_recovery_requests_alvo ON ops.ops_mfa_recovery_requests (target_user_id) WHERE state IN (2, 3, 4);
-CREATE INDEX ix_ops_mfa_recovery_requests_origem ON ops.ops_mfa_recovery_requests (requester_contact_id, opened_at);
+CREATE INDEX ix_ops_mfa_recovery_requests_origem ON ops.ops_mfa_recovery_requests (origin_pseudonym, opened_at) WHERE origin_pseudonym IS NOT NULL;
+CREATE INDEX ix_ops_mfa_recovery_requests_origem_ant ON ops.ops_mfa_recovery_requests (prev_pseudonym, opened_at) WHERE prev_pseudonym IS NOT NULL;
+
+-- Fotografia dos demais ORG_ADMIN considerados na verificacao (item 5). Fatos do banco separados da declaracao:
+-- o banco NAO comprova posse do dispositivo nem disponibilidade dos codigos.
+CREATE TABLE ops.ops_mfa_request_admins (
+    request_id                UUID NOT NULL,
+    organization_id           UUID NOT NULL,
+    target_user_id            UUID NOT NULL,
+    user_id                   UUID NOT NULL,
+    captured_at               TIMESTAMPTZ NOT NULL,
+    active_factor_id          UUID,
+    factor_confirmed_active   BOOLEAN NOT NULL,
+    totp_last_step            BIGINT,
+    used_codes                INTEGER NOT NULL CHECK (used_codes >= 0),
+    active_codes              INTEGER NOT NULL CHECK (active_codes >= 0),
+    active_sessions           INTEGER NOT NULL CHECK (active_sessions >= 0),
+    declared_no_usable_factor BOOLEAN NOT NULL CHECK (declared_no_usable_factor),
+    declared_no_usable_codes  BOOLEAN NOT NULL CHECK (declared_no_usable_codes),
+    PRIMARY KEY (request_id, user_id),
+    FOREIGN KEY (request_id, organization_id, target_user_id)
+        REFERENCES ops.ops_mfa_recovery_requests (request_id, organization_id, target_user_id),
+    FOREIGN KEY (organization_id, user_id) REFERENCES public.users (organization_id, user_id) ON DELETE RESTRICT,
+    CHECK (user_id <> target_user_id),
+    CHECK (factor_confirmed_active = (active_factor_id IS NOT NULL))
+);
 CREATE INDEX ix_ops_mfa_recovery_requests_executadas ON ops.ops_mfa_recovery_requests (organization_id, executed_at) WHERE state = 5;
 
 -- === 7. Avisos e tokens (contrato, secao 6.1) ===
 --
 -- kind: 1=PRE_APROVACAO_TITULAR (CONFIRMAR + CONTESTAR), 2=PRE_APROVACAO_ADMIN (CONTESTAR), 3=EXECUCAO_TITULAR,
--- 4=EXECUCAO_ADMIN (informativos). issued_at: a Platform gerou os tokens e vai enviar. discarded: nao emitido
--- (solicitacao ja terminal ao emitir).
+-- 4=EXECUCAO_ADMIN (informativos). Cada linha e uma TENTATIVA (revisao 4, item 10), numerada por seq dentro da
+-- solicitacao. state: 0=PENDENTE (criada, sem tokens), 1=EMITIDA (tokens gerados; nada saiu), 2=ENTREGANDO (gravado
+-- ANTES da entrega, com a reivindicacao claim_id), 3=ENFILEIRADA (informativo), 4=ACEITA_PELO_TRANSPORTE (nao e
+-- recebimento nem confirmacao), 5=FALHOU, 6=DESCONHECIDO. issued_at: saida de PENDENTE.
 
 CREATE TABLE ops.ops_mfa_notices (
     notice_id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -315,15 +449,27 @@ CREATE TABLE ops.ops_mfa_notices (
     kind              SMALLINT NOT NULL CHECK (kind IN (1, 2, 3, 4)),
     created_at        TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     issued_at         TIMESTAMPTZ,
-    discarded         BOOLEAN NOT NULL DEFAULT false,
+    seq               INTEGER NOT NULL CHECK (seq >= 1),
+    state             SMALLINT NOT NULL DEFAULT 0 CHECK (state BETWEEN 0 AND 6),
+    state_at          TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+    claim_id          UUID,
+    claimed_at        TIMESTAMPTZ,
+    accepted_at       TIMESTAMPTZ,
+    category          TEXT CHECK (category ~ '^[A-Z_]{3,40}$'),
     UNIQUE (notice_id, request_id, organization_id, target_user_id, recipient_user_id),
+    UNIQUE (request_id, seq),
     FOREIGN KEY (request_id, organization_id, target_user_id)
         REFERENCES ops.ops_mfa_recovery_requests (request_id, organization_id, target_user_id),
     FOREIGN KEY (organization_id, recipient_user_id) REFERENCES public.users (organization_id, user_id) ON DELETE RESTRICT,
     CHECK ((kind IN (1, 3)) = (recipient_user_id = target_user_id)),
-    CHECK (NOT discarded OR issued_at IS NOT NULL)
+    CHECK ((state = 0) = (issued_at IS NULL)),
+    CHECK ((claim_id IS NULL) = (claimed_at IS NULL)),
+    CHECK (state <> 2 OR claim_id IS NOT NULL),
+    CHECK ((state = 4) = (accepted_at IS NOT NULL))
 );
-CREATE INDEX ix_ops_mfa_notices_pendentes ON ops.ops_mfa_notices (created_at) WHERE issued_at IS NULL;
+CREATE INDEX ix_ops_mfa_notices_pendentes ON ops.ops_mfa_notices (created_at) WHERE state = 0;
+CREATE INDEX ix_ops_mfa_notices_andamento ON ops.ops_mfa_notices (state_at) WHERE state IN (1, 2, 3);
+CREATE INDEX ix_ops_mfa_notices_destinatario ON ops.ops_mfa_notices (request_id, recipient_user_id, kind, seq);
 
 -- purpose: 1=CONFIRMAR (so o titular), 2=CONTESTAR. Guarda so o SHA-256 (hex) do token.
 CREATE TABLE ops.ops_mfa_notice_tokens (
@@ -346,8 +492,47 @@ CREATE TABLE ops.ops_mfa_notice_tokens (
     CHECK (purpose <> 1 OR valid_until <= issued_at + interval '24 hours'),
     CHECK (used_at IS NULL OR invalidated_at IS NULL)
 );
-CREATE UNIQUE INDEX ux_ops_mfa_notice_tokens_ativo ON ops.ops_mfa_notice_tokens (request_id, recipient_user_id, purpose)
+-- Revisao 4, item 10: varios tokens validos do mesmo destinatario e finalidade podem coexistir (o anterior so e
+-- invalidado quando a tentativa nova for aceita pelo transporte); por isso o indice deixa de ser UNICO.
+CREATE INDEX ix_ops_mfa_notice_tokens_ativo ON ops.ops_mfa_notice_tokens (request_id, recipient_user_id, purpose)
     WHERE used_at IS NULL AND invalidated_at IS NULL;
+
+-- Historico dos resultados de entrega (inclusive atrasados, repetidos e conflitantes). outcome: APLICADO | REPETIDO |
+-- ATRASADO | CONFLITANTE | TRANSICAO_INVALIDA | RECUPERACAO. reported_state: estado informado (1..6).
+CREATE TABLE ops.ops_mfa_notice_results (
+    result_id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    notice_id         UUID NOT NULL,
+    request_id        UUID NOT NULL,
+    organization_id   UUID NOT NULL,
+    target_user_id    UUID NOT NULL,
+    recipient_user_id UUID NOT NULL,
+    reported_state    SMALLINT NOT NULL CHECK (reported_state BETWEEN 1 AND 6),
+    outcome           TEXT NOT NULL CHECK (outcome IN ('APLICADO', 'REPETIDO', 'ATRASADO', 'CONFLITANTE', 'TRANSICAO_INVALIDA', 'RECUPERACAO')),
+    category          TEXT CHECK (category ~ '^[A-Z_]{3,40}$'),
+    session_role      TEXT NOT NULL DEFAULT session_user,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+    FOREIGN KEY (notice_id, request_id, organization_id, target_user_id, recipient_user_id)
+        REFERENCES ops.ops_mfa_notices (notice_id, request_id, organization_id, target_user_id, recipient_user_id)
+);
+CREATE INDEX ix_ops_mfa_notice_results_notice ON ops.ops_mfa_notice_results (notice_id);
+
+-- Versoes das tentativas consideradas na aprovacao final (item 10).
+CREATE TABLE ops.ops_mfa_approval_attempts (
+    request_id        UUID NOT NULL,
+    organization_id   UUID NOT NULL,
+    target_user_id    UUID NOT NULL,
+    recipient_user_id UUID NOT NULL,
+    notice_id         UUID NOT NULL,
+    seq               INTEGER NOT NULL,
+    state             SMALLINT NOT NULL CHECK (state = 4),
+    accepted_at       TIMESTAMPTZ NOT NULL,
+    approved_at       TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (request_id, notice_id),
+    UNIQUE (request_id, recipient_user_id),
+    FOREIGN KEY (notice_id, request_id, organization_id, target_user_id, recipient_user_id)
+        REFERENCES ops.ops_mfa_notices (notice_id, request_id, organization_id, target_user_id, recipient_user_id),
+    CHECK (accepted_at + interval '24 hours' <= approved_at)
+);
 
 -- === 8. Auditoria (append-only) ===
 --
@@ -360,7 +545,7 @@ CREATE TABLE ops.ops_mfa_recovery_events (
     target_user_id    UUID,
     act               TEXT NOT NULL CHECK (act IN ('ABRIR', 'VERIFICAR', 'PRE_APROVAR', 'APROVAR', 'EXECUTAR', 'CANCELAR',
                                                    'CONSULTAR', 'REENVIAR_AVISO', 'AVISO_EMITIDO', 'AVISO_CONFIRMADO',
-                                                   'AVISO_CONTESTADO', 'AVISO_INVALIDO', 'FALHA')),
+                                                   'AVISO_CONTESTADO', 'AVISO_INVALIDO', 'FALHA', 'RETORNO_REGISTRADO')),
     result            TEXT NOT NULL CHECK (result IN ('OK', 'RECUSA', 'FALHA')),
     reason            TEXT CHECK (reason ~ '^[A-Z_]{2,40}$'),
     session_role      TEXT NOT NULL DEFAULT session_user,
@@ -388,23 +573,28 @@ CREATE TABLE ops.ops_mfa_recovery_events (
 );
 CREATE INDEX ix_ops_mfa_recovery_events_request ON ops.ops_mfa_recovery_events (request_id);
 
--- Cadastro, CA e vinculos. actor_kind: 1=OPERADOR, 2=CA, 3=PLATAFORMA, 4=BOOTSTRAP.
+-- Cadastro, CA e vinculos. actor_kind: 1=OPERADOR, 2=CA, 3=PLATAFORMA, 4=BOOTSTRAP, 5=ENTRADA.
 CREATE TABLE ops.ops_registry_events (
     event_id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     kind               TEXT NOT NULL CHECK (kind IN ('OPERADOR_CRIADO', 'HABILITACAO_CONCEDIDA', 'HABILITACAO_RETIRADA',
                                                      'OPERADOR_DESATIVADO', 'CERTIFICADO_REGISTRADO', 'CERTIFICADO_REVOGADO',
                                                      'PROVA_CONTA_EMITIDA', 'VINCULO_CONTA', 'PROVA_CONTATO_EMITIDA',
                                                      'VINCULO_CONTATO', 'VINCULO_REMOVIDO', 'CONTATO_INCLUIDO',
-                                                     'CONTATO_CANAL_ALTERADO', 'CONTATO_REMOVIDO')),
+                                                     'CONTATO_CANAL_ALTERADO', 'CONTATO_REMOVIDO', 'ENTRADA_REGISTRADA',
+                                                     'VERSAO_CHAVE_ATIVADA')),
     result             TEXT NOT NULL CHECK (result IN ('OK', 'RECUSA')),
     reason             TEXT CHECK (reason ~ '^[A-Z_]{2,40}$'),
-    actor_kind         SMALLINT NOT NULL CHECK (actor_kind IN (1, 2, 3, 4)),
+    actor_kind         SMALLINT NOT NULL CHECK (actor_kind IN (1, 2, 3, 4, 5)),
     session_role       TEXT NOT NULL DEFAULT session_user,
     actor_operator_id  UUID REFERENCES ops.ops_operators (operator_id),
     target_operator_id UUID REFERENCES ops.ops_operators (operator_id),
     act                SMALLINT CHECK (act BETWEEN 1 AND 6),
     certificate_id     UUID REFERENCES ops.ops_operator_certificates (certificate_id),
-    organization_id    UUID REFERENCES public.organizations (organization_id) ON DELETE RESTRICT,
+    -- SEM FK para organizations (achados I-3/I-4, retirada pontual aprovada): a FK pedia KEY SHARE na organizacao
+    -- depois do operador (vinculos) e depois da conta (prova de conta), invertendo a ordem dos atos. O valor vem sempre
+    -- de linha ja validada (prova, contato, organizacao travada ou contexto da requisicao conferido com users) - ver
+    -- inventario v2, paragrafo 6. O identificador historico permanece mesmo que a organizacao deixe de existir.
+    organization_id    UUID,
     contact_id         UUID REFERENCES ops.org_authorized_contacts (contact_id),
     cert_issuer_dn     TEXT,
     cert_serial        NUMERIC(60, 0),
@@ -501,8 +691,18 @@ BEGIN
     IF OLD.state IN (5, 6, 7, 8) THEN RAISE EXCEPTION 'solicitacao em estado terminal e imutavel'; END IF;
     IF NEW.request_id <> OLD.request_id OR NEW.organization_id <> OLD.organization_id OR NEW.target_user_id <> OLD.target_user_id
        OR NEW.requester_contact_id <> OLD.requester_contact_id OR NEW.requester_kind <> OLD.requester_kind
-       OR NEW.opened_at <> OLD.opened_at OR NEW.opened_by <> OLD.opened_by OR NEW.t_total <> OLD.t_total THEN
+       OR NEW.opened_at <> OLD.opened_at OR NEW.opened_by <> OLD.opened_by OR NEW.t_total <> OLD.t_total
+       OR NEW.open_mode <> OLD.open_mode OR NEW.intake_entry_id IS DISTINCT FROM OLD.intake_entry_id
+       OR NEW.callback_id IS DISTINCT FROM OLD.callback_id
+       OR (NEW.origin_version, NEW.origin_pseudonym, NEW.prev_version, NEW.prev_pseudonym)
+          IS DISTINCT FROM (OLD.origin_version, OLD.origin_pseudonym, OLD.prev_version, OLD.prev_pseudonym) THEN
         RAISE EXCEPTION 'origem da solicitacao e imutavel';
+    END IF;
+    IF (OLD.other_admins_declaration IS NOT NULL AND (NEW.other_admins_declaration, NEW.other_admins_captured_at, NEW.other_admins_count)
+            IS DISTINCT FROM (OLD.other_admins_declaration, OLD.other_admins_captured_at, OLD.other_admins_count))
+       OR NEW.notice_seq < OLD.notice_seq
+       OR (OLD.notice_seq_at_approval IS NOT NULL AND NEW.notice_seq_at_approval IS DISTINCT FROM OLD.notice_seq_at_approval) THEN
+        RAISE EXCEPTION 'declaracao, sequencia de avisos ou versao da aprovacao ja gravadas sao imutaveis';
     END IF;
     IF NOT (NEW.state = OLD.state OR NEW.state IN (6, 7, 8) OR (NEW.state = OLD.state + 1 AND NEW.state <= 5)) THEN
         RAISE EXCEPTION 'transicao de estado nao permitida (% -> %)', OLD.state, NEW.state;
@@ -523,13 +723,52 @@ BEGIN
 END;
 $$;
 
+-- Tentativa de aviso (item 10): origem imutavel; so as transicoes da maquina de estados; ACEITA e FALHOU finais;
+-- reivindicacao e aceite gravados uma vez.
 CREATE FUNCTION ops.prevent_notice_change() RETURNS TRIGGER
 LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
 BEGIN
-    IF OLD.issued_at IS NOT NULL THEN RAISE EXCEPTION 'aviso emitido e imutavel'; END IF;
     IF NEW.notice_id <> OLD.notice_id OR NEW.request_id <> OLD.request_id OR NEW.recipient_user_id <> OLD.recipient_user_id
-       OR NEW.kind <> OLD.kind OR NEW.created_at <> OLD.created_at THEN
-        RAISE EXCEPTION 'origem do aviso e imutavel';
+       OR NEW.kind <> OLD.kind OR NEW.created_at <> OLD.created_at OR NEW.seq <> OLD.seq
+       OR (OLD.issued_at IS NOT NULL AND NEW.issued_at IS DISTINCT FROM OLD.issued_at)
+       OR (OLD.claim_id IS NOT NULL AND (NEW.claim_id, NEW.claimed_at) IS DISTINCT FROM (OLD.claim_id, OLD.claimed_at))
+       OR (OLD.accepted_at IS NOT NULL AND NEW.accepted_at IS DISTINCT FROM OLD.accepted_at) THEN
+        RAISE EXCEPTION 'origem da tentativa de aviso e imutavel';
+    END IF;
+    IF NEW.state <> OLD.state AND NOT (
+           (OLD.state = 0 AND NEW.state IN (1, 5))
+        OR (OLD.state = 1 AND NEW.state IN (2, 5))
+        OR (OLD.state = 2 AND NEW.state IN (3, 4, 5, 6))
+        OR (OLD.state = 3 AND NEW.state IN (4, 5, 6))
+        OR (OLD.state = 6 AND NEW.state IN (4, 5))) THEN
+        RAISE EXCEPTION 'transicao de tentativa de aviso nao permitida (% -> %)', OLD.state, NEW.state;
+    END IF;
+    IF OLD.state IN (4, 5) AND (NEW.state, NEW.state_at, NEW.category) IS DISTINCT FROM (OLD.state, OLD.state_at, OLD.category) THEN
+        RAISE EXCEPTION 'tentativa em estado final e imutavel';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- Entradas e retornos: so a marca de uso, uma vez.
+CREATE FUNCTION ops.prevent_entry_change() RETURNS TRIGGER
+LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+BEGIN
+    IF OLD.used_at IS NOT NULL THEN RAISE EXCEPTION 'entrada ou retorno usado e imutavel'; END IF;
+    IF (to_jsonb(NEW) - 'used_at' - 'used_request_id') IS DISTINCT FROM (to_jsonb(OLD) - 'used_at' - 'used_request_id') THEN
+        RAISE EXCEPTION 'origem da entrada ou do retorno e imutavel';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- Estado das versoes de chave: so avanca uma versao por vez, com a anterior registrada.
+CREATE FUNCTION ops.prevent_key_state_change() RETURNS TRIGGER
+LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+BEGIN
+    IF NEW.current_version <> OLD.current_version + 1 OR NEW.previous_version IS DISTINCT FROM OLD.current_version
+       OR NEW.activated_at <= OLD.activated_at THEN
+        RAISE EXCEPTION 'estado das versoes de chave so avanca uma versao por vez';
     END IF;
     RETURN NEW;
 END;
@@ -559,6 +798,13 @@ CREATE TRIGGER trg_org_authorized_contacts_prevent_change BEFORE UPDATE ON ops.o
 CREATE TRIGGER trg_ops_mfa_recovery_requests_prevent_change BEFORE UPDATE ON ops.ops_mfa_recovery_requests FOR EACH ROW EXECUTE FUNCTION ops.prevent_request_change();
 CREATE TRIGGER trg_ops_mfa_notices_prevent_change BEFORE UPDATE ON ops.ops_mfa_notices FOR EACH ROW EXECUTE FUNCTION ops.prevent_notice_change();
 CREATE TRIGGER trg_ops_mfa_notice_tokens_prevent_change BEFORE UPDATE ON ops.ops_mfa_notice_tokens FOR EACH ROW EXECUTE FUNCTION ops.prevent_notice_token_change();
+CREATE TRIGGER trg_ops_intake_entries_prevent_change BEFORE UPDATE ON ops.ops_intake_entries FOR EACH ROW EXECUTE FUNCTION ops.prevent_entry_change();
+CREATE TRIGGER trg_ops_mfa_callbacks_prevent_change BEFORE UPDATE ON ops.ops_mfa_callbacks FOR EACH ROW EXECUTE FUNCTION ops.prevent_entry_change();
+CREATE TRIGGER trg_ops_intake_key_state_prevent_change BEFORE UPDATE ON ops.ops_intake_key_state FOR EACH ROW EXECUTE FUNCTION ops.prevent_key_state_change();
+CREATE TRIGGER trg_ops_origin_buckets_prevent_update BEFORE UPDATE ON ops.ops_origin_buckets FOR EACH ROW EXECUTE FUNCTION public.prevent_update();
+CREATE TRIGGER trg_ops_mfa_request_admins_prevent_update BEFORE UPDATE ON ops.ops_mfa_request_admins FOR EACH ROW EXECUTE FUNCTION public.prevent_update();
+CREATE TRIGGER trg_ops_mfa_notice_results_prevent_update BEFORE UPDATE ON ops.ops_mfa_notice_results FOR EACH ROW EXECUTE FUNCTION public.prevent_update();
+CREATE TRIGGER trg_ops_mfa_approval_attempts_prevent_update BEFORE UPDATE ON ops.ops_mfa_approval_attempts FOR EACH ROW EXECUTE FUNCTION public.prevent_update();
 CREATE TRIGGER trg_org_authorized_contact_events_prevent_update BEFORE UPDATE ON ops.org_authorized_contact_events FOR EACH ROW EXECUTE FUNCTION public.prevent_update();
 CREATE TRIGGER trg_ops_mfa_recovery_events_prevent_update BEFORE UPDATE ON ops.ops_mfa_recovery_events FOR EACH ROW EXECUTE FUNCTION public.prevent_update();
 CREATE TRIGGER trg_ops_registry_events_prevent_update BEFORE UPDATE ON ops.ops_registry_events FOR EACH ROW EXECUTE FUNCTION public.prevent_update();
@@ -570,7 +816,8 @@ BEGIN
     FOREACH t IN ARRAY ARRAY['ops_operators', 'ops_operator_permissions', 'ops_operator_certificates', 'ops_account_link_proofs',
         'ops_operator_platform_accounts', 'org_authorized_contacts', 'org_authorized_contact_events', 'ops_contact_link_proofs',
         'ops_operator_contact_links', 'ops_mfa_recovery_requests', 'ops_mfa_notices', 'ops_mfa_notice_tokens',
-        'ops_mfa_recovery_events', 'ops_registry_events'] LOOP
+        'ops_mfa_recovery_events', 'ops_registry_events', 'ops_intake_key_state', 'ops_intake_entries', 'ops_origin_buckets',
+        'ops_mfa_callbacks', 'ops_mfa_request_admins', 'ops_mfa_notice_results', 'ops_mfa_approval_attempts'] LOOP
         EXECUTE format('CREATE TRIGGER trg_%s_prevent_delete BEFORE DELETE ON ops.%I FOR EACH ROW EXECUTE FUNCTION public.prevent_delete()', t, t);
         EXECUTE format('CREATE TRIGGER trg_%s_prevent_truncate BEFORE TRUNCATE ON ops.%I FOR EACH STATEMENT EXECUTE FUNCTION public.prevent_truncate()', t, t);
     END LOOP;
@@ -606,6 +853,10 @@ GRANT SELECT, INSERT, UPDATE ON ops.ops_operators, ops.ops_operator_permissions,
     ops.ops_operator_contact_links, ops.ops_mfa_recovery_requests, ops.ops_mfa_notices, ops.ops_mfa_notice_tokens
     TO nekkora_ops_mfa_owner;
 GRANT SELECT, INSERT ON ops.org_authorized_contact_events, ops.ops_mfa_recovery_events, ops.ops_registry_events TO nekkora_ops_mfa_owner;
+GRANT SELECT, UPDATE ON ops.ops_intake_key_state TO nekkora_ops_mfa_owner;
+GRANT SELECT, INSERT, UPDATE ON ops.ops_intake_entries, ops.ops_mfa_callbacks TO nekkora_ops_mfa_owner;
+GRANT SELECT, INSERT, UPDATE ON ops.ops_origin_buckets TO nekkora_ops_mfa_owner;   -- UPDATE so para SELECT ... FOR UPDATE (trigger impede alterar)
+GRANT SELECT, INSERT ON ops.ops_mfa_request_admins, ops.ops_mfa_notice_results, ops.ops_mfa_approval_attempts TO nekkora_ops_mfa_owner;
 
 -- Tabelas de tenant: so as colunas lidas; UPDATE so nas colunas alteradas pelo reset. O UPDATE em updated_at de
 -- organizations/users existe apenas porque SELECT ... FOR UPDATE exige privilegio de UPDATE em alguma coluna;
@@ -615,11 +866,11 @@ GRANT SELECT (organization_id, user_id, account_type, status), UPDATE (updated_a
 GRANT SELECT (organization_id, membership_id, user_id, status) ON public.organization_memberships TO nekkora_ops_mfa_owner;
 GRANT SELECT (organization_id, membership_id, role_id, status) ON public.organization_role_assignments TO nekkora_ops_mfa_owner;
 GRANT SELECT (role_id, code) ON public.roles TO nekkora_ops_mfa_owner;
-GRANT SELECT (organization_id, user_id, factor_id, confirmed_at, disabled_at), UPDATE (disabled_at) ON public.user_mfa_factors TO nekkora_ops_mfa_owner;
+GRANT SELECT (organization_id, user_id, factor_id, confirmed_at, disabled_at, last_used_step), UPDATE (disabled_at) ON public.user_mfa_factors TO nekkora_ops_mfa_owner;
 GRANT SELECT (organization_id, user_id, used_at, invalidated_at), UPDATE (invalidated_at) ON public.user_mfa_recovery_codes TO nekkora_ops_mfa_owner;
 GRANT SELECT (organization_id, user_id, consumed_at, invalidated_at), UPDATE (invalidated_at, credential_hash, pending_password_hash)
     ON public.auth_challenges TO nekkora_ops_mfa_owner;
-GRANT SELECT (organization_id, user_id, revoked_at), UPDATE (revoked_at) ON public.user_sessions TO nekkora_ops_mfa_owner;
+GRANT SELECT (organization_id, user_id, revoked_at, created_at), UPDATE (revoked_at) ON public.user_sessions TO nekkora_ops_mfa_owner;
 GRANT SELECT (organization_id, user_id, event_type, ops_request_id), INSERT (organization_id, user_id, event_type, correlation_id, ops_request_id)
     ON public.mfa_events TO nekkora_ops_mfa_owner;
 
@@ -776,13 +1027,14 @@ LANGUAGE sql STABLE SET search_path = pg_catalog, pg_temp AS $$
     ORDER BY 1
 $$;
 
--- Contato elegivel (D2): da organizacao, ativo, canal registrado ha >= 30 dias. Motivo nulo = elegivel.
+-- Contato elegivel (D2; revisao 4, item 1): da organizacao, ativo, canal registrado (inclusao ou alteracao) ha pelo
+-- menos 720 horas completas. Motivo nulo = elegivel.
 CREATE FUNCTION ops.contato_inelegivel(p_org UUID, p_contact UUID, p_agora TIMESTAMPTZ) RETURNS TEXT
 LANGUAGE sql STABLE SET search_path = pg_catalog, pg_temp AS $$
     SELECT CASE
         WHEN c.contact_id IS NULL THEN 'CONTATO_INVALIDO'
         WHEN c.status <> 1 THEN 'CONTATO_INATIVO'
-        WHEN c.channel_set_at > p_agora - interval '30 days' THEN 'CANAL_RECENTE'
+        WHEN c.channel_set_at > p_agora - interval '720 hours' THEN 'CANAL_RECENTE'
     END
     FROM (SELECT 1) AS um
     LEFT JOIN ops.org_authorized_contacts c ON c.organization_id = p_org AND c.contact_id = p_contact
@@ -791,7 +1043,7 @@ $$;
 CREATE FUNCTION ops.contatos_elegiveis(p_org UUID, p_agora TIMESTAMPTZ) RETURNS INTEGER
 LANGUAGE sql STABLE SET search_path = pg_catalog, pg_temp AS $$
     SELECT count(*)::int FROM ops.org_authorized_contacts c
-    WHERE c.organization_id = p_org AND c.status = 1 AND c.channel_set_at <= p_agora - interval '30 days'
+    WHERE c.organization_id = p_org AND c.status = 1 AND c.channel_set_at <= p_agora - interval '720 hours'
 $$;
 
 -- Prazos (contrato, secao 6): T_total; nao verificada em 24 h; APROVADA alem de aprovacao_final + 60 min.
@@ -808,9 +1060,9 @@ CREATE FUNCTION ops.limite_executado(p_org UUID, p_target UUID, p_agora TIMESTAM
 LANGUAGE sql STABLE SET search_path = pg_catalog, pg_temp AS $$
     SELECT CASE
         WHEN EXISTS (SELECT 1 FROM ops.ops_mfa_recovery_requests r WHERE r.target_user_id = p_target AND r.state = 5
-                     AND r.executed_at > p_agora - interval '7 days') THEN 'LIMITE_ALVO'
+                     AND r.executed_at > p_agora - interval '168 hours') THEN 'LIMITE_ALVO'
         WHEN (SELECT count(*) FROM ops.ops_mfa_recovery_requests r WHERE r.organization_id = p_org AND r.state = 5
-              AND r.executed_at > p_agora - interval '30 days') >= 3 THEN 'LIMITE_ORGANIZACAO'
+              AND r.executed_at > p_agora - interval '720 hours') >= 3 THEN 'LIMITE_ORGANIZACAO'
     END
 $$;
 
@@ -846,12 +1098,122 @@ BEGIN
 END;
 $$;
 
--- Emissao dos avisos de um marco (pre-aprovacao ou execucao): titular + demais ORG_ADMIN efetivos.
-CREATE FUNCTION ops.criar_avisos(p_request UUID, p_org UUID, p_target UUID, p_kind_titular SMALLINT) RETURNS VOID
+-- Tentativas de aviso de um marco (pre-aprovacao ou execucao): titular + demais ORG_ADMIN informados (ja travados
+-- no conjunto de contas, revisao 4 / I-5). Cada tentativa recebe o proximo seq da solicitacao (chamada com a
+-- solicitacao travada e ainda nao terminal).
+CREATE FUNCTION ops.criar_avisos(p_request UUID, p_org UUID, p_target UUID, p_kind_titular SMALLINT, p_demais UUID[]) RETURNS VOID
+LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+DECLARE
+    v_u UUID;
+BEGIN
+    FOR v_u IN SELECT p_target UNION ALL (SELECT DISTINCT x FROM unnest(coalesce(p_demais, '{}')) AS x WHERE x <> p_target ORDER BY 1) LOOP
+        PERFORM ops.nova_tentativa(p_request, p_org, p_target, v_u,
+                                   CASE WHEN v_u = p_target THEN p_kind_titular ELSE (p_kind_titular + 1)::smallint END);
+    END LOOP;
+END;
+$$;
+
+-- Nova tentativa de aviso (seq da solicitacao, sob o lock da solicitacao).
+CREATE FUNCTION ops.nova_tentativa(p_request UUID, p_org UUID, p_target UUID, p_recipient UUID, p_kind SMALLINT) RETURNS UUID
+LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+DECLARE
+    v_seq INTEGER;
+    v_id UUID;
+BEGIN
+    UPDATE ops.ops_mfa_recovery_requests SET notice_seq = notice_seq + 1 WHERE request_id = p_request RETURNING notice_seq INTO v_seq;
+    INSERT INTO ops.ops_mfa_notices (request_id, organization_id, target_user_id, recipient_user_id, kind, seq)
+    VALUES (p_request, p_org, p_target, p_recipient, p_kind, v_seq) RETURNING notice_id INTO v_id;
+    RETURN v_id;
+END;
+$$;
+
+-- Conjunto ordenado de contas (inventario v2, paragrafo 5; I-5): alvo FOR UPDATE e demais FOR SHARE, juntos, em ordem
+-- crescente de user_id, deduplicados, depois da organizacao. Devolve as contas travadas.
+CREATE FUNCTION ops.travar_contas(p_org UUID, p_target UUID, p_outros UUID[]) RETURNS UUID[]
+LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+DECLARE
+    v_id UUID;
+    v_travadas UUID[] := '{}';
+BEGIN
+    FOR v_id IN SELECT DISTINCT x FROM unnest(ARRAY[p_target] || coalesce(p_outros, '{}')) AS x WHERE x IS NOT NULL ORDER BY x LOOP
+        IF v_id = p_target THEN
+            PERFORM 1 FROM public.users WHERE organization_id = p_org AND user_id = v_id FOR UPDATE;
+        ELSE
+            PERFORM 1 FROM public.users WHERE organization_id = p_org AND user_id = v_id FOR SHARE;
+        END IF;
+        v_travadas := v_travadas || v_id;
+    END LOOP;
+    RETURN v_travadas;
+END;
+$$;
+
+-- Conta necessaria que apareceu depois da aquisicao (ex.: papel ORG_ADMIN inserido, o que nao trava a organizacao):
+-- o ato e recusado sem escrever e sem travar a conta nova fora de ordem.
+CREATE FUNCTION ops.contas_em_mudanca(p_org UUID, p_target UUID, p_travadas UUID[]) RETURNS BOOLEAN
+LANGUAGE sql STABLE SET search_path = pg_catalog, pg_temp AS $$
+    SELECT EXISTS (SELECT 1 FROM ops.demais_admins(p_org, p_target) AS a WHERE NOT (a = ANY (p_travadas)))
+$$;
+
+-- Fotografia dos considerados (item 5), com as contas ja travadas.
+CREATE FUNCTION ops.fotografar_admins(p_request UUID, p_org UUID, p_target UUID, p_demais UUID[], p_agora TIMESTAMPTZ) RETURNS VOID
 LANGUAGE sql SET search_path = pg_catalog, pg_temp AS $$
-    INSERT INTO ops.ops_mfa_notices (request_id, organization_id, target_user_id, recipient_user_id, kind)
-    SELECT p_request, p_org, p_target, d.u, CASE WHEN d.u = p_target THEN p_kind_titular ELSE (p_kind_titular + 1)::smallint END
-    FROM (SELECT p_target AS u UNION ALL SELECT a FROM ops.demais_admins(p_org, p_target) AS a) AS d
+    INSERT INTO ops.ops_mfa_request_admins (request_id, organization_id, target_user_id, user_id, captured_at, active_factor_id,
+                                            factor_confirmed_active, totp_last_step, used_codes, active_codes, active_sessions,
+                                            declared_no_usable_factor, declared_no_usable_codes)
+    SELECT p_request, p_org, p_target, u, p_agora, f.factor_id, f.factor_id IS NOT NULL, f.last_used_step,
+           (SELECT count(*) FROM public.user_mfa_recovery_codes c WHERE c.organization_id = p_org AND c.user_id = u AND c.used_at IS NOT NULL),
+           (SELECT count(*) FROM public.user_mfa_recovery_codes c WHERE c.organization_id = p_org AND c.user_id = u
+               AND c.used_at IS NULL AND c.invalidated_at IS NULL),
+           (SELECT count(*) FROM public.user_sessions s WHERE s.organization_id = p_org AND s.user_id = u AND s.revoked_at IS NULL),
+           true, true
+    FROM unnest(p_demais) AS u
+    LEFT JOIN public.user_mfa_factors f ON f.organization_id = p_org AND f.user_id = u AND f.confirmed_at IS NOT NULL AND f.disabled_at IS NULL
+$$;
+
+-- Reconferencia da declaracao nos atos seguintes (item 5), com as contas travadas. Motivo nulo = valida.
+-- Sinais sem depender de instantes gravados com now(): troca do fator ativo, passo TOTP que avancou, contagem de codigos
+-- usados que cresceu, sessao criada depois da fotografia (created_at = clock_timestamp() sob o lock da conta).
+CREATE FUNCTION ops.declaracao_invalida(p_request UUID, p_org UUID, p_target UUID) RETURNS TEXT
+LANGUAGE sql STABLE SET search_path = pg_catalog, pg_temp AS $$
+    SELECT CASE
+        WHEN (SELECT coalesce(array_agg(a ORDER BY a), '{}') FROM ops.demais_admins(p_org, p_target) AS a)
+             IS DISTINCT FROM (SELECT coalesce(array_agg(x.user_id ORDER BY x.user_id), '{}') FROM ops.ops_mfa_request_admins x
+                               WHERE x.request_id = p_request) THEN 'COMPOSICAO_ALTERADA'
+        WHEN EXISTS (SELECT 1 FROM ops.ops_mfa_request_admins x WHERE x.request_id = p_request
+                     AND NOT EXISTS (SELECT 1 FROM public.user_mfa_factors f WHERE f.organization_id = p_org AND f.user_id = x.user_id
+                                     AND f.confirmed_at IS NOT NULL AND f.disabled_at IS NULL)) THEN 'ADMIN_PODE_CADASTRAR'
+        WHEN EXISTS (SELECT 1 FROM ops.ops_mfa_request_admins x
+                     JOIN public.user_mfa_factors f ON f.organization_id = p_org AND f.user_id = x.user_id
+                      AND f.confirmed_at IS NOT NULL AND f.disabled_at IS NULL
+                     WHERE x.request_id = p_request
+                       AND (f.factor_id IS DISTINCT FROM x.active_factor_id
+                            OR coalesce(f.last_used_step, -1) > coalesce(x.totp_last_step, -1))) THEN 'DECLARACAO_CONTRADITA'
+        WHEN EXISTS (SELECT 1 FROM ops.ops_mfa_request_admins x WHERE x.request_id = p_request
+                     AND (SELECT count(*) FROM public.user_mfa_recovery_codes c WHERE c.organization_id = p_org AND c.user_id = x.user_id
+                          AND c.used_at IS NOT NULL) > x.used_codes) THEN 'DECLARACAO_CONTRADITA'
+        WHEN EXISTS (SELECT 1 FROM ops.ops_mfa_request_admins x WHERE x.request_id = p_request
+                     AND EXISTS (SELECT 1 FROM public.user_sessions s WHERE s.organization_id = p_org AND s.user_id = x.user_id
+                                 AND s.created_at > x.captured_at)) THEN 'DECLARACAO_CONTRADITA'
+    END
+$$;
+
+-- Tentativa vigente de um destinatario num tipo de aviso (item 10, decisao v4): a de maior seq que nao falhou.
+CREATE FUNCTION ops.tentativa_vigente(p_request UUID, p_recipient UUID, p_kind SMALLINT) RETURNS UUID
+LANGUAGE sql STABLE SET search_path = pg_catalog, pg_temp AS $$
+    SELECT n.notice_id FROM ops.ops_mfa_notices n
+    WHERE n.request_id = p_request AND n.recipient_user_id = p_recipient AND n.kind = p_kind AND n.state <> 5
+    ORDER BY n.seq DESC LIMIT 1
+$$;
+
+-- Condicao 2 da aprovacao final (item 10): para cada outro ORG_ADMIN notificado na pre-aprovacao, a tentativa vigente
+-- de CONTESTAR aceita pelo transporte ha pelo menos 24 h. Motivo nulo = satisfeita.
+CREATE FUNCTION ops.condicao_avisos_demais(p_request UUID, p_agora TIMESTAMPTZ) RETURNS TEXT
+LANGUAGE sql STABLE SET search_path = pg_catalog, pg_temp AS $$
+    SELECT CASE WHEN EXISTS (
+        SELECT 1 FROM (SELECT DISTINCT n.recipient_user_id AS u FROM ops.ops_mfa_notices n WHERE n.request_id = p_request AND n.kind = 2) d
+        LEFT JOIN ops.ops_mfa_notices v ON v.notice_id = ops.tentativa_vigente(p_request, d.u, 2::smallint)
+        WHERE v.notice_id IS NULL OR v.state <> 4 OR v.accepted_at + interval '24 hours' > p_agora)
+    THEN 'AVISO_DEMAIS_PENDENTE' END
 $$;
 
 -- Guarda de isolamento (achado da revisao): toda funcao publica ops_* a chama como PRIMEIRA instrucao. Em
@@ -876,7 +1238,12 @@ $$;
 -- (r_resultado OK|RECUSA, r_motivo, r_solicitacao, r_estado). Falha tecnica = erro (rollback integral).
 -- Ordem de locks: organizacao -> conta alvo -> solicitacao -> operadores (crescente, FOR SHARE).
 
-CREATE FUNCTION public.ops_mfa_open(p_org UUID, p_target UUID, p_requester_contact UUID)
+-- Abertura (revisao 4, item 4): por ENTRADA com origem comprovada (registro de entrada de uso unico, designado ao
+-- operador; cota de 3 por origem em 24 h, contada entre organizacoes e uma vez por solicitacao) ou por RETORNO pelo
+-- canal registrado (registro de retorno de uso unico; sem cota). Exatamente um dos dois. Nao existe cota por contato
+-- alegado. Ordem: organizacao -> conta alvo -> (entrada: estado das versoes FOR SHARE -> baldes crescentes) ->
+-- entrada ou retorno FOR UPDATE -> operador FOR SHARE.
+CREATE FUNCTION public.ops_mfa_open(p_org UUID, p_target UUID, p_requester_contact UUID, p_entry UUID, p_callback UUID)
 RETURNS TABLE (r_resultado TEXT, r_motivo TEXT, r_solicitacao UUID, r_estado TEXT)
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp SET nekkora.fn_organization_id = ''
@@ -890,24 +1257,82 @@ DECLARE
     v_target UUID;
     v_contato RECORD;
     v_id UUID;
+    v_ent RECORD;
+    v_ret RECORD;
+    v_chaves TEXT[] := '{}';
+    v_k TEXT;
+    v_n INTEGER;
 BEGIN
     PERFORM ops.exigir_read_committed();
     PERFORM set_config('nekkora.fn_organization_id', coalesce(p_org::text, ''), true);
     SELECT true INTO v_org_ok FROM public.organizations WHERE organization_id = p_org FOR UPDATE;
     SELECT user_id INTO v_target FROM public.users WHERE organization_id = p_org AND user_id = p_target FOR UPDATE;
+    IF p_entry IS NOT NULL AND p_callback IS NULL THEN
+        -- pseudonimos lidos sem lock (imutaveis), depois estado das versoes e baldes em ordem crescente
+        SELECT e.origin_version, e.origin_pseudonym, e.prev_version, e.prev_pseudonym INTO v_ent
+        FROM ops.ops_intake_entries e WHERE e.entry_id = p_entry;
+        PERFORM 1 FROM ops.ops_intake_key_state FOR SHARE;
+        IF v_ent.origin_pseudonym IS NOT NULL THEN
+            v_chaves := ARRAY[v_ent.origin_version::text || ':' || v_ent.origin_pseudonym];
+            IF v_ent.prev_pseudonym IS NOT NULL THEN
+                v_chaves := v_chaves || (v_ent.prev_version::text || ':' || v_ent.prev_pseudonym);
+            END IF;
+            FOR v_k IN SELECT x FROM unnest(v_chaves) AS x ORDER BY x LOOP
+                INSERT INTO ops.ops_origin_buckets (bucket_key) VALUES (v_k) ON CONFLICT (bucket_key) DO NOTHING;
+                PERFORM 1 FROM ops.ops_origin_buckets WHERE bucket_key = v_k FOR UPDATE;
+            END LOOP;
+        END IF;
+        SELECT * INTO v_ent FROM ops.ops_intake_entries e WHERE e.entry_id = p_entry FOR UPDATE;
+    ELSE
+        -- sem entrada: origem vazia (registro atribuido para a insercao e as comparacoes)
+        SELECT NULL::uuid AS entry_id, NULL::integer AS origin_version, NULL::text AS origin_pseudonym,
+               NULL::integer AS prev_version, NULL::text AS prev_pseudonym INTO v_ent;
+        IF p_callback IS NOT NULL AND p_entry IS NULL THEN
+            SELECT * INTO v_ret FROM ops.ops_mfa_callbacks c WHERE c.callback_id = p_callback FOR UPDATE;
+        END IF;
+    END IF;
     PERFORM ops.travar_operadores(ARRAY[v_op]);
     v_agora := clock_timestamp();
     SELECT * INTO v_aut FROM ops.autorizar(v_op, 1::smallint, v_agora);
     v_motivo := v_aut.o_motivo;
+    IF v_motivo IS NULL AND (p_entry IS NULL) = (p_callback IS NULL) THEN v_motivo := 'PARAMETRO_INVALIDO'; END IF;
     IF v_motivo IS NULL AND ops.tem_vinculo(v_op, p_org) THEN v_motivo := 'VINCULO_IMPEDITIVO'; END IF;
     IF v_motivo IS NULL AND v_org_ok IS NULL THEN v_motivo := 'ORGANIZACAO_INELEGIVEL'; END IF;
     IF v_motivo IS NULL AND v_target IS NULL THEN v_motivo := 'CONTA_INELEGIVEL'; END IF;
     IF v_motivo IS NULL THEN v_motivo := ops.alvo_inelegivel(p_org, p_target); END IF;
     IF v_motivo IS NULL AND ops.contatos_elegiveis(p_org, v_agora) < 2 THEN v_motivo := 'CONTATOS_INSUFICIENTES'; END IF;
     IF v_motivo IS NULL THEN v_motivo := ops.contato_inelegivel(p_org, p_requester_contact, v_agora); END IF;
-    IF v_motivo IS NULL AND (SELECT count(*) FROM ops.ops_mfa_recovery_requests r WHERE r.requester_contact_id = p_requester_contact
-                             AND r.opened_at > v_agora - interval '24 hours') >= 3 THEN
-        v_motivo := 'LIMITE_ORIGEM';
+    IF v_motivo IS NULL AND p_entry IS NOT NULL THEN
+        IF v_ent.entry_id IS NULL THEN
+            v_motivo := 'ENTRADA_INVALIDA';
+        ELSIF v_ent.designated_operator_id <> v_op THEN
+            v_motivo := 'ENTRADA_DE_OUTRO_OPERADOR';
+        ELSIF v_ent.used_at IS NOT NULL THEN
+            v_motivo := 'ENTRADA_USADA';
+        ELSIF v_agora >= v_ent.expires_at THEN
+            v_motivo := 'ENTRADA_VENCIDA';
+        ELSIF v_ent.mechanism = 3 THEN
+            v_motivo := 'ORIGEM_NAO_COMPROVADA';
+        ELSE
+            -- solicitacoes DISTINTAS das ultimas 24 h com qualquer dos pseudonimos da entrada, em qualquer organizacao
+            SELECT count(DISTINCT r.request_id) INTO v_n FROM ops.ops_mfa_recovery_requests r
+            WHERE r.opened_at > v_agora - interval '24 hours'
+              AND ((r.origin_version = v_ent.origin_version AND r.origin_pseudonym = v_ent.origin_pseudonym)
+                OR (r.prev_version = v_ent.origin_version AND r.prev_pseudonym = v_ent.origin_pseudonym)
+                OR (v_ent.prev_pseudonym IS NOT NULL
+                    AND ((r.origin_version = v_ent.prev_version AND r.origin_pseudonym = v_ent.prev_pseudonym)
+                      OR (r.prev_version = v_ent.prev_version AND r.prev_pseudonym = v_ent.prev_pseudonym))));
+            IF v_n >= 3 THEN v_motivo := 'LIMITE_ORIGEM'; END IF;
+        END IF;
+    END IF;
+    IF v_motivo IS NULL AND p_callback IS NOT NULL THEN
+        SELECT c.channel_type, c.channel_set_at, c.status INTO v_contato FROM ops.org_authorized_contacts c
+        WHERE c.organization_id = p_org AND c.contact_id = p_requester_contact;
+        IF v_ret.callback_id IS NULL OR v_ret.operator_id <> v_op OR v_ret.organization_id <> p_org
+           OR v_ret.contact_id <> p_requester_contact OR v_ret.used_at IS NOT NULL OR v_agora >= v_ret.expires_at
+           OR v_contato.channel_type IS DISTINCT FROM v_ret.channel_type OR v_contato.channel_set_at IS DISTINCT FROM v_ret.channel_set_at THEN
+            v_motivo := 'RETORNO_INVALIDO';
+        END IF;
     END IF;
     IF v_motivo IS NOT NULL THEN
         PERFORM ops.registrar(NULL, CASE WHEN v_org_ok THEN p_org END, v_target, 'ABRIR', 'RECUSA', v_motivo, v_op,
@@ -917,16 +1342,68 @@ BEGIN
     END IF;
     SELECT c.user_id INTO v_contato FROM ops.org_authorized_contacts c WHERE c.organization_id = p_org AND c.contact_id = p_requester_contact;
     INSERT INTO ops.ops_mfa_recovery_requests (organization_id, target_user_id, requester_contact_id, requester_kind, opened_at,
-                                               opened_by, t_total)
+                                               opened_by, t_total, open_mode, intake_entry_id, callback_id, origin_version,
+                                               origin_pseudonym, prev_version, prev_pseudonym)
     VALUES (p_org, p_target, p_requester_contact, CASE WHEN v_contato.user_id = p_target THEN 1 ELSE 2 END, v_agora, v_op,
-            v_agora + interval '72 hours')
+            v_agora + interval '72 hours', CASE WHEN p_entry IS NOT NULL THEN 1 ELSE 2 END, p_entry, p_callback,
+            v_ent.origin_version, v_ent.origin_pseudonym, v_ent.prev_version, v_ent.prev_pseudonym)
     RETURNING request_id INTO v_id;
+    IF p_entry IS NOT NULL THEN
+        UPDATE ops.ops_intake_entries SET used_at = v_agora, used_request_id = v_id WHERE entry_id = p_entry;
+    ELSE
+        UPDATE ops.ops_mfa_callbacks SET used_at = v_agora, used_request_id = v_id WHERE callback_id = p_callback;
+    END IF;
     PERFORM ops.registrar(v_id, p_org, p_target, 'ABRIR', 'OK', NULL, v_op, v_aut.o_emissor, v_aut.o_serial);
     RETURN QUERY SELECT 'OK'::text, NULL::text, v_id, 'SOLICITADA'::text;
 END;
 $$;
 
-CREATE FUNCTION public.ops_mfa_verify(p_request UUID, p_callback_ok BOOLEAN, p_second_contact UUID, p_second_contact_ok BOOLEAN)
+-- Registro do retorno pelo canal registrado (item 4): feito pelo verificador (VERIFICAR) logo depois de ligar ou
+-- escrever para o contato pelo canal registrado dele. Grava operador, contato, canal (tipo e versao, nunca o valor) e o
+-- instante do banco. Uso unico, 60 min, mesmo operador. Nao dispensa nenhuma evidencia nem etapa.
+-- Ordem: organizacao -> contato FOR SHARE -> operador FOR SHARE.
+CREATE FUNCTION public.ops_mfa_callback_register(p_contact UUID)
+RETURNS TABLE (r_resultado TEXT, r_motivo TEXT, r_retorno UUID, r_valido_ate TIMESTAMPTZ)
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp SET nekkora.fn_organization_id = ''
+AS $$
+DECLARE
+    v_op UUID := ops.operador_da_sessao();
+    v_org UUID;
+    v_c RECORD;
+    v_agora TIMESTAMPTZ;
+    v_aut RECORD;
+    v_motivo TEXT;
+    v_id UUID;
+BEGIN
+    PERFORM ops.exigir_read_committed();
+    SELECT c.organization_id INTO v_org FROM ops.org_authorized_contacts c WHERE c.contact_id = p_contact;
+    PERFORM set_config('nekkora.fn_organization_id', coalesce(v_org::text, ''), true);
+    PERFORM 1 FROM public.organizations WHERE organization_id = v_org FOR UPDATE;
+    SELECT c.contact_id, c.channel_type, c.channel_set_at, c.status INTO v_c FROM ops.org_authorized_contacts c
+    WHERE c.contact_id = p_contact FOR SHARE;
+    PERFORM ops.travar_operadores(ARRAY[v_op]);
+    v_agora := clock_timestamp();
+    SELECT * INTO v_aut FROM ops.autorizar(v_op, 1::smallint, v_agora);
+    v_motivo := v_aut.o_motivo;
+    IF v_motivo IS NULL AND (v_org IS NULL OR v_c.contact_id IS NULL OR v_c.status <> 1) THEN v_motivo := 'CONTATO_INVALIDO'; END IF;
+    IF v_motivo IS NULL THEN v_motivo := ops.contato_inelegivel(v_org, p_contact, v_agora); END IF;
+    IF v_motivo IS NULL AND ops.tem_vinculo(v_op, v_org) THEN v_motivo := 'VINCULO_IMPEDITIVO'; END IF;
+    IF v_motivo IS NOT NULL THEN
+        PERFORM ops.registrar(NULL, v_org, NULL, 'RETORNO_REGISTRADO', 'RECUSA', v_motivo, v_op, v_aut.o_emissor, v_aut.o_serial);
+        RETURN QUERY SELECT 'RECUSA'::text, v_motivo, NULL::uuid, NULL::timestamptz;
+        RETURN;
+    END IF;
+    INSERT INTO ops.ops_mfa_callbacks (organization_id, contact_id, operator_id, channel_type, channel_set_at, created_at, expires_at)
+    VALUES (v_org, p_contact, v_op, v_c.channel_type, v_c.channel_set_at, v_agora, v_agora + interval '60 minutes')
+    RETURNING callback_id INTO v_id;
+    PERFORM ops.registrar(NULL, v_org, NULL, 'RETORNO_REGISTRADO', 'OK', NULL, v_op, v_aut.o_emissor, v_aut.o_serial);
+    RETURN QUERY SELECT 'OK'::text, NULL::text, v_id, v_agora + interval '60 minutes';
+END;
+$$;
+
+CREATE FUNCTION public.ops_mfa_verify(p_request UUID, p_callback_ok BOOLEAN, p_second_contact UUID, p_second_contact_ok BOOLEAN,
+                                      p_other_admins TEXT)
 RETURNS TABLE (r_resultado TEXT, r_motivo TEXT, r_solicitacao UUID, r_estado TEXT)
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp SET nekkora.fn_organization_id = ''
@@ -940,6 +1417,9 @@ DECLARE
     v_aut RECORD;
     v_motivo TEXT;
     v_outra RECORD;
+    v_demais UUID[];
+    v_travadas UUID[];
+    v_decl SMALLINT := CASE p_other_admins WHEN 'NENHUM' THEN 1 WHEN 'TODOS_SEM_FATOR_E_CODIGOS_UTILIZAVEIS' THEN 2 END;
 BEGIN
     PERFORM ops.exigir_read_committed();
     SELECT q.organization_id, q.target_user_id INTO v_org, v_target FROM ops.ops_mfa_recovery_requests q WHERE q.request_id = p_request;
@@ -951,7 +1431,8 @@ BEGIN
     END IF;
     PERFORM set_config('nekkora.fn_organization_id', v_org::text, true);
     PERFORM 1 FROM public.organizations WHERE organization_id = v_org FOR UPDATE;
-    PERFORM 1 FROM public.users WHERE organization_id = v_org AND user_id = v_target FOR UPDATE;
+    v_demais := ARRAY(SELECT ops.demais_admins(v_org, v_target));
+    v_travadas := ops.travar_contas(v_org, v_target, v_demais);
     SELECT * INTO r FROM ops.ops_mfa_recovery_requests q WHERE q.request_id = p_request FOR UPDATE;
     PERFORM ops.travar_operadores(ARRAY[v_op]);
     v_agora := clock_timestamp();
@@ -961,11 +1442,21 @@ BEGIN
     IF v_motivo IS NULL AND r.state <> 1 THEN v_motivo := 'ESTADO_INVALIDO'; END IF;
     IF v_motivo IS NULL AND ops.tem_vinculo(v_op, v_org) THEN v_motivo := 'VINCULO_IMPEDITIVO'; END IF;
     IF v_motivo IS NULL AND (p_second_contact IS NULL OR p_second_contact = r.requester_contact_id
-                             OR p_callback_ok IS NULL OR p_second_contact_ok IS NULL) THEN
+                             OR p_callback_ok IS NULL OR p_second_contact_ok IS NULL OR v_decl IS NULL) THEN
         v_motivo := 'PARAMETRO_INVALIDO';
     END IF;
     IF v_motivo IS NULL AND ops.contato_inelegivel(v_org, p_second_contact, v_agora) IS NOT NULL THEN
         v_motivo := 'SEGUNDO_CONTATO_INELEGIVEL';
+    END IF;
+    -- conjunto de contas (I-5): conta necessaria nao travada -> recusa do ato, sem travar fora de ordem
+    IF v_motivo IS NULL AND ops.contas_em_mudanca(v_org, v_target, v_travadas) THEN v_motivo := 'CONTAS_EM_MUDANCA'; END IF;
+    -- declaracao dos demais ORG_ADMIN (item 5)
+    IF v_motivo IS NULL AND ((v_decl = 1) <> (cardinality(v_demais) = 0)) THEN v_motivo := 'DECLARACAO_DIVERGENTE'; END IF;
+    IF v_motivo IS NULL AND v_decl = 2 AND EXISTS (
+            SELECT 1 FROM unnest(v_demais) AS u WHERE NOT EXISTS (
+                SELECT 1 FROM public.user_mfa_factors f WHERE f.organization_id = v_org AND f.user_id = u
+                  AND f.confirmed_at IS NOT NULL AND f.disabled_at IS NULL)) THEN
+        v_motivo := 'ADMIN_PODE_CADASTRAR';
     END IF;
     IF v_motivo IS NOT NULL THEN
         PERFORM ops.registrar(p_request, v_org, v_target, 'VERIFICAR', 'RECUSA', v_motivo, v_op, v_aut.o_emissor, v_aut.o_serial);
@@ -1014,8 +1505,10 @@ BEGIN
 
     UPDATE ops.ops_mfa_recovery_requests
        SET state = 2, verified_at = v_agora, verified_by = v_op, callback_ok = p_callback_ok,
-           second_contact_id = p_second_contact, second_contact_ok = p_second_contact_ok
+           second_contact_id = p_second_contact, second_contact_ok = p_second_contact_ok,
+           other_admins_declaration = v_decl, other_admins_captured_at = v_agora, other_admins_count = cardinality(v_demais)
      WHERE request_id = p_request;
+    PERFORM ops.fotografar_admins(p_request, v_org, v_target, v_demais, v_agora);
     PERFORM ops.registrar(p_request, v_org, v_target, 'VERIFICAR', 'OK', NULL, v_op, v_aut.o_emissor, v_aut.o_serial);
     RETURN QUERY SELECT 'OK'::text, NULL::text, p_request, 'VERIFICADA'::text;
 END;
@@ -1035,6 +1528,8 @@ DECLARE
     v_aut RECORD;
     v_motivo TEXT;
     v_fator UUID;
+    v_demais UUID[];
+    v_travadas UUID[];
 BEGIN
     PERFORM ops.exigir_read_committed();
     SELECT q.organization_id, q.target_user_id INTO v_org, v_target FROM ops.ops_mfa_recovery_requests q WHERE q.request_id = p_request;
@@ -1046,7 +1541,8 @@ BEGIN
     END IF;
     PERFORM set_config('nekkora.fn_organization_id', v_org::text, true);
     PERFORM 1 FROM public.organizations WHERE organization_id = v_org FOR UPDATE;
-    PERFORM 1 FROM public.users WHERE organization_id = v_org AND user_id = v_target FOR UPDATE;
+    v_demais := ARRAY(SELECT ops.demais_admins(v_org, v_target));
+    v_travadas := ops.travar_contas(v_org, v_target, v_demais);
     SELECT * INTO r FROM ops.ops_mfa_recovery_requests q WHERE q.request_id = p_request FOR UPDATE;
     PERFORM ops.travar_operadores(ARRAY[v_op, r.verified_by]);
     v_agora := clock_timestamp();
@@ -1056,6 +1552,7 @@ BEGIN
     IF v_motivo IS NULL AND r.state <> 2 THEN v_motivo := 'ESTADO_INVALIDO'; END IF;
     IF v_motivo IS NULL AND v_op = r.verified_by THEN v_motivo := 'APROVADOR_IGUAL_VERIFICADOR'; END IF;
     IF v_motivo IS NULL AND ops.tem_vinculo(v_op, v_org) THEN v_motivo := 'VINCULO_IMPEDITIVO'; END IF;
+    IF v_motivo IS NULL AND ops.contas_em_mudanca(v_org, v_target, v_travadas) THEN v_motivo := 'CONTAS_EM_MUDANCA'; END IF;
     IF v_motivo IS NOT NULL THEN
         PERFORM ops.registrar(p_request, v_org, v_target, 'PRE_APROVAR', 'RECUSA', v_motivo, v_op, v_aut.o_emissor, v_aut.o_serial);
         RETURN QUERY SELECT 'RECUSA'::text, v_motivo, p_request, ops.estado_nome(r.state);
@@ -1068,6 +1565,7 @@ BEGIN
         RETURN;
     END IF;
     v_motivo := ops.participante_invalido(r.verified_by, 1::smallint, v_org, v_agora);
+    IF v_motivo IS NULL THEN v_motivo := ops.declaracao_invalida(p_request, v_org, v_target); END IF;
     IF v_motivo IS NULL THEN v_motivo := ops.alvo_inelegivel(v_org, v_target); END IF;
     IF v_motivo IS NULL THEN v_motivo := ops.limite_executado(v_org, v_target, v_agora); END IF;
     IF v_motivo IS NOT NULL THEN
@@ -1081,7 +1579,7 @@ BEGIN
     UPDATE ops.ops_mfa_recovery_requests
        SET state = 3, preapproved_at = v_agora, preapproved_by = v_op, approved_factor_id = v_fator
      WHERE request_id = p_request;
-    PERFORM ops.criar_avisos(p_request, v_org, v_target, 1::smallint);
+    PERFORM ops.criar_avisos(p_request, v_org, v_target, 1::smallint, v_demais);
     PERFORM ops.registrar(p_request, v_org, v_target, 'PRE_APROVAR', 'OK', NULL, v_op, v_aut.o_emissor, v_aut.o_serial);
     RETURN QUERY SELECT 'OK'::text, NULL::text, p_request, 'PRE_APROVADA'::text;
 END;
@@ -1100,6 +1598,8 @@ DECLARE
     v_agora TIMESTAMPTZ;
     v_aut RECORD;
     v_motivo TEXT;
+    v_demais UUID[];
+    v_travadas UUID[];
 BEGIN
     PERFORM ops.exigir_read_committed();
     SELECT q.organization_id, q.target_user_id INTO v_org, v_target FROM ops.ops_mfa_recovery_requests q WHERE q.request_id = p_request;
@@ -1111,7 +1611,8 @@ BEGIN
     END IF;
     PERFORM set_config('nekkora.fn_organization_id', v_org::text, true);
     PERFORM 1 FROM public.organizations WHERE organization_id = v_org FOR UPDATE;
-    PERFORM 1 FROM public.users WHERE organization_id = v_org AND user_id = v_target FOR UPDATE;
+    v_demais := ARRAY(SELECT ops.demais_admins(v_org, v_target));
+    v_travadas := ops.travar_contas(v_org, v_target, v_demais);
     SELECT * INTO r FROM ops.ops_mfa_recovery_requests q WHERE q.request_id = p_request FOR UPDATE;
     PERFORM ops.travar_operadores(ARRAY[v_op, r.verified_by, r.preapproved_by]);
     v_agora := clock_timestamp();
@@ -1121,11 +1622,15 @@ BEGIN
     IF v_motivo IS NULL AND r.state <> 3 THEN v_motivo := 'ESTADO_INVALIDO'; END IF;
     IF v_motivo IS NULL AND v_op = r.verified_by THEN v_motivo := 'APROVADOR_IGUAL_VERIFICADOR'; END IF;
     IF v_motivo IS NULL AND ops.tem_vinculo(v_op, v_org) THEN v_motivo := 'VINCULO_IMPEDITIVO'; END IF;
+    IF v_motivo IS NULL AND ops.contas_em_mudanca(v_org, v_target, v_travadas) THEN v_motivo := 'CONTAS_EM_MUDANCA'; END IF;
     IF v_motivo IS NULL AND NOT ops.vencida(r.state, r.opened_at, r.t_total, r.final_approved_at, v_agora) THEN
         IF r.notice_confirmed_at IS NULL THEN
             v_motivo := 'AVISO_NAO_CONFIRMADO';
         ELSIF v_agora < r.notice_confirmed_at + interval '24 hours' THEN
             v_motivo := 'ESPERA_NAO_CUMPRIDA';
+        ELSE
+            -- item 10: 24 h desde o aceite pelo transporte do aviso vigente de cada outro ORG_ADMIN (aceite nao e recebimento)
+            v_motivo := ops.condicao_avisos_demais(p_request, v_agora);
         END IF;
     END IF;
     IF v_motivo IS NOT NULL THEN
@@ -1145,6 +1650,7 @@ BEGIN
                                         AND f.factor_id = r.approved_factor_id AND f.confirmed_at IS NOT NULL AND f.disabled_at IS NULL) THEN
         v_motivo := 'FATOR_DIVERGENTE';
     END IF;
+    IF v_motivo IS NULL THEN v_motivo := ops.declaracao_invalida(p_request, v_org, v_target); END IF;
     IF v_motivo IS NULL THEN v_motivo := ops.alvo_inelegivel(v_org, v_target); END IF;
     IF v_motivo IS NULL THEN v_motivo := ops.limite_executado(v_org, v_target, v_agora); END IF;
     IF v_motivo IS NOT NULL THEN
@@ -1153,7 +1659,15 @@ BEGIN
         RETURN QUERY SELECT 'RECUSA'::text, v_motivo, p_request, 'RECUSADA'::text;
         RETURN;
     END IF;
-    UPDATE ops.ops_mfa_recovery_requests SET state = 4, final_approved_at = v_agora, final_approved_by = v_op WHERE request_id = p_request;
+    -- versoes das tentativas consideradas (item 10): a vigente de CONTESTAR de cada outro ORG_ADMIN notificado
+    INSERT INTO ops.ops_mfa_approval_attempts (request_id, organization_id, target_user_id, recipient_user_id, notice_id, seq, state,
+                                               accepted_at, approved_at)
+    SELECT p_request, v_org, v_target, n.recipient_user_id, n.notice_id, n.seq, n.state, n.accepted_at, v_agora
+    FROM (SELECT DISTINCT x.recipient_user_id AS u FROM ops.ops_mfa_notices x WHERE x.request_id = p_request AND x.kind = 2) d
+    JOIN ops.ops_mfa_notices n ON n.notice_id = ops.tentativa_vigente(p_request, d.u, 2::smallint);
+    UPDATE ops.ops_mfa_recovery_requests
+       SET state = 4, final_approved_at = v_agora, final_approved_by = v_op, notice_seq_at_approval = notice_seq
+     WHERE request_id = p_request;
     PERFORM ops.registrar(p_request, v_org, v_target, 'APROVAR', 'OK', NULL, v_op, v_aut.o_emissor, v_aut.o_serial);
     RETURN QUERY SELECT 'OK'::text, NULL::text, p_request, 'APROVADA'::text;
 END;
@@ -1177,6 +1691,8 @@ DECLARE
     v_fator_ativo RECORD;
     v_n INTEGER;
     v_ok UUID;
+    v_demais UUID[];
+    v_travadas UUID[];
 BEGIN
     PERFORM ops.exigir_read_committed();
     SELECT q.organization_id, q.target_user_id INTO v_org, v_target FROM ops.ops_mfa_recovery_requests q WHERE q.request_id = p_request;
@@ -1186,10 +1702,11 @@ BEGIN
         RETURN QUERY SELECT 'RECUSA'::text, 'SOLICITACAO_INEXISTENTE'::text, p_request, NULL::text;
         RETURN;
     END IF;
-    -- 1. locks: organizacao -> conta -> solicitacao -> participantes (crescente, FOR SHARE)
+    -- 1. locks: organizacao -> contas (alvo e destinatarios dos avisos, crescentes) -> solicitacao -> participantes
     PERFORM set_config('nekkora.fn_organization_id', v_org::text, true);
     PERFORM 1 FROM public.organizations WHERE organization_id = v_org FOR UPDATE;
-    PERFORM 1 FROM public.users WHERE organization_id = v_org AND user_id = v_target FOR UPDATE;
+    v_demais := ARRAY(SELECT ops.demais_admins(v_org, v_target));
+    v_travadas := ops.travar_contas(v_org, v_target, v_demais);
     SELECT * INTO r FROM ops.ops_mfa_recovery_requests q WHERE q.request_id = p_request FOR UPDATE;
     PERFORM ops.travar_operadores(ARRAY[v_op, r.verified_by, r.preapproved_by, r.final_approved_by]);
     -- 2. instante do banco depois dos locks
@@ -1202,15 +1719,27 @@ BEGIN
     IF v_motivo IS NULL AND r.state <> 4 THEN v_motivo := 'ESTADO_INVALIDO'; END IF;
     IF v_motivo IS NULL AND (v_op = r.preapproved_by OR v_op = r.final_approved_by) THEN v_motivo := 'EXECUTOR_IGUAL_APROVADOR'; END IF;
     IF v_motivo IS NULL AND ops.tem_vinculo(v_op, v_org) THEN v_motivo := 'VINCULO_IMPEDITIVO'; END IF;
+    IF v_motivo IS NULL AND ops.contas_em_mudanca(v_org, v_target, v_travadas) THEN v_motivo := 'CONTAS_EM_MUDANCA'; END IF;
     IF v_motivo IS NOT NULL THEN
         PERFORM ops.registrar(p_request, v_org, v_target, 'EXECUTAR', 'RECUSA', v_motivo, v_op, v_aut.o_emissor, v_aut.o_serial);
         RETURN QUERY SELECT 'RECUSA'::text, v_motivo, p_request, ops.estado_nome(r.state);
         RETURN;
     END IF;
+    -- prazo antes da condicao de aviso: vencida, a solicitacao EXPIRA mesmo que um reenvio tenha alterado a condicao
     IF ops.vencida(r.state, r.opened_at, r.t_total, r.final_approved_at, v_agora) THEN
         PERFORM ops.encerrar(p_request, 8::smallint, 'PRAZO_ENCERRADO', v_op, v_agora);
         PERFORM ops.registrar(p_request, v_org, v_target, 'EXECUTAR', 'RECUSA', 'PRAZO_ENCERRADO', v_op, v_aut.o_emissor, v_aut.o_serial);
         RETURN QUERY SELECT 'RECUSA'::text, 'PRAZO_ENCERRADO'::text, p_request, 'EXPIRADA'::text;
+        RETURN;
+    END IF;
+    -- item 10: qualquer tentativa criada depois da aprovacao (reenvio a qualquer destinatario, inclusive o titular), ou
+    -- versao registrada que deixou de estar aceita, impede executar - recusa do ato, sem reiniciar a confirmacao nem
+    -- ampliar prazos (a solicitacao continua APROVADA ate executar ou vencer)
+    IF r.notice_seq > r.notice_seq_at_approval
+       OR EXISTS (SELECT 1 FROM ops.ops_mfa_approval_attempts a JOIN ops.ops_mfa_notices n ON n.notice_id = a.notice_id
+                  WHERE a.request_id = p_request AND n.state <> 4) THEN
+        PERFORM ops.registrar(p_request, v_org, v_target, 'EXECUTAR', 'RECUSA', 'CONDICAO_DE_AVISO_ALTERADA', v_op, v_aut.o_emissor, v_aut.o_serial);
+        RETURN QUERY SELECT 'RECUSA'::text, 'CONDICAO_DE_AVISO_ALTERADA'::text, p_request, ops.estado_nome(r.state);
         RETURN;
     END IF;
     -- reconferencias da solicitacao (recusa encerra: RECUSADA na execucao)
@@ -1225,6 +1754,7 @@ BEGIN
             v_motivo := 'FATOR_DIVERGENTE';
         END IF;
     END IF;
+    IF v_motivo IS NULL THEN v_motivo := ops.declaracao_invalida(p_request, v_org, v_target); END IF;
     IF v_motivo IS NULL THEN v_motivo := ops.alvo_inelegivel(v_org, v_target); END IF;
     IF v_motivo IS NULL THEN v_motivo := ops.limite_executado(v_org, v_target, v_agora); END IF;
     IF v_motivo IS NOT NULL THEN
@@ -1249,13 +1779,14 @@ BEGIN
      WHERE organization_id = v_org AND user_id = v_target AND revoked_at IS NULL;
     INSERT INTO public.mfa_events (organization_id, user_id, event_type, correlation_id, ops_request_id)
     VALUES (v_org, v_target, 4, gen_random_uuid(), p_request);
+    -- avisos de execucao ANTES de marcar EXECUTADA (a sequencia da solicitacao nao muda em estado terminal)
+    PERFORM ops.criar_avisos(p_request, v_org, v_target, 3::smallint, v_demais);
     UPDATE ops.ops_mfa_recovery_requests SET state = 5, executed_at = v_agora, executed_by = v_op
      WHERE request_id = p_request AND state = 4
     RETURNING request_id INTO v_ok;
     IF v_ok IS NULL THEN
         RAISE EXCEPTION 'execucao: transicao para EXECUTADA falhou' USING ERRCODE = 'P0001';
     END IF;
-    PERFORM ops.criar_avisos(p_request, v_org, v_target, 3::smallint);
     PERFORM ops.registrar(p_request, v_org, v_target, 'EXECUTAR', 'OK', NULL, v_op, v_aut.o_emissor, v_aut.o_serial);
     RETURN QUERY SELECT 'OK'::text, NULL::text, p_request, 'EXECUTADA'::text;
 END;
@@ -1308,7 +1839,7 @@ END;
 $$;
 
 -- Reenvio do aviso ao titular (so em PRE_APROVADA). Depois da confirmacao, o novo aviso so leva CONTESTAR.
-CREATE FUNCTION public.ops_mfa_resend_notice(p_request UUID)
+CREATE FUNCTION public.ops_mfa_resend_notice(p_request UUID, p_recipient UUID)
 RETURNS TABLE (r_resultado TEXT, r_motivo TEXT, r_solicitacao UUID, r_estado TEXT)
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp SET nekkora.fn_organization_id = ''
@@ -1321,6 +1852,7 @@ DECLARE
     v_agora TIMESTAMPTZ;
     v_aut RECORD;
     v_motivo TEXT;
+    v_travadas UUID[];
 BEGIN
     PERFORM ops.exigir_read_committed();
     SELECT q.organization_id, q.target_user_id INTO v_org, v_target FROM ops.ops_mfa_recovery_requests q WHERE q.request_id = p_request;
@@ -1330,29 +1862,34 @@ BEGIN
         RETURN QUERY SELECT 'RECUSA'::text, 'SOLICITACAO_INEXISTENTE'::text, p_request, NULL::text;
         RETURN;
     END IF;
+    -- organizacao -> contas (alvo e destinatario, crescentes; I-5) -> solicitacao -> operador
     PERFORM set_config('nekkora.fn_organization_id', v_org::text, true);
     PERFORM 1 FROM public.organizations WHERE organization_id = v_org FOR UPDATE;
-    PERFORM 1 FROM public.users WHERE organization_id = v_org AND user_id = v_target FOR UPDATE;
+    v_travadas := ops.travar_contas(v_org, v_target, ARRAY[p_recipient]);
     SELECT * INTO r FROM ops.ops_mfa_recovery_requests q WHERE q.request_id = p_request FOR UPDATE;
     PERFORM ops.travar_operadores(ARRAY[v_op]);
     v_agora := clock_timestamp();
     SELECT * INTO v_aut FROM ops.autorizar(v_op, 1::smallint, v_agora);
     v_motivo := v_aut.o_motivo;
-    IF v_motivo IS NULL AND r.state <> 3 THEN v_motivo := 'ESTADO_INVALIDO'; END IF;
+    IF v_motivo IS NULL AND r.state NOT IN (3, 4) THEN v_motivo := 'ESTADO_INVALIDO'; END IF;
+    IF v_motivo IS NULL AND (p_recipient IS NULL OR (p_recipient <> v_target AND NOT EXISTS (
+            SELECT 1 FROM ops.ops_mfa_notices n WHERE n.request_id = p_request AND n.recipient_user_id = p_recipient AND n.kind = 2))) THEN
+        v_motivo := 'DESTINATARIO_INVALIDO';
+    END IF;
     IF v_motivo IS NULL AND ops.vencida(r.state, r.opened_at, r.t_total, r.final_approved_at, v_agora) THEN
         PERFORM ops.encerrar(p_request, 8::smallint, 'PRAZO_ENCERRADO', v_op, v_agora);
         r.state := 8;
         v_motivo := 'PRAZO_ENCERRADO';
     END IF;
     IF v_motivo IS NOT NULL THEN
-        PERFORM ops.registrar(p_request, v_org, v_target, 'REENVIAR_AVISO', 'RECUSA', v_motivo, v_op, v_aut.o_emissor, v_aut.o_serial);
+        PERFORM ops.registrar(p_request, v_org, v_target, 'REENVIAR_AVISO', 'RECUSA', v_motivo, v_op, v_aut.o_emissor, v_aut.o_serial,
+                              p_recipient);
         RETURN QUERY SELECT 'RECUSA'::text, v_motivo, p_request, ops.estado_nome(r.state);
         RETURN;
     END IF;
-    INSERT INTO ops.ops_mfa_notices (request_id, organization_id, target_user_id, recipient_user_id, kind)
-    VALUES (p_request, v_org, v_target, v_target, 1);
-    PERFORM ops.registrar(p_request, v_org, v_target, 'REENVIAR_AVISO', 'OK', NULL, v_op, v_aut.o_emissor, v_aut.o_serial);
-    RETURN QUERY SELECT 'OK'::text, NULL::text, p_request, 'PRE_APROVADA'::text;
+    PERFORM ops.nova_tentativa(p_request, v_org, v_target, p_recipient, CASE WHEN p_recipient = v_target THEN 1 ELSE 2 END::smallint);
+    PERFORM ops.registrar(p_request, v_org, v_target, 'REENVIAR_AVISO', 'OK', NULL, v_op, v_aut.o_emissor, v_aut.o_serial, p_recipient);
+    RETURN QUERY SELECT 'OK'::text, NULL::text, p_request, ops.estado_nome(r.state);
 END;
 $$;
 
@@ -1411,7 +1948,8 @@ END;
 $$;
 
 -- Falha tecnica informada pela CLI (origem INFORMADO_PELA_CLI), em transacao separada. Sem mensagem livre.
--- Ordem: solicitacao (KEY SHARE, pela FK) -> operador (FOR SHARE).
+-- Ordem (I-2): leitura sem lock da solicitacao -> organizacao (KEY SHARE) -> conta alvo (KEY SHARE) -> solicitacao
+-- (KEY SHARE) -> operador (FOR SHARE), com reconferencia de organizacao e alvo depois dos locks.
 CREATE FUNCTION public.ops_mfa_record_failure(p_request UUID, p_failed_act TEXT, p_sqlstate TEXT, p_stage TEXT)
 RETURNS TABLE (r_resultado TEXT, r_motivo TEXT)
 LANGUAGE plpgsql SECURITY DEFINER
@@ -1419,15 +1957,25 @@ SET search_path = pg_catalog, pg_temp SET nekkora.fn_organization_id = ''
 AS $$
 DECLARE
     v_op UUID := ops.operador_da_sessao();
+    v_org UUID;
+    v_target UUID;
     v_req RECORD;
     v_aut RECORD;
 BEGIN
     PERFORM ops.exigir_read_committed();
+    -- I-2: ordem canonica organizacao -> conta -> solicitacao -> operador (KEY SHARE), com reconferencia depois
+    SELECT q.organization_id, q.target_user_id INTO v_org, v_target FROM ops.ops_mfa_recovery_requests q WHERE q.request_id = p_request;
+    IF v_org IS NOT NULL THEN
+        PERFORM set_config('nekkora.fn_organization_id', v_org::text, true);
+        PERFORM 1 FROM public.organizations WHERE organization_id = v_org FOR KEY SHARE;
+        PERFORM 1 FROM public.users WHERE organization_id = v_org AND user_id = v_target FOR KEY SHARE;
+    END IF;
     SELECT q.request_id, q.organization_id, q.target_user_id INTO v_req
     FROM ops.ops_mfa_recovery_requests q WHERE q.request_id = p_request FOR KEY SHARE;
     PERFORM ops.travar_operadores(ARRAY[v_op]);
     SELECT * INTO v_aut FROM ops.autorizar(v_op, NULL, clock_timestamp());
-    IF v_aut.o_motivo IS NOT NULL OR v_req.request_id IS NULL
+    IF v_aut.o_motivo IS NOT NULL OR v_req.request_id IS NULL OR v_req.organization_id IS DISTINCT FROM v_org
+       OR v_req.target_user_id IS DISTINCT FROM v_target
        OR coalesce(p_failed_act, '') NOT IN ('ABRIR', 'VERIFICAR', 'PRE_APROVAR', 'APROVAR', 'EXECUTAR', 'CANCELAR', 'CONSULTAR', 'REENVIAR_AVISO')
        OR coalesce(p_sqlstate, '') !~ '^[0-9A-Z]{5}$' OR coalesce(p_stage, '') NOT IN ('CHAMADA', 'COMMIT') THEN
         RETURN QUERY SELECT 'RECUSA'::text, coalesce(v_aut.o_motivo, CASE WHEN v_req.request_id IS NULL THEN 'SOLICITACAO_INEXISTENTE'
@@ -2035,11 +2583,15 @@ SET search_path = pg_catalog, pg_temp
 AS $$
     SELECT ops.exigir_read_committed();
     SELECT n.notice_id, n.organization_id, n.recipient_user_id, n.kind FROM ops.ops_mfa_notices n
-    WHERE n.issued_at IS NULL ORDER BY n.created_at, n.notice_id LIMIT least(greatest(coalesce(p_limit, 0), 0), 100)
+    WHERE n.state = 0 ORDER BY n.created_at, n.notice_id LIMIT least(greatest(coalesce(p_limit, 0), 0), 100)
 $$;
 
 -- Emissao: gera os tokens cabiveis (CONFIRMAR so para o titular em PRE_APROVADA ainda nao confirmada; CONTESTAR
--- para os notificados enquanto nao terminal) e invalida os anteriores do mesmo destinatario e finalidade.
+-- para os notificados enquanto nao terminal). Nao invalida tokens anteriores (isso e do aceite, item 10). Finalidade ja
+-- substituida por tentativa POSTERIOR do mesmo destinatario aceita pelo transporte nao ganha token: o aceite dela so
+-- invalida tokens que ja existiam, e um token antigo nascido depois dele escaparia da substituicao. Tentativa posterior
+-- que falhou, ficou desconhecida ou ainda nao foi aceita NAO impede a emissao. Sem nenhuma finalidade restante, a
+-- tentativa vai a FALHOU (SUBSTITUIDA_POR_TENTATIVA_ACEITA) sem sair.
 -- Retorno: emitido (enviar o e-mail) e quais links incluir. Lock: organizacao -> conta alvo -> solicitacao -> aviso.
 CREATE FUNCTION public.ops_notice_issue(p_notice UUID, p_confirm_hash TEXT, p_contest_hash TEXT)
 RETURNS TABLE (r_emitido BOOLEAN, r_confirmar BOOLEAN, r_contestar BOOLEAN, r_tipo SMALLINT, r_organizacao UUID,
@@ -2048,65 +2600,286 @@ LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp SET nekkora.fn_organization_id = ''
 AS $$
 DECLARE
-    n RECORD;
+    v_ids RECORD;
+    n ops.ops_mfa_notices%ROWTYPE;
     r ops.ops_mfa_recovery_requests%ROWTYPE;
     v_agora TIMESTAMPTZ;
     v_confirmar BOOLEAN := false;
     v_contestar BOOLEAN := false;
     v_conf_ate TIMESTAMPTZ;
+    v_sub_conf BOOLEAN;
+    v_sub_cont BOOLEAN;
 BEGIN
     PERFORM ops.exigir_read_committed();
     IF p_confirm_hash !~ '^[0-9a-f]{64}$' OR p_contest_hash !~ '^[0-9a-f]{64}$' OR p_confirm_hash = p_contest_hash THEN
         RAISE EXCEPTION 'hash de token invalido' USING ERRCODE = '22023';
     END IF;
-    SELECT q.notice_id, q.request_id, q.organization_id, q.target_user_id, q.recipient_user_id, q.kind INTO n
-    FROM ops.ops_mfa_notices q WHERE q.notice_id = p_notice;
-    IF NOT FOUND THEN
-        RETURN QUERY SELECT false, false, false, NULL::smallint, NULL::uuid, NULL::uuid, NULL::timestamptz, NULL::timestamptz;
-        RETURN;
+    SELECT q.request_id, q.organization_id, q.target_user_id INTO v_ids FROM ops.ops_mfa_notices q WHERE q.notice_id = p_notice;
+    IF v_ids.request_id IS NOT NULL THEN
+        PERFORM set_config('nekkora.fn_organization_id', v_ids.organization_id::text, true);
+        PERFORM 1 FROM public.organizations WHERE organization_id = v_ids.organization_id FOR UPDATE;
+        PERFORM 1 FROM public.users WHERE organization_id = v_ids.organization_id AND user_id = v_ids.target_user_id FOR UPDATE;
+        SELECT * INTO r FROM ops.ops_mfa_recovery_requests q WHERE q.request_id = v_ids.request_id FOR UPDATE;
+        SELECT * INTO n FROM ops.ops_mfa_notices q WHERE q.notice_id = p_notice FOR UPDATE;
     END IF;
-    PERFORM set_config('nekkora.fn_organization_id', n.organization_id::text, true);
-    PERFORM 1 FROM public.organizations WHERE organization_id = n.organization_id FOR UPDATE;
-    PERFORM 1 FROM public.users WHERE organization_id = n.organization_id AND user_id = n.target_user_id FOR UPDATE;
-    SELECT * INTO r FROM ops.ops_mfa_recovery_requests q WHERE q.request_id = n.request_id FOR UPDATE;
-    PERFORM 1 FROM ops.ops_mfa_notices q WHERE q.notice_id = p_notice AND q.issued_at IS NULL FOR UPDATE;
-    IF NOT FOUND THEN
+    IF n.notice_id IS NULL OR n.state <> 0 THEN
         RETURN QUERY SELECT false, false, false, n.kind, n.organization_id, n.recipient_user_id, NULL::timestamptz, NULL::timestamptz;
         RETURN;
     END IF;
     v_agora := clock_timestamp();
     IF n.kind IN (1, 2) AND (r.state NOT IN (1, 2, 3, 4) OR v_agora >= r.t_total) THEN
-        UPDATE ops.ops_mfa_notices SET issued_at = v_agora, discarded = true WHERE notice_id = p_notice;
+        -- solicitacao ja terminal: a tentativa nunca sai (sem tokens)
+        UPDATE ops.ops_mfa_notices SET issued_at = v_agora, state = 5, state_at = v_agora, category = 'SOLICITACAO_ENCERRADA'
+         WHERE notice_id = p_notice;
         RETURN QUERY SELECT false, false, false, n.kind, n.organization_id, n.recipient_user_id, NULL::timestamptz, NULL::timestamptz;
         RETURN;
     END IF;
-    IF n.kind = 1 AND r.state = 3 AND r.notice_confirmed_at IS NULL THEN
+    -- item 10: os tokens anteriores do destinatario NAO sao invalidados aqui (so no aceite desta tentativa pelo transporte).
+    -- Substituicao ja confirmada: tentativa posterior (seq maior) do mesmo destinatario, ACEITA, com token da finalidade.
+    SELECT EXISTS (SELECT 1 FROM ops.ops_mfa_notices o JOIN ops.ops_mfa_notice_tokens t ON t.notice_id = o.notice_id
+                   WHERE o.request_id = n.request_id AND o.recipient_user_id = n.recipient_user_id AND o.seq > n.seq
+                     AND o.state = 4 AND t.purpose = 1),
+           EXISTS (SELECT 1 FROM ops.ops_mfa_notices o JOIN ops.ops_mfa_notice_tokens t ON t.notice_id = o.notice_id
+                   WHERE o.request_id = n.request_id AND o.recipient_user_id = n.recipient_user_id AND o.seq > n.seq
+                     AND o.state = 4 AND t.purpose = 2)
+      INTO v_sub_conf, v_sub_cont;
+    IF n.kind IN (1, 2) AND v_sub_cont
+       AND (v_sub_conf OR NOT (n.kind = 1 AND r.state = 3 AND r.notice_confirmed_at IS NULL)) THEN
+        UPDATE ops.ops_mfa_notices SET issued_at = v_agora, state = 5, state_at = v_agora, category = 'SUBSTITUIDA_POR_TENTATIVA_ACEITA'
+         WHERE notice_id = p_notice;
+        RETURN QUERY SELECT false, false, false, n.kind, n.organization_id, n.recipient_user_id, NULL::timestamptz, NULL::timestamptz;
+        RETURN;
+    END IF;
+    IF n.kind = 1 AND r.state = 3 AND r.notice_confirmed_at IS NULL AND NOT v_sub_conf THEN
         v_confirmar := true;
         v_conf_ate := least(r.t_total, v_agora + interval '24 hours');
-        UPDATE ops.ops_mfa_notice_tokens SET invalidated_at = v_agora
-         WHERE request_id = r.request_id AND recipient_user_id = n.recipient_user_id AND purpose = 1 AND used_at IS NULL AND invalidated_at IS NULL;
         INSERT INTO ops.ops_mfa_notice_tokens (notice_id, request_id, organization_id, target_user_id, recipient_user_id, purpose,
                                                token_hash, issued_at, valid_until)
         VALUES (n.notice_id, n.request_id, n.organization_id, n.target_user_id, n.recipient_user_id, 1, p_confirm_hash, v_agora, v_conf_ate);
     END IF;
-    IF n.kind IN (1, 2) THEN
+    IF n.kind IN (1, 2) AND NOT v_sub_cont THEN
         v_contestar := true;
-        UPDATE ops.ops_mfa_notice_tokens SET invalidated_at = v_agora
-         WHERE request_id = r.request_id AND recipient_user_id = n.recipient_user_id AND purpose = 2 AND used_at IS NULL AND invalidated_at IS NULL;
         INSERT INTO ops.ops_mfa_notice_tokens (notice_id, request_id, organization_id, target_user_id, recipient_user_id, purpose,
                                                token_hash, issued_at, valid_until)
         VALUES (n.notice_id, n.request_id, n.organization_id, n.target_user_id, n.recipient_user_id, 2, p_contest_hash, v_agora, r.t_total);
     END IF;
-    UPDATE ops.ops_mfa_notices SET issued_at = v_agora WHERE notice_id = p_notice;
+    UPDATE ops.ops_mfa_notices SET issued_at = v_agora, state = 1, state_at = v_agora WHERE notice_id = p_notice;
     PERFORM ops.registrar(r.request_id, r.organization_id, r.target_user_id, 'AVISO_EMITIDO', 'OK', NULL, NULL, NULL, NULL, n.recipient_user_id);
     RETURN QUERY SELECT true, v_confirmar, v_contestar, n.kind, n.organization_id, n.recipient_user_id, v_conf_ate,
                         CASE WHEN v_contestar THEN r.t_total END;
 END;
 $$;
 
+-- Reivindicacao da entrega (item 10, protocolo ENTREGANDO): EMITIDA -> ENTREGANDO com o claim_id do processo, gravado
+-- ANTES de entregar a mensagem. Devolve o estado resultante e se a reivindicacao e deste claim_id. Nao presume nada:
+-- o processo so entrega com r_minha = true, e so na MESMA execucao que sabe ainda nao ter chamado o transporte.
+CREATE FUNCTION public.ops_notice_claim(p_notice UUID, p_claim UUID)
+RETURNS TABLE (r_estado SMALLINT, r_minha BOOLEAN)
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp SET nekkora.fn_organization_id = ''
+AS $$
+DECLARE
+    v_ids RECORD;
+    n ops.ops_mfa_notices%ROWTYPE;
+    r ops.ops_mfa_recovery_requests%ROWTYPE;
+    v_agora TIMESTAMPTZ;
+BEGIN
+    PERFORM ops.exigir_read_committed();
+    IF p_claim IS NULL THEN
+        RAISE EXCEPTION 'reivindicacao sem identificador' USING ERRCODE = '22023';
+    END IF;
+    SELECT q.request_id, q.organization_id, q.target_user_id INTO v_ids FROM ops.ops_mfa_notices q WHERE q.notice_id = p_notice;
+    IF v_ids.request_id IS NOT NULL THEN
+        PERFORM set_config('nekkora.fn_organization_id', v_ids.organization_id::text, true);
+        PERFORM 1 FROM public.organizations WHERE organization_id = v_ids.organization_id FOR UPDATE;
+        PERFORM 1 FROM public.users WHERE organization_id = v_ids.organization_id AND user_id = v_ids.target_user_id FOR UPDATE;
+        SELECT * INTO r FROM ops.ops_mfa_recovery_requests q WHERE q.request_id = v_ids.request_id FOR UPDATE;
+        SELECT * INTO n FROM ops.ops_mfa_notices q WHERE q.notice_id = p_notice FOR UPDATE;
+    END IF;
+    IF n.notice_id IS NULL THEN
+        RETURN QUERY SELECT NULL::smallint, false;
+        RETURN;
+    END IF;
+    IF n.state = 1 THEN
+        v_agora := clock_timestamp();
+        UPDATE ops.ops_mfa_notices SET state = 2, state_at = v_agora, claim_id = p_claim, claimed_at = v_agora WHERE notice_id = p_notice;
+        INSERT INTO ops.ops_mfa_notice_results (notice_id, request_id, organization_id, target_user_id, recipient_user_id, reported_state, outcome)
+        VALUES (n.notice_id, n.request_id, n.organization_id, n.target_user_id, n.recipient_user_id, 2, 'APLICADO');
+        RETURN QUERY SELECT 2::smallint, true;
+        RETURN;
+    END IF;
+    RETURN QUERY SELECT n.state, (n.claim_id IS NOT DISTINCT FROM p_claim AND n.state = 2);
+END;
+$$;
+
+-- Leitura da tentativa sob a mesma cadeia de locks (reconciliacao da perda de confirmacao do commit de ENTREGANDO).
+CREATE FUNCTION public.ops_notice_attempt_state(p_notice UUID)
+RETURNS TABLE (r_estado SMALLINT, r_claim UUID)
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp SET nekkora.fn_organization_id = ''
+AS $$
+DECLARE
+    v_ids RECORD;
+    n ops.ops_mfa_notices%ROWTYPE;
+    r ops.ops_mfa_recovery_requests%ROWTYPE;
+BEGIN
+    PERFORM ops.exigir_read_committed();
+    SELECT q.request_id, q.organization_id, q.target_user_id INTO v_ids FROM ops.ops_mfa_notices q WHERE q.notice_id = p_notice;
+    IF v_ids.request_id IS NOT NULL THEN
+        PERFORM set_config('nekkora.fn_organization_id', v_ids.organization_id::text, true);
+        PERFORM 1 FROM public.organizations WHERE organization_id = v_ids.organization_id FOR UPDATE;
+        PERFORM 1 FROM public.users WHERE organization_id = v_ids.organization_id AND user_id = v_ids.target_user_id FOR UPDATE;
+        SELECT * INTO r FROM ops.ops_mfa_recovery_requests q WHERE q.request_id = v_ids.request_id FOR UPDATE;
+        SELECT * INTO n FROM ops.ops_mfa_notices q WHERE q.notice_id = p_notice FOR UPDATE;
+    END IF;
+    RETURN QUERY SELECT n.state, n.claim_id;
+END;
+$$;
+
+-- Resultado da entrega (item 10), preso a tentativa exata. Idempotente: o mesmo resultado repetido nao muda nada nem
+-- repete efeitos; resultado atrasado (estado ja adiante) so vai ao historico; conflito com estado final mantem o final;
+-- transicao sem origem permitida e recusada. ACEITA (primeira vez): accepted_at e invalidacao PERMANENTE dos tokens
+-- ainda validos das tentativas ANTERIORES (seq menor) do mesmo destinatario e finalidade, nunca das posteriores.
+-- FALHOU: invalida os tokens da propria tentativa (nunca sairam ou nao serao entregues).
+CREATE FUNCTION public.ops_notice_delivery_result(p_notice UUID, p_state SMALLINT, p_category TEXT)
+RETURNS TABLE (r_resultado TEXT, r_estado SMALLINT)
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp SET nekkora.fn_organization_id = ''
+AS $$
+DECLARE
+    v_ids RECORD;
+    n ops.ops_mfa_notices%ROWTYPE;
+    r ops.ops_mfa_recovery_requests%ROWTYPE;
+    v_agora TIMESTAMPTZ;
+    v_out TEXT;
+    v_tok RECORD;
+BEGIN
+    PERFORM ops.exigir_read_committed();
+    IF p_state IS NULL OR p_state NOT IN (3, 4, 5, 6) OR (p_category IS NOT NULL AND p_category !~ '^[A-Z_]{3,40}$') THEN
+        RAISE EXCEPTION 'resultado de entrega invalido' USING ERRCODE = '22023';
+    END IF;
+    SELECT q.request_id, q.organization_id, q.target_user_id INTO v_ids FROM ops.ops_mfa_notices q WHERE q.notice_id = p_notice;
+    IF v_ids.request_id IS NOT NULL THEN
+        PERFORM set_config('nekkora.fn_organization_id', v_ids.organization_id::text, true);
+        PERFORM 1 FROM public.organizations WHERE organization_id = v_ids.organization_id FOR UPDATE;
+        PERFORM 1 FROM public.users WHERE organization_id = v_ids.organization_id AND user_id = v_ids.target_user_id FOR UPDATE;
+        SELECT * INTO r FROM ops.ops_mfa_recovery_requests q WHERE q.request_id = v_ids.request_id FOR UPDATE;
+        SELECT * INTO n FROM ops.ops_mfa_notices q WHERE q.notice_id = p_notice FOR UPDATE;
+    END IF;
+    IF n.notice_id IS NULL THEN
+        RETURN QUERY SELECT 'TENTATIVA_INEXISTENTE'::text, NULL::smallint;
+        RETURN;
+    END IF;
+    v_agora := clock_timestamp();
+    IF p_state = n.state THEN
+        v_out := 'REPETIDO';
+    ELSIF n.state IN (4, 5) THEN
+        v_out := CASE WHEN p_state IN (4, 5) THEN 'CONFLITANTE' ELSE 'ATRASADO' END;
+    ELSIF n.state = 6 AND p_state = 3 THEN
+        v_out := 'ATRASADO';
+    ELSIF (n.state = 1 AND p_state = 5) OR (n.state IN (2, 3) AND p_state IN (3, 4, 5, 6)) OR (n.state = 6 AND p_state IN (4, 5)) THEN
+        IF n.state = 3 AND p_state = 3 THEN v_out := 'REPETIDO'; ELSE v_out := 'APLICADO'; END IF;
+    ELSE
+        v_out := 'TRANSICAO_INVALIDA';
+    END IF;
+    IF v_out = 'APLICADO' THEN
+        UPDATE ops.ops_mfa_notices
+           SET state = p_state, state_at = v_agora, category = p_category,
+               accepted_at = CASE WHEN p_state = 4 THEN v_agora ELSE accepted_at END
+         WHERE notice_id = p_notice;
+        IF p_state = 4 THEN
+            FOR v_tok IN SELECT t.token_id FROM ops.ops_mfa_notice_tokens t JOIN ops.ops_mfa_notices o ON o.notice_id = t.notice_id
+                         WHERE t.request_id = n.request_id AND t.recipient_user_id = n.recipient_user_id AND o.seq < n.seq
+                           AND t.used_at IS NULL AND t.invalidated_at IS NULL
+                           AND t.purpose IN (SELECT p.purpose FROM ops.ops_mfa_notice_tokens p WHERE p.notice_id = n.notice_id)
+                         ORDER BY t.token_id FOR UPDATE OF t LOOP
+                UPDATE ops.ops_mfa_notice_tokens SET invalidated_at = v_agora WHERE token_id = v_tok.token_id;
+            END LOOP;
+        ELSIF p_state = 5 THEN
+            FOR v_tok IN SELECT t.token_id FROM ops.ops_mfa_notice_tokens t WHERE t.notice_id = n.notice_id
+                           AND t.used_at IS NULL AND t.invalidated_at IS NULL ORDER BY t.token_id FOR UPDATE LOOP
+                UPDATE ops.ops_mfa_notice_tokens SET invalidated_at = v_agora WHERE token_id = v_tok.token_id;
+            END LOOP;
+        END IF;
+    END IF;
+    INSERT INTO ops.ops_mfa_notice_results (notice_id, request_id, organization_id, target_user_id, recipient_user_id, reported_state,
+                                            outcome, category)
+    VALUES (n.notice_id, n.request_id, n.organization_id, n.target_user_id, n.recipient_user_id, p_state, v_out, p_category);
+    RETURN QUERY SELECT v_out, (SELECT q.state FROM ops.ops_mfa_notices q WHERE q.notice_id = p_notice);
+END;
+$$;
+
+-- Tentativas paradas (item 10, recuperacao de queda): lista sem lock; cada uma e tratada por ops_notice_recover numa
+-- transacao propria (uma organizacao por transacao).
+CREATE FUNCTION public.ops_notice_stalled(p_limit INTEGER)
+RETURNS TABLE (r_aviso UUID)
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $$
+    SELECT ops.exigir_read_committed();
+    SELECT n.notice_id FROM ops.ops_mfa_notices n
+    WHERE (n.state IN (1, 2) AND n.state_at < clock_timestamp() - interval '10 minutes')
+       OR (n.state = 3 AND n.state_at < clock_timestamp() - interval '24 hours')
+    ORDER BY n.state_at, n.notice_id LIMIT least(greatest(coalesce(p_limit, 0), 0), 100)
+$$;
+
+-- EMITIDA parada -> FALHOU (a entrega so comeca depois do commit de ENTREGANDO: nunca saiu); ENTREGANDO parada ->
+-- DESCONHECIDO (pode ter saido); ENFILEIRADA sem resultado ha 24 h -> DESCONHECIDO. Nunca aceite presumido.
+CREATE FUNCTION public.ops_notice_recover(p_notice UUID)
+RETURNS TABLE (r_resultado TEXT, r_estado SMALLINT)
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp SET nekkora.fn_organization_id = ''
+AS $$
+DECLARE
+    v_ids RECORD;
+    n ops.ops_mfa_notices%ROWTYPE;
+    r ops.ops_mfa_recovery_requests%ROWTYPE;
+    v_agora TIMESTAMPTZ;
+    v_novo SMALLINT;
+    v_cat TEXT;
+    v_tok RECORD;
+BEGIN
+    PERFORM ops.exigir_read_committed();
+    SELECT q.request_id, q.organization_id, q.target_user_id INTO v_ids FROM ops.ops_mfa_notices q WHERE q.notice_id = p_notice;
+    IF v_ids.request_id IS NOT NULL THEN
+        PERFORM set_config('nekkora.fn_organization_id', v_ids.organization_id::text, true);
+        PERFORM 1 FROM public.organizations WHERE organization_id = v_ids.organization_id FOR UPDATE;
+        PERFORM 1 FROM public.users WHERE organization_id = v_ids.organization_id AND user_id = v_ids.target_user_id FOR UPDATE;
+        SELECT * INTO r FROM ops.ops_mfa_recovery_requests q WHERE q.request_id = v_ids.request_id FOR UPDATE;
+        SELECT * INTO n FROM ops.ops_mfa_notices q WHERE q.notice_id = p_notice FOR UPDATE;
+    END IF;
+    IF n.notice_id IS NULL THEN
+        RETURN QUERY SELECT 'TENTATIVA_INEXISTENTE'::text, NULL::smallint;
+        RETURN;
+    END IF;
+    v_agora := clock_timestamp();
+    IF n.state = 1 AND n.state_at < v_agora - interval '10 minutes' THEN
+        v_novo := 5; v_cat := 'ABANDONADA_ANTES_DA_ENTREGA';
+    ELSIF n.state = 2 AND n.state_at < v_agora - interval '10 minutes' THEN
+        v_novo := 6; v_cat := 'QUEDA_DURANTE_ENTREGA';
+    ELSIF n.state = 3 AND n.state_at < v_agora - interval '24 hours' THEN
+        v_novo := 6; v_cat := 'SEM_RESULTADO_DO_TRANSPORTE';
+    ELSE
+        RETURN QUERY SELECT 'NADA_A_FAZER'::text, n.state;
+        RETURN;
+    END IF;
+    UPDATE ops.ops_mfa_notices SET state = v_novo, state_at = v_agora, category = v_cat WHERE notice_id = p_notice;
+    IF v_novo = 5 THEN
+        FOR v_tok IN SELECT t.token_id FROM ops.ops_mfa_notice_tokens t WHERE t.notice_id = n.notice_id
+                       AND t.used_at IS NULL AND t.invalidated_at IS NULL ORDER BY t.token_id FOR UPDATE LOOP
+            UPDATE ops.ops_mfa_notice_tokens SET invalidated_at = v_agora WHERE token_id = v_tok.token_id;
+        END LOOP;
+    END IF;
+    INSERT INTO ops.ops_mfa_notice_results (notice_id, request_id, organization_id, target_user_id, recipient_user_id, reported_state,
+                                            outcome, category)
+    VALUES (n.notice_id, n.request_id, n.organization_id, n.target_user_id, n.recipient_user_id, v_novo, 'RECUPERACAO', v_cat);
+    RETURN QUERY SELECT 'RECUPERADA'::text, v_novo;
+END;
+$$;
+
 -- Uso de token (confirmacao ou contestacao). Resposta so booleana: a Platform devolve a mesma resposta publica em
 -- toda recusa. p_org vem da rota e deve bater com o contexto de requisicao e com o token.
-CREATE FUNCTION ops.usar_token(p_org UUID, p_token_hash TEXT, p_purpose SMALLINT) RETURNS BOOLEAN
+CREATE FUNCTION ops.usar_token(p_org UUID, p_token_hash TEXT, p_purpose SMALLINT) RETURNS TEXT
 LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
 AS $$
 DECLARE
@@ -2120,15 +2893,15 @@ BEGIN
         RAISE EXCEPTION 'contexto organizacional ausente ou divergente' USING ERRCODE = '42501';
     END IF;
     IF p_token_hash IS NULL OR p_token_hash !~ '^[0-9a-f]{64}$' THEN
-        RETURN false;
+        RETURN 'NAO_ATRIBUIVEL';
     END IF;
     SELECT q.token_id, q.request_id, q.organization_id, q.target_user_id, q.recipient_user_id, q.purpose INTO t
     FROM ops.ops_mfa_notice_tokens q WHERE q.token_hash = p_token_hash;
     IF NOT FOUND THEN
-        RETURN false;  -- token desconhecido: nada a atribuir (a Platform registra a categoria)
+        RETURN 'NAO_ATRIBUIVEL';  -- token desconhecido: nada a atribuir
     END IF;
     IF t.organization_id <> p_org THEN
-        RETURN false;  -- token de outra organizacao: mesma resposta, sem tocar a outra organizacao
+        RETURN 'NAO_ATRIBUIVEL';  -- token de outra organizacao: nenhuma escrita em nenhuma organizacao (item 6d rejeitado)
     END IF;
     PERFORM set_config('nekkora.fn_organization_id', t.organization_id::text, true);
     PERFORM 1 FROM public.organizations WHERE organization_id = t.organization_id FOR UPDATE;
@@ -2154,7 +2927,7 @@ BEGIN
     IF v_motivo IS NOT NULL THEN
         PERFORM ops.registrar(r.request_id, r.organization_id, r.target_user_id, 'AVISO_INVALIDO', 'RECUSA', v_motivo, NULL, NULL, NULL,
                               t.recipient_user_id, t.purpose);
-        RETURN false;
+        RETURN 'RECUSADO_REGISTRADO';
     END IF;
     UPDATE ops.ops_mfa_notice_tokens SET used_at = v_agora WHERE token_id = t.token_id;
     IF p_purpose = 1 THEN
@@ -2163,23 +2936,113 @@ BEGIN
         PERFORM ops.encerrar(r.request_id, 7::smallint, 'CONTESTADA', NULL, v_agora);
     END IF;
     PERFORM ops.registrar(r.request_id, r.organization_id, r.target_user_id, v_ato, 'OK', NULL, NULL, NULL, NULL, t.recipient_user_id, t.purpose);
-    RETURN true;
+    RETURN 'ACEITO';
 END;
 $$;
 
-CREATE FUNCTION public.ops_notice_confirm(p_org UUID, p_token_hash TEXT) RETURNS BOOLEAN
+CREATE FUNCTION public.ops_notice_confirm(p_org UUID, p_token_hash TEXT) RETURNS TEXT
 LANGUAGE sql SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp SET nekkora.fn_organization_id = ''
 AS $$
     SELECT ops.exigir_read_committed();
     SELECT ops.usar_token(p_org, p_token_hash, 1::smallint) $$;
 
-CREATE FUNCTION public.ops_notice_contest(p_org UUID, p_token_hash TEXT) RETURNS BOOLEAN
+CREATE FUNCTION public.ops_notice_contest(p_org UUID, p_token_hash TEXT) RETURNS TEXT
 LANGUAGE sql SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp SET nekkora.fn_organization_id = ''
 AS $$
     SELECT ops.exigir_read_committed();
     SELECT ops.usar_token(p_org, p_token_hash, 2::smallint) $$;
+
+-- === 17a. Servico de registro de entrada (revisao 4, item 4; chamador: nekkora_ops_intake) ===
+--
+-- O banco recebe so PSEUDONIMOS HMAC (as chaves secretas ficam no servico de entrada). Transicao de 25 h contada da
+-- ativacao da versao NOVA: enquanto v_agora < ativada_em + 25 h, todo registro NOVO traz os dois pseudonimos (vigente
+-- e anterior); depois, so o vigente, e um pseudonimo da versao anterior e recusado EM REGISTRO NOVO (uma entrada ja
+-- registrada continua valida ate o proprio vencimento de 60 min). Ordem: estado das versoes FOR SHARE -> INSERT.
+CREATE FUNCTION public.ops_intake_register(p_channel_type SMALLINT, p_mechanism SMALLINT, p_version INTEGER, p_pseudonym TEXT,
+                                           p_prev_version INTEGER, p_prev_pseudonym TEXT, p_operator_role TEXT)
+RETURNS TABLE (r_resultado TEXT, r_motivo TEXT, r_entrada UUID, r_valido_ate TIMESTAMPTZ)
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $$
+DECLARE
+    k ops.ops_intake_key_state%ROWTYPE;
+    v_agora TIMESTAMPTZ;
+    v_op UUID;
+    v_motivo TEXT;
+    v_id UUID;
+    v_transicao BOOLEAN;
+BEGIN
+    PERFORM ops.exigir_read_committed();
+    SELECT * INTO k FROM ops.ops_intake_key_state FOR SHARE;
+    v_agora := clock_timestamp();
+    SELECT o.operator_id INTO v_op FROM ops.ops_operators o WHERE o.db_role = p_operator_role AND o.status = 1;
+    v_transicao := k.previous_version IS NOT NULL AND v_agora < k.activated_at + interval '25 hours';
+    IF v_op IS NULL THEN
+        v_motivo := 'OPERADOR_INVALIDO';
+    ELSIF p_channel_type IS NULL OR p_channel_type NOT IN (1, 2) OR p_mechanism IS NULL OR p_mechanism NOT IN (1, 2, 3)
+          OR (p_mechanism = 1 AND p_channel_type <> 2) OR (p_mechanism = 2 AND p_channel_type <> 1) THEN
+        v_motivo := 'PARAMETRO_INVALIDO';
+    ELSIF p_mechanism = 3 THEN
+        IF p_version IS NOT NULL OR p_pseudonym IS NOT NULL OR p_prev_version IS NOT NULL OR p_prev_pseudonym IS NOT NULL THEN
+            v_motivo := 'ENTRADA_INVALIDA';
+        END IF;
+    ELSIF p_version IS DISTINCT FROM k.current_version OR p_pseudonym IS NULL OR p_pseudonym !~ '^[0-9a-f]{64}$' THEN
+        v_motivo := 'ENTRADA_INVALIDA';
+    ELSIF v_transicao AND (p_prev_version IS DISTINCT FROM k.previous_version OR p_prev_pseudonym IS NULL
+                           OR p_prev_pseudonym !~ '^[0-9a-f]{64}$' OR p_prev_pseudonym = p_pseudonym) THEN
+        v_motivo := 'ENTRADA_INVALIDA';
+    ELSIF NOT v_transicao AND (p_prev_version IS NOT NULL OR p_prev_pseudonym IS NOT NULL) THEN
+        v_motivo := 'ENTRADA_INVALIDA';
+    END IF;
+    IF v_motivo IS NOT NULL THEN
+        PERFORM ops.registrar_cadastro('ENTRADA_REGISTRADA', 'RECUSA', v_motivo, 5::smallint, NULL, v_op);
+        RETURN QUERY SELECT 'RECUSA'::text, v_motivo, NULL::uuid, NULL::timestamptz;
+        RETURN;
+    END IF;
+    INSERT INTO ops.ops_intake_entries (channel_type, mechanism, origin_version, origin_pseudonym, prev_version, prev_pseudonym,
+                                        designated_operator_id, created_at, expires_at)
+    VALUES (p_channel_type, p_mechanism, CASE WHEN p_mechanism <> 3 THEN p_version END, p_pseudonym,
+            CASE WHEN v_transicao AND p_mechanism <> 3 THEN p_prev_version END,
+            CASE WHEN v_transicao AND p_mechanism <> 3 THEN p_prev_pseudonym END,
+            v_op, v_agora, v_agora + interval '60 minutes')
+    RETURNING entry_id INTO v_id;
+    PERFORM ops.registrar_cadastro('ENTRADA_REGISTRADA', 'OK', NULL, 5::smallint, NULL, v_op);
+    RETURN QUERY SELECT 'OK'::text, NULL::text, v_id, v_agora + interval '60 minutes';
+END;
+$$;
+
+-- Ativacao da proxima versao de chave: so uma versao por vez e so 25 h depois da ativacao da versao vigente
+-- (transicoes nao se sobrepoem). Trava so o estado das versoes (FOR UPDATE): espera as aberturas e os registros em curso.
+CREATE FUNCTION public.ops_intake_key_activate(p_version INTEGER)
+RETURNS TABLE (r_resultado TEXT, r_motivo TEXT)
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $$
+DECLARE
+    k ops.ops_intake_key_state%ROWTYPE;
+    v_agora TIMESTAMPTZ;
+    v_motivo TEXT;
+BEGIN
+    PERFORM ops.exigir_read_committed();
+    SELECT * INTO k FROM ops.ops_intake_key_state FOR UPDATE;
+    v_agora := clock_timestamp();
+    IF p_version IS DISTINCT FROM k.current_version + 1 THEN
+        v_motivo := 'VERSAO_INVALIDA';
+    ELSIF v_agora < k.activated_at + interval '25 hours' THEN
+        v_motivo := 'TRANSICAO_EM_CURSO';
+    END IF;
+    IF v_motivo IS NOT NULL THEN
+        PERFORM ops.registrar_cadastro('VERSAO_CHAVE_ATIVADA', 'RECUSA', v_motivo, 5::smallint, NULL);
+        RETURN QUERY SELECT 'RECUSA'::text, v_motivo;
+        RETURN;
+    END IF;
+    UPDATE ops.ops_intake_key_state SET current_version = p_version, previous_version = k.current_version, activated_at = v_agora;
+    PERFORM ops.registrar_cadastro('VERSAO_CHAVE_ATIVADA', 'OK', NULL, 5::smallint, NULL);
+    RETURN QUERY SELECT 'OK'::text, NULL::text;
+END;
+$$;
 
 -- === 18. Donos, EXECUTE e matriz ===
 
@@ -2200,9 +3063,10 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.ops_mfa_open(UUID, UUID, UUID), public.ops_mfa_verify(UUID, BOOLEAN, UUID, BOOLEAN),
+GRANT EXECUTE ON FUNCTION public.ops_mfa_open(UUID, UUID, UUID, UUID, UUID), public.ops_mfa_callback_register(UUID),
+    public.ops_mfa_verify(UUID, BOOLEAN, UUID, BOOLEAN, TEXT),
     public.ops_mfa_preapprove(UUID), public.ops_mfa_final_approve(UUID), public.ops_mfa_execute(UUID),
-    public.ops_mfa_cancel(UUID, TEXT), public.ops_mfa_resend_notice(UUID), public.ops_mfa_status(UUID),
+    public.ops_mfa_cancel(UUID, TEXT), public.ops_mfa_resend_notice(UUID, UUID), public.ops_mfa_status(UUID),
     public.ops_mfa_record_failure(UUID, TEXT, TEXT, TEXT), public.ops_operator_create(TEXT, TEXT, TEXT),
     public.ops_operator_grant(UUID, TEXT), public.ops_operator_revoke(UUID, TEXT), public.ops_operator_disable(UUID),
     public.ops_link_platform_account(TEXT), public.ops_contact_link_code_issue(UUID, TEXT), public.ops_link_contact(TEXT),
@@ -2215,8 +3079,13 @@ GRANT EXECUTE ON FUNCTION public.ops_ca_resolve_operator(TEXT, TEXT),
     public.ops_revoke_certificate(TEXT, NUMERIC)
     TO nekkora_ops_ca;
 GRANT EXECUTE ON FUNCTION public.ops_account_proof_issue(UUID, UUID, TEXT), public.ops_notice_pending(INTEGER),
-    public.ops_notice_issue(UUID, TEXT, TEXT), public.ops_notice_confirm(UUID, TEXT), public.ops_notice_contest(UUID, TEXT)
+    public.ops_notice_issue(UUID, TEXT, TEXT), public.ops_notice_confirm(UUID, TEXT), public.ops_notice_contest(UUID, TEXT),
+    public.ops_notice_claim(UUID, UUID), public.ops_notice_attempt_state(UUID), public.ops_notice_delivery_result(UUID, SMALLINT, TEXT),
+    public.ops_notice_stalled(INTEGER), public.ops_notice_recover(UUID)
     TO nekkora_platform;
+GRANT EXECUTE ON FUNCTION public.ops_intake_register(SMALLINT, SMALLINT, INTEGER, TEXT, INTEGER, TEXT, TEXT),
+    public.ops_intake_key_activate(INTEGER)
+    TO nekkora_ops_intake;
 
 COMMENT ON SCHEMA ops IS 'recuperacao emergencial de MFA (016): so nekkora_ops_mfa_owner tem USAGE; acesso so pelas funcoes public.ops_*';
 
@@ -2225,18 +3094,22 @@ COMMENT ON SCHEMA ops IS 'recuperacao emergencial de MFA (016): so nekkora_ops_m
 DO $$
 DECLARE
     v_bad TEXT;
-    v_ops_roles CONSTANT TEXT[] := ARRAY['nekkora_ops_mfa_owner', 'nekkora_ops_mfa', 'nekkora_ops_ca'];
+    v_ops_roles CONSTANT TEXT[] := ARRAY['nekkora_ops_mfa_owner', 'nekkora_ops_mfa', 'nekkora_ops_ca', 'nekkora_ops_intake'];
     v_servico CONSTANT TEXT[] := ARRAY['nekkora_platform', 'nekkora_ingestion', 'nekkora_scheduler', 'nekkora_provisioning',
-        'nekkora_retention_executor', 'nekkora_portal', 'nekkora_ops_ca', 'nekkora_ops_mfa'];
+        'nekkora_retention_executor', 'nekkora_portal', 'nekkora_ops_ca', 'nekkora_ops_mfa', 'nekkora_ops_intake'];
     v_esperado CONSTANT TEXT[] := ARRAY[
         'ops_account_proof_issue=nekkora_platform', 'ops_bootstrap_operator=', 'ops_ca_resolve_operator=nekkora_ops_ca',
         'ops_contact_add=nekkora_ops_mfa', 'ops_contact_change_channel=nekkora_ops_mfa', 'ops_contact_link_code_issue=nekkora_ops_mfa',
-        'ops_contact_remove=nekkora_ops_mfa', 'ops_link_contact=nekkora_ops_mfa', 'ops_link_platform_account=nekkora_ops_mfa',
-        'ops_link_remove=nekkora_ops_mfa', 'ops_mfa_cancel=nekkora_ops_mfa', 'ops_mfa_execute=nekkora_ops_mfa',
+        'ops_contact_remove=nekkora_ops_mfa', 'ops_intake_key_activate=nekkora_ops_intake', 'ops_intake_register=nekkora_ops_intake',
+        'ops_link_contact=nekkora_ops_mfa', 'ops_link_platform_account=nekkora_ops_mfa',
+        'ops_link_remove=nekkora_ops_mfa', 'ops_mfa_callback_register=nekkora_ops_mfa', 'ops_mfa_cancel=nekkora_ops_mfa',
+        'ops_mfa_execute=nekkora_ops_mfa',
         'ops_mfa_final_approve=nekkora_ops_mfa', 'ops_mfa_open=nekkora_ops_mfa', 'ops_mfa_preapprove=nekkora_ops_mfa',
         'ops_mfa_record_failure=nekkora_ops_mfa', 'ops_mfa_resend_notice=nekkora_ops_mfa', 'ops_mfa_status=nekkora_ops_mfa',
-        'ops_mfa_verify=nekkora_ops_mfa', 'ops_notice_confirm=nekkora_platform', 'ops_notice_contest=nekkora_platform',
-        'ops_notice_issue=nekkora_platform', 'ops_notice_pending=nekkora_platform', 'ops_operator_create=nekkora_ops_mfa',
+        'ops_mfa_verify=nekkora_ops_mfa', 'ops_notice_attempt_state=nekkora_platform', 'ops_notice_claim=nekkora_platform',
+        'ops_notice_confirm=nekkora_platform', 'ops_notice_contest=nekkora_platform',
+        'ops_notice_delivery_result=nekkora_platform', 'ops_notice_issue=nekkora_platform', 'ops_notice_pending=nekkora_platform',
+        'ops_notice_recover=nekkora_platform', 'ops_notice_stalled=nekkora_platform', 'ops_operator_create=nekkora_ops_mfa',
         'ops_operator_disable=nekkora_ops_mfa', 'ops_operator_grant=nekkora_ops_mfa', 'ops_operator_revoke=nekkora_ops_mfa',
         'ops_register_certificate=nekkora_ops_ca', 'ops_revoke_certificate=nekkora_ops_ca'];
     v_real TEXT[];
@@ -2244,7 +3117,8 @@ BEGIN
     -- atributos e memberships dos papeis novos
     SELECT string_agg(rolname, ', ') INTO v_bad FROM pg_roles
     WHERE rolname = ANY (v_ops_roles) AND (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolreplication
-        OR (rolname IN ('nekkora_ops_mfa_owner', 'nekkora_ops_mfa') AND rolcanlogin) OR (rolname = 'nekkora_ops_ca' AND NOT rolcanlogin));
+        OR (rolname IN ('nekkora_ops_mfa_owner', 'nekkora_ops_mfa') AND rolcanlogin)
+        OR (rolname IN ('nekkora_ops_ca', 'nekkora_ops_intake') AND NOT rolcanlogin));
     IF v_bad IS NOT NULL THEN RAISE EXCEPTION 'papel operacional com atributo indevido: %', v_bad; END IF;
     SELECT string_agg(format('%s -> %s', r.rolname, m.rolname), ', ') INTO v_bad
     FROM pg_auth_members am JOIN pg_roles r ON r.oid = am.roleid JOIN pg_roles m ON m.oid = am.member
@@ -2272,7 +3146,7 @@ BEGIN
     SELECT string_agg(c.relname, ', ') INTO v_bad FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = 'ops' AND c.relkind = 'r' AND has_table_privilege('nekkora_ops_mfa_owner', c.oid, 'DELETE, TRUNCATE, REFERENCES, TRIGGER');
     IF v_bad IS NOT NULL THEN RAISE EXCEPTION 'proprietario operacional com DELETE/TRUNCATE em ops: %', v_bad; END IF;
-    IF (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'ops' AND c.relkind = 'r') <> 14 THEN
+    IF (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'ops' AND c.relkind = 'r') <> 21 THEN
         RAISE EXCEPTION 'inventario de tabelas de ops divergente';
     END IF;
 
@@ -2341,6 +3215,14 @@ BEGIN
     IF has_column_privilege('nekkora_platform', 'public.mfa_events', 'ops_request_id', 'INSERT, UPDATE')
        OR NOT has_column_privilege('nekkora_platform', 'public.mfa_events', 'reason_code', 'INSERT') THEN
         RAISE EXCEPTION 'privilegio da Platform em mfa_events divergente';
+    END IF;
+
+    -- I-3/I-4 (retirada PONTUAL): ops_registry_events sem FK para organizations; ops_mfa_recovery_events mantem a sua
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'ops.ops_registry_events'::regclass AND contype = 'f'
+               AND confrelid = 'public.organizations'::regclass)
+       OR NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'ops.ops_mfa_recovery_events'::regclass AND contype = 'f'
+                      AND confrelid = 'public.organizations'::regclass) THEN
+        RAISE EXCEPTION 'FKs de auditoria para organizations fora da decisao I-3/I-4';
     END IF;
 
     -- sslinfo no schema ops, sem EXECUTE publico

@@ -113,10 +113,10 @@ ACRESCIMO_PREVISTO='^> (col\|mfa_events\|(ops_request_id|reason_code)\||colacl\|
 [ "$(grep '^<' "$SAIDA/A01_diff_catalogo.txt" | grep -vcE "$REMOCAO_PREVISTA" || true)" = 0 ] || falha "a 016 alterou/removeu objeto de 001-015 fora do previsto"
 [ "$(grep '^>' "$SAIDA/A01_diff_catalogo.txt" | grep -vcE "$ACRESCIMO_PREVISTO" || true)" = 0 ] || falha "a 016 acrescentou objeto fora do previsto"
 [ "$(grep -c '^> pol|.*|ops_function_context|' "$SAIDA/A01_diff_catalogo.txt")" = 9 ] || falha "esperadas 9 politicas ops_function_context"
-[ "$(grep -c '^> fn|ops_' "$SAIDA/A01_diff_catalogo.txt")" = 29 ] || falha "esperadas 29 funcoes publicas ops_*"
+[ "$(grep -c '^> fn|ops_' "$SAIDA/A01_diff_catalogo.txt")" = 37 ] || falha "esperadas 37 funcoes publicas ops_*"
 invariantes "$LIMPA" A02
 psqlc "$LIMPA" nekkora < "$AQUI/sql/c_listagem_ops.sql" > "$SAIDA/A03_listagem_ops.txt"
-[ "$(grep -c '^rel|.*|r|' "$SAIDA/A03_listagem_ops.txt")" = 14 ] || falha "esperadas 14 tabelas em ops"
+[ "$(grep -c '^rel|.*|r|' "$SAIDA/A03_listagem_ops.txt")" = 21 ] || falha "esperadas 21 tabelas em ops"
 grep -q '^nspacl|ops|nekkora_ops_mfa_owner|USAGE$' "$SAIDA/A03_listagem_ops.txt" || falha "USAGE do dono operacional em ops ausente"
 [ "$(grep -c '^nspacl|ops|' "$SAIDA/A03_listagem_ops.txt")" = 3 ] || falha "ACL do schema ops inesperada (esperado: dono + USAGE/CREATE do migrador e USAGE do dono operacional)"
 echo "   catalogo, invariantes e listagem de ops: OK"

@@ -161,6 +161,7 @@ class IsolamentoIT {
                             CASE WHEN has_function_privilege('nekkora_ops_mfa', p.oid, 'EXECUTE') THEN 'operador'
                                  WHEN has_function_privilege('nekkora_ops_ca', p.oid, 'EXECUTE') THEN 'nekkora_ops_ca'
                                  WHEN has_function_privilege('nekkora_platform', p.oid, 'EXECUTE') THEN 'nekkora_platform'
+                                 WHEN has_function_privilege('nekkora_ops_intake', p.oid, 'EXECUTE') THEN 'nekkora_ops_intake'
                                  ELSE 'superusuario' END
                        FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
                       WHERE n.nspname = 'public' AND p.proname LIKE 'ops\\_%' ORDER BY 1""")) {
@@ -169,7 +170,7 @@ class IsolamentoIT {
                 funcoes.add(new Funcao(rs.getString(1), "SELECT * FROM public." + rs.getString(1) + "(" + args + ")", rs.getString(3)));
             }
         }
-        assertThat(funcoes).hasSize(29);
+        assertThat(funcoes).hasSize(37);
         OpsBanco.Operador op = DB.operador("iso", "CONSULTAR");
         try (Credencial c = DB.credencial(op)) {
             for (Funcao f : funcoes) {

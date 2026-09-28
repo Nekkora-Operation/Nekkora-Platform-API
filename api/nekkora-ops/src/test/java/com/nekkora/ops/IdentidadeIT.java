@@ -41,7 +41,7 @@ class IdentidadeIT {
         Cenarios.Alvo al = C.alvo();
         try (Credencial c = DB.credencial(v)) {
             var cli = new com.nekkora.ops.cli.ExecutorAtos(() -> DB.conectar(c), new com.nekkora.ops.cli.LogLocal(DB.diretorio().resolve("id1.log")));
-            Cenarios.exigirOk(cli.abrir(al.org().id(), al.titular(), al.contatoTitular()), "abrir");
+            Cenarios.exigirOk(C.abrirPorEntrada(v, cli, al.org().id(), al.titular(), al.contatoTitular()), "abrir");
             List<List<Object>> ev = DB.linhas("SELECT operator_id, session_role, cert_serial::text, cert_issuer_dn, origin FROM ops.ops_mfa_recovery_events "
                     + "WHERE act = 'ABRIR' AND target_user_id = ?", al.titular());
             assertThat(ev).hasSize(1);
@@ -55,15 +55,16 @@ class IdentidadeIT {
 
     @Test
     void nenhumaFuncaoDoOperadorRecebeAutoriaEmissorOuSerial() {
-        // entradas exatas das 20 funcoes do grupo nekkora_ops_mfa: nenhuma recebe autor, emissor, serial ou instante
+        // entradas exatas das 21 funcoes do grupo nekkora_ops_mfa: nenhuma recebe autor, emissor, serial ou instante
         java.util.Map<String, String> esperado = new java.util.TreeMap<>(java.util.Map.ofEntries(
-                java.util.Map.entry("ops_mfa_open", "p_org,p_target,p_requester_contact"),
-                java.util.Map.entry("ops_mfa_verify", "p_request,p_callback_ok,p_second_contact,p_second_contact_ok"),
+                java.util.Map.entry("ops_mfa_open", "p_org,p_target,p_requester_contact,p_entry,p_callback"),
+                java.util.Map.entry("ops_mfa_callback_register", "p_contact"),
+                java.util.Map.entry("ops_mfa_verify", "p_request,p_callback_ok,p_second_contact,p_second_contact_ok,p_other_admins"),
                 java.util.Map.entry("ops_mfa_preapprove", "p_request"),
                 java.util.Map.entry("ops_mfa_final_approve", "p_request"),
                 java.util.Map.entry("ops_mfa_execute", "p_request"),
                 java.util.Map.entry("ops_mfa_cancel", "p_request,p_reason"),
-                java.util.Map.entry("ops_mfa_resend_notice", "p_request"),
+                java.util.Map.entry("ops_mfa_resend_notice", "p_request,p_recipient"),
                 java.util.Map.entry("ops_mfa_status", "p_request"),
                 java.util.Map.entry("ops_mfa_record_failure", "p_request,p_failed_act,p_sqlstate,p_stage"),
                 java.util.Map.entry("ops_operator_create", "p_db_role,p_idp_issuer,p_idp_subject"),
@@ -98,10 +99,12 @@ class IdentidadeIT {
                     .satisfies(e -> assertThat(((SQLException) e).getSQLState()).isEqualTo("42501"));
             // SET ROLE para o grupo muda so current_user; a autoria continua session_user = X
             st.execute("SET ROLE nekkora_ops_mfa");
-            try (PreparedStatement ps = con.prepareStatement("SELECT r_resultado FROM public.ops_mfa_open(?, ?, ?)")) {
+            UUID entrada = C.entradaComprovada(x, OpsBanco.hex(32));
+            try (PreparedStatement ps = con.prepareStatement("SELECT r_resultado FROM public.ops_mfa_open(?, ?, ?, ?, NULL)")) {
                 ps.setObject(1, al.org().id());
                 ps.setObject(2, al.titular());
                 ps.setObject(3, al.contatoTitular());
+                ps.setObject(4, entrada);
                 try (ResultSet rs = ps.executeQuery()) {
                     rs.next();
                     assertThat(rs.getString(1)).isEqualTo("OK");
@@ -159,11 +162,13 @@ class IdentidadeIT {
         KeyPair par = Credencial.novoParDeChaves();
         // assinado com a chave da CA de teste, mas sem passar pelo registro de emissao
         var cert = Pki.clienteSemRegistro(DB.caOps(), par.getPublic(), x.papel(), Instant.now().minusSeconds(5), Instant.now().plus(Duration.ofMinutes(10)));
+        UUID entrada = C.entradaComprovada(x, OpsBanco.hex(32));
         try (Credencial c = Credencial.de(x.papel(), par, cert, DB.caOps().certificado()); Connection con = DB.conectar(c);
-             PreparedStatement ps = con.prepareStatement("SELECT r_resultado, r_motivo FROM public.ops_mfa_open(?, ?, ?)")) {
+             PreparedStatement ps = con.prepareStatement("SELECT r_resultado, r_motivo FROM public.ops_mfa_open(?, ?, ?, ?, NULL)")) {
             ps.setObject(1, al.org().id());
             ps.setObject(2, al.titular());
             ps.setObject(3, al.contatoTitular());
+            ps.setObject(4, entrada);
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
                 assertThat(rs.getString(1)).isEqualTo("RECUSA");
@@ -189,7 +194,7 @@ class IdentidadeIT {
         Cenarios.Equipe eq = C.equipe();
         Cenarios.Alvo al = C.alvo();
         UUID s = C.preAprovada(eq, al);
-        for (String papel : List.of("nekkora_platform", "nekkora_ops_ca", "nekkora_portal", "nekkora_provisioning")) {
+        for (String papel : List.of("nekkora_platform", "nekkora_ops_ca", "nekkora_portal", "nekkora_provisioning", "nekkora_ops_intake")) {
             try (Connection con = DB.comoServico(papel); Statement st = con.createStatement()) {
                 assertThatThrownBy(() -> st.executeQuery("SELECT * FROM public.ops_mfa_execute('" + s + "')"))
                         .satisfies(e -> assertThat(((SQLException) e).getSQLState()).as(papel).isEqualTo("42501"));
@@ -200,6 +205,11 @@ class IdentidadeIT {
         try (Credencial c = DB.credencial(eq.verificador()); Connection con = DB.conectar(c); Statement st = con.createStatement()) {
             for (String sql : List.of("SELECT public.ops_notice_confirm('" + al.org().id() + "', repeat('a', 64))",
                     "SELECT * FROM public.ops_notice_issue(gen_random_uuid(), repeat('a', 64), repeat('b', 64))",
+                    // operador nao registra resultado de entrega, nao reivindica entrega e nao registra entrada
+                    "SELECT * FROM public.ops_notice_delivery_result(gen_random_uuid(), 4::smallint, NULL)",
+                    "SELECT * FROM public.ops_notice_claim(gen_random_uuid(), gen_random_uuid())",
+                    "SELECT * FROM public.ops_intake_register(2::smallint, 1::smallint, 1, repeat('a', 64), NULL, NULL, 'op_x')",
+                    "SELECT * FROM public.ops_intake_key_activate(2)",
                     "SELECT count(*) FROM ops.ops_mfa_notice_tokens",
                     "UPDATE ops.ops_mfa_recovery_requests SET notice_confirmed_at = now()",
                     "SELECT count(*) FROM public.user_mfa_factors")) {

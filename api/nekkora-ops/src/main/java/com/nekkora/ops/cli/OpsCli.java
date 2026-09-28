@@ -17,8 +17,10 @@ import java.util.UUID;
  * (chave gerada no dispositivo, certificado da CA operacional);</li>
  * <li>{@code NEKKORA_OPS_LOG} - log local sanitizado.</li>
  * </ul>
- * Uso: {@code abrir <org> <alvo> <contato>} | {@code verificar <solicitacao> <retorno-ok> <segundo-contato> <segundo-ok>}
- * | {@code pre-aprovar|aprovar|executar|consultar|reenviar-aviso <solicitacao>} | {@code cancelar <solicitacao> <motivo>}.
+ * Uso: {@code retorno <contato>} | {@code abrir <org> <alvo> <contato> entrada|retorno <id>}
+ * | {@code verificar <solicitacao> <retorno-ok> <segundo-contato> <segundo-ok> NENHUM|TODOS_SEM_FATOR_E_CODIGOS_UTILIZAVEIS}
+ * | {@code pre-aprovar|aprovar|executar|consultar <solicitacao>} | {@code reenviar-aviso <solicitacao> <destinatario>}
+ * | {@code cancelar <solicitacao> <motivo>}.
  * Saida: {@code solicitacao=<uuid> resultado=... origem=... estado=... motivo=...}; em ABRIR, o UUID devolvido pelo
  * banco e o que o operador usa nos atos seguintes.
  * Codigo de saida: 0 OK, 2 recusa, 3 falha confirmada, 4 desconhecido, 64 uso invalido.
@@ -53,15 +55,32 @@ public final class OpsCli {
         }
         LogLocal log = new LogLocal(Path.of(env.getOrDefault("NEKKORA_OPS_LOG", "nekkora-ops.log")));
         ExecutorAtos ex = new ExecutorAtos(() -> DriverManager.getConnection(url, p), log);
+        if ("retorno".equals(a[0])) {
+            ExecutorAtos.RetornoRegistrado rr;
+            try {
+                rr = ex.registrarRetorno(UUID.fromString(a[1]));
+            } catch (RuntimeException e) {
+                err.println("uso invalido");
+                return 64;
+            }
+            out.println("retorno=" + (rr.retorno() == null ? "-" : rr.retorno()) + " resultado=" + rr.classe()
+                    + " motivo=" + LogLocal.codigo(rr.motivo()));
+            return codigo(rr.classe());
+        }
         ExecutorAtos.Resultado r;
         try {
             r = switch (a[0]) {
-                case "abrir" -> ex.abrir(UUID.fromString(a[1]), UUID.fromString(a[2]), UUID.fromString(a[3]));
-                case "verificar" -> ex.verificar(UUID.fromString(a[1]), Boolean.parseBoolean(a[2]), UUID.fromString(a[3]), Boolean.parseBoolean(a[4]));
+                case "abrir" -> ex.abrir(UUID.fromString(a[1]), UUID.fromString(a[2]), UUID.fromString(a[3]), switch (a[4]) {
+                    case "entrada" -> new ExecutorAtos.Entrada(UUID.fromString(a[5]));
+                    case "retorno" -> new ExecutorAtos.Retorno(UUID.fromString(a[5]));
+                    default -> throw new IllegalArgumentException("modo");
+                });
+                case "verificar" -> ex.verificar(UUID.fromString(a[1]), Boolean.parseBoolean(a[2]), UUID.fromString(a[3]),
+                        Boolean.parseBoolean(a[4]), ExecutorAtos.DemaisAdmins.valueOf(a[5]));
                 case "pre-aprovar" -> ex.preAprovar(UUID.fromString(a[1]));
                 case "aprovar" -> ex.aprovar(UUID.fromString(a[1]));
                 case "executar" -> ex.executar(UUID.fromString(a[1]));
-                case "reenviar-aviso" -> ex.reenviarAviso(UUID.fromString(a[1]));
+                case "reenviar-aviso" -> ex.reenviarAviso(UUID.fromString(a[1]), UUID.fromString(a[2]));
                 case "consultar" -> ex.consultar(UUID.fromString(a[1]));
                 case "cancelar" -> ex.cancelar(UUID.fromString(a[1]), a[2]);
                 default -> null;
@@ -76,7 +95,11 @@ public final class OpsCli {
         }
         out.println("solicitacao=" + (r.solicitacao() == null ? "-" : r.solicitacao()) + " resultado=" + r.classe() + " origem=" + r.origem()
                 + " estado=" + LogLocal.codigo(r.estado()) + " motivo=" + LogLocal.codigo(r.motivo()));
-        return switch (r.classe()) {
+        return codigo(r.classe());
+    }
+
+    private static int codigo(ExecutorAtos.Classe classe) {
+        return switch (classe) {
             case OK -> 0;
             case RECUSA -> 2;
             case FALHA_CONFIRMADA -> 3;

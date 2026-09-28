@@ -223,4 +223,83 @@ class MutacoesIT {
                 "    PERFORM ops.exigir_read_committed();\n", ""})),
                 MutacoesIT::detectorIsolamento);
     }
+
+    // ------------------------------------------------------------------ revisao 4 (itens 3, 4, 5 e 10)
+
+    /** M6 (item 4): cota contada tambem pelo contato alegado. Detector: outra origem alegando o mesmo contato continua abrindo. */
+    @Test
+    void mutacaoDaCotaPorContatoEDetectada() {
+        contraprova(Map.of("public.ops_mfa_open(uuid,uuid,uuid,uuid,uuid)", List.<String[]>of(new String[] {
+                "AND ((r.origin_version = v_ent.origin_version AND r.origin_pseudonym = v_ent.origin_pseudonym)",
+                "AND (r.requester_contact_id = p_requester_contact OR (r.origin_version = v_ent.origin_version AND r.origin_pseudonym = v_ent.origin_pseudonym)"})),
+                () -> new EstadosEPrazosIT().origemAlegadaNaoEsgotaACotaDoContatoLegitimoEOLimiteEPorOrigem());
+    }
+
+    /** M7 (item 10): o aceite invalida tambem tentativas POSTERIORES. Detector: aceite fora de ordem com uso dos tokens. */
+    @Test
+    void mutacaoDaInvalidacaoDeTentativasPosterioresEDetectada() {
+        contraprova(Map.of("public.ops_notice_delivery_result(uuid,smallint,text)", List.<String[]>of(new String[] {
+                "AND o.seq < n.seq", "AND o.seq <> n.seq"})),
+                () -> new Revisao4TentativasIT().aceiteForaDeOrdemPreservaATentativaPosterior());
+    }
+
+    /** M8 (item 10): a execucao ignora notice_seq_at_approval. Detector: reenvio depois da aprovacao (titular e outro admin). */
+    @Test
+    void mutacaoQueIgnoraASequenciaDaAprovacaoEDetectada() {
+        contraprova(Map.of("public.ops_mfa_execute(uuid)", List.<String[]>of(new String[] {
+                "r.notice_seq > r.notice_seq_at_approval", "false"})),
+                () -> new Revisao4TentativasIT().reenvioDepoisDaAprovacaoImpedeAExecucao());
+    }
+
+    /**
+     * M9 (item 5): os sinais dos considerados sao lidos ANTES dos locks e usados depois. Detector: fluxo do considerado
+     * que confirma o sinal enquanto a execucao espera a conta dele.
+     */
+    @Test
+    void mutacaoDaLeituraDosSinaisAntesDosLocksEDetectada() {
+        contraprova(Map.of("public.ops_mfa_execute(uuid)", List.<String[]>of(
+                new String[] {"    PERFORM 1 FROM public.organizations WHERE organization_id = v_org FOR UPDATE;\n",
+                        "    PERFORM set_config('nekkora.mut_pre', coalesce(ops.declaracao_invalida(p_request, v_org, v_target), ''), true);\n"
+                                + "    PERFORM 1 FROM public.organizations WHERE organization_id = v_org FOR UPDATE;\n"},
+                new String[] {"IF v_motivo IS NULL THEN v_motivo := ops.declaracao_invalida(p_request, v_org, v_target); END IF;",
+                        "IF v_motivo IS NULL THEN v_motivo := nullif(current_setting('nekkora.mut_pre'), ''); END IF;"})),
+                () -> assertThat(Revisao4DeclaracaoIT.execucaoComSinalDuranteAEspera()).isEqualTo("DECLARACAO_CONTRADITA"));
+    }
+
+    /** M10 (item 3): encerrar nao encerra. Detector: recusa terminal (EVIDENCIA_NEGATIVA) precisa deixar RECUSADA. */
+    @Test
+    void mutacaoDeEncerrarEDetectada() {
+        contraprova(Map.of("ops.encerrar(uuid,smallint,text,uuid,timestamp with time zone)", List.<String[]>of(
+                new String[] {"WHERE request_id = p_request AND state IN (1, 2, 3, 4);", "WHERE false;"},
+                new String[] {"IF NOT FOUND THEN", "IF false THEN"})),
+                Revisao4PrazosEImpedimentosIT::detectorEncerrar);
+    }
+
+    /**
+     * M11 (item 10, achado da revisao da rodada 3): a emissao ignora a substituicao ja confirmada por tentativa posterior
+     * aceita. Detector: tentativa antiga emitida depois do aceite da nova - o token antigo precisa ser recusado.
+     */
+    @Test
+    void mutacaoDaEmissaoDeTentativaSubstituidaEDetectada() {
+        contraprova(Map.of("public.ops_notice_issue(uuid,text,text)", List.<String[]>of(
+                new String[] {"AND o.state = 4 AND t.purpose = 1),", "AND false AND t.purpose = 1),"},
+                new String[] {"AND o.state = 4 AND t.purpose = 2)", "AND false AND t.purpose = 2)"})),
+                Revisao4TentativasIT::detectorEmissaoAntiga);
+    }
+
+    /**
+     * M12 (item 10, achado da revisao da rodada 3): a condicao de aviso volta a ser conferida ANTES do prazo (ordem
+     * anterior). Detector: reenvio depois da aprovacao e execucao no vencimento - a solicitacao precisa EXPIRAR.
+     */
+    @Test
+    void mutacaoDaCondicaoDeAvisoAntesDoPrazoEDetectada() {
+        contraprova(Map.of("public.ops_mfa_execute(uuid)", List.<String[]>of(new String[] {
+                "    -- prazo antes da condicao de aviso:",
+                "    IF r.notice_seq > r.notice_seq_at_approval THEN\n"
+                        + "        RETURN QUERY SELECT 'RECUSA'::text, 'CONDICAO_DE_AVISO_ALTERADA'::text, p_request, ops.estado_nome(r.state);\n"
+                        + "        RETURN;\n"
+                        + "    END IF;\n"
+                        + "    -- prazo antes da condicao de aviso:"})),
+                Revisao4TentativasIT::detectorPrazo);
+    }
 }

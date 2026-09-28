@@ -1,0 +1,12 @@
+>> A: instalacao limpa 001-016 (nekkora-mfa016-limpa)
+   catalogo, invariantes e listagem de ops: OK
+>> B: base populada 001-015 -> 016 (nekkora-mfa016-populada)
+   dados identicos, historico preservado, catalogo = limpa, invariantes e restauracao logica: OK
+A: 16 migrations; diff de catalogo: removidas (<): 1; acrescentadas (>): 198
+A: invariantes 012/013/014(adaptada)/016: OK
+B: organizacoes=3 usuarios=303 sessoes_ativas=300 concessoes=120 execucoes=900 eventos=450
+B: massa_mfa: fatores=60 codigos=180 eventos=82 resets_admin_sem_motivo=10 sessoes_mfa=60
+B: tabelas no instantaneo: 49; diff de dados: vazio; resets historicos sem motivo preservados: 10
+B: catalogo e schema ops identicos a instalacao limpa; invariantes OK; restauracao logica OK
+containers descartaveis removidos: nekkora-mfa016-limpa nekkora-mfa016-populada
+saidas: /c/Users/nicol/nekkora/nekkora-platform/db/tests/mfa-emergencia-016/saidas/2026-09-28T154850Z_nekkora-mfa016

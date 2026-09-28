@@ -26,8 +26,23 @@ public interface MailSender {
     void send(Kind kind, UUID organization, String recipient, String tokenOrNull);
 
     /**
-     * Aviso da recuperacao emergencial (contrato 6.1): ate dois tokens, cada um com a sua finalidade. Os links levam
-     * o token no FRAGMENTO da pagina estatica; abrir o link nao confirma nem contesta.
+     * Desfecho da entrega de um aviso da recuperacao emergencial (revisao 4, item 10). O retorno desta porta NAO e
+     * recebimento nem confirmacao:
+     * <ul>
+     * <li>{@code ENFILEIRADO}: entregue a uma fila ou so registrada a intencao (o que o {@link LocalMailSender} faz);</li>
+     * <li>{@code ACEITO_PELO_TRANSPORTE}: o transporte real aceitou a mensagem (por exemplo, resposta positiva do
+     * servidor SMTP); nao prova recebimento;</li>
+     * <li>{@code RECUSADO_DEFINITIVO}: a fila ou o transporte recusou com certeza de nao entrega;</li>
+     * <li>{@code INCERTO}: tempo esgotado, excecao ou queda depois de entregar - pode ter saido.</li>
+     * </ul>
      */
-    void sendEmergencyNotice(Kind kind, UUID organization, String recipient, String confirmTokenOrNull, String contestTokenOrNull);
+    enum Outcome { ENFILEIRADO, ACEITO_PELO_TRANSPORTE, RECUSADO_DEFINITIVO, INCERTO }
+
+    /**
+     * Aviso da recuperacao emergencial (contrato 6.1): ate dois tokens, cada um com a sua finalidade. Os links levam
+     * o token no FRAGMENTO da pagina estatica; abrir o link nao confirma nem contesta. {@code attemptId} identifica a
+     * tentativa para correlacionar o resultado do transporte; ele NAO garante deduplicacao pelo SMTP.
+     */
+    Outcome sendEmergencyNotice(Kind kind, UUID organization, String recipient, String confirmTokenOrNull, String contestTokenOrNull,
+                                UUID attemptId);
 }

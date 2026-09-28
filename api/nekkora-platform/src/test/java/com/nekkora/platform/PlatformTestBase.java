@@ -245,12 +245,24 @@ public abstract class PlatformTestBase {
 
     // ------------------------------------------------------------------ e-mail em memoria
 
-    /** {@code token}: token unico (ou CONFIRMAR, nos avisos emergenciais); {@code contestToken}: CONTESTAR (so emergencial). */
-    public record SentMessage(MailSender.Kind kind, UUID org, String recipient, String token, String contestToken) {
+    /**
+     * {@code token}: token unico (ou CONFIRMAR, nos avisos emergenciais); {@code contestToken}: CONTESTAR (so emergencial);
+     * {@code attempt}: tentativa do aviso emergencial (item 10), nulo nos demais.
+     */
+    public record SentMessage(MailSender.Kind kind, UUID org, String recipient, String token, String contestToken, UUID attempt) {
+        public SentMessage(MailSender.Kind kind, UUID org, String recipient, String token, String contestToken) {
+            this(kind, org, recipient, token, contestToken, null);
+        }
     }
 
+    /**
+     * Transporte SIMULADO (e-mail real pausado): guarda as chamadas observadas pelo harness e devolve o desfecho
+     * configurado ({@code ACEITO_PELO_TRANSPORTE} por padrao). Contar chamadas por tentativa NAO e garantia de
+     * recebimento exatamente uma vez pelo destinatario.
+     */
     public static final class TestMailSender implements MailSender {
         public final List<SentMessage> sent = new CopyOnWriteArrayList<>();
+        public volatile Outcome outcome = Outcome.ACEITO_PELO_TRANSPORTE;
 
         @Override
         public void send(Kind kind, UUID organization, String recipient, String tokenOrNull) {
@@ -258,13 +270,19 @@ public abstract class PlatformTestBase {
         }
 
         @Override
-        public void sendEmergencyNotice(Kind kind, UUID organization, String recipient, String confirmTokenOrNull, String contestTokenOrNull) {
-            sent.add(new SentMessage(kind, organization, recipient, confirmTokenOrNull, contestTokenOrNull));
+        public Outcome sendEmergencyNotice(Kind kind, UUID organization, String recipient, String confirmTokenOrNull, String contestTokenOrNull,
+                                           UUID attemptId) {
+            sent.add(new SentMessage(kind, organization, recipient, confirmTokenOrNull, contestTokenOrNull, attemptId));
+            return outcome;
+        }
+
+        public long callsFor(UUID attempt) {
+            return sent.stream().filter(m -> attempt.equals(m.attempt())).count();
         }
     }
 
     @TestConfiguration
-    static class TestMailConfig {
+    public static class TestMailConfig {
         @Bean
         @Primary
         TestMailSender testMailSender() {

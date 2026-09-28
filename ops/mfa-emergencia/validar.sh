@@ -5,7 +5,7 @@
 #      atualizacao populada 015 -> 016, restauracao logica);
 #   2. regressao Maven completa (core, ops, platform, portal) - inclui os grupos do contrato §10 em nekkora-ops, as
 #      contraprovas de mutacao e o fluxo completo pela API (EmergencyRecoveryFlowIT);
-#   3. contraprovas de mutacao (5, detectadas);
+#   3. contraprovas de mutacao (12, detectadas);
 #   4. evidencia SANITIZADA em ops/mfa-emergencia/saidas/<instante>/ e varredura dela (varredura.py: formato de
 #      token da v1, PEM, senhas), que precisa sair vazia, com controle positivo (tokens do gerador de producao).
 #   resumo.txt sempre gerado, com o codigo de saida de cada etapa (etapas.txt).
@@ -87,8 +87,8 @@ etapa 2_regressao_maven "$rc" "$det"
 echo ">> 3/4 contraprovas de mutacao"
 rc=0
 grep -h "\[mutacao\]" "$REPO"/api/nekkora-ops/target/surefire-reports/com.nekkora.ops.MutacoesIT-output.txt > "$SAIDA/mutacoes.txt" 2>/dev/null || rc=1
-[ "$rc" = 0 ] && [ "$(wc -l < "$SAIDA/mutacoes.txt")" != 5 ] && rc=2
-etapa 3_mutacoes "$rc" "detectadas=$(wc -l < "$SAIDA/mutacoes.txt" 2>/dev/null || echo 0)_de_5"
+[ "$rc" = 0 ] && [ "$(wc -l < "$SAIDA/mutacoes.txt")" != 12 ] && rc=2
+etapa 3_mutacoes "$rc" "detectadas=$(wc -l < "$SAIDA/mutacoes.txt" 2>/dev/null || echo 0)_de_12"
 
 echo ">> 4/4 varredura da evidencia e controle positivo"
 PY=python3; "$PY" -c 1 >/dev/null 2>&1 || PY=python

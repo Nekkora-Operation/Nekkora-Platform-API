@@ -28,10 +28,10 @@ class SeparacaoDeFuncoesIT {
         OpsBanco.Operador a = DB.operador("apr", "APROVAR");
         ExecutorAtos cliVa = DB.cli(va);
         Cenarios.Alvo al = C.alvo();
-        Resultado ab = cliVa.abrir(al.org().id(), al.titular(), al.contatoTitular());
-        UUID s = DB.valor(UUID.class, "SELECT request_id FROM ops.ops_mfa_recovery_requests WHERE target_user_id = ?", al.titular());
+        Resultado ab = C.abrirPorRetorno(cliVa, al.org().id(), al.titular(), al.contatoTitular());
         Cenarios.exigirOk(ab, "abrir");
-        Cenarios.exigirOk(cliVa.verificar(s, true, al.segundoContato(), true), "verificar");
+        UUID s = ab.solicitacao();
+        Cenarios.exigirOk(C.verificar(cliVa, s, al.segundoContato()), "verificar");
         Resultado r = cliVa.preAprovar(s);
         assertThat(r.classe()).isEqualTo(Classe.RECUSA);
         assertThat(r.motivo()).isEqualTo("APROVADOR_IGUAL_VERIFICADOR");

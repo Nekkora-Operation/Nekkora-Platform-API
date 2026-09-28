@@ -75,6 +75,16 @@ public final class AccountRepository {
                 .query(Integer.class).optional().isPresent();
     }
 
+    /**
+     * Lock da conta em FOR KEY SHARE: o modo que uma FK exige quando esta conta e so referenciada (por exemplo, o ator
+     * no evento do reset administrativo). Usado no conjunto ordenado de contas (inventario de locks, I-5), ja no modo
+     * final, sem promocao posterior.
+     */
+    public boolean lockKeyShare(JdbcClient j, UUID org, UUID user) {
+        return j.sql("SELECT 1 FROM public.users WHERE organization_id = ? AND user_id = ? FOR KEY SHARE").param(org).param(user)
+                .query(Integer.class).optional().isPresent();
+    }
+
     /** Lock da organizacao (caminhos protegidos pela 003: suspensao de conta/vinculo) - antes do lock da conta. */
     public void lockOrganization(JdbcClient j, UUID org) {
         j.sql("SELECT 1 FROM public.organizations WHERE organization_id = ? FOR UPDATE").param(org).query(Integer.class).optional();

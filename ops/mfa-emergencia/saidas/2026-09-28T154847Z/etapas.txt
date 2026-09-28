@@ -1,0 +1,6 @@
+etapa=1_suite_banco codigo_saida=0
+etapa=2_regressao_maven codigo_saida=0 detalhe=metodos_OK=209
+etapa=3_mutacoes codigo_saida=0 detalhe=detectadas=12_de_12
+etapa=4a_varredura codigo_saida=0
+etapa=4b_controle_positivo codigo_saida=0
+etapa=5_preservacao codigo_saida=0

@@ -317,35 +317,54 @@ class ConcorrenciaIT {
         assertThat(DB.valor(Long.class, "SELECT count(*) FROM mfa_events WHERE user_id = ? AND event_type IN (3, 4)", al2.titular())).isEqualTo(1);
     }
 
+    /**
+     * Ultima recuperacao da organizacao (limite de 3 executadas) disputada por dois alvos. Revisao 4 (item 5): cada
+     * solicitacao fotografa os demais ORG_ADMIN na verificacao; por isso cada nova solicitacao e verificada DEPOIS que o
+     * alvo anterior recadastrou o fator (fixture, como no primeiro login). Na disputa, a perdedora so enxerga o reset da
+     * vencedora depois dos locks: o alvo vencedor, fotografado com fator, agora pode cadastrar - ADMIN_PODE_CADASTRAR,
+     * conferido antes do limite. O limite continua coberto por uma solicitacao posterior, ja com a composicao estavel.
+     */
     @Test
     void ultimaRecuperacaoDaOrganizacaoDisputadaPorDoisAlvos() throws Exception {
         Cenarios.Equipe eq = C.equipe();
         Cenarios.Alvo base = C.alvo();
         OpsBanco.Org org = base.org();
         List<UUID> alvos = List.of(org.admin(), DB.outroAdmin(org), DB.outroAdmin(org), DB.outroAdmin(org));
-        List<UUID> solicitacoes = new ArrayList<>();
+        List<UUID> contatos = new ArrayList<>();
         for (UUID alvo : alvos) {
-            UUID contato = alvo.equals(org.admin()) ? base.contatoTitular() : DB.contatoElegivel(org, alvo);
-            solicitacoes.add(C.aprovada(eq, new Cenarios.Alvo(org, alvo, null, contato, base.segundoContato())));
+            contatos.add(alvo.equals(org.admin()) ? base.contatoTitular() : DB.contatoElegivel(org, alvo));
         }
-        Cenarios.exigirOk(eq.e().executar(solicitacoes.get(0)), "1a");
-        Cenarios.exigirOk(eq.e().executar(solicitacoes.get(1)), "2a");
+        java.util.function.IntFunction<UUID> aprovada = i -> C.aprovada(eq, new Cenarios.Alvo(org, alvos.get(i), null, contatos.get(i), base.segundoContato()));
+        for (int i = 0; i < 2; i++) {
+            Cenarios.exigirOk(eq.e().executar(aprovada.apply(i)), (i + 1) + "a");
+            DB.fatorConfirmado(org.id(), alvos.get(i));
+        }
+        UUID s2 = aprovada.apply(2);
+        UUID s3 = aprovada.apply(3);
         OpsBanco.Operador e2 = DB.operador("exe2", "EXECUTAR");
         ExecutorAtos cli2 = DB.cli(e2);
+        List<ExecutorAtos.Resultado> rs;
         try (Connection bloqueio = DB.superusuario()) {
             bloqueio.setAutoCommit(false);
             try (Statement st = bloqueio.createStatement()) {
                 st.execute("SELECT 1 FROM organizations WHERE organization_id = '" + org.id() + "' FOR UPDATE");
             }
-            CompletableFuture<ExecutorAtos.Resultado> a = CompletableFuture.supplyAsync(() -> eq.e().executar(solicitacoes.get(2)));
-            CompletableFuture<ExecutorAtos.Resultado> b = CompletableFuture.supplyAsync(() -> cli2.executar(solicitacoes.get(3)));
+            CompletableFuture<ExecutorAtos.Resultado> a = CompletableFuture.supplyAsync(() -> eq.e().executar(s2));
+            CompletableFuture<ExecutorAtos.Resultado> b = CompletableFuture.supplyAsync(() -> cli2.executar(s3));
             CertificadosIT.esperarBloqueado(eq.executor().papel());
             CertificadosIT.esperarBloqueado(e2.papel());
             bloqueio.commit();
-            List<ExecutorAtos.Resultado> rs = List.of(a.get(30, TimeUnit.SECONDS), b.get(30, TimeUnit.SECONDS));
-            assertThat(rs.stream().filter(ExecutorAtos.Resultado::ok).count()).isEqualTo(1);
-            assertThat(rs.stream().filter(r -> "LIMITE_ORGANIZACAO".equals(r.motivo())).count()).isEqualTo(1);
+            rs = List.of(a.get(30, TimeUnit.SECONDS), b.get(30, TimeUnit.SECONDS));
         }
+        assertThat(rs.stream().filter(ExecutorAtos.Resultado::ok).count()).isEqualTo(1);
+        assertThat(rs.stream().filter(r -> "ADMIN_PODE_CADASTRAR".equals(r.motivo())).count()).isEqualTo(1);
+        int vencedor = rs.get(0).ok() ? 2 : 3;
+        int perdedor = 5 - vencedor;
+        DB.fatorConfirmado(org.id(), alvos.get(vencedor));
+        // composicao estavel de novo: uma quarta recuperacao na organizacao esbarra no limite ja na verificacao
+        Cenarios.Alvo quarto = new Cenarios.Alvo(org, alvos.get(perdedor), null, contatos.get(perdedor), base.segundoContato());
+        UUID s4 = C.aberta(eq, quarto);
+        assertThat(C.verificar(eq.v(), s4, base.segundoContato()).motivo()).isEqualTo("LIMITE_ORGANIZACAO");
         assertThat(DB.valor(Long.class, "SELECT count(*) FROM ops.ops_mfa_recovery_requests WHERE organization_id = ? AND state = 5", org.id()))
                 .isEqualTo(3);
     }

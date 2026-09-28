@@ -1,0 +1,7 @@
+[INFO] Reactor Summary for nekkora-api 0.1.0-SNAPSHOT:
+[INFO] nekkora-api ........................................ SUCCESS [  0.363 s]
+[INFO] nekkora-core ....................................... SUCCESS [ 16.031 s]
+[INFO] nekkora-ops ........................................ SUCCESS [05:02 min]
+[INFO] nekkora-platform ................................... SUCCESS [03:16 min]
+[INFO] nekkora-portal ..................................... SUCCESS [ 20.608 s]
+[INFO] BUILD SUCCESS

@@ -15,11 +15,11 @@ Requisitos: Docker, Git Bash/Linux/macOS e Python 3. No sucesso, os containers s
 
 1. **Aplicação:** as 16 migrations pelo entrypoint, sem erro.
 2. **Catálogo de `public`:** comparado com uma base 001–015 no mesmo cluster, usando a listagem da `portal-013`.
-   - Só são aceitos os acréscimos previstos na matriz: colunas, restrições e índice de `mfa_events`, grants por coluna, 9 políticas `ops_function_context`, 29 funções `ops_*` com as ACLs, o schema `ops` e a extensão `sslinfo`.
+   - Só são aceitos os acréscimos previstos na matriz: colunas, restrições e índice de `mfa_events`, grants por coluna, 9 políticas `ops_function_context`, 37 funções `ops_*` com as ACLs (revisão 4: 29 + 8 novas - retorno pelo canal, entrada e ativação de versão, reivindicação, estado da tentativa, resultado da entrega, varredura e recuperação), o schema `ops` e a extensão `sslinfo`.
    - A **única** remoção aceita é o INSERT de tabela inteira da Platform em `mfa_events`, trocado por INSERT por coluna sem `ops_request_id`.
 3. **Controles anteriores:** os blocos de invariantes da 012 (§15), 013 (§8) e 014 (§8) rodam de novo sobre 001–016, junto com o da 016 (§19).
    - A 014 tem **uma** adaptação, feita pelo runner e conferida (o trecho precisa existir exatamente uma vez): a contagem de "exatamente uma política" nas tabelas de MFA desconsidera a política nova `ops_function_context`, que é prevista pela matriz.
-4. **Schema `ops`:** listagem guardada como evidência (`sql/c_listagem_ops.sql`), com 14 tabelas e o USAGE só do dono operacional.
+4. **Schema `ops`:** listagem guardada como evidência (`sql/c_listagem_ops.sql`), com 21 tabelas (revisão 4: 14 + 7 novas - estado das versões, entradas, baldes, retornos, fotografia dos considerados, histórico de resultados e tentativas da aprovação) e o USAGE só do dono operacional.
 
 ## B. Atualização de base populada 015 → 016
 

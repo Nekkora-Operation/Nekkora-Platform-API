@@ -38,7 +38,8 @@ public final class Cenarios {
     public record Alvo(OpsBanco.Org org, UUID titular, UUID fator, UUID contatoTitular, UUID segundoContato) {
     }
 
-    public record Tokens(UUID destinatario, String confirmar, String contestar, boolean temConfirmar, boolean temContestar) {
+    /** Tokens de uma tentativa de aviso emitida (item 10: {@code aviso} = tentativa). */
+    public record Tokens(UUID destinatario, String confirmar, String contestar, boolean temConfirmar, boolean temContestar, UUID aviso) {
     }
 
     public Equipe equipe() {
@@ -56,17 +57,93 @@ public final class Cenarios {
         return new Alvo(o, o.admin(), o.adminFator(), c1, c2);
     }
 
+    /** Abertura pelo caminho legitimo garantido: retorno pelo canal registrado do contato do titular (item 4). */
     public UUID aberta(Equipe eq, Alvo al) {
-        Resultado r = eq.v().abrir(al.org().id(), al.titular(), al.contatoTitular());
+        Resultado r = abrirPorRetorno(eq.v(), al.org().id(), al.titular(), al.contatoTitular());
         assertThat(r.classe()).as("abrir: %s", r).isEqualTo(Classe.OK);
         // o UUID vem do proprio resultado da CLI: nenhuma consulta administrativa para continuar
         assertThat(r.solicitacao()).as("abrir devolve a solicitacao").isNotNull();
         return r.solicitacao();
     }
 
+    /** Retorno registrado pelo verificador e abertura com ele. Se o registro do retorno for recusado, devolve a recusa. */
+    public Resultado abrirPorRetorno(ExecutorAtos v, UUID org, UUID alvo, UUID contato) {
+        ExecutorAtos.RetornoRegistrado rr = v.registrarRetorno(contato);
+        if (rr.classe() != Classe.OK) {
+            return new Resultado(null, rr.classe(), rr.motivo(), null, ExecutorAtos.Origem.BANCO, rr.sqlstate(), false);
+        }
+        return v.abrir(org, alvo, contato, new ExecutorAtos.Retorno(rr.retorno()));
+    }
+
+    /** Abertura por ENTRADA com origem comprovada nova (pseudonimo aleatorio): exercita as recusas da propria abertura. */
+    public Resultado abrirPorEntrada(OpsBanco.Operador op, ExecutorAtos v, UUID org, UUID alvo, UUID contato) {
+        return v.abrir(org, alvo, contato, new ExecutorAtos.Entrada(entradaComprovada(op, OpsBanco.hex(32))));
+    }
+
+    public Resultado abrirPorEntrada(Equipe eq, UUID org, UUID alvo, UUID contato) {
+        return abrirPorEntrada(eq.verificador(), eq.v(), org, alvo, contato);
+    }
+
+    /** Abertura por ENTRADA com uma origem comprovada escolhida (mesmo pseudonimo = mesma origem para a cota). */
+    public Resultado abrirPorEntradaDaOrigem(Equipe eq, UUID org, UUID alvo, UUID contato, String pseudonimo) {
+        return eq.v().abrir(org, alvo, contato, new ExecutorAtos.Entrada(entradaComprovada(eq.verificador(), pseudonimo)));
+    }
+
+    /** Registro de entrada pelo servico de atendimento: origem comprovada por desafio de e-mail, pseudonimo informado. */
+    public UUID entradaComprovada(OpsBanco.Operador op, String pseudonimo) {
+        List<Object> r = registrarEntrada(2, 1, pseudonimo, null, op.papel());
+        assertThat(r.get(0)).as("registro de entrada: %s", r).isEqualTo("OK");
+        return (UUID) r.get(2);
+    }
+
+    /**
+     * Chama {@code ops_intake_register} como {@code nekkora_ops_intake}, usando a versao vigente (e, na transicao, a
+     * anterior com {@code pseudonimoAnterior}). Devolve [resultado, motivo, entrada].
+     */
+    public List<Object> registrarEntrada(int canal, int mecanismo, String pseudonimo, String pseudonimoAnterior, String papelOperador) {
+        Integer vigente = db.valor(Integer.class, "SELECT current_version FROM ops.ops_intake_key_state");
+        return registrarEntradaVersao(canal, mecanismo, mecanismo == 3 ? null : vigente, pseudonimo,
+                pseudonimoAnterior == null ? null : vigente - 1, pseudonimoAnterior, papelOperador);
+    }
+
+    public List<Object> registrarEntradaVersao(int canal, int mecanismo, Integer versao, String pseudonimo, Integer versaoAnterior,
+                                               String pseudonimoAnterior, String papelOperador) {
+        try (Connection c = db.comoServico("nekkora_ops_intake");
+             PreparedStatement ps = c.prepareStatement("SELECT r_resultado, r_motivo, r_entrada FROM public.ops_intake_register(?::smallint, ?::smallint, ?, ?, ?, ?, ?)")) {
+            ps.setInt(1, canal);
+            ps.setInt(2, mecanismo);
+            ps.setObject(3, versao);
+            ps.setString(4, pseudonimo);
+            ps.setObject(5, versaoAnterior);
+            ps.setString(6, pseudonimoAnterior);
+            ps.setString(7, papelOperador);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                List<Object> out = new ArrayList<>();
+                out.add(rs.getString(1));
+                out.add(rs.getString(2));
+                out.add(rs.getObject(3, UUID.class));
+                return out;
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("registro de entrada falhou (sqlstate " + e.getSQLState() + ")", e);
+        }
+    }
+
+    /** Declaracao dos demais ORG_ADMIN coerente com a organizacao da solicitacao (item 5). */
+    public ExecutorAtos.DemaisAdmins declaracao(UUID solicitacao) {
+        Long n = db.valor(Long.class, "SELECT count(*) FROM ops.demais_admins((SELECT organization_id FROM ops.ops_mfa_recovery_requests "
+                + "WHERE request_id = ?), (SELECT target_user_id FROM ops.ops_mfa_recovery_requests WHERE request_id = ?))", solicitacao, solicitacao);
+        return n == 0 ? ExecutorAtos.DemaisAdmins.NENHUM : ExecutorAtos.DemaisAdmins.TODOS_SEM_FATOR_E_CODIGOS_UTILIZAVEIS;
+    }
+
+    public Resultado verificar(ExecutorAtos v, UUID s, UUID segundoContato) {
+        return v.verificar(s, true, segundoContato, true, declaracao(s));
+    }
+
     public UUID verificada(Equipe eq, Alvo al) {
         UUID s = aberta(eq, al);
-        exigirOk(eq.v().verificar(s, true, al.segundoContato(), true), "verificar");
+        exigirOk(verificar(eq.v(), s, al.segundoContato()), "verificar");
         return s;
     }
 
@@ -98,8 +175,16 @@ public final class Cenarios {
 
     // ------------------------------------------------------------------ Platform (nekkora_platform)
 
-    /** Emite os avisos pendentes da organizacao como a Platform: tokens brutos so aqui, hash no banco. */
+    /**
+     * Emite e entrega os avisos pendentes da organizacao como a Platform, pelo protocolo do item 10: emissao (tokens so
+     * aqui, hash no banco) -> reivindicacao ENTREGANDO -> transporte simulado que ACEITA. Devolve os tokens emitidos.
+     */
     public List<Tokens> emitirAvisos(UUID org) {
+        return emitirAvisos(org, (short) 4);
+    }
+
+    /** Idem, com o desfecho do transporte simulado ({@code 3} ENFILEIRADA, {@code 4} ACEITA, {@code 5} FALHOU, {@code 6} DESCONHECIDO; 0 = nao entregar). */
+    public List<Tokens> emitirAvisos(UUID org, short desfecho) {
         List<Tokens> out = new ArrayList<>();
         try (Connection c = db.comoServico("nekkora_platform")) {
             List<UUID> pendentes = new ArrayList<>();
@@ -114,7 +199,7 @@ public final class Cenarios {
             for (UUID aviso : pendentes) {
                 String conf = OpsBanco.tokenBruto();
                 String cont = OpsBanco.tokenBruto();
-                c.setAutoCommit(false);
+                boolean emitido;
                 try (PreparedStatement ps = c.prepareStatement(
                         "SELECT r_emitido, r_confirmar, r_contestar, r_destinatario FROM public.ops_notice_issue(?, ?, ?)")) {
                     ps.setObject(1, aviso);
@@ -122,19 +207,61 @@ public final class Cenarios {
                     ps.setString(3, OpsBanco.sha256(cont));
                     try (ResultSet rs = ps.executeQuery()) {
                         rs.next();
-                        if (rs.getBoolean(1)) {
+                        emitido = rs.getBoolean(1);
+                        if (emitido) {
                             out.add(new Tokens(rs.getObject(4, UUID.class), rs.getBoolean(2) ? conf : null, rs.getBoolean(3) ? cont : null,
-                                    rs.getBoolean(2), rs.getBoolean(3)));
+                                    rs.getBoolean(2), rs.getBoolean(3), aviso));
                         }
                     }
                 }
-                c.commit();
-                c.setAutoCommit(true);
+                if (emitido && desfecho != 0) {
+                    reivindicar(aviso, UUID.randomUUID());
+                    resultado(aviso, desfecho, null);
+                }
             }
         } catch (SQLException e) {
             throw new IllegalStateException("emissao de avisos falhou (sqlstate " + e.getSQLState() + ")", e);
         }
         return out;
+    }
+
+    /** {@code ops_notice_claim} como a Platform: [estado, minha]. */
+    public List<Object> reivindicar(UUID aviso, UUID claim) {
+        try (Connection c = db.comoServico("nekkora_platform");
+             PreparedStatement ps = c.prepareStatement("SELECT r_estado, r_minha FROM public.ops_notice_claim(?, ?)")) {
+            ps.setObject(1, aviso);
+            ps.setObject(2, claim);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                List<Object> out = new ArrayList<>();
+                out.add(rs.getObject(1, Short.class));
+                out.add(rs.getBoolean(2));
+                return out;
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("reivindicacao falhou (sqlstate " + e.getSQLState() + ")", e);
+        }
+    }
+
+    /** {@code ops_notice_delivery_result} como a Platform: devolve o resultado (APLICADO, REPETIDO, ...). */
+    public String resultado(UUID aviso, short estado, String categoria) {
+        try (Connection c = db.comoServico("nekkora_platform");
+             PreparedStatement ps = c.prepareStatement("SELECT r_resultado FROM public.ops_notice_delivery_result(?, ?::smallint, ?)")) {
+            ps.setObject(1, aviso);
+            ps.setShort(2, estado);
+            ps.setString(3, categoria);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getString(1);
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("resultado de entrega falhou (sqlstate " + e.getSQLState() + ")", e);
+        }
+    }
+
+    /** Estado da tentativa (leitura de evidencia, superusuario). */
+    public short estadoDoAviso(UUID aviso) {
+        return db.valor(Short.class, "SELECT state FROM ops.ops_mfa_notices WHERE notice_id = ?", aviso);
     }
 
     public boolean confirmar(UUID org, String bruto) {
@@ -145,21 +272,26 @@ public final class Cenarios {
         return usarToken("ops_notice_contest", org, org, bruto);
     }
 
-    /** Uso de token como a Platform: contexto de requisicao {@code ctx} e organizacao da rota {@code org}. */
+    /** Uso de token como a Platform: aceito so com a categoria interna ACEITO (a resposta publica e a mesma em toda recusa). */
     public boolean usarToken(String funcao, UUID ctx, UUID org, String bruto) {
+        return "ACEITO".equals(categoriaDoToken(funcao, ctx, org, bruto));
+    }
+
+    /** Categoria interna devolvida a Platform (item 6): ACEITO | RECUSADO_REGISTRADO | NAO_ATRIBUIVEL. */
+    public String categoriaDoToken(String funcao, UUID ctx, UUID org, String bruto) {
         try (Connection c = db.comoServico("nekkora_platform")) {
             c.setAutoCommit(false);
             try (PreparedStatement ps = c.prepareStatement("SELECT set_config('nekkora.organization_id', ?, true)")) {
                 ps.setString(1, ctx.toString());
                 ps.execute();
             }
-            boolean r;
+            String r;
             try (PreparedStatement ps = c.prepareStatement("SELECT public." + funcao + "(?, ?)")) {
                 ps.setObject(1, org);
                 ps.setString(2, bruto == null ? null : OpsBanco.sha256(bruto));
                 try (ResultSet rs = ps.executeQuery()) {
                     rs.next();
-                    r = rs.getBoolean(1);
+                    r = rs.getString(1);
                 }
             }
             c.commit();

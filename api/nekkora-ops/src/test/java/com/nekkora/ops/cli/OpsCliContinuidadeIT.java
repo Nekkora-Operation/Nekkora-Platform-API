@@ -34,6 +34,7 @@ class OpsCliContinuidadeIT {
     static final Cenarios C = new Cenarios(DB);
     private static final Pattern SAIDA = Pattern.compile(
             "^solicitacao=(\\S+) resultado=(\\S+) origem=(\\S+) estado=(\\S+) motivo=(\\S+)$");
+    private static final Pattern SAIDA_RETORNO = Pattern.compile("^retorno=(\\S+) resultado=(\\S+) motivo=(\\S+)$");
 
     private record Execucao(int codigo, String solicitacao, String resultado, String estado, String motivo) {
     }
@@ -54,14 +55,25 @@ class OpsCliContinuidadeIT {
             int codigo = OpsCli.executar(args, env, new PrintStream(out, true, StandardCharsets.UTF_8),
                     new PrintStream(err, true, StandardCharsets.UTF_8));
             String linha = out.toString(StandardCharsets.UTF_8).strip();
-            Matcher m = SAIDA.matcher(linha);
+            boolean retorno = "retorno".equals(args[0]);
+            Matcher m = (retorno ? SAIDA_RETORNO : SAIDA).matcher(linha);
             assertThat(m.matches()).as("formato da saida da CLI: [%s] (erro: %s)", linha, err.toString(StandardCharsets.UTF_8)).isTrue();
             // a senha da credencial nunca aparece na saida nem no log local
             assertThat(linha).doesNotContain(p.getProperty("sslpassword"));
             assertThat(Files.readString(log)).doesNotContain(p.getProperty("sslpassword"));
             Files.deleteIfExists(log);
-            return new Execucao(codigo, m.group(1), m.group(2), m.group(4), m.group(5));
+            return retorno ? new Execucao(codigo, m.group(1), m.group(2), null, m.group(3))
+                    : new Execucao(codigo, m.group(1), m.group(2), m.group(4), m.group(5));
         }
+    }
+
+    /** Pela CLI: registra o retorno pelo canal registrado e abre com ele (item 4). */
+    private static Execucao abrirPorRetorno(OpsBanco.Operador o, Cenarios.Alvo al, UUID contato) throws Exception {
+        Execucao r = cli(o, "retorno", contato.toString());
+        if (r.codigo() != 0) {
+            return new Execucao(r.codigo(), "-", r.resultado(), null, r.motivo());
+        }
+        return cli(o, "abrir", al.org().id().toString(), al.titular().toString(), contato.toString(), "retorno", r.solicitacao());
     }
 
     @Test
@@ -70,19 +82,19 @@ class OpsCliContinuidadeIT {
         Cenarios.Alvo al1 = C.alvo();
         Cenarios.Alvo al2 = C.alvo();
 
-        Execucao a1 = cli(eq.verificador(), "abrir", al1.org().id().toString(), al1.titular().toString(), al1.contatoTitular().toString());
+        Execucao a1 = abrirPorRetorno(eq.verificador(), al1, al1.contatoTitular());
         assertThat(a1.codigo()).isZero();
         assertThat(a1.resultado()).isEqualTo("OK");
         assertThat(a1.estado()).isEqualTo("SOLICITADA");
         UUID s1 = UUID.fromString(a1.solicitacao());
         // contraprova: uma segunda abertura, para outro alvo, torna-se a "ultima solicitacao"
-        Execucao a2 = cli(eq.verificador(), "abrir", al2.org().id().toString(), al2.titular().toString(), al2.contatoTitular().toString());
+        Execucao a2 = abrirPorRetorno(eq.verificador(), al2, al2.contatoTitular());
         assertThat(a2.codigo()).isZero();
         UUID s2 = UUID.fromString(a2.solicitacao());
         assertThat(s2).isNotEqualTo(s1);
 
         // continuidade: so o UUID da saida de abrir
-        Execucao v = cli(eq.verificador(), "verificar", s1.toString(), "true", al1.segundoContato().toString(), "true");
+        Execucao v = cli(eq.verificador(), "verificar", s1.toString(), "true", al1.segundoContato().toString(), "true", "NENHUM");
         assertThat(v.codigo()).isZero();
         assertThat(v.solicitacao()).isEqualTo(s1.toString());
         assertThat(v.estado()).isEqualTo("VERIFICADA");
@@ -102,13 +114,78 @@ class OpsCliContinuidadeIT {
                 al1.titular(), al2.titular())).as("a 'ultima solicitacao' teria dado o id errado").isEqualTo(s2);
     }
 
+    private record Bruta(int codigo, String linha, String log, String erro) {
+    }
+
+    /** Execucao da CLI sem conferencia de formato, com URL do banco opcionalmente trocada; devolve codigo, saida e log local. */
+    private static Bruta cliBruta(OpsBanco.Operador o, String url, String... args) throws Exception {
+        try (Credencial cred = DB.credencial(o)) {
+            Properties p = cred.propriedades(DB.raizServidor());
+            Path log = Files.createTempFile("nekkora-ops-cli-", ".log");
+            Map<String, String> env = new HashMap<>();
+            env.put("NEKKORA_OPS_DB_URL", url);
+            env.put("NEKKORA_OPS_PAPEL", o.papel());
+            env.put("NEKKORA_OPS_RAIZ_SERVIDOR", DB.raizServidor().toString());
+            env.put("NEKKORA_OPS_CREDENCIAL", p.getProperty("sslkey"));
+            env.put("NEKKORA_OPS_CREDENCIAL_SENHA", p.getProperty("sslpassword"));
+            env.put("NEKKORA_OPS_LOG", log.toString());
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            ByteArrayOutputStream err = new ByteArrayOutputStream();
+            int codigo = OpsCli.executar(args, env, new PrintStream(out, true, StandardCharsets.UTF_8), new PrintStream(err, true, StandardCharsets.UTF_8));
+            String conteudo = Files.readString(log);
+            Files.deleteIfExists(log);
+            return new Bruta(codigo, out.toString(StandardCharsets.UTF_8).strip(), conteudo, err.toString(StandardCharsets.UTF_8));
+        }
+    }
+
+    private static long eventos(UUID s) {
+        return DB.valor(Long.class, "SELECT count(*) FROM ops.ops_mfa_recovery_events WHERE request_id = ?", s);
+    }
+
+    /** Item 7: consulta avulsa sem a trava (outra transacao segura a solicitacao) -> DESCONHECIDO, codigo 4, alerta; nada no banco. */
+    @Test
+    void consultaAvulsaSemTravaAlertaComCodigo4() throws Exception {
+        Cenarios.Equipe eq = C.equipe();
+        Cenarios.Alvo al = C.alvo();
+        UUID s = C.verificada(eq, al);
+        long antes = eventos(s);
+        Bruta b;
+        try (java.sql.Connection trava = DB.superusuario()) {
+            trava.setAutoCommit(false);
+            try (java.sql.Statement st = trava.createStatement()) {
+                st.execute("SELECT 1 FROM ops.ops_mfa_recovery_requests WHERE request_id = '" + s + "' FOR UPDATE");
+            }
+            b = cliBruta(eq.executor(), DB.url(), "consultar", s.toString());
+            trava.rollback();
+        }
+        assertThat(b.codigo()).isEqualTo(4);
+        assertThat(b.linha()).contains("resultado=DESCONHECIDO", "motivo=TRAVA_NAO_OBTIDA");
+        assertThat(b.log()).contains("ALERTA ato=CONSULTAR", "categoria=RESULTADO_DESCONHECIDO");
+        assertThat(eventos(s)).as("nada registrado no banco").isEqualTo(antes);
+    }
+
+    /** Item 7: banco inacessivel na consulta avulsa -> CONSULTA_IMPOSSIVEL, codigo 4, alerta. */
+    @Test
+    void consultaAvulsaComBancoInacessivelAlertaComCodigo4() throws Exception {
+        Cenarios.Equipe eq = C.equipe();
+        UUID s = UUID.randomUUID();
+        int porta;
+        try (java.net.ServerSocket livre = new java.net.ServerSocket(0)) {
+            porta = livre.getLocalPort();
+        }
+        Bruta b = cliBruta(eq.executor(), OpsBanco.url("127.0.0.1", porta), "consultar", s.toString());
+        assertThat(b.codigo()).isEqualTo(4);
+        assertThat(b.linha()).contains("resultado=DESCONHECIDO", "motivo=CONSULTA_IMPOSSIVEL");
+        assertThat(b.log()).contains("ALERTA ato=CONSULTAR", "categoria=RESULTADO_DESCONHECIDO");
+    }
+
     @Test
     void abrirRecusadoNaoInventaSolicitacao() throws Exception {
         Cenarios.Equipe eq = C.equipe();
         Cenarios.Alvo al = C.alvo();
         Cenarios.Alvo outra = C.alvo();
         // contato de outra organizacao: recusa, sem solicitacao
-        Execucao r = cli(eq.verificador(), "abrir", al.org().id().toString(), al.titular().toString(), outra.contatoTitular().toString());
+        Execucao r = abrirPorRetorno(eq.verificador(), al, outra.contatoTitular());
         assertThat(r.codigo()).isEqualTo(2);
         assertThat(r.resultado()).isEqualTo("RECUSA");
         assertThat(r.solicitacao()).isEqualTo("-");

@@ -47,7 +47,8 @@ import com.nekkora.ops.idp.VerificadorIdp;
 public final class OpsBanco {
 
     public static final String IMAGEM = "postgres:16-alpine";
-    private static final List<String> SERVICOS = List.of("nekkora_platform", "nekkora_portal", "nekkora_provisioning", "nekkora_ops_ca");
+    private static final List<String> SERVICOS = List.of("nekkora_platform", "nekkora_portal", "nekkora_provisioning", "nekkora_ops_ca",
+            "nekkora_ops_intake");
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private static OpsBanco instancia;
@@ -479,9 +480,40 @@ public final class OpsBanco {
                 + ", notice_confirmed_at = notice_confirmed_at - " + i + ", final_approved_at = final_approved_at - " + i
                 + ", executed_at = executed_at - " + i + ", closed_at = closed_at - " + i + " WHERE request_id = '" + solicitacao + "'",
             "UPDATE ops.ops_mfa_notices SET created_at = created_at - " + i + ", issued_at = issued_at - " + i
+                + ", state_at = state_at - " + i + ", claimed_at = claimed_at - " + i + ", accepted_at = accepted_at - " + i
                 + " WHERE request_id = '" + solicitacao + "'",
             "UPDATE ops.ops_mfa_notice_tokens SET issued_at = issued_at - " + i + ", valid_until = valid_until - " + i
-                + ", used_at = used_at - " + i + ", invalidated_at = invalidated_at - " + i + " WHERE request_id = '" + solicitacao + "'");
+                + ", used_at = used_at - " + i + ", invalidated_at = invalidated_at - " + i + " WHERE request_id = '" + solicitacao + "'",
+            // a fotografia (captured_at) NAO e deslocada: ela e comparada com fatos externos (sessoes, fatores, codigos),
+            // que a fixture nao move; deslocar faria fatos anteriores a fotografia parecerem posteriores
+            "UPDATE ops.ops_mfa_approval_attempts SET accepted_at = accepted_at - " + i + ", approved_at = approved_at - " + i
+                + " WHERE request_id = '" + solicitacao + "'");
+    }
+
+    /** Desloca para tras so o aceite (e o estado) de UMA tentativa de aviso: aceite antigo sem mexer no resto. */
+    public void recuarAceite(UUID aviso, Duration d) {
+        String i = "interval '" + d.toSeconds() + " seconds'";
+        replica("UPDATE ops.ops_mfa_notices SET accepted_at = accepted_at - " + i + ", state_at = state_at - " + i
+                + " WHERE notice_id = '" + aviso + "'");
+    }
+
+    /** Desloca para tras o instante do estado de uma tentativa (tentativa parada ha d, para a varredura de recuperacao). */
+    public void recuarEstadoDoAviso(UUID aviso, Duration d) {
+        String i = "interval '" + d.toSeconds() + " seconds'";
+        replica("UPDATE ops.ops_mfa_notices SET state_at = state_at - " + i + " WHERE notice_id = '" + aviso + "'");
+    }
+
+    /** Desloca para tras a ativacao da versao de chave vigente (transicao de 25 h que ja comecou ha d). */
+    public void recuarAtivacaoDaChave(Duration d) {
+        String i = "interval '" + d.toSeconds() + " seconds'";
+        replica("UPDATE ops.ops_intake_key_state SET activated_at = activated_at - " + i);
+    }
+
+    /** Desloca para tras o registro de uma entrada (registrada ha d). */
+    public void recuarEntrada(UUID entrada, Duration d) {
+        String i = "interval '" + d.toSeconds() + " seconds'";
+        replica("UPDATE ops.ops_intake_entries SET created_at = created_at - " + i + ", expires_at = expires_at - " + i
+                + " WHERE entry_id = '" + entrada + "'");
     }
 
     /**

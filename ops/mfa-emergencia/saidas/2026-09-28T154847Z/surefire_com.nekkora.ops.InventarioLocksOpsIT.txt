@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.nekkora.ops.InventarioLocksOpsIT
+-------------------------------------------------------------------------------
+Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 9.203 s -- in com.nekkora.ops.InventarioLocksOpsIT

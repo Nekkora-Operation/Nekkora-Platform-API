@@ -17,6 +17,7 @@ import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 
+import com.nekkora.ops.cli.ExecutorAtos;
 import com.nekkora.ops.testsupport.Cenarios;
 import com.nekkora.ops.testsupport.OpsBanco;
 
@@ -46,8 +47,9 @@ class IntegridadeEAuditoriaIT {
     void eventoDeResetSoApontaParaSolicitacaoDaMesmaOrganizacaoEAlvo() {
         Cenarios.Equipe eq = C.equipe();
         Cenarios.Alvo al = C.alvo();
-        UUID s = C.aprovada(eq, al);
+        // o outro admin existe ANTES da verificacao: criado depois, mudaria a composicao fotografada (COMPOSICAO_ALTERADA)
         UUID outroAlvo = DB.outroAdmin(al.org());
+        UUID s = C.aprovada(eq, al);
         Cenarios.Alvo al2 = C.alvo();
         // prova ESTRUTURAL (superusuario, que ignora privilegios mas nao as restricoes): evento valido isoladamente,
         // associado a solicitacao de outro alvo ou de outra organizacao
@@ -71,11 +73,16 @@ class IntegridadeEAuditoriaIT {
         UUID outro = DB.outroAdmin(al.org());
         UUID fatorDoOutro = DB.valor(UUID.class, "SELECT factor_id FROM user_mfa_factors WHERE user_id = ? AND disabled_at IS NULL", outro);
         OpsBanco.Operador op = DB.bootstrap();
+        Cenarios.Equipe eq = C.equipe();
+        // registro de retorno real (FK de callback_id) e declaracao dos demais: so a FK composta do fator deve falhar
+        ExecutorAtos.RetornoRegistrado rr = eq.v().registrarRetorno(al.contatoTitular());
         assertThat(sqlstate("INSERT INTO ops.ops_mfa_recovery_requests (organization_id, target_user_id, requester_contact_id, requester_kind, state, "
                 + "opened_at, opened_by, t_total, verified_at, verified_by, callback_ok, second_contact_id, second_contact_ok, preapproved_at, "
-                + "preapproved_by, approved_factor_id) SELECT '" + al.org().id() + "', '" + al.titular() + "', '" + al.contatoTitular() + "', 1, 3, "
+                + "preapproved_by, approved_factor_id, open_mode, callback_id, other_admins_declaration, other_admins_captured_at, other_admins_count) "
+                + "SELECT '" + al.org().id() + "', '" + al.titular() + "', '" + al.contatoTitular() + "', 1, 3, "
                 + "now(), '" + op.id() + "', now() + interval '72 hours', now(), '" + op.id() + "', true, '" + al.segundoContato() + "', true, now(), "
-                + "o.operator_id, '" + fatorDoOutro + "' FROM ops.ops_operators o WHERE o.operator_id <> '" + op.id() + "' LIMIT 1")).isEqualTo("23503");
+                + "o.operator_id, '" + fatorDoOutro + "', 2, '" + rr.retorno() + "', 2, now(), 1 "
+                + "FROM ops.ops_operators o WHERE o.operator_id <> '" + op.id() + "' LIMIT 1")).isEqualTo("23503");
     }
 
     @Test
@@ -85,10 +92,12 @@ class IntegridadeEAuditoriaIT {
         Cenarios.Alvo b = C.alvo();
         String fa = C.acesso(a.org().id(), a.titular());
         String fb = C.acesso(b.org().id(), b.titular());
-        assertThat(eq.v().abrir(a.org().id(), b.titular(), a.contatoTitular()).motivo()).isEqualTo("CONTA_INELEGIVEL");
-        assertThat(eq.v().abrir(a.org().id(), a.titular(), b.contatoTitular()).motivo()).isEqualTo("CONTATO_INVALIDO");
+        assertThat(C.abrirPorEntrada(eq, a.org().id(), b.titular(), a.contatoTitular()).motivo()).isEqualTo("CONTA_INELEGIVEL");
+        assertThat(C.abrirPorEntrada(eq, a.org().id(), a.titular(), b.contatoTitular()).motivo()).isEqualTo("CONTATO_INVALIDO");
+        // retorno registrado para o contato da outra organizacao nao abre na organizacao A
+        assertThat(C.abrirPorRetorno(eq.v(), a.org().id(), a.titular(), b.contatoTitular()).motivo()).isEqualTo("CONTATO_INVALIDO");
         UUID s = C.aberta(eq, a);
-        assertThat(eq.v().verificar(s, true, b.segundoContato(), true).motivo()).isEqualTo("SEGUNDO_CONTATO_INELEGIVEL");
+        assertThat(C.verificar(eq.v(), s, b.segundoContato()).motivo()).isEqualTo("SEGUNDO_CONTATO_INELEGIVEL");
         assertThat(C.estado(s)).isEqualTo("SOLICITADA");
         // (token de uma organizacao na rota de outra: AvisosIT)
         assertThat(C.acesso(a.org().id(), a.titular())).isEqualTo(fa);
@@ -178,7 +187,7 @@ class IntegridadeEAuditoriaIT {
                     tabelas.add(rs.getString(1));
                 }
             }
-            assertThat(tabelas).hasSize(16);
+            assertThat(tabelas).hasSize(23);
             for (String tab : tabelas) {
                 try (Statement s2 = c.createStatement(); ResultSet rs = s2.executeQuery("SELECT t::text FROM " + tab + " t")) {
                     while (rs.next()) {

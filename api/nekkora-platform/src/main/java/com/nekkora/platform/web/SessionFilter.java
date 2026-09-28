@@ -37,6 +37,8 @@ public final class SessionFilter extends OncePerRequestFilter {
 
     public static final String ATTRIBUTE = "nekkora.session";
     public static final String ATTRIBUTE_TOKEN = "nekkora.session.token";
+    /** Estado do limitador R7 nesta requisicao (ATIVO | INDISPONIVEL), so para log sanitizado. */
+    public static final String ATTRIBUTE_LIMITER = "nekkora.limiter.r7";
 
     private final OrgTransactions tx;
     private final SessionRepository sessions;
@@ -64,6 +66,7 @@ public final class SessionFilter extends OncePerRequestFilter {
             try {
                 String key = session.isPresent() ? "s:" + Tokens.sha256Hex(token) : "ip:" + RequestContextFilter.ip(req);
                 boolean limiterOk = limits.bySessionOrIp(key);
+                req.setAttribute(ATTRIBUTE_LIMITER, limiterOk ? "ATIVO" : "INDISPONIVEL");
                 if (!limiterOk && session.isPresent() && Routes.isWrite(req)) {
                     ErrorResponses.writeError(res, ApiError.SERVICE_UNAVAILABLE, 1L);
                     return;
@@ -98,5 +101,10 @@ public final class SessionFilter extends OncePerRequestFilter {
 
     public static String token(HttpServletRequest req) {
         return (String) req.getAttribute(ATTRIBUTE_TOKEN);
+    }
+
+    /** Estado do limitador R7 registrado pelo filtro (ATIVO | INDISPONIVEL), ou nulo se a rota ficou fora dele. */
+    public static String limiterState(HttpServletRequest req) {
+        return (String) req.getAttribute(ATTRIBUTE_LIMITER);
     }
 }

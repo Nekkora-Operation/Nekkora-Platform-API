@@ -139,7 +139,27 @@ public final class AdminService {
         String[] email = new String[1];
         java.util.List<String> otherAdmins = new java.util.ArrayList<>();
         runAdminAction(org, j -> {
+            // Achado I-5 do inventario de locks. (0) verificacao preliminar SEM lock (validate(..., false) nao trava a
+            // sessao); (1) organizacao; (2) ator e alvo em ordem crescente de user_id, cada um ja no modo final (alvo
+            // FOR UPDATE, ator FOR KEY SHARE - o modo que o evento exige), sem promocao; (3) reconferencia de sessao,
+            // step-up, permissao, elegibilidade e alvo != ator DEPOIS dos locks; (4) so entao os efeitos e o evento.
             Failure f = authorize(j, org, actor, actorToken, "identity.mfa.reset", target);
+            if (f != null) {
+                return f;
+            }
+            accounts.lockOrganization(j, org);
+            boolean targetFound = true;
+            for (UUID account : java.util.stream.Stream.of(actor.userId(), target).distinct().sorted().toList()) {
+                if (account.equals(target)) {
+                    targetFound = accounts.lock(j, org, target);
+                } else {
+                    accounts.lockKeyShare(j, org, account);
+                }
+            }
+            if (!targetFound) {
+                return Failure.TARGET_NOT_FOUND;
+            }
+            f = authorize(j, org, actor, actorToken, "identity.mfa.reset", target);
             if (f != null) {
                 return f;
             }
@@ -147,9 +167,6 @@ public final class AdminService {
                     .param(SessionRepository.interval(stepUpWindow)).param(actor.sessionId()).query(Boolean.class).single();
             if (!recent) {
                 return Failure.STEP_UP;
-            }
-            if (!accounts.lock(j, org, target)) {
-                return Failure.TARGET_NOT_FOUND;
             }
             mfa.invalidateForAccount(j, target, null);
             mfa.disableFactor(j, target);

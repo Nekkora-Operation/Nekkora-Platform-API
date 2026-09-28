@@ -1,0 +1,2 @@
+arquivos varridos: 46 (log bruto do Maven varrido a parte: 0 ocorrencias)
+achados: 0

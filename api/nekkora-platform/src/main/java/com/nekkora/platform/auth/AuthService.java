@@ -421,20 +421,33 @@ public final class AuthService {
         if (!Tokens.isValidFormat(token)) {
             throw ApiException.invalid("token");
         }
+        // Achado I-1 do inventario de locks: organizacao -> conta -> token. O UPDATE em users dispara o trigger de presenca
+        // de ORG_ADMIN (003), que trava a organizacao; por isso a organizacao vem ANTES da conta e do consumo do token
+        // (antes, a ordem era token -> conta -> organizacao, invertida em relacao a suspensao e aos atos da 016).
         boolean ok = tx.inOrganization(org, Mode.READ_WRITE, j -> {
-            Optional<UUID> user = j.sql("""
-                    UPDATE public.email_verification_tokens SET consumed_at = clock_timestamp()
-                     WHERE token_hash = ? AND consumed_at IS NULL AND revoked_at IS NULL AND expires_at > clock_timestamp()
-                    RETURNING user_id
-                    """).param(Tokens.sha256Hex(token)).query(UUID.class).optional();
+            String hash = Tokens.sha256Hex(token);
+            Optional<UUID> user = j.sql("SELECT user_id FROM public.email_verification_tokens WHERE token_hash = ?")
+                    .param(hash).query(UUID.class).optional();       // leitura sem lock
             if (user.isEmpty()) {
                 return false;
             }
+            accounts.lockOrganization(j, org);
+            if (!accounts.lock(j, org, user.get())) {
+                return false;
+            }
+            // reconferencia e consumo atomicos, depois dos locks
+            Optional<String> email = j.sql("""
+                    UPDATE public.email_verification_tokens SET consumed_at = clock_timestamp()
+                     WHERE token_hash = ? AND user_id = ? AND consumed_at IS NULL AND revoked_at IS NULL AND expires_at > clock_timestamp()
+                    RETURNING target_email
+                    """).param(hash).param(user.get()).query(String.class).optional();
+            if (email.isEmpty()) {
+                return false;
+            }
             return j.sql("""
-                    UPDATE public.users u SET email_verified_at = coalesce(u.email_verified_at, clock_timestamp())
-                      FROM public.email_verification_tokens t
-                     WHERE t.token_hash = ? AND u.user_id = t.user_id AND u.email = t.target_email
-                    """).param(Tokens.sha256Hex(token)).update() == 1;
+                    UPDATE public.users SET email_verified_at = coalesce(email_verified_at, clock_timestamp())
+                     WHERE organization_id = ? AND user_id = ? AND email = ?
+                    """).param(org).param(user.get()).param(email.get()).update() == 1;
         });
         if (!ok) {
             throw ApiException.invalid("token");

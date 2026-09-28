@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.nekkora.ops.IntegridadeEAuditoriaIT
+-------------------------------------------------------------------------------
+Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 10.06 s -- in com.nekkora.ops.IntegridadeEAuditoriaIT

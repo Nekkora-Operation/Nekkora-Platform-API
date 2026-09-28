@@ -1,0 +1,71 @@
+data_utc=2026-09-28T15:48:47Z
+commit=effa5163c39ba0c94a95af8fec63c24270d69c8e branch=feat/mfa-emergencia
+contrato=docs/relatorios/2026-09-27-contrato-recuperacao-emergencial-mfa.md sha256=d22f3b6ca227dd5bf86dba191e8685e53cae382053076888f296eb0879264353
+migration_016_sha256=25bef818a7d38c465fffcc5821c1bf9f924ef3cade0f29ec7b79f5b1711fbe61
+git_status_porcelain:
+   M api/nekkora-ops/src/main/java/com/nekkora/ops/cli/ExecutorAtos.java
+   M api/nekkora-ops/src/main/java/com/nekkora/ops/cli/OpsCli.java
+   M api/nekkora-ops/src/test/java/com/nekkora/ops/AvisosIT.java
+   M api/nekkora-ops/src/test/java/com/nekkora/ops/ConcorrenciaIT.java
+   M api/nekkora-ops/src/test/java/com/nekkora/ops/EstadosEPrazosIT.java
+   M api/nekkora-ops/src/test/java/com/nekkora/ops/IdentidadeIT.java
+   M api/nekkora-ops/src/test/java/com/nekkora/ops/IntegridadeEAuditoriaIT.java
+   M api/nekkora-ops/src/test/java/com/nekkora/ops/IsolamentoIT.java
+   M api/nekkora-ops/src/test/java/com/nekkora/ops/MutacoesIT.java
+   M api/nekkora-ops/src/test/java/com/nekkora/ops/SeparacaoDeFuncoesIT.java
+   M api/nekkora-ops/src/test/java/com/nekkora/ops/cli/OpsCliContinuidadeIT.java
+   M api/nekkora-ops/src/test/java/com/nekkora/ops/testsupport/Cenarios.java
+   M api/nekkora-ops/src/test/java/com/nekkora/ops/testsupport/OpsBanco.java
+   M api/nekkora-platform/src/main/java/com/nekkora/platform/account/AccountRepository.java
+   M api/nekkora-platform/src/main/java/com/nekkora/platform/admin/AdminService.java
+   M api/nekkora-platform/src/main/java/com/nekkora/platform/auth/AuthService.java
+   M api/nekkora-platform/src/main/java/com/nekkora/platform/emergency/EmergencyNotices.java
+   M api/nekkora-platform/src/main/java/com/nekkora/platform/mail/LocalMailSender.java
+   M api/nekkora-platform/src/main/java/com/nekkora/platform/mail/MailSender.java
+   M api/nekkora-platform/src/main/java/com/nekkora/platform/web/EmergencyNoticeController.java
+   M api/nekkora-platform/src/main/java/com/nekkora/platform/web/SessionFilter.java
+   M api/nekkora-platform/src/test/java/com/nekkora/platform/EmergencyRecoveryFlowIT.java
+   M api/nekkora-platform/src/test/java/com/nekkora/platform/PlatformTestBase.java
+   M db/migrations/016_recuperacao_emergencial_mfa.sql
+   M db/tests/mfa-emergencia-016/README.md
+   M db/tests/mfa-emergencia-016/run.sh
+   M docs/relatorios/2026-09-27-mfa-emergencia-implementacao.md
+   M docs/relatorios/2026-09-27-mfa-emergencia-matriz-016.md
+   M ops/mfa-emergencia/empacotar.sh
+   M ops/mfa-emergencia/validar.sh
+  ?? api/e2e/email/
+  ?? api/nekkora-ops/src/test/java/com/nekkora/ops/InventarioLocksOpsIT.java
+  ?? api/nekkora-ops/src/test/java/com/nekkora/ops/Revisao4DeclaracaoIT.java
+  ?? api/nekkora-ops/src/test/java/com/nekkora/ops/Revisao4OrigemIT.java
+  ?? api/nekkora-ops/src/test/java/com/nekkora/ops/Revisao4PrazosEImpedimentosIT.java
+  ?? api/nekkora-ops/src/test/java/com/nekkora/ops/Revisao4TentativasIT.java
+  ?? api/nekkora-platform/src/test/java/com/nekkora/platform/InventarioLocksPlatformIT.java
+  ?? api/nekkora-platform/src/test/java/com/nekkora/platform/emergency/
+  ?? db/tests/mfa-014/saidas/2026-09-26T160847Z_nekkora-mfa-014ens/
+  ?? db/tests/mfa-014/saidas/2026-09-26T160926Z_nekkora-mfa-014ens/
+  ?? db/tests/mfa-014/saidas/2026-09-26T161000Z_nekkora-mfa-014ens/
+  ?? db/tests/mfa-014/saidas/2026-09-26T161044Z_nekkora-mfa-014ens/
+  ?? db/tests/mfa-emergencia-016/saidas/
+  ?? db/tests/portal-013/saidas/2026-09-26T043635Z_nekkora-portal-013ens/
+  ?? db/tests/portal-013/saidas/2026-09-26T043648Z_nekkora-portal-013ens/
+  ?? db/tests/portal-013/saidas/2026-09-26T043722Z_nekkora-portal-013ens/
+  ?? db/tests/portal-013/saidas/2026-09-26T043911Z_nekkora-portal-013ens/
+  ?? db/tests/portal-013/saidas/2026-09-26T044135Z_nekkora-portal-013ens/
+  ?? db/tests/portal-013/saidas/2026-09-26T044322Z_nekkora-portal-013ens/
+  ?? db/tests/portal-013/saidas/2026-09-26T044517Z_nekkora-portal-013ens/
+  ?? db/tests/portal-8-2/
+  ?? db/tests/seguranca-012/saidas/2026-09-26T160015Z_nekkora-seg-012h/
+  ?? docs/relatorios/2026-09-28-mfa-emergencia-consolidacao-anexo.md
+  ?? docs/relatorios/2026-09-28-mfa-emergencia-consolidacao-decisoes.md
+  ?? docs/relatorios/2026-09-28-mfa-emergencia-inventario-locks.md
+  ?? ops/mfa-emergencia/saidas/2026-09-28T003057Z/
+  ?? ops/mfa-emergencia/saidas/2026-09-28T023718Z/
+  ?? ops/mfa-emergencia/saidas/2026-09-28T024805Z/
+  ?? ops/mfa-emergencia/saidas/2026-09-28T025340Z/
+  ?? ops/mfa-emergencia/saidas/2026-09-28T025915Z/
+  ?? ops/mfa-emergencia/saidas/2026-09-28T030420Z/
+  ?? ops/mfa-emergencia/saidas/2026-09-28T041923Z/maven.txt
+  ?? ops/mfa-emergencia/saidas/2026-09-28T125940Z/
+  ?? ops/mfa-emergencia/saidas/2026-09-28T154847Z/
+docker=29.7.2
+openjdk version "21.0.12" 2026-07-21 LTS

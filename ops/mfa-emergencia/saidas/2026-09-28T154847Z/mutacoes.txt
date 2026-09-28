@@ -1,0 +1,12 @@
+[mutacao] ops.encerrar(uuid,smallint,text,uuid,timestamp with time zone) detectada por: [recusa terminal encerra] expected: "RECUSADA" but was: "SOLICITADA"
+[mutacao] ops.operador_da_sessao(),ops.autorizar(uuid,smallint,timestamp with time zone) detectada por: expected: "RECUSA" but was: "OK"
+[mutacao] public.ops_mfa_execute(uuid) detectada por: [ao titular=true] expected: "CONDICAO_DE_AVISO_ALTERADA" but was: null
+[mutacao] public.ops_notice_delivery_result(uuid,smallint,text) detectada por: [seq maior nunca e invalidado] expected: 0L but was: 2L
+[mutacao] public.ops_mfa_execute(uuid) detectada por: [execucao com certificado revogado depois do snapshot] expected: "25N01" but was: "executou:OK"
+[mutacao] public.ops_notice_issue(uuid,text,text) detectada por: [token antigo nascido depois do aceite da nova] Expecting value to be false but was true
+[mutacao] public.ops_mfa_execute(uuid) detectada por: [nenhum efeito parcial] expected: "1|2|1|1" but was: "0|0|0|0"
+[mutacao] public.ops_mfa_open(uuid,uuid,uuid,uuid,uuid) detectada por: [outra origem: Resultado[solicitacao=null, classe=RECUSA, motivo=LIMITE_ORIGEM, estado=null, origem=BANCO, sqlstate=null, falhaRegistrada=false]] expected: OK but was: RECUSA
+[mutacao] public.ops_mfa_execute(uuid) detectada por: expected: "DECLARACAO_CONTRADITA" but was: "OK"
+[mutacao] ops.autorizar(uuid,smallint,timestamp with time zone) detectada por: expected: "RECUSA" but was: "OK"
+[mutacao] public.ops_mfa_execute(uuid) detectada por: expected: "PRAZO_ENCERRADO|EXPIRADA" but was: "CONDICAO_DE_AVISO_ALTERADA|APROVADA"
+[mutacao] public.ops_notice_issue(uuid,text,text) detectada por: Expecting value to be true but was false

@@ -1,6 +1,6 @@
 # Recuperação emergencial de MFA — implementação e validação (candidato)
 
-**Data:** 2026-09-27; **rodada 2** em 2026-09-28, com as correções dos cinco achados da revisão (§5d).
+**Data:** 2026-09-27; **rodada 2** em 2026-09-28, com as correções dos cinco achados da revisão (§5d); **rodada 3** (revisão 4 do contrato e achados I-1–I-5 do inventário de locks) em 2026-09-28, §5f, com as correções da revisão dela na §5g, **sem commit**.
 **Branch:** `feat/mfa-emergencia`, sobre `ca4033b` (contrato aprovado, revisão 3 final; SHA-256 `d22f3b6ca227dd5bf86dba191e8685e53cae382053076888f296eb0879264353`).
 **Estado:**
 - **Candidato para revisão.** Não habilitado em produção.
@@ -189,10 +189,10 @@ Sem divergência deliberada do contrato. Estes pontos são **interpretações** 
    - recusas do próprio ator (certificado, habilitação, distinção, vínculo do ator, estado, parâmetro, espera ainda não cumprida) **não** encerram a solicitação;
    - recusas da solicitação a encerram (`RECUSADA`/`EXPIRADA`).
    - O contrato fala em `RECUSADA_NA_EXECUCAO` sem distinguir os dois casos.
-4. **Limite por origem:** 3 aberturas por contato solicitante em 24 h (o contrato dá "ex.: 3").
-5. **Cenário C ("único ORG_ADMIN"):** o banco exige `ORG_ADMIN` efetivo com fator confirmado, mas **não** que ele seja o único. "Outro administrador disponível" não é aferível pelo banco e fica com o julgamento do verificador, registrado.
+4. **Limite por origem:** 3 aberturas por contato solicitante em 24 h. *[Correção factual de 2026-09-28]* O contrato **não** fixa número; 3 é escolha da implementação. A cota conta o contato **alegado** na abertura, e uma origem que só alega ser um contato esgota a cota dele: **lacuna** diante de D6(a). Decisão e desenho substituto em `2026-09-28-mfa-emergencia-consolidacao-decisoes.md`, §1 e §4.
+5. **Cenário C ("único ORG_ADMIN"):** o banco exige `ORG_ADMIN` efetivo com fator confirmado, mas **não** que ele seja o único. "Outro administrador disponível" não é aferível pelo banco e fica com o julgamento do verificador. *[Correção factual de 2026-09-28]* Esse julgamento **não é registrado** hoje: `ops_mfa_verify` não recebe declaração sobre os demais administradores (**lacuna**). Decisão e desenho em `2026-09-28-mfa-emergencia-consolidacao-decisoes.md`, §1 e §5.
 6. **Tentativas com token desconhecido** não geram evento no banco (não há destinatário a atribuir); a Platform registra só a categoria. Tokens conhecidos geram `AVISO_INVALIDO` com destinatário e finalidade.
-7. **Consulta sem a trava** (`TRAVA_NAO_OBTIDA`) não é gravada no banco, porque o registro exigiria a própria trava. Fica no log local da CLI, com alerta.
+7. **Consulta sem a trava** (`TRAVA_NAO_OBTIDA`) não é gravada no banco, porque o registro exigiria a própria trava. *[Correção factual de 2026-09-28]* Na **reconciliação**, fica no log local da CLI, com alerta. Na **consulta avulsa** (`consultar`), fica só no log local, com código de saída 4 e **sem alerta**, e o mesmo vale para `CONSULTA_IMPOSSIVEL` (**lacuna** diante de C:235). Correção decidida em `2026-09-28-mfa-emergencia-consolidacao-decisoes.md`, §3.5.
 8. **Aviso de reset administrativo aos "demais" `ORG_ADMIN`:** todos os efetivos exceto o alvo, incluindo o ator.
 9. **Confirmação tardia demais para aprovar.** Um `CONFIRMAR` usado dentro da própria validade (`min(T_total, emissão + 24 h)`, §6.1), mas com `confirmação + 24 h ≥ T_total`, é **aceito e registrado**. A solicitação então não alcança a aprovação final e expira em `T_total`, que é o resultado que o §6 exige.
    - A alternativa seria recusar essa confirmação no POST. O efeito prático é o mesmo (nenhuma aprovação possível); a diferença é só o que fica registrado.
@@ -204,7 +204,9 @@ Sem divergência deliberada do contrato. Estes pontos são **interpretações** 
      - passado `T_total`, a aprovação encerra a solicitação como **`EXPIRADA`** (`PRAZO_ENCERRADO`), e a execução é recusada (`ESTADO_INVALIDO`);
      - **nenhum reset:** zero eventos tipo 4, fator aprovado ativo, e códigos, desafios, sessões e identidade da conta idênticos.
    - Além disso, a CHECK `final_approved_at >= notice_confirmed_at + 24 h AND final_approved_at < t_total` torna essa aprovação impossível também na tabela.
-10. **Reenvio de `CONTESTAR`** existe só para o titular (`ops_mfa_resend_notice`). Os demais administradores recebem o `CONTESTAR` uma vez por marco. O contrato não exige reenvio a eles.
+10. **Reenvio de `CONTESTAR`** existe só para o titular (`ops_mfa_resend_notice`). Os demais administradores recebem o `CONTESTAR` uma vez por marco. *[Correção factual de 2026-09-28]* O contrato prevê reenvio de `CONTESTAR` **por destinatário** (C:179: "invalida o anterior do mesmo destinatário"), e a falha de entrega hoje só vai para o log da Platform (**lacuna**). Decisão e desenho em `2026-09-28-mfa-emergencia-consolidacao-decisoes.md`, §1 e §6.
+
+*As quatro correções factuais acima (itens 4, 5, 7 e 10) foram autorizadas na revisão de 2026-09-28. O texto anterior está em `effa516`. A consolidação dos dez itens, com as decisões, está em `2026-09-28-mfa-emergencia-consolidacao-decisoes.md` e no anexo `2026-09-28-mfa-emergencia-consolidacao-anexo.md`.*
 
 ## 5a. Verificação independente (retomada, 2026-09-28 ~02:30Z)
 
@@ -342,6 +344,120 @@ A revisão conferiu que os anexos da rodada 1 eram idênticos aos já revisados 
   - as execuções não oficiais e a inválida (estão só no pacote);
   - as saídas brutas da suíte de banco (`db/tests/mfa-emergencia-016/saidas/`), cujos resumos estão na evidência oficial.
 
+## 5f. Rodada 3 — revisão 4 do contrato e inventário de locks (2026-09-28, sem commit)
+
+**Autorização:** passos 1–4 da mensagem de aprovação de I-5 (consolidar I-5 e a restrição de entrega; detalhar as tabelas novas; corrigir I-1–I-5 e implementar os desenhos aprovados; contraprovas, testes determinísticos, regressão e pacote). **Fora da autorização, e não feitos:** commit, integração, aplicação em bases persistentes, retomada do e-mail real e frontend.
+
+**Documentos de decisão** (não versionados antes desta rodada): `2026-09-28-mfa-emergencia-consolidacao-decisoes.md` (v6), `…-consolidacao-anexo.md` (v5) e `…-inventario-locks.md` (v3, com o esquema detalhado no §10 e a decisão de I-5 no §11.1).
+
+### 5f.1 O que mudou
+
+| Área | Mudança |
+|---|---|
+| 016 | Revisão 4 descrita no cabeçalho. Papel `nekkora_ops_intake` (LOGIN, só `ops_intake_register` e `ops_intake_key_activate`). 7 tabelas novas (estado das versões de chave, entradas, baldes de origem, retornos pelo canal registrado, fotografia dos considerados, histórico de resultados de entrega, tentativas consideradas na aprovação): 21 tabelas em `ops`. 8 funções públicas novas: 37 `ops_*`. Janelas em horas (720 h e 168 h). FK `ops_registry_events.organization_id` retirada (I-3/I-4; coluna e valor mantidos). Tentativas de aviso numeradas com máquina de estados em trigger. `ops_mfa_record_failure` na ordem canônica (I-2). Contas envolvidas (alvo, considerados e destinatários) travadas juntas em ordem crescente (`ops.travar_contas`), com `CONTAS_EM_MUDANCA` quando aparece conta necessária não travada (I-5) |
+| Platform | `confirmEmail`: organização → conta → reconferência e consumo do token (I-1). `resetMfa`: verificação preliminar sem lock → organização → ator e alvo em ordem crescente no modo final → reconferência de sessão, step-up, permissão e alvo ≠ ator → efeitos (I-5). `EmergencyNotices`: emissão → reivindicação `ENTREGANDO` → entrega única → resultado; reconciliação só na mesma execução e só antes de chamar o transporte (restrição v6); `recoverStalled`; categoria do token no log, sem segredo. `MailSender.Outcome` |
+| CLI | `retorno <contato>`; `abrir … entrada|retorno <id>`; declaração dos demais na `verificar`; `reenviar-aviso <s> <destinatario>`; alerta na consulta avulsa (item 7) |
+
+**Correção durante a rodada:** o primeiro ensaio de regressão falhou em quase todas as classes com `55000` (`record "v_ent" is not assigned yet`) na abertura por retorno: o registro da entrada só era atribuído no caminho por entrada. Corrigido atribuindo a origem vazia no outro caminho (`ops_mfa_open`). Testes existentes ajustados porque a revisão 4 muda a preparação ou o resultado esperado (nenhum por relaxar regra):
+- `ConcorrenciaIT.ultimaRecuperacaoDaOrganizacaoDisputadaPorDoisAlvos`: a perdedora agora termina em `ADMIN_PODE_CADASTRAR` (o alvo vencedor, fotografado com fator, pode cadastrar), conferido antes do limite; o `LIMITE_ORGANIZACAO` passou a ser coberto numa verificação posterior;
+- `IntegridadeEAuditoriaIT.eventoDeReset…` e `EstadosEPrazosIT.alvoInelegivel`: o outro administrador passa a existir **antes** da verificação (criado depois, a composição fotografada muda);
+- `IntegridadeEAuditoriaIT.fatorAprovadoDeOutraConta…`: o INSERT estrutural preenche as colunas novas obrigatórias, para que só a FK composta falhe;
+- contagens: 37 funções (`IsolamentoIT`, com o chamador `nekkora_ops_intake`), 23 tabelas na varredura (21 de `ops` + 2), suíte de banco (37 e 21).
+
+### 5f.2 Testes novos
+
+| Classe | Cobre |
+|---|---|
+| `InventarioLocksPlatformIT` (12) | I-1: contraprova da ordem anterior (`40P01`), espera simples depois, dois `confirmEmail` com o mesmo token (um consumo), token vencido/revogado/consumido/de outra organização, disputa com ato da 016 nas duas ordens. I-5: contraprova dos resets cruzados (`40P01`), resets cruzados nas duas ordens com **exatamente um** concluído, segundo reset depois do commit do primeiro, recusa depois de sessão revogada, permissão retirada e step-up vencido **durante a espera pelos locks**, e reset concorrente com execução, pré-aprovação e reenvio da 016 nas duas ordens |
+| `InventarioLocksOpsIT` (7) | I-2: contraprova e espera simples nas duas ordens, solicitação inexistente. I-3/I-4: contraprova, vínculo e prova de conta sem esperar a organização, organização ainda gravada no evento, só a FK prevista retirada |
+| `Revisao4PrazosEImpedimentosIT` (6) | Item 1: `limite − 1 µs`, `limite`, `limite + 1 s` para a carência e as duas janelas, em quatro `TimeZone` (Europe/Berlin atravessa a mudança de horário, conferido); fluxo com contato a 719 h e 720 h. Item 2: terceiro contato em cada ato e na reconferência da execução. Item 3: matriz de recusas (ato × terminal, com evento) e erros técnicos (guarda `25N01`, falha injetada) sem recusa |
+| `Revisao4OrigemIT` (8) | Item 4: origem não comprovada, recusas da entrada, retorno com canal alterado ou de outro operador, 4 aberturas concorrentes → 3, mesma origem em duas organizações → 3, rotação (entrada anterior à ativação, contagem única dos dois pseudônimos, 25 h, ativação que espera abertura em curso) |
+| `Revisao4DeclaracaoIT` (7) | Item 5: declaração, fotografia completa e imutável, os quatro sinais confirmados antes do ato, considerado sem fator, fluxo que espera a execução, sinal confirmado durante a espera da execução, `CONTAS_EM_MUDANCA` |
+| `Revisao4TentativasIT` (11) | Item 10: transições permitidas e proibidas, idempotência, recuperação, worker × varredura, vigente (falhas e desconhecidos), aceite fora de ordem com uso dos tokens, reenvio que falha, `ENFILEIRADA` não satisfaz (2), aceite tardio e expiração, reenvio depois da aprovação ao titular e ao outro administrador, registro de aceite × execução nas duas ordens |
+| `EntregaReivindicacaoIT` (7) | §6.8 com o `EmergencyNotices` real sobre `DataSource` com falhas injetadas: confirmação do commit perdida com e sem aplicação, banco inacessível na reconciliação, varredura antes da reconciliação, dois processos, queda depois da entrega, transporte incerto. Contador confirma que cada falha foi disparada. **Alcance:** chamadas observadas pelo harness por `attempt_id`, não recebimento exatamente uma vez |
+| `EmergencyRecoveryFlowIT` (+1) | Item 6: token de outra organização, desconhecido e malformado sem escrita; recusa atribuível registrada; log com categoria e organização da rota, sem token, hash nem destinatário, com controle positivo da captura |
+| `OpsCliContinuidadeIT` (+2) | Item 7: consulta avulsa sem a trava e com banco inacessível → código 4, alerta no log local, nada no banco |
+| `MutacoesIT` (+5) | Cota por contato, invalidação de tentativa posterior, `notice_seq_at_approval` ignorada, sinais lidos antes dos locks, `encerrar` sem efeito: **todas detectadas** |
+
+### 5f.3 Resultado
+
+Execução oficial `ops/mfa-emergencia/saidas/2026-09-28T125940Z/` — `resultado=APROVADO`:
+- suíte de banco: 0 (37 funções, 21 tabelas, dados da base populada idênticos, restauração lógica);
+- Maven: 0 — core 5, ops 119, platform 64, portal 12 (200 métodos);
+- mutações: 0 — **10 de 10** detectadas;
+- varredura: 0 achados; controle positivo 200/200 tokens e 5/5 marcadores;
+- preservação: containers fora da validação idênticos antes e depois; migrations 001–015 iguais a `ca4033b` e a `origin/main`.
+
+### 5f.4 Limites desta rodada
+
+- **Contraprovas "ordem anterior"** de I-1, I-2, I-3/I-4 e I-5 reproduzem em SQL direto a sequência de locks do código anterior (inventário §4). Elas provam que aquela ordem produz `40P01`; não executam o código anterior.
+- **Sinais do item 5** no ops são escritos em SQL na forma da autenticação (conta `FOR UPDATE` → sinal). O login real concorrente com a execução é coberto só pelo reset (Platform), não pelos quatro sinais.
+- **`CONTAS_EM_MUDANCA`** só é alcançável quando um papel `ORG_ADMIN` é inserido com responsável (não trava a organização) durante a espera do ato. As demais mudanças de composição esperam a organização.
+- **Limites de 25 h da rotação** testados com margem de 5 s, não de 1 µs: o registro de entrada usa `clock_timestamp()` e não recebe `p_agora`.
+- **Serviço de entrada** (desafio de ida e volta, chave HMAC em cofre) é dependência proposta, simulada nos testes com pseudônimos aleatórios.
+- **Varredura de recuperação** (`recoverStalled`) está implementada e testada, mas **não** é agendada, assim como a emissão periódica (desligada por padrão).
+- **Alerta da CLI** vai ao log local e ao `System.err` do processo, não ao fluxo de erro injetado em `OpsCli.executar`.
+- **Emissor e revogador de token de verificação de e-mail** não existem no código. A regra para quando existirem (organização → conta → token) está no inventário §4.1.
+
+### 5f.5 Limpeza da rodada
+
+- `nk016-r4` (ensaio manual da 016 revisão 4, rede none): **removido** (`docker rm -f nk016-r4`).
+- `nekkora-mfa016-limpa` e `nekkora-mfa016-populada` do primeiro ensaio da suíte, que falhou pela contagem antiga de funções: **removidos**.
+- `scratchpad/016_effa516.sql` (cópia da 016 de `effa516`, fora do repositório): pode ser apagado.
+
+## 5g. Correções da revisão da rodada 3 (2026-09-28, sem commit)
+
+A revisão estática do pacote `mfa-emergencia-implementacao-20260928T153401Z` (SHA-256 `4b35f25f…caf93b`, conferido pelo revisor) apontou dois defeitos e dois ajustes documentais. Os resultados da §5f continuam válidos para o que cobriam; as limitações da §5f.4 continuam.
+
+**1. Tentativa antiga emitia tokens depois do aceite da nova** (`ops_notice_issue`).
+- Entrelaçamento: tentativa 1 criada sem tokens → tentativa 2 emitida e `ACEITA` → emissão da 1. O aceite da 2 só invalida tokens existentes, e o aceite tardio da 1 só invalida `seq` menores: o token antigo nascia depois da substituição e valia.
+- Correção: a emissão não gera token de finalidade para a qual já existe tentativa **posterior** do mesmo destinatário **`ACEITA`** com token dessa finalidade. Sem finalidade restante, a tentativa vai a `FALHOU` com `SUBSTITUIDA_POR_TENTATIVA_ACEITA` e não sai. Uma tentativa posterior `FALHOU`, `DESCONHECIDO`, `ENFILEIRADA` ou `ENTREGANDO` **não** impede a emissão nem a entrega da anterior.
+- Testes:
+  - `Revisao4TentativasIT.tentativaAntigaNaoEmiteDepoisDoAceiteDaNova`: outro administrador e titular, com `CONFIRMAR` e `CONTESTAR`;
+  - `…tokenAntigoRecusadoENovoUtilizavel`;
+  - `…tentativaAntigaEmiteQuandoANovaFalhouOuEIncertaOuPendente`: nova em `FALHOU`, `DESCONHECIDO`, `ENFILEIRADA` e `ENTREGANDO`;
+  - `EmergencyRecoveryFlowIT.tentativaAntigaEmitidaDepoisDoAceiteDaNovaNaoValePelaRota`, pela **rota HTTP real**: o `CONTESTAR` cujo hash a tentativa antiga ofereceu ao ser emitida recebe 400 com a resposta pública comum, e o da nova recebe 204. O mesmo teste faz a **contraprova na rota**: com a verificação retirada da emissão (definição alterada só na base de teste, restaurada e conferida), o token antigo recebe 204;
+  - `EntregaReivindicacaoIT.tentativaAntigaSoSaiSeANovaNaoFoiAceita`, com o despachante real: com a nova aceita, nenhuma chamada ao transporte para a antiga; com a nova recusada pelo transporte, a antiga sai uma vez;
+  - mutação **M11** (`MutacoesIT`): detectada.
+
+**2. Reenvio depois da aprovação impedia o encerramento por prazo** (`ops_mfa_execute`).
+- `CONDICAO_DE_AVISO_ALTERADA` vinha antes de `ops.vencida`: executar depois do prazo mantinha `APROVADA`.
+- Correção: depois das conferências de autorização, estado, executor, vínculo e contas, o **prazo** é conferido primeiro (→ `EXPIRADA`, `PRAZO_ENCERRADO`), e só então a condição de aviso (recusa do ato).
+- Testes:
+  - `Revisao4TentativasIT.prazoTemPrecedenciaSobreACondicaoDeAviso`, com reenvio depois da aprovação e passagem de 59 min, 60 min e 2 h: antes do vencimento, `CONDICAO_DE_AVISO_ALTERADA` e `APROVADA`; no vencimento e depois, `EXPIRADA`. Nunca há reset, a repetição do ato não muda o desfecho, e a primeira confirmação, `T_total` e a aprovação ficam inalteradas;
+  - `…limiteExatoDaJanelaDeExecucao`, por `p_agora`: `aprovação + 60 min − 1 µs` não vencida; `+ 60 min` e `+ 60 min + 1 s` vencida;
+  - mutação **M12** (ordem anterior: condição antes do prazo): detectada.
+
+**Ajustes documentais:**
+- o comentário de `ops_mfa_record_failure` descreve a ordem implementada (organização → conta → solicitação → operador, com reconferência);
+- o manifesto usa caminhos relativos à **raiz do pacote** (a pasta de primeiro nível do ZIP), sem o prefixo `pacote/`. `cd <pacote> && sha256sum -c manifesto.sha256` confere tudo diretamente, e o empacotador faz essa conferência antes de gerar o ZIP. Arquivos entregues removidos, se houver, vão para `arquivos-removidos.txt`;
+- a decisão do item 10 (§6.3 e §6.6 de `…consolidacao-decisoes.md`) registra as duas correções.
+
+**Resultado:** execução oficial `ops/mfa-emergencia/saidas/2026-09-28T154847Z/` — `resultado=APROVADO`:
+- suíte de banco: 0;
+- Maven: 0 — core 5, ops 126, platform 66, portal 12 (209 métodos);
+- mutações: 0 — **12 de 12** detectadas;
+- varredura: 0 achados, com controle positivo OK;
+- preservação: 0.
+
+Antes dela, os testes direcionados passaram: `Revisao4TentativasIT` (16), `MutacoesIT` (12), `EmergencyRecoveryFlowIT` (4) e `EntregaReivindicacaoIT` (8). Depois da execução oficial só mudaram este relatório e o empacotador (rótulo da execução anterior).
+
+## 5h. Encerramento da revisão da rodada 3 (2026-09-28)
+
+- **Revisão concluída** por inspeção do código e das evidências, sem reexecução de Maven, Docker ou PostgreSQL pelo revisor.
+- **Conferido:**
+  - ZIP `mfa-emergencia-implementacao-20260928T155926Z.zip`, SHA-256 `741a2d3fad07a81fbc12c8477406885657093cc3b3bd56d7dab84c4ab8c7d19d`;
+  - manifesto 160/160, sem divergência;
+  - migration 016, SHA-256 `25bef818a7d38c465fffcc5821c1bf9f924ef3cade0f29ec7b79f5b1711fbe61`;
+  - código das duas correções da §5g, testes direcionados, contraprovas M11 e M12;
+  - evidência oficial `2026-09-28T154847Z`: 209 testes, 12/12 mutações e todas as etapas com saída 0.
+- **Os dois achados da revisão da rodada 3 estão encerrados** dentro do escopo revisado.
+- **Precisões do revisor:**
+  - na execução depois de expirar, a repetição retorna `ESTADO_INVALIDO`, mantendo `EXPIRADA` e sem reset. O teste confere isso; não é repetição do mesmo motivo;
+  - o texto das definições colado na conversa foi conferido contra o arquivo do ZIP, que está completo e correto.
+- **Commit autorizado** do conjunto revisado na `feat/mfa-emergencia`, com a evidência oficial `2026-09-28T154847Z` (sem o log bruto do Maven, como na rodada 2). O conteúdo foi conferido contra o manifesto antes do commit; a única diferença posterior à revisão é esta nota (§5h).
+- **Continuam:** os limites documentados (§5f.4, §6) e os bloqueios de produção (§7). A aprovação não autoriza aplicação em bases persistentes, retomada do e-mail real nem frontend.
+
 ## 6. Limitações
 
 - **CA e IdP são bibliotecas testadas em processo**, com o IdP simulado. Não há serviço HTTP da CA nem integração com um IdP real; o transporte CLI ↔ CA é dependência de implantação.
@@ -396,7 +512,14 @@ Requisitos: Docker, JDK 21, Git Bash/Linux/macOS e Python 3.
 
 O pacote vai para `../relatorios/`. **No Windows**, extraia numa pasta curta (por exemplo `C:\rev`): o maior caminho dentro do ZIP tem 144 caracteres, e extrair sob um diretório profundo esbarra no limite de 260 caracteres. A conferência do manifesto também pode ser feita sem extrair, lendo os membros do ZIP.
 
-Conteúdo:
+**Rodada 3:**
+- o diff é contra `effa516` (candidata revisada da rodada 2; `BASE=ca4033b ops/mfa-emergencia/empacotar.sh` gera o diff desde o contrato);
+- a evidência é `2026-09-28T154847Z` (depois das correções da §5g); `125940Z` (pacote anterior) e a oficial da rodada 2 (`041923Z`) vão em `outras-execucoes/`;
+- o manifesto usa caminhos relativos à raiz do pacote (§5g);
+- os três documentos de decisão (`2026-09-28-mfa-emergencia-*.md`) vão na raiz do pacote;
+- **depois** da execução oficial só mudaram este relatório e o empacotador (rótulo da execução anterior). Código, migration, testes e runners estão como foram validados.
+
+Conteúdo (rodadas 1 e 2; a rodada 3 segue a mesma estrutura com as diferenças acima):
 - diff contra `ca4033b`, com os arquivos novos;
 - `repo/<caminho>`: a versão **final** de cada arquivo entregue, conferida contra o manifesto;
 - `git status`;

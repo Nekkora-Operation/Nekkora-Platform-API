@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.nekkora.platform.emergency.EntregaReivindicacaoIT
+-------------------------------------------------------------------------------
+Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 22.10 s -- in com.nekkora.platform.emergency.EntregaReivindicacaoIT

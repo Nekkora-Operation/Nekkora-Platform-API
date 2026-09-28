@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Pacote de revisao da recuperacao emergencial de MFA (016, candidata) em ../relatorios/ (fora do repositorio):
-# diff contra a base (ca4033b, contrato aprovado) com os arquivos novos, os ARQUIVOS FINAIS entregues em
+# diff contra a base (padrao effa516, candidata revisada da rodada 2; BASE=ca4033b para o diff desde o contrato) com os arquivos novos, os ARQUIVOS FINAIS entregues em
 # repo/<caminho>, git status, lista e manifesto SHA-256 dos arquivos entregues (conferidos contra repo/), relatorio, matriz e a evidencia sanitizada mais recente de ops/mfa-emergencia/validar.sh.
 # Nao faz commit, stage nem push. Uso: ops/mfa-emergencia/empacotar.sh [diretorio-de-evidencia]
 set -euo pipefail
 
 AQUI="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$AQUI/../.." && pwd)"
-BASE=ca4033b
+BASE="${BASE:-effa516}"
 DESTINO="$(cd "$REPO/.." && pwd)/relatorios"
 EVID="${1:-$(ls -td "$AQUI"/saidas/*/ 2>/dev/null | head -1)}"
 [ -n "$EVID" ] && [ -f "$EVID/resumo.txt" ] || { echo "ERRO: evidencia de validar.sh ausente" >&2; exit 1; }
@@ -34,7 +34,7 @@ cat "$PKG/arquivos-alterados.txt" "$PKG/arquivos-novos.txt" | sort -u > "$PKG/ar
     echo "db0164c incorporado? $(git merge-base --is-ancestor db0164c HEAD && echo SIM || echo nao)"
     git status --porcelain --untracked-files=all
 } > "$PKG/git-status.txt"
-cp docs/relatorios/2026-09-27-mfa-emergencia-implementacao.md docs/relatorios/2026-09-27-mfa-emergencia-matriz-016.md "$PKG/"
+cp docs/relatorios/2026-09-27-mfa-emergencia-implementacao.md docs/relatorios/2026-09-27-mfa-emergencia-matriz-016.md docs/relatorios/2026-09-28-mfa-emergencia-*.md "$PKG/"
 # arquivos FINAIS entregues (versao completa, nao so o patch), no mesmo caminho do repositorio: repo/<caminho>
 while read -r f; do
     [ -f "$f" ] || continue
@@ -68,6 +68,8 @@ fi
 # demais execucoes: so resumo, etapas e o fim da suite de banco, para rastreabilidade; LEIA.txt diz o papel de cada uma
 papel() {
     case "$1" in
+        2026-09-28T125940Z) echo "OFICIAL DA RODADA 3 ANTES DAS CORRECOES DA REVISAO (pacote 20260928T153401Z; nao cobre os dois defeitos corrigidos na secao 5g)";;
+        2026-09-28T041923Z) echo "OFICIAL DA RODADA 2 (commit effa516; nao cobre a revisao 4 nem I-1 a I-5)";;
         2026-09-28T030420Z) echo "OFICIAL DA RODADA 1 (revisada; valida para os cenarios executados, nao cobre os achados da rodada 2)";;
         2026-09-28T023718Z) echo "nao oficial: antes do teste da confirmacao tardia, da varredura corrigida e dos codigos por etapa";;
         2026-09-28T024805Z) echo "nao oficial: aprovada, mas sem a lista por metodo";;
@@ -93,28 +95,42 @@ repo, pkg = sys.argv[1], sys.argv[2]
 def h(p):
     with open(p, 'rb') as f:
         return hashlib.sha256(f.read()).hexdigest()
+# Caminhos do manifesto relativos a RAIZ DO PACOTE (a pasta de primeiro nivel do ZIP), sem prefixo: depois de extrair,
+# `cd <pacote> && sha256sum -c manifesto.sha256` confere tudo diretamente. Arquivos entregues removidos (sem conteudo)
+# vao para arquivos-removidos.txt, fora do manifesto. O proprio manifesto nao se lista.
 linhas = []
+removidos = []
 for rel in open(os.path.join(pkg, 'arquivos-entregues.txt'), encoding='utf-8').read().split():
     p = os.path.join(repo, rel)
-    linhas.append(f"{h(p)}  repo/{rel}" if os.path.isfile(p) else f"REMOVIDO  repo/{rel}")
+    if os.path.isfile(p):
+        linhas.append(f"{h(p)}  repo/{rel}")
+    else:
+        removidos.append(f"repo/{rel}")
+if removidos:
+    open(os.path.join(pkg, 'arquivos-removidos.txt'), 'w', encoding='utf-8', newline='\n').write('\n'.join(removidos) + '\n')
 for raiz, _, arquivos in os.walk(pkg):
     for a in sorted(arquivos):
         p = os.path.join(raiz, a)
         rel = os.path.relpath(p, pkg).replace(os.sep, '/')
-        if rel.startswith('repo/'):
-            continue  # ja listados como repo/<caminho>; o mesmo hash e conferido abaixo
-        linhas.append(f"{h(p)}  pacote/{rel}")
+        if rel.startswith('repo/') or rel == 'manifesto.sha256':
+            continue  # repo/ ja listado a partir do repositorio; o mesmo hash e conferido abaixo
+        linhas.append(f"{h(p)}  {rel}")
 # cada arquivo entregue do manifesto (repo/...) precisa estar no pacote, em repo/<caminho>, com o mesmo hash
 faltas = []
 for l in linhas:
     h_, rel = l.split('  ', 1)
-    if rel.startswith('repo/') and h_ != 'REMOVIDO':
+    if rel.startswith('repo/'):
         p = os.path.join(pkg, rel)
         if not os.path.isfile(p) or h(p) != h_:
             faltas.append(rel)
 if faltas:
     sys.exit('ERRO: arquivos do manifesto ausentes ou divergentes no pacote: ' + ', '.join(faltas))
 open(os.path.join(pkg, 'manifesto.sha256'), 'w', encoding='utf-8', newline='\n').write('\n'.join(linhas) + '\n')
+# conferencia direta, como o revisor fara: cada linha, relativa a raiz do pacote
+for l in linhas:
+    h_, rel = l.split('  ', 1)
+    if h(os.path.join(pkg, rel)) != h_:
+        sys.exit('ERRO: conferencia direta do manifesto falhou em ' + rel)
 z = pkg + '.zip'
 with zipfile.ZipFile(z, 'w', zipfile.ZIP_DEFLATED) as zf:
     for raiz, _, arquivos in os.walk(pkg):
