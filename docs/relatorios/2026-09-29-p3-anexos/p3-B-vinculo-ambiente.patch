@@ -1,0 +1,53 @@
+diff --git a/ops/homologacao/homologacao.sh b/ops/homologacao/homologacao.sh
+index 621675f..cfea330 100644
+--- a/ops/homologacao/homologacao.sh
++++ b/ops/homologacao/homologacao.sh
+@@ -87,8 +87,8 @@ criar)
+         016) [[ "$HOMOLOG_ID" =~ ^ensaio- ]] || falha "a 016 na homologacao so em ambiente descartavel (id ensaio-*)"
+              # sem a linha autorizada (etapa P3), a 016 rodaria sem privilegio, falharia e poderia deixar historico do
+              # Flyway com success=false: recusa ANTES de criar qualquer recurso
+-             grep -vE '^\s*(#|$)' "$AQUI/implantacao/elevacao.txt" | grep -qE '^016 [0-9a-f]{64}$' \
+-                 || falha "a 016 exige a linha de elevacao autorizada em implantacao/elevacao.txt (etapa P3); para o desenho anterior, HOMOLOG_ATE=015";;
++             grep -vE '^\s*(#|$)' "$AQUI/implantacao/elevacao.txt" | grep -qE "^016 [0-9a-f]{64}( $HOMOLOG_ID)?\$" \
++                 || falha "a 016 exige a linha de elevacao autorizada em implantacao/elevacao.txt (etapa P3) para este id ($HOMOLOG_ID); para o desenho anterior, HOMOLOG_ATE=015";;
+         *) falha "HOMOLOG_ATE invalido (015 ou 016)";;
+     esac
+ 
+diff --git a/ops/homologacao/implantacao/elevacao.txt b/ops/homologacao/implantacao/elevacao.txt
+index 59f3177..434e29c 100644
+--- a/ops/homologacao/implantacao/elevacao.txt
++++ b/ops/homologacao/implantacao/elevacao.txt
+@@ -15,3 +15,6 @@
+ 011 38a509845cb4459311b7edfda135ad1ca46203af7387fa45f1e356b200e87ef9
+ 012 d3929cc76261debb47740bb0167d1e3438e00b14e01eca2a793716e5ce8321f4
+ 013 c6192bff305f3888710ef9430751452b7a48a5bc7078691a16e16ddebb4c14d9
++# 016 (P3): terceira coluna = id do UNICO ambiente em que a elevacao desta versao vale; implantar.sh recusa em qualquer
++# outro, antes de conceder. Decisao: docs/relatorios/2026-09-29-mfa-emergencia-homologacao-p3-decisao-elevacao.md
++016 25bef818a7d38c465fffcc5821c1bf9f924ef3cade0f29ec7b79f5b1711fbe61 ensaio-016a
+diff --git a/ops/homologacao/implantacao/implantar.sh b/ops/homologacao/implantacao/implantar.sh
+index a10ee69..8b2c401 100644
+--- a/ops/homologacao/implantacao/implantar.sh
++++ b/ops/homologacao/implantacao/implantar.sh
+@@ -13,8 +13,9 @@
+ #   - versoes PENDENTES aplicadas uma a uma (flyway migrate -target=<versao>), modo transacional por arquivo:
+ #     sem BEGIN proprio (001-011) -> executeInTransaction=true; com BEGIN/COMMIT proprio (012+) -> false;
+ #   - ELEVACAO so para versao listada em implantacao/elevacao.txt COM o sha256 exato do arquivo, e com
+-#     HOMOLOG_AUTORIZA_ELEVACAO=1. Janela = uma versao. Depois de cada janela e ao final: SUPERUSER revogado, sessoes do
+-#     migrador encerradas, atributos e memberships finais conferidos;
++#     HOMOLOG_AUTORIZA_ELEVACAO=1; com terceira coluna na linha, so no ambiente com exatamente aquele id. Janela = uma
++#     versao. Depois de cada janela e ao final: SUPERUSER revogado, sessoes do migrador encerradas, atributos e
++#     memberships finais conferidos;
+ #   - FALHA NA REVOGACAO OU NA CONFERENCIA e falha da implantacao: o runner para (codigo 4), MANTEM a trava e exige
+ #     "homologacao.sh recuperar". Falha de migration: tenta revogar e conferir; so libera a trava se o estado estiver limpo;
+ #   - revogacao EXECUTADA E CONFERIDA nos caminhos testados (fim normal, falha de migration, sinal capturavel). Um
+@@ -131,7 +132,10 @@ for f in "$HOMOLOG_MIGRACOES_HOST"/[0-9]*.sql; do
+     modo=true
+     grep -qE '^\s*BEGIN\s*;' "$f" && modo=false
+     autorizado="$(awk -v v="$v" '$1 == v {print $2}' <(grep -vE '^\s*(#|$)' "$LISTA"))"
++    alvo="$(awk -v v="$v" '$1 == v {print $3}' <(grep -vE '^\s*(#|$)' "$LISTA"))"
+     if [ -n "$autorizado" ]; then
++        # terceira coluna opcional da lista: a elevacao desta versao so vale no ambiente com exatamente este id
++        [ -z "$alvo" ] || [ "$alvo" = "$HOMOLOG_ID" ] || encerra_com_falha 2 "versao $v: elevacao autorizada so para o ambiente $alvo (este: $HOMOLOG_ID); RECUSADA antes de conceder"
+         [ "${HOMOLOG_AUTORIZA_ELEVACAO:-}" = 1 ] || encerra_com_falha 2 "versao $v exige elevacao e HOMOLOG_AUTORIZA_ELEVACAO nao foi dado"
+         real="$(sha256sum "$f" | cut -d' ' -f1)"
+         [ "$real" = "$autorizado" ] || encerra_com_falha 2 "versao $v: sha256 $real diferente do autorizado ($autorizado); elevacao RECUSADA antes de conceder"
