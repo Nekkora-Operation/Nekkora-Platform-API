@@ -9,7 +9,7 @@ Etapa C da missão de integração e homologação (2026-09-26). **Revisão 2**,
 | Identidade | Tipo | Privilégios permanentes | Onde pode conectar (`pg_hba`) | Para quê |
 |---|---|---|---|---|
 | `admin_cluster` | administrador do cluster (bootstrap) | SUPERUSER | socket local do container PostgreSQL; pela rede, **só** do container efêmero de ferramentas (TLS, SCRAM) | `initdb`, bootstrap, concessão e revogação da elevação, recuperação, senhas por verificador SCRAM, verificação |
-| `migrador_nekkora` | implantação (Flyway) | **Sem atributos administrativos elevados permanentes** (SUPERUSER, CREATEROLE, CREATEDB, BYPASSRLS e REPLICATION desligados fora da janela), **mas com os privilégios de ownership**: dono do banco `nekkora` e dos objetos que as migrations não reatribuem (46 tabelas, 67 funções, o histórico do Flyway). Ownership permite alterar e excluir esses objetos | só do container do Flyway (`10.252.10.30`), `hostssl` + SCRAM, só o banco `nekkora` | aplicar migrations |
+| `migrador_nekkora` | implantação (Flyway) | **Sem atributos administrativos elevados permanentes** (SUPERUSER, CREATEROLE, CREATEDB, BYPASSRLS e REPLICATION desligados fora da janela), **mas com os privilégios de ownership**: dono do banco `nekkora` e dos objetos que as migrations não reatribuem (001–015: 46 tabelas, 67 funções, o histórico do Flyway; com a 016: mais o schema `ops`, a extensão `sslinfo` e seus 10 membros, 21 tabelas e 51 índices de `ops` e as 11 funções de gatilho `ops.prevent_*` — 67 tabelas e 88 funções no total). É a **identidade de implantação declarada** na §19 da 016 (revisão 5), que confere que ela é a dona do banco. Ownership permite alterar e excluir esses objetos | só do container do Flyway (`10.252.10.30`), `hostssl` + SCRAM, só o banco `nekkora` | aplicar migrations |
 | `backup_nekkora` | backup lógico | LOGIN, BYPASSRLS, membro de `pg_read_all_data` | só do container de backup (`10.252.10.32`) | `pg_dump` e `pg_dumpall --roles-only --no-role-passwords` |
 | `nekkora_platform`, `nekkora_portal` | execução dos serviços | os das migrations (sem atributo privilegiado, sem membership) | cada um só do próprio container | Platform e Portal |
 | demais `nekkora_*` | owners e serviços das migrations | NOLOGIN, ou LOGIN sem senha | nenhuma | donos protegidos e papéis ainda sem serviço |
@@ -38,6 +38,12 @@ Medido por `mapa_privilegios.sh` (evidência em `evidencias/mapa-privilegios/`).
 **Conclusão (limitada ao que foi medido):** nos caminhos ensaiados, com as migrations atuais e sem memberships em papéis protegidos, 011–013 exigiram elevação. Os caminhos que evitariam a elevação e que foram considerados (membership com SET nos owners; CREATEROLE, que no PostgreSQL 16 cria membership do criador) conflitam com o invariante de membership da 012–014. Não foram adotados nem enfraquecidos. Isto **não** demonstra que nenhuma outra alternativa exista, por exemplo uma alteração aditiva futura revisada.
 
 O pgcrypto é *trusted* e instala sem elevação. Os objetos dele ficam com o superusuário do bootstrap como dono.
+
+**016 (recuperação emergencial de MFA):**
+- também exige superusuário: `CREATE ROLE`/`ALTER ROLE` dos papéis `nekkora_ops_*` e `CREATE EXTENSION sslinfo`, extensão não confiável;
+- a medição pelo `mapa_privilegios.sh` (com e sem papéis pré-criados) é a etapa B1 do plano de homologação da 016;
+- a linha `016 <sha256>` em `implantacao/elevacao.txt` só entra com a decisão escrita do responsável (etapa P3), **ao lado** das de 011–013, que não mudam;
+- **sem ela**, o `criar` com `HOMOLOG_ATE=016` (a 016 nunca é o padrão) recusa **antes de criar qualquer recurso**. Sem a linha, a 016 rodaria sem privilégio, falharia e poderia deixar histórico do Flyway com `success=false`.
 
 ## 3. Controles da elevação temporária
 

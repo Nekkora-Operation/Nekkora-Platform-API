@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Mapa de elevacao da baseline 001-015 para a identidade de implantacao (Etapa C da missao de homologacao).
+# Mapa de elevacao da baseline (todas as migrations de db/migrations, hoje 001-016) para a identidade de implantacao
+# (Etapa C da missao de homologacao; a 016 entrou para a medicao B1 do plano de homologacao da 016).
 #
 # Cluster PostgreSQL 16 DESCARTAVEL e isolado (container rotulado, sem porta publicada, sem volume nomeado):
 #   - administrador do cluster (bootstrap) = POSTGRES_USER, senha aleatoria, autenticacao SCRAM (sem trust);
@@ -26,10 +27,13 @@ mkdir -p "$SAIDA"
 ADM="$(head -c 24 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n')"
 MIG="$(head -c 24 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n')"
 
-MSYS_NO_PATHCONV=1 docker run -d --name "$C" --label nekkora.homologacao="$ID" --label nekkora.homologacao.papel=mapa-privilegios \
+# --network none: o mapa so usa docker exec; sem rede nem porta (P2). O id do container e registrado para o controle de
+# recursos proprios (criacao e remocao).
+MSYS_NO_PATHCONV=1 docker run -d --name "$C" --network none --label nekkora.homologacao="$ID" --label nekkora.homologacao.papel=mapa-privilegios \
     -e POSTGRES_USER=admin_cluster -e POSTGRES_PASSWORD="$ADM" -e POSTGRES_DB=postgres \
     -e POSTGRES_INITDB_ARGS="--auth-local=scram-sha-256 --auth-host=scram-sha-256" postgres:16-alpine >/dev/null
-trap 'docker rm -f -v "$C" >/dev/null 2>&1 || true' EXIT
+echo "$(date -u +%Y-%m-%dT%H:%M:%SZ)|container|$(docker inspect -f '{{.Id}}' "$C")|$C imagem $(docker image inspect -f '{{.Id}}' postgres:16-alpine)|criado" > "$SAIDA/container.txt"
+trap 'docker rm -f -v "$C" >/dev/null 2>&1 && echo "$(date -u +%Y-%m-%dT%H:%M:%SZ)|container|$C|removido com docker rm -f -v (inclui o volume anonimo)" >> "$SAIDA/container.txt" || true' EXIT
 for i in $(seq 1 60); do
     [ "$(docker logs "$C" 2>&1 | grep -c 'database system is ready to accept connections')" -ge 2 ] && break
     sleep 2
@@ -47,6 +51,7 @@ CREATE ROLE nekkora_retention_tables_owner NOLOGIN; CREATE ROLE nekkora_retentio
 CREATE ROLE nekkora_app LOGIN; CREATE ROLE nekkora_platform LOGIN; CREATE ROLE nekkora_ingestion LOGIN; CREATE ROLE nekkora_scheduler LOGIN;
 CREATE ROLE nekkora_provisioning LOGIN; CREATE ROLE nekkora_scheduler_owner NOLOGIN; CREATE ROLE nekkora_provisioning_owner NOLOGIN;
 CREATE ROLE nekkora_portal LOGIN; CREATE ROLE nekkora_portal_owner NOLOGIN;
+CREATE ROLE nekkora_ops_mfa_owner NOLOGIN; CREATE ROLE nekkora_ops_mfa NOLOGIN; CREATE ROLE nekkora_ops_ca LOGIN; CREATE ROLE nekkora_ops_intake LOGIN;
 SQL
 fi
 

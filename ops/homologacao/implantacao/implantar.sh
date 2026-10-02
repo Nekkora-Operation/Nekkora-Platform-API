@@ -13,24 +13,46 @@
 #   - versoes PENDENTES aplicadas uma a uma (flyway migrate -target=<versao>), modo transacional por arquivo:
 #     sem BEGIN proprio (001-011) -> executeInTransaction=true; com BEGIN/COMMIT proprio (012+) -> false;
 #   - ELEVACAO so para versao listada em implantacao/elevacao.txt COM o sha256 exato do arquivo, e com
-#     HOMOLOG_AUTORIZA_ELEVACAO=1. Janela = uma versao. Depois de cada janela e ao final: SUPERUSER revogado, sessoes do
-#     migrador encerradas, atributos e memberships finais conferidos;
+#     HOMOLOG_AUTORIZA_ELEVACAO=1; com terceira coluna na linha, so no ambiente com exatamente aquele id. Janela = uma
+#     versao. Depois de cada janela e ao final: SUPERUSER revogado, sessoes do migrador encerradas, atributos e
+#     memberships finais conferidos;
 #   - FALHA NA REVOGACAO OU NA CONFERENCIA e falha da implantacao: o runner para (codigo 4), MANTEM a trava e exige
 #     "homologacao.sh recuperar". Falha de migration: tenta revogar e conferir; so libera a trava se o estado estiver limpo;
 #   - revogacao EXECUTADA E CONFERIDA nos caminhos testados (fim normal, falha de migration, sinal capturavel). Um
 #     encerramento abrupto (SIGKILL, queda do host) nao executa nada: a trava e a elevacao podem ficar, e a recuperacao
 #     independente ("homologacao.sh recuperar") detecta, revoga e confere; enquanto isso o ambiente fica BLOQUEADO;
 #   - FALHA: sem nova tentativa, sem "flyway repair", sem baseline, sem clean.
+#   - PRE-VOO (P3): versao cuja linha na lista tem terceira coluna (vinculada a um id) so e elevada se
+#     implantacao/preflight/<versao>.sql existir (versao sintetica sem pre-voo operacional: <dir da lista alternativa>/preflight)
+#     e a consulta terminar com codigo 0 E PREFLIGHT_OK na ultima linha; roda com a trava
+#     obtida, depois do sha256 e do 0|0|0 e ANTES de conceder (saida em preflight_<versao>.txt);
+#   - PARADA (P3): HOMOLOG_IMPLANTAR_ATE=<versao> aplica so ate ela (inclusive); as seguintes ficam pendentes e o
+#     "flyway validate" final ignora SO as pendentes.
 set -uo pipefail
 
 : "${HOMOLOG_EVID:?}" "${HOMOLOG_MIGRACOES_HOST:?}" "${HOMOLOG_ID:?}"
 DIR_IMPL="$(cd "$(dirname "$0")" && pwd)"
-# HOMOLOG_ELEVACAO_ARQ: so nos ensaios (lista alternativa); o padrao e a lista revisada
+# HOMOLOG_ELEVACAO_ARQ: lista alternativa SO em ambiente descartavel (id ensaio-*); o padrao e a lista revisada
+if [ -n "${HOMOLOG_ELEVACAO_ARQ:-}" ] && [[ ! "$HOMOLOG_ID" =~ ^ensaio- ]]; then
+    echo "FALHA: lista de elevacao alternativa (HOMOLOG_ELEVACAO_ARQ) so em ambiente descartavel (id ensaio-*)" >&2; exit 3
+fi
 LISTA="${HOMOLOG_ELEVACAO_ARQ:-$DIR_IMPL/elevacao.txt}"
+# Versoes com VINCULO e PRE-VOO OFICIAL obrigatorios: a linha precisa da terceira coluna com o id exato do ambiente e o
+# pre-voo vem SO de implantacao/preflight/<versao>.sql (nunca da lista alternativa). 011-013 seguem no formato legado.
+VINCULO_OBRIGATORIO=" 016 "
+# A lista e validada ANTES de qualquer acao (trava, elevacao ou migration) pela gramatica de lib/lista_elevacao.sh
+# (P4-R2a-C): legado "VVV <sha256> [<id>]" = SUPERUSER; forma nova "VVV <sha256> tipo=superuser|bypassrls [ambiente=<id>]";
+# 014 so bypassrls; versao de vinculo obrigatorio so superuser e com ambiente. Erro de leitura ou de formato recusa
+# (codigo 3); NUNCA equivale a "versao fora da lista". LISTA_NORMAL: "VVV SHA256 TIPO ALVO" (ALVO "-" sem vinculo).
+. "$DIR_IMPL/../lib/lista_elevacao.sh"
+LISTA_NORMAL="$(lista_elevacao_normalizada "$LISTA" "$VINCULO_OBRIGATORIO")" || { echo "FALHA: lista de elevacao recusada (acima); nada foi feito" >&2; exit 3; }
 TRAVA="${HOMOLOG_TRAVA:-$(cd "$DIR_IMPL/.." && pwd)/saidas/$HOMOLOG_ID/implantacao.trava}"
 LOG="$HOMOLOG_EVID/implantacao.txt"
 JANELA="$HOMOLOG_EVID/janelas_de_elevacao.txt"
+ATE_MAX="${HOMOLOG_IMPLANTAR_ATE:-}"
+[ -z "$ATE_MAX" ] || [[ "$ATE_MAX" =~ ^[0-9]{3}$ ]] || { echo "FALHA: HOMOLOG_IMPLANTAR_ATE invalido ($ATE_MAX)" >&2; exit 3; }
 ELEVADO=""
+ELEVADO_TIPO=""   # SUPERUSER | BYPASSRLS (texto dos registros; o de SUPERUSER e o mesmo de antes)
 TRAVA_MINHA=""
 
 agora() { date -u +%Y-%m-%dT%H:%M:%S.%3NZ; }
@@ -48,8 +70,8 @@ revoga_e_confere() {
     sleep 1
     e="$(estado_migrador)"
     [ "$e" = "0|0|0" ] || return 1
-    [ -n "$ELEVADO" ] && echo "$(agora) fim    versao=$ELEVADO SUPERUSER revogado, sessoes encerradas, estado conferido (0|0|0) [$motivo]" >> "$JANELA"
-    ELEVADO=""
+    [ -n "$ELEVADO" ] && echo "$(agora) fim    versao=$ELEVADO $ELEVADO_TIPO revogado, sessoes encerradas, estado conferido (0|0|0) [$motivo]" >> "$JANELA"
+    ELEVADO=""; ELEVADO_TIPO=""
     return 0
 }
 
@@ -80,13 +102,16 @@ encerra_com_falha() {
 
 # ---------------------------------------------------------------------------------------------- exclusao e pre-condicoes
 # ganchos SO de ensaio (recusados fora de ambiente descartavel): largada comum, para disputar a entrada ao mesmo tempo;
-# pausa num ponto ("antes-de-elevar" ou "antes-do-flyway"), para derrubar a sessao da trava ali
+# pausa num ponto ("antes-de-elevar" ou "antes-do-flyway", em qualquer versao; ou "<ponto>@<versao>", so naquela
+# versao), para derrubar a sessao da trava ou interromper o runner ali
 if [ -n "${HOMOLOG_ENSAIO_LARGADA:-}${HOMOLOG_ENSAIO_PAUSA:-}" ] && [[ ! "$HOMOLOG_ID" =~ ^ensaio- ]]; then
     echo "FALHA: ganchos de ensaio so em ambiente descartavel (id ensaio-*)" >&2; exit 3
 fi
 if [ -n "${HOMOLOG_ENSAIO_LARGADA:-}" ]; then while [ ! -e "$HOMOLOG_ENSAIO_LARGADA" ]; do sleep 0.05; done; fi
-ensaio_pausa() {
-    [ -n "${HOMOLOG_ENSAIO_PAUSA:-}" ] && [ "${HOMOLOG_ENSAIO_PAUSA%%:*}" = "$1" ] || return 0
+ensaio_pausa() {   # $1 ponto, $2 versao (set -u: a variavel so e expandida depois de conferida)
+    [ -n "${HOMOLOG_ENSAIO_PAUSA:-}" ] || return 0
+    local ponto="${HOMOLOG_ENSAIO_PAUSA%%:*}"
+    [ "$ponto" = "$1" ] || [ "$ponto" = "$1@$2" ] || return 0
     local f="${HOMOLOG_ENSAIO_PAUSA#*:}"
     touch "$f.chegou"
     while [ ! -e "$f" ]; do sleep 0.05; done
@@ -108,7 +133,7 @@ printf 'pid=%s host=%s inicio=%s id=%s\n' "$$" "$(hostname)" "$(agora)" "$HOMOLO
 # capturavel: fica para a recuperacao (a sessao da trava no banco cai com o processo).
 trap 'encerra_com_falha 5 "sinal recebido"' INT TERM HUP
 
-registra "== implantacao $(agora) (lista de elevacao: $(basename "$LISTA"))"
+registra "== implantacao $(agora) (lista de elevacao: $(basename "$LISTA")${HOMOLOG_ELEVACAO_ARQ:+ ALTERNATIVA DE ENSAIO} sha256 $(sha256sum "$LISTA" 2>/dev/null | cut -c1-64))"
 e0="$(estado_migrador)"
 if [ "$e0" != "0|0|0" ]; then
     libera_trava
@@ -128,24 +153,52 @@ for f in "$HOMOLOG_MIGRACOES_HOST"/[0-9]*.sql; do
     n="$(basename "$f")"
     v="${n%%_*}"
     case " $h " in *" $v:true "*|"$v:true "*) continue;; esac
+    if [ -n "$ATE_MAX" ] && [ "$((10#$v))" -gt "$((10#$ATE_MAX))" ]; then
+        registra "-- PARADA: $n e seguintes NAO aplicadas (HOMOLOG_IMPLANTAR_ATE=$ATE_MAX)"
+        break
+    fi
     modo=true
     grep -qE '^\s*BEGIN\s*;' "$f" && modo=false
-    autorizado="$(awk -v v="$v" '$1 == v {print $2}' <(grep -vE '^\s*(#|$)' "$LISTA"))"
+    autorizado="$(printf '%s\n' "$LISTA_NORMAL" | awk -v v="$v" '$1 == v {print $2}')"
+    tipo="$(printf '%s\n' "$LISTA_NORMAL" | awk -v v="$v" '$1 == v {print $3}')"
+    alvo="$(printf '%s\n' "$LISTA_NORMAL" | awk -v v="$v" '$1 == v && $4 != "-" {print $4}')"
     if [ -n "$autorizado" ]; then
+        # terceira coluna: a elevacao desta versao so vale no ambiente com exatamente este id; OBRIGATORIA para as versoes
+        # de VINCULO_OBRIGATORIO (defesa em profundidade: valida_lista ja recusou a linha sem id)
+        case "$VINCULO_OBRIGATORIO" in *" $v "*) [ -n "$alvo" ] || encerra_com_falha 2 "versao $v exige vinculo ao id exato do ambiente na lista; elevacao RECUSADA antes de conceder";; esac
+        [ -z "$alvo" ] || [ "$alvo" = "$HOMOLOG_ID" ] || encerra_com_falha 2 "versao $v: elevacao autorizada so para o ambiente $alvo (este: $HOMOLOG_ID); RECUSADA antes de conceder"
         [ "${HOMOLOG_AUTORIZA_ELEVACAO:-}" = 1 ] || encerra_com_falha 2 "versao $v exige elevacao e HOMOLOG_AUTORIZA_ELEVACAO nao foi dado"
         real="$(sha256sum "$f" | cut -d' ' -f1)"
         [ "$real" = "$autorizado" ] || encerra_com_falha 2 "versao $v: sha256 $real diferente do autorizado ($autorizado); elevacao RECUSADA antes de conceder"
         ei="$(estado_migrador)"
         [ "$ei" = "0|0|0" ] || encerra_com_falha 2 "versao $v: estado '$ei' antes de elevar (sessao ativa de outra implantacao?)"
-        ensaio_pausa antes-de-elevar
-        sql_na_trava "ALTER ROLE migrador_nekkora SUPERUSER" || encerra_com_falha 2 "nao foi possivel conceder a elevacao para $v"
-        ELEVADO="$v"
-        echo "$(agora) inicio versao=$v SUPERUSER concedido (sha256 $real autorizado)" >> "$JANELA"
+        if [ -n "$alvo" ]; then
+            pf="$DIR_IMPL/preflight/$v.sql"
+            # Pre-voo alternativo SO para versoes SINTETICAS de ensaio (9xx, fora do repositorio), com lista alternativa (so
+            # ensaio-*) e sem pre-voo oficial. Versao de vinculo obrigatorio (016) nunca usa o alternativo: sem o oficial, recusa.
+            if [ ! -f "$pf" ] && [ -n "${HOMOLOG_ELEVACAO_ARQ:-}" ] && [[ "$v" =~ ^9[0-9]{2}$ ]]; then pf="$(dirname "$LISTA")/preflight/$v.sql"; fi
+            [ -f "$pf" ] || encerra_com_falha 2 "versao $v vinculada a $alvo sem pre-voo ($pf); elevacao RECUSADA antes de conceder"
+            # as DUAS condicoes: consulta com codigo 0 E marcador final PREFLIGHT_OK
+            admin_sql nekkora < "$pf" > "$HOMOLOG_EVID/preflight_$v.txt" 2>&1; rc_pf=$?
+            ult_pf="$(tr -d '\r' < "$HOMOLOG_EVID/preflight_$v.txt" | tail -1)"
+            [ "$rc_pf" = 0 ] && [ "$ult_pf" = PREFLIGHT_OK ] \
+                || encerra_com_falha 2 "versao $v: pre-voo recusou (codigo $rc_pf, ultima linha '$ult_pf'; ver preflight_$v.txt); elevacao RECUSADA antes de conceder"
+            registra "pre-voo da $v: codigo 0 e PREFLIGHT_OK (preflight_$v.txt)"
+        fi
+        ensaio_pausa antes-de-elevar "$v"
+        case "$tipo" in
+            superuser) atributo=SUPERUSER ;;
+            bypassrls) atributo=BYPASSRLS ;;   # P4-R2a-C: so atravessa RLS (a 014), sem os demais poderes de superusuario
+            *) encerra_com_falha 2 "versao $v: tipo de elevacao '$tipo' desconhecido; RECUSADA antes de conceder" ;;
+        esac
+        sql_na_trava "ALTER ROLE migrador_nekkora $atributo" || encerra_com_falha 2 "nao foi possivel conceder a elevacao para $v"
+        ELEVADO="$v"; ELEVADO_TIPO="$atributo"
+        echo "$(agora) inicio versao=$v $atributo concedido (sha256 $real autorizado)" >> "$JANELA"
     fi
     registra "-- $n (executeInTransaction=$modo${ELEVADO:+, ELEVADA})"
     confere_trava || encerra_com_falha 6 "trava no banco perdida antes de $n"
     # (conferencia pontual; a garantia para o Flyway e o initSql, que confere o lock a cada conexao)
-    ensaio_pausa antes-do-flyway
+    ensaio_pausa antes-do-flyway "$v"
     if ! flyway -executeInTransaction="$modo" migrate -target="$v" >> "$LOG" 2>&1; then
         encerra_com_falha 2 "migration $n"
     fi
@@ -154,11 +207,15 @@ for f in "$HOMOLOG_MIGRACOES_HOST"/[0-9]*.sql; do
     fi
 done
 
-flyway validate >> "$LOG" 2>&1 || encerra_com_falha 1 "flyway validate"
+if [ -n "$ATE_MAX" ]; then
+    flyway -ignoreMigrationPatterns='*:pending' validate >> "$LOG" 2>&1 || encerra_com_falha 1 "flyway validate (pendentes ignoradas: parada em $ATE_MAX)"
+else
+    flyway validate >> "$LOG" 2>&1 || encerra_com_falha 1 "flyway validate"
+fi
 flyway info > "$HOMOLOG_EVID/flyway_info.txt" 2>&1
 ef="$(estado_migrador)"
 [ "$ef" = "0|0|0" ] || encerra_com_falha 4 "conferencia final do migrador: '$ef'"
 registra "estado final do migrador: 0 atributos elevados, 0 memberships, 0 sessoes"
 registra "historico depois: $(admin_sql nekkora -c "SELECT string_agg(coalesce(version, '-') || ':' || success, ' ' ORDER BY installed_rank) FROM public.flyway_schema_history")"
 libera_trava
-registra "== implantacao OK"
+registra "== implantacao OK${ATE_MAX:+ ate $ATE_MAX (PARADA: versoes seguintes pendentes)}"

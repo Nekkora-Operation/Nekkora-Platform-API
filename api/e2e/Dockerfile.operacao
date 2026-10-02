@@ -1,0 +1,19 @@
+# Imagem do job "operacao" da HOMOLOGACAO descartavel (ops/homologacao, so ambientes ensaio-*; desenho P1a, §6):
+#   - CLI real dos operadores (com.nekkora.ops.cli.OpsCli, jar da nekkora-ops);
+#   - ferramenta de homologacao (com.nekkora.ops.homologacao.FerramentaHomologacao) e o IdP SIMULADO + utilitarios de
+#     PKI de TESTE (IdpSimulado, Pki), necessarios para emitir credenciais sem IdP real (limite declarado, C1/C2).
+# Sem segredo embutido: CA operacional, senhas e credenciais chegam por volume/variavel do runner. Nunca publicada;
+# o runner so a constroi para id ensaio-*. Pre-requisito do build (feito pelo runner, a partir de api/):
+#   ./mvnw -q -DskipTests package
+#   ./mvnw -q -pl nekkora-ops dependency:copy-dependencies -DincludeScope=runtime -DoutputDirectory=target/dep-operacao
+#   ./mvnw -q -pl nekkora-ops test-compile
+FROM eclipse-temurin:21-jre-alpine
+RUN addgroup -S nekkora && adduser -S -G nekkora -H nekkora
+COPY --chown=root:root nekkora-ops/target/nekkora-ops-0.1.0-SNAPSHOT.jar /app/lib/
+COPY --chown=root:root nekkora-ops/target/dep-operacao/ /app/lib/
+# so as classes da ferramenta (o diretorio de teste tambem tem os testes do P1c em homologacao/p1c, que nao entram)
+COPY --chown=root:root nekkora-ops/target/test-classes/com/nekkora/ops/homologacao/FerramentaHomologacao*.class /app/classes/com/nekkora/ops/homologacao/
+# glob, nunca "Pki$Ca.class" literal: o Dockerfile expande $Ca como variavel (vazia) e a classe interna ficava de fora (P1c)
+COPY --chown=root:root nekkora-ops/target/test-classes/com/nekkora/ops/testsupport/IdpSimulado*.class nekkora-ops/target/test-classes/com/nekkora/ops/testsupport/Pki*.class /app/classes/com/nekkora/ops/testsupport/
+USER nekkora
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-cp", "/app/lib/*:/app/classes"]

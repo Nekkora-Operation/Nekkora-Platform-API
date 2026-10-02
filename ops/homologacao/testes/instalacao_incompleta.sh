@@ -29,8 +29,17 @@ registra() { echo "$1|$2|$3" >> "$RES"; echo "[$1] $2 - $3"; [ "$2" = OK ] || ok
 PROJ="nekkora-homologacao-$ID"
 PG="$PROJ-postgres-1"
 
+# P3-R015: sub-redes e porta do LABORATORIO repassadas EXPLICITAMENTE ao criar (HOMOLOG_REDE_INTERNA/BORDA e
+# HOMOLOG_PORTA; ausentes = padrao do criar). Com a hml03 preservada, as sub-redes padrao sao recusadas pelo criar
+# (sobreposicao); em ensaio-* o 015 aceita sub-redes proprias (pg_hba/nginx gerados). Valores efetivos registrados.
+LAB_REDE=()
+[ -n "${HOMOLOG_REDE_INTERNA:-}" ] && LAB_REDE+=("HOMOLOG_REDE_INTERNA=$HOMOLOG_REDE_INTERNA")
+[ -n "${HOMOLOG_REDE_BORDA:-}" ] && LAB_REDE+=("HOMOLOG_REDE_BORDA=$HOMOLOG_REDE_BORDA")
+[ -n "${HOMOLOG_PORTA:-}" ] && LAB_REDE+=("HOMOLOG_PORTA=$HOMOLOG_PORTA")
+echo "parametros de laboratorio repassados ao criar: ${LAB_REDE[*]:-nenhum (padrao)}" > "$EV/0_parametros.txt"
+
 # ---------------------------------------------------------------- 1. interromper a criacao na janela da 011
-( exec bash "$H" criar "$ID" > "$EV/1_criar_saida.txt" 2>&1 ) &
+( exec env "${LAB_REDE[@]}" bash "$H" criar "$ID" > "$EV/1_criar_saida.txt" 2>&1 ) &
 pc=$!
 aberta=""
 for i in $(seq 1 1200); do
@@ -50,6 +59,8 @@ kill -9 "$pc" 2>/dev/null
 [ -n "$pr" ] && kill -9 "$pr" 2>/dev/null
 for c in $(docker ps -q --filter "label=com.docker.compose.project=$PROJ" --filter "label=com.docker.compose.service=flyway"); do docker kill "$c" > /dev/null; done
 sleep 3
+{ echo "valores efetivos do ambiente:"; grep -E '^HOMOLOG_(REDE_INTERNA|REDE_BORDA|PORTA|REDE_015_ENSAIO|CONFIG|COMPOSE_EXTRA|ATE)=' "$S/ambiente.env" 2>/dev/null; } >> "$EV/0_parametros.txt"
+for p in "${LAB_REDE[@]}"; do grep -qx "$p" "$S/ambiente.env" 2>/dev/null || echo "DIVERGENTE: $p nao consta do ambiente.env" >> "$EV/0_parametros.txt"; done
 { echo "janela da 011 aberta antes do kill: ${aberta:-nao}; container do Flyway em execucao: ${rodando:-nao}"; echo "PID do criar: $pc; PID do runner (trava): ${pr:-?}"
   echo "janelas:"; cat "$S/janelas_de_elevacao.txt" 2>/dev/null; } > "$EV/1_interrupcao.txt"
 if [ -n "$aberta" ] && [ -n "$rodando" ] && [ -n "$pr" ]; then

@@ -312,7 +312,49 @@ def h06(f):
     salva(e)
 
 
+# ---------------------------------------------------------------- 016 (desenho P1a; testes/h016.sh)
+# fixture.json da 016: {'org': ..., 'titular': {email, senha}, 'outro': {email, senha}}. Tokens de aviso chegam por
+# ARQUIVO (lido da caixa pela ferramenta restrita para HOMOLOG_SEGREDOS/teste016, fora do Git) e vao para
+# SEGREDOS_VISTOS, conferidos contra as evidencias.
+
+def h016_mfa(f):
+    """Primeiro acesso dos dois ORG_ADMIN sinteticos: login e cadastro do MFA pelo gateway (fatores confirmados reais)."""
+    e = estado()
+    for chave in ('titular', 'outro'):
+        _, st, js, _ = login(e, f['org'], f[chave], novo=True)
+        confere(f'H016.mfa {chave} com fator confirmado', 200, st)
+    salva(e)
+
+
+def h016_confirmar(f, arquivo_token, esperado='204'):
+    """CONFIRMAR do titular pela rota real (POST com CSRF de pre-autenticacao e Origin): status esperado."""
+    token = open(arquivo_token, encoding='utf-8').read().strip()
+    visto(token)
+    n = Navegador()
+    st, js, _, _ = n.req('GET', '/api/v1/csrf')
+    n.csrf = js.get('csrfToken')
+    visto(n.csrf)
+    st, _, _, _ = n.req('POST', base(f['org']) + '/auth/mfa-emergencia/aviso/confirmar', {'token': token})
+    confere('H016.confirmar pela rota', int(esperado), st)
+
+
+def h016_novo_mfa(f):
+    """Depois da execucao (B8b): login do titular com a senha atual exige novo cadastro de MFA; cadastro conclui."""
+    e = estado()
+    e['segredos'].pop(f['titular']['email'], None)
+    n = Navegador()
+    st, js, _, _ = n.req('GET', '/api/v1/csrf')
+    n.csrf = js.get('csrfToken')
+    st, js, _, _ = n.req('POST', base(f['org']) + '/auth/login', {'email': f['titular']['email'], 'password': f['titular']['senha']})
+    confere('H016.novo_mfa login exige cadastro', 'mfa_enrollment_required', js.get('status'))
+    _, st, _, _ = login(e, f['org'], f['titular'], novo=True)
+    confere('H016.novo_mfa cadastro e sessao', 200, st)
+    salva(e)
+
+
 if __name__ == '__main__':
     fixture = json.load(open(sys.argv[2], encoding='utf-8'))
-    {'h05': h05, 'h06': h06, 'h07_prep': h07_prep, 'h07_redis_fora': h07_redis_fora, 'h07_r7': h07_r7}[sys.argv[1]](fixture)
+    cenarios = {'h05': h05, 'h06': h06, 'h07_prep': h07_prep, 'h07_redis_fora': h07_redis_fora, 'h07_r7': h07_r7,
+                'h016_mfa': h016_mfa, 'h016_confirmar': h016_confirmar, 'h016_novo_mfa': h016_novo_mfa}
+    cenarios[sys.argv[1]](fixture, *sys.argv[3:])
     sys.exit(1 if falhas else 0)

@@ -1,0 +1,46 @@
+# SOBREPOSICAO: transporte de HOMOLOGACAO da Platform (desenho P1a, §4) - SO em ambiente ensaio-* criado com
+# HOMOLOG_TRANSPORTE=homologacao (o runner recusa outro id). Nenhum envio externo: a Platform continua so na rede
+# "interna" (internal: true), e o transporte grava cada mensagem na CAIXA.
+#
+# A caixa e um VOLUME Docker EXCLUSIVO do ensaio (rotulado), nunca uma pasta do host: dono e permissoes sao aplicados e
+# CONFERIDOS no Linux do Docker por "caixa-init" (nekkora, 0700). O operador so acessa pela ferramenta restrita
+# "caixa-ferramenta" (homologacao.sh caixa <id> ...): ler uma mensagem no proprio terminal, gravar regra de controle,
+# exportar SO o indice sanitizado para a evidencia. O volume some no "destruir" (rotulo do ambiente).
+
+volumes:
+  caixa:
+    labels:
+      nekkora.homologacao: ${HOMOLOG_ID:?defina HOMOLOG_ID}
+
+services:
+  platform:
+    environment:
+      NEKKORA_AMBIENTE: ${HOMOLOG_ID:?}
+      NEKKORA_MAIL_TRANSPORTE: homologacao
+      NEKKORA_MAIL_CAIXA: /caixa
+      NEKKORA_AVISOS_EMERGENCIA: "true"
+    volumes:
+      - caixa:/caixa
+
+  caixa-init:
+    profiles: [caixa]
+    image: nekkora-homologacao-platform:${HOMOLOG_COMMIT:?}
+    labels:
+      nekkora.homologacao: ${HOMOLOG_ID:?}
+    user: root
+    network_mode: none
+    entrypoint: ["sh", "-ec", "install -d -o nekkora -g nekkora -m 700 /caixa && stat -c '%U %a' /caixa"]
+    volumes:
+      - caixa:/caixa
+
+  caixa-ferramenta:
+    profiles: [caixa]
+    image: nekkora-homologacao-platform:${HOMOLOG_COMMIT:?}
+    labels:
+      nekkora.homologacao: ${HOMOLOG_ID:?}
+    user: nekkora
+    network_mode: none
+    read_only: true
+    entrypoint: []
+    volumes:
+      - caixa:/caixa

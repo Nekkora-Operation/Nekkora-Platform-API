@@ -109,7 +109,50 @@ migrador_recuperado() {   # $1 trava local
     return $n
 }
 
+# ------------------------------------------------------------------------------------------ versao SINTETICA de ensaio
+# P3-R015: declaracao EXPLICITA saidas/<id>/ensaio_sintetica.txt (escrita ANTES da execucao sintetica) de UMA versao
+# sintetica 9xx fora do repositorio, aplicada pelo runner a partir do conjunto de laboratorio saidas/<id>/migracoes_ensaio
+# (= copia registrada do ambiente + a sintetica). Campos: versao, sha256, arquivo, id, conjunto (=migracoes_ensaio),
+# interrompidas (janelas interrompidas esperadas da sintetica), registrada_em. Honrada SO se: id do ambiente ensaio-* e
+# igual ao declarado; versao 9xx; arquivo "<versao>_*.sql" com o sha256 declarado; conjunto = copia registrada (byte a
+# byte, migracoes_sha256.txt) + a sintetica, nada mais. Sem arquivo: SINT_VERSAO vazio (comportamento normal).
+# Arquivo presente e invalido: codigo 1 e SINT_ERRO (quem chama BLOQUEIA; nunca aceita em silencio).
+sintetica_declarada() {
+    local base="$AQUI/saidas/$HOMOLOG_ID" d k v c
+    SINT_VERSAO=""; SINT_SHA=""; SINT_ARQ=""; SINT_CONJ=""; SINT_INTERR=""; SINT_EM=""; SINT_ERRO=""
+    d="$base/ensaio_sintetica.txt"
+    [ -f "$d" ] || return 0
+    [[ "$HOMOLOG_ID" =~ ^ensaio- ]] || { SINT_ERRO="declaracao de versao sintetica fora de ambiente ensaio-*"; return 1; }
+    while IFS='=' read -r k v; do
+        v="${v%$'\r'}"
+        case "$k" in
+            versao) SINT_VERSAO="$v";; sha256) SINT_SHA="$v";; arquivo) SINT_ARQ="$v";; conjunto) c="$v";;
+            interrompidas) SINT_INTERR="$v";; registrada_em) SINT_EM="$v";;
+            id) [ "$v" = "$HOMOLOG_ID" ] || { SINT_ERRO="declaracao para outro id ($v)"; return 1; };;
+            ''|\#*) ;;
+            *) SINT_ERRO="campo desconhecido na declaracao: $k"; return 1;;
+        esac
+    done < "$d"
+    grep -q "^id=$HOMOLOG_ID\$" <(tr -d '\r' < "$d") || { SINT_ERRO="declaracao sem id"; return 1; }
+    [[ "$SINT_VERSAO" =~ ^9[0-9]{2}$ ]] || { SINT_ERRO="versao sintetica invalida (so 9xx): $SINT_VERSAO"; return 1; }
+    [[ "$SINT_SHA" =~ ^[0-9a-f]{64}$ ]] || { SINT_ERRO="sha256 invalido"; return 1; }
+    [[ "$SINT_ARQ" =~ ^${SINT_VERSAO}_[a-z0-9_]+\.sql$ ]] || { SINT_ERRO="arquivo invalido: $SINT_ARQ"; return 1; }
+    [[ "$SINT_INTERR" =~ ^[0-9]$ ]] || { SINT_ERRO="numero de interrompidas invalido"; return 1; }
+    [[ "$SINT_EM" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || { SINT_ERRO="registrada_em invalido"; return 1; }
+    [ "${c:-}" = migracoes_ensaio ] || { SINT_ERRO="conjunto deve ser migracoes_ensaio"; return 1; }
+    SINT_CONJ="$base/migracoes_ensaio"
+    [ -f "$SINT_CONJ/$SINT_ARQ" ] && [ "$(sha256sum "$SINT_CONJ/$SINT_ARQ" | cut -d' ' -f1)" = "$SINT_SHA" ] \
+        || { SINT_ERRO="sintetica ausente ou com sha256 diferente do declarado"; return 1; }
+    [ "$(cd "$SINT_CONJ" && ls *.sql | sort | tr '\n' ' ')" = "$( (cd "$base/migracoes" && ls *.sql; echo "$SINT_ARQ") | sort | tr '\n' ' ')" ] \
+        || { SINT_ERRO="conjunto de laboratorio diferente de copia do ambiente + sintetica"; return 1; }
+    (cd "$SINT_CONJ" && sha256sum $(cd "$base/migracoes" && ls *.sql)) | diff -q - "$base/migracoes_sha256.txt" > /dev/null \
+        || { SINT_ERRO="migrations reais do conjunto de laboratorio diferentes da copia registrada"; return 1; }
+    return 0
+}
+
 # (2) AMBIENTE APTO: conjunto aprovado integro, historico = exatamente as versoes esperadas com sucesso, flyway validate.
+# Com versao sintetica de ensaio declarada e valida (sintetica_declarada): esperadas = copia + a sintetica, e o validate
+# usa o conjunto de laboratorio. Declaracao invalida BLOQUEIA.
 ambiente_apto() {
     local n=0 dir esperado obtido falhas v
     dir="$AQUI/saidas/$HOMOLOG_ID/migracoes"
@@ -118,6 +161,13 @@ ambiente_apto() {
     fi
     esperado="$(ls "$dir" 2>/dev/null | grep -E '^[0-9]+_.*\.sql$' | sed -E 's/_.*//' | sort | tr '\n' ' ' | sed 's/ $//')"
     [ -n "$esperado" ] || { echo "BLOQUEIO: lista de versoes esperadas vazia"; n=$((n + 1)); }
+    local sint_mig=""
+    if ! sintetica_declarada; then
+        echo "BLOQUEIO: declaracao de versao sintetica de ensaio invalida ($SINT_ERRO)"; n=$((n + 1))
+    elif [ -n "$SINT_VERSAO" ]; then
+        esperado="$(printf '%s\n' $esperado "$SINT_VERSAO" | sort | tr '\n' ' ' | sed 's/ $//')"; sint_mig="$SINT_CONJ"
+        echo "ensaio: versao sintetica $SINT_VERSAO declarada ($SINT_ARQ, sha256 ${SINT_SHA:0:12}...) incluida nas esperadas"
+    fi
     if [ "$(admin_sql nekkora -c "SELECT to_regclass('public.flyway_schema_history') IS NOT NULL" 2>/dev/null | tr -d '\r')" != t ]; then
         echo "BLOQUEIO: historico do Flyway ausente ou consulta falhou (instalacao nao iniciada ou incompleta)"; return $((n + 1))
     fi
@@ -132,7 +182,10 @@ ambiente_apto() {
         echo "BLOQUEIO: instalacao incompleta ou divergente (faltam:${faltam:- nenhuma}; nao esperadas:${sobram:- nenhuma})"; n=$((n + 1))
     fi
     if [ $n = 0 ]; then
-        if flyway validate > /dev/null 2>&1; then :; else echo "BLOQUEIO: flyway validate falhou (checksums ou historico)"; n=$((n + 1)); fi
+        if [ -n "$sint_mig" ]; then   # validate com o conjunto de laboratorio (copia + sintetica declarada), so aqui
+            if ( export HOMOLOG_MIGRACOES="$(cygpath -m "$sint_mig" 2>/dev/null || echo "$sint_mig")"; flyway validate > /dev/null 2>&1 ); then :
+            else echo "BLOQUEIO: flyway validate falhou (checksums ou historico; conjunto de laboratorio)"; n=$((n + 1)); fi
+        elif flyway validate > /dev/null 2>&1; then :; else echo "BLOQUEIO: flyway validate falhou (checksums ou historico)"; n=$((n + 1)); fi
     fi
     [ $n = 0 ] && echo "ambiente apto: versoes $(echo "$esperado" | awk '{print $1"-"$NF}') todas com sucesso, conjunto integro, flyway validate OK"
     return $n
