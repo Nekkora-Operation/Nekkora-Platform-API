@@ -1,0 +1,12 @@
+# Sobreposicao do caminho 015 em SUB-REDE DE ENSAIO (P3-R015; so ids ensaio-* com HOMOLOG_REDE_INTERNA/BORDA fora do
+# padrao 10.252.10/10.252.11). Troca SO os dois arquivos estaticos que carregam o prefixo da rede interna: pg_hba.conf
+# e nginx.conf, gerados pelo runner em HOMOLOG_CONFIG a partir dos estaticos do caminho 015 (lib/redes.py trocar-
+# prefixo), com as mesmas regras e so o prefixo trocado. Nada da 016 (pg_ident, regras ops, CA operacional, transporte).
+# Os arquivos estaticos (usados pela hml03 e pelo padrao) nao mudam.
+services:
+  postgres:
+    volumes:
+      - ${HOMOLOG_CONFIG:?}/pg_hba.conf:/etc/nekkora/pg_hba.conf:ro
+  gateway:
+    volumes:
+      - ${HOMOLOG_CONFIG:?}/nginx.conf:/etc/nginx/nginx.conf:ro

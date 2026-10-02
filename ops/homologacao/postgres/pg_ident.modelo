@@ -1,0 +1,4 @@
+# pg_ident da HOMOLOGACAO com a 016: o CN do certificado do operador precisa ser exatamente o papel op_* (mesma regra
+# dos testes, OpsBanco). Regex entre aspas: a virgula de {2,40} separaria os campos.
+# MAPNAME  SYSTEM-USERNAME                    PG-USERNAME
+ops        "/^(op_[a-z0-9_]{2,40})$"          \1

@@ -6,6 +6,7 @@
 set -uo pipefail
 
 : "${HOMOLOG_ID:?}" "${HOMOLOG_SEGREDOS_HOST:?}"
+HOMOLOG_REDE_INTERNA="${HOMOLOG_REDE_INTERNA:-10.252.10}"   # prefixo da rede interna (padrao do desenho anterior)
 REPO="$(cd "$AQUI/../.." && pwd)"
 EV="$AQUI/saidas/$HOMOLOG_ID/testes-$(date -u +%Y%m%dT%H%M%SZ)"
 T="$HOMOLOG_SEGREDOS_HOST/teste"
@@ -58,63 +59,222 @@ h01() {
 }
 
 # ================================================================================ H02 instalacao e implantacao
+# Janelas de elevacao do ambiente (P3-IT, F5), de TODOS os registros: criacao (saidas/<id>/janelas_de_elevacao.txt) e
+# cada implantar (implantacao-*/janelas_de_elevacao.txt). Por registro, em ordem: "inicio" seguido de "fim" da mesma
+# versao = CONCLUIDA; "inicio" seguido de OUTRO "inicio", ou sem "fim" = INTERROMPIDA; "fim" sem "inicio" aberto (ou de
+# outra versao) = ORFA. CADA INTERROMPIDA exige a SUA recuperacao: um saidas/<id>/recuperacao-*.txt que conferiu 0|0|0
+# CERTAMENTE depois do inicio dela e CERTAMENTE antes do inicio seguinte (qualquer registro); cada recuperacao comprova
+# no maximo UMA interrupcao. Instantes como INTERVALOS: com milissegundos (janelas) = o proprio ms; so com segundos
+# (cabecalho da recuperacao) = [ss.000, ss.999]. A antes de B so se A.fim < B.inicio (no mesmo registro, a ordem do
+# arquivo). Sobreposicao entre registros, ou instante ilegivel, = AMBIGUA: a comprovacao e RECUSADA (conta como problema).
+#   h02_janelas <base do ambiente> <dir de saida>  -> imprime "concluidas(versoes ordenadas)|n_interrompidas|n_problemas"
+# e grava <dir>/h02_janelas_todas.txt, h02_janelas_brutas.txt, h02_recuperacoes.txt e h02_janelas_classificadas.txt
+# (TIPO|versao|instante|registro|sequencia|situacao).
+h02_janelas() {
+    local base="$1" out="$2" arq rec t
+    : > "$out/h02_janelas_todas.txt"; : > "$out/h02_janelas_brutas.txt"; : > "$out/h02_recuperacoes.txt"
+    for arq in "$base/janelas_de_elevacao.txt" "$base"/implantacao-*/janelas_de_elevacao.txt; do
+        [ -f "$arq" ] || continue
+        echo "## ${arq#$base/}" >> "$out/h02_janelas_todas.txt"; cat "$arq" >> "$out/h02_janelas_todas.txt"
+        # instante = primeiro campo da linha, COMPLETO (ex.: 2026-09-29T13:08:12.550Z); sequencia = linha no registro
+        tr -d '\r' < "$arq" | awk -v reg="${arq#$base/}" '
+            / inicio versao=/ { match($0, /versao=[0-9]+/); v = substr($0, RSTART + 7, RLENGTH - 7)
+                               if (a != "") print "INTERROMPIDA|" a "|" ta "|" reg "|" sa
+                               a = v; ta = $1; sa = NR; next }
+            / fim +versao=.*revogado, sessoes encerradas, estado conferido/ {
+                               match($0, /versao=[0-9]+/); b = substr($0, RSTART + 7, RLENGTH - 7)
+                               if (a != "" && a == b) print "CONCLUIDA|" b "|" ta "|" reg "|" sa
+                               else { if (a != "") print "INTERROMPIDA|" a "|" ta "|" reg "|" sa; print "ORFA|" b "|" $1 "|" reg "|" NR }
+                               a = ""; next }
+            END { if (a != "") print "INTERROMPIDA|" a "|" ta "|" reg "|" sa }' >> "$out/h02_janelas_brutas.txt"
+    done
+    # recuperacoes que conferiram 0|0|0, pelo instante do cabecalho ("== recuperacao <UTC> ..."), com a precisao que tiver
+    for rec in "$base"/recuperacao-*.txt; do
+        [ -f "$rec" ] || continue
+        grep -q 'estado do migrador depois da revogacao: 0|0|0' "$rec" || continue
+        t="$(tr -d '\r' < "$rec" | sed -nE '1s/^== recuperacao ([^ ]+).*/\1/p')"
+        echo "${t:-ILEGIVEL}|${rec#$base/}" >> "$out/h02_recuperacoes.txt"
+    done
+    awk -F'|' -v REC="$out/h02_recuperacoes.txt" '
+        # intervalo [LO, HI] em texto de largura fixa "AAAA-MM-DDTHH:MM:SS.mmm"; 0 se ilegivel
+        function iv(ts,   d, f) {
+            if (ts !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9](\.[0-9]+)?Z$/) return 0
+            d = substr(ts, 1, 19)
+            if (substr(ts, 20, 1) == ".") { f = substr(ts, 21); sub(/Z$/, "", f); f = substr(f "000", 1, 3); LO = d "." f; HI = LO }
+            else { LO = d ".000"; HI = d ".999" }
+            return 1
+        }
+        BEGIN { nr = 0
+                while ((getline l < REC) > 0) { split(l, p, "|"); nr++; rts[nr] = p[1]; rarq[nr] = p[2]
+                    rok[nr] = iv(p[1]); rlo[nr] = LO; rhi[nr] = HI; usada[nr] = 0 } }
+        { n++; tipo[n] = $1; ver[n] = $2; ts[n] = $3; reg[n] = $4; seq[n] = $5; linha[n] = $0
+          ok[n] = iv($3); lo[n] = LO; hi[n] = HI }
+        END {
+            # interrompidas em ordem de inicio (as ilegiveis ao fim), para o consumo 1:1 das recuperacoes
+            m = 0; for (i = 1; i <= n; i++) if (tipo[i] == "INTERROMPIDA") ord[++m] = i
+            for (x = 2; x <= m; x++) for (y = x; y > 1; y--) {
+                a = ord[y - 1]; b = ord[y]
+                if ((ok[a] ? lo[a] : "~") > (ok[b] ? lo[b] : "~")) { ord[y - 1] = b; ord[y] = a } else break }
+            for (x = 1; x <= m; x++) {
+                i = ord[x]; amb = ""; blo = ""; bhi = ""
+                if (!ok[i]) amb = "instante ilegivel: " ts[i]
+                for (j = 1; j <= n && amb == ""; j++) {
+                    if (j == i || tipo[j] == "ORFA") continue
+                    if (!ok[j]) { amb = "instante ilegivel em " reg[j]; break }
+                    if (reg[j] == reg[i]) { depois = (seq[j] + 0 > seq[i] + 0) }
+                    else if (lo[j] > hi[i]) depois = 1
+                    else if (hi[j] < lo[i]) depois = 0
+                    else { amb = "inicio em " reg[j] " (" ts[j] ") sem ordem estabelecida em relacao a " ts[i]; break }
+                    if (depois && (blo == "" || lo[j] < blo)) { blo = lo[j]; bhi = hi[j]; bts = ts[j] }
+                }
+                achou = 0
+                for (r = 1; r <= nr && amb == ""; r++) {
+                    if (!rok[r]) { amb = "recuperacao com instante ilegivel (" rarq[r] ")"; break }
+                    dentro = (rlo[r] > hi[i]) && (blo == "" || rhi[r] < blo)
+                    fora = (rhi[r] < lo[i]) || (blo != "" && rlo[r] > bhi)
+                    if (!dentro && !fora) { amb = "recuperacao " rts[r] " sem ordem estabelecida em relacao ao inicio " ts[i] (blo == "" ? "" : " ou ao inicio seguinte " bts); break }
+                    if (dentro && !usada[r] && !achou) { usada[r] = 1; achou = r }
+                }
+                if (amb != "") sit[i] = "AMBIGUA (" amb "): comprovacao RECUSADA"
+                else if (achou) sit[i] = "RECUPERADA em " rts[achou] " (" rarq[achou] ")"
+                else sit[i] = "SEM RECUPERACAO PROPRIA (antes de " (blo == "" ? "o fim" : bts) ")"
+            }
+            for (i = 1; i <= n; i++) print linha[i] "|" (tipo[i] == "INTERROMPIDA" ? sit[i] : "-")
+        }' "$out/h02_janelas_brutas.txt" > "$out/h02_janelas_classificadas.txt"
+    printf '%s|%s|%s\n' \
+        "$(grep '^CONCLUIDA|' "$out/h02_janelas_classificadas.txt" | cut -d'|' -f2 | sort | tr '\n' ' ' | sed 's/ $//')" \
+        "$(grep -c '^INTERROMPIDA|' "$out/h02_janelas_classificadas.txt")" \
+        "$(grep -cE '^ORFA\||SEM RECUPERACAO|AMBIGUA' "$out/h02_janelas_classificadas.txt")"
+}
+
+# Janelas CONCLUIDAS esperadas (P3-IT, F5; 014 desde a R2b-0b): 011, 012 e 013 (e a 016) quando a copia de migrations do
+# ambiente as contem; a 014 SO quando, alem de estar na copia, a lista de elevacao HISTORICA do ambiente (a fotografia
+# feita pelo criar, ou a fonte legada explicita: lib/elevacao_historica.sh, eh_lista_h02) autoriza a 014 com
+# tipo=bypassrls sem vinculo ou vinculada a ESTE id - o mesmo leitor de lista do runner (lib/lista_elevacao.sh).
+# Lista ilegivel ou fora do formato: codigo 1 (o H02 falha; nunca equivale a "sem 014").
+# (O limite da R2b-0b - expectativa pela lista em vigor no TESTE - foi resolvido pela missao H02 x lista historica.)
+#   h02_esperadas <dir de migrations do ambiente> <lista> <id>  -> imprime as versoes esperadas, separadas por espaco
+h02_esperadas() {
+    local mig="$1" lista="$2" id="$3" v esp="" n
+    for v in 011 012 013 016; do ls "$mig/${v}_"*.sql > /dev/null 2>&1 && esp="$esp $v"; done
+    . "$AQUI/lib/lista_elevacao.sh"
+    n="$(lista_elevacao_normalizada "$lista" " 016 " 2>&1)" || { echo "lista de elevacao historica recusada ($lista): $n" >&2; return 1; }
+    if ls "$mig/014_"*.sql > /dev/null 2>&1 \
+       && printf '%s\n' "$n" | awk -v id="$id" '$1 == "014" && $3 == "bypassrls" && ($4 == "-" || $4 == id) { f = 1 } END { exit !f }'; then
+        esp="$esp 014"
+    fi
+    echo $esp | tr ' ' '\n' | sort | tr '\n' ' ' | sed 's/ $//'
+}
+
 h02() {
-    local base="$AQUI/saidas/$HOMOLOG_ID" ok=0
+    # Expectativa DERIVADA do ambiente (P3-IT, F5): versoes = copia de migrations do ambiente; janelas esperadas = as
+    # versoes da copia que exigem elevacao (011, 012, 013 e, com HOMOLOG_ATE=016, a 016), cada uma com EXATAMENTE uma
+    # janela CONCLUIDA (inicio + fim revogado/conferido no mesmo arquivo) nos registros da criacao e das implantacoes
+    # (saidas/<id>/janelas_de_elevacao.txt e implantacao-*/janelas_de_elevacao.txt). Janela INTERROMPIDA e contada a parte
+    # e exige a SUA recuperacao com 0|0|0 (h02_janelas).
+    # P3-R015: com versao sintetica de ensaio DECLARADA e valida (lib/estado.sh, sintetica_declarada; so ensaio-*), a
+    # sintetica entra nas janelas concluidas esperadas, as interrompidas tem de ser EXATAMENTE o numero declarado (todas
+    # com recuperacao propria), a declaracao tem de ser anterior a primeira janela da sintetica, e historico/reexecucao
+    # usam o conjunto de laboratorio. A comparacao das migrations REAIS com db/migrations nao muda.
+    . "$AQUI/lib/estado.sh"   # estado_migrador e sintetica_declarada (executar.sh roda por exec; nada e exportado)
+    local base="$AQUI/saidas/$HOMOLOG_ID" ok=0 v arq esperadas="" concluidas interrompidas=0 mig
     cp "$base/implantacao.txt" "$EV/h02_implantacao_criacao.txt"; cp "$base/janelas_de_elevacao.txt" "$EV/h02_janelas_de_elevacao.txt"
     cp "$base/flyway_info.txt" "$EV/h02_flyway_info_criacao.txt"; cp "$base/migracoes_sha256.txt" "$EV/h02_migracoes_sha256.txt"
-    (cd "$REPO/db/migrations" && sha256sum 0*.sql) | diff - "$EV/h02_migracoes_sha256.txt" > /dev/null || { echo "copia difere de db/migrations" >> "$EV/h02_nota.txt"; ok=1; }
-    [ "$(grep -c ' inicio ' "$EV/h02_janelas_de_elevacao.txt")" = 3 ] && [ "$(grep -c ' fim .*revogado, sessoes encerradas, estado conferido' "$EV/h02_janelas_de_elevacao.txt")" = 3 ] || ok=1
-    grep -q 'versao=011' "$EV/h02_janelas_de_elevacao.txt" && grep -q 'versao=012' "$EV/h02_janelas_de_elevacao.txt" && grep -q 'versao=013' "$EV/h02_janelas_de_elevacao.txt" || ok=1
+    # a copia do ambiente confere com os MESMOS arquivos de db/migrations (so os nomes presentes na copia)
+    (cd "$REPO/db/migrations" && sha256sum $(cd "$base/migracoes" && ls *.sql)) | diff - "$EV/h02_migracoes_sha256.txt" > /dev/null \
+        || { echo "copia difere de db/migrations" >> "$EV/h02_nota.txt"; ok=1; }
+    # lista HISTORICA da criacao (missao H02 x lista historica; lib/elevacao_historica.sh): a fotografia do ambiente ou, so
+    # em ambiente legado, a fonte historica EXPLICITA; NUNCA a lista vigente (elevacao.txt nem HOMOLOG_ELEVACAO_ARQ do teste)
+    . "$AQUI/lib/elevacao_historica.sh"
+    local lista_h02
+    if ! lista_h02="$(eh_lista_h02 "$base" "$HOMOLOG_ID" "${HOMOLOG_ELEVACAO_CRIACAO_SHA256:-}" 2>> "$EV/h02_nota.txt")"; then
+        echo "expectativa de janelas NAO determinada: sem lista historica valida (falha fechada)" >> "$EV/h02_nota.txt"; esperadas=""; ok=1
+    elif esperadas="$(h02_esperadas "$base/migracoes" "$lista_h02" "$HOMOLOG_ID" 2>> "$EV/h02_nota.txt")"; then
+        echo "expectativa de janelas pela lista HISTORICA $lista_h02 (sha256 $(sha256sum "$lista_h02" | cut -c1-64)): $esperadas" >> "$EV/h02_nota.txt"
+    else
+        esperadas=""; ok=1
+    fi
+    mig="$base/migracoes"
+    if ! sintetica_declarada; then
+        echo "declaracao de versao sintetica invalida: $SINT_ERRO" >> "$EV/h02_nota.txt"; ok=1
+    elif [ -n "$SINT_VERSAO" ]; then
+        cp "$base/ensaio_sintetica.txt" "$EV/h02_ensaio_sintetica.txt"
+        esperadas="$esperadas $SINT_VERSAO"; mig="$SINT_CONJ"
+        echo "ensaio: versao sintetica $SINT_VERSAO declarada em $SINT_EM ($SINT_ARQ, sha256 $SINT_SHA); interrompidas esperadas: $SINT_INTERR" >> "$EV/h02_nota.txt"
+    fi
+    local r_jan; r_jan="$(h02_janelas "$base" "$EV")"
+    concluidas="$(echo "$r_jan" | cut -d'|' -f1)"; interrompidas="$(echo "$r_jan" | cut -d'|' -f2)"
+    [ "$concluidas" = "$(echo $esperadas | tr ' ' '\n' | sort | tr '\n' ' ' | sed 's/ $//')" ] \
+        || { echo "janelas concluidas '$concluidas' <> esperadas '$(echo $esperadas)'" >> "$EV/h02_nota.txt"; ok=1; }
+    [ "$(echo "$r_jan" | cut -d'|' -f3)" = 0 ] || { echo "janelas com problema (ORFA, AMBIGUA ou INTERROMPIDA sem recuperacao propria): ver h02_janelas_classificadas.txt" >> "$EV/h02_nota.txt"; ok=1; }
+    if [ -n "${SINT_VERSAO:-}" ]; then
+        [ "$interrompidas" = "$SINT_INTERR" ] || { echo "interrompidas $interrompidas <> declaradas $SINT_INTERR" >> "$EV/h02_nota.txt"; ok=1; }
+        local primeira; primeira="$(grep -E "^[A-Z]+\|$SINT_VERSAO\|" "$EV/h02_janelas_classificadas.txt" | cut -d'|' -f3 | sort | head -1)"
+        [ -n "$primeira" ] && [[ "${SINT_EM%Z}" < "${primeira:0:19}" ]] \
+            || { echo "declaracao ($SINT_EM) nao e anterior a primeira janela da sintetica (${primeira:-nenhuma})" >> "$EV/h02_nota.txt"; ok=1; }
+    fi
     # reexecucao: nada pendente, so validacao (historico e checksums) pela identidade dedicada SEM elevacao
-    HOMOLOG_EVID="$EV" HOMOLOG_MIGRACOES_HOST="$base/migracoes" bash "$AQUI/implantacao/implantar.sh" > "$EV/h02_reexecucao.txt" 2>&1 || ok=1
+    HOMOLOG_EVID="$EV" HOMOLOG_MIGRACOES="$(cygpath -m "$mig" 2>/dev/null || echo "$mig")" HOMOLOG_MIGRACOES_HOST="$mig" \
+        bash "$AQUI/implantacao/implantar.sh" > "$EV/h02_reexecucao.txt" 2>&1 || ok=1
     mv "$EV/implantacao.txt" "$EV/h02_reexecucao_detalhe.txt" 2>/dev/null; mv "$EV/flyway_info.txt" "$EV/h02_flyway_info.txt" 2>/dev/null
-    grep -q 'historico depois: 001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true$' "$EV/h02_reexecucao.txt" || ok=1
+    local hist_esperado; hist_esperado="$(cd "$mig" && ls *.sql | sed -E 's/_.*//; s/$/:true/' | tr '\n' ' ' | sed 's/ $//')"
+    grep -q "historico depois: $hist_esperado\$" "$EV/h02_reexecucao.txt" || { echo "historico <> '$hist_esperado'" >> "$EV/h02_nota.txt"; ok=1; }
     [ ! -s "$EV/janelas_de_elevacao.txt" ] || ok=1   # a reexecucao nao elevou nada
     [ "$(admin_sql postgres -c "SELECT rolsuper FROM pg_roles WHERE rolname = 'migrador_nekkora'")" = f ] || ok=1
-    [ $ok = 0 ] && registra H02 OK agora "001-015 por Flyway pela identidade dedicada; elevacao so em 011/012/013 (3 janelas abertas e fechadas); reexecucao sem pendencias valida historico/checksums sem elevar" \
+    [ "$(estado_migrador)" = "0|0|0" ] || { echo "migrador fora de 0|0|0 ao fim" >> "$EV/h02_nota.txt"; ok=1; }
+    [ $ok = 0 ] && registra H02 OK agora "historico = $([ -n "${SINT_VERSAO:-}" ] && echo "copia + sintetica declarada $SINT_VERSAO" || echo "copia do ambiente") ($hist_esperado); janelas concluidas: $concluidas (esperadas); interrompidas: $interrompidas, todas com recuperacao propria; reexecucao sem pendencias valida historico/checksums sem elevar; migrador 0|0|0" \
                || registra H02 FALHA agora "ver h02_*"
 }
 
 # ================================================================================ H03 privilegio minimo
 h03() {
-    local ok=0 f="$EV/h03_estado.txt"
-    admin_sql nekkora < "$AQUI/sql/h03_estado.sql" > "$f" 2>&1 || ok=1
-    ! grep -q '^senha_nao_scram|' "$f" || ok=1
-    [ "$(grep '^membership|' "$f")" = "membership|pg_read_all_data->backup_nekkora|admin=false|inherit=true|set=true" ] || { echo "memberships inesperadas" >> "$f"; ok=1; }
-    [ "$(grep '^atributos|' "$f" | grep -c 'super=true')" = 1 ] && grep -q '^atributos|admin_cluster|login=true|super=true' "$f" || ok=1
-    grep -q '^atributos|migrador_nekkora|login=true|super=false|createrole=false|createdb=false|bypassrls=false' "$f" || ok=1
-    grep -q '^atributos|backup_nekkora|login=true|super=false|createrole=false|createdb=false|bypassrls=true' "$f" || ok=1
-    ! grep '^atributos|nekkora_' "$f" | grep -qE 'super=true|createrole=true|createdb=true|bypassrls=true|replication=true' || ok=1
-    grep -q '^conexao_servico|nekkora_platform|10.252.10.20|ssl=true|TLSv1.3' "$f" && grep -q '^conexao_servico|nekkora_portal|10.252.10.21|ssl=true|TLSv1.3' "$f" || ok=1
-    ! grep '^hba|' "$f" | grep -qiE '\|trust\||\|error' || ok=1
-    grep -q '^login_com_senha|admin_cluster,backup_nekkora,migrador_nekkora,nekkora_platform,nekkora_portal$' "$f" || ok=1
-    # invariantes das migrations, reexecutados sobre o estado atual (transacao desfeita)
-    { echo "BEGIN;"
-      awk '/^-- === 15\. /{f=1} f && /^COMMIT;/{exit} f' "$REPO/db/migrations/012_security_rls.sql"
-      awk '/^-- === 8\. /{f=1} f && /^COMMIT;/{exit} f' "$REPO/db/migrations/013_portal_externo.sql"
-      awk '/^-- === 8\. /{f=1} f && /^COMMIT;/{exit} f' "$REPO/db/migrations/014_mfa_sessoes.sql"
-      awk '/^-- === Invariantes ===/{f=1} f && /^COMMIT;/{exit} f' "$REPO/db/migrations/015_restauracao_logica.sql"
-      echo "ROLLBACK;"; } > "$T/invariantes.sql"
-    [ "$(grep -c '^DO \$\$' "$T/invariantes.sql")" = 4 ] || ok=1
-    admin_sql nekkora < "$T/invariantes.sql" > "$EV/h03_invariantes.txt" 2>&1 && echo "4 blocos de invariantes (012, 013, 014, 015) sem erro" >> "$EV/h03_invariantes.txt" || { echo "INVARIANTE FALHOU" >> "$EV/h03_invariantes.txt"; ok=1; }
-    # catalogo x instalacao de referencia 001-015 por superusuario (como nos ensaios aprovados), com o instalador normalizado
-    local ref="nekkora-homologacao-$HOMOLOG_ID-referencia" pr
-    pr="$(head -c 18 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n')"
-    MSYS_NO_PATHCONV=1 docker run -d --name "$ref" --label "nekkora.homologacao=$HOMOLOG_ID" --label nekkora.homologacao.papel=referencia-catalogo \
-        -e POSTGRES_USER=nekkora -e POSTGRES_DB=nekkora -e POSTGRES_PASSWORD="$pr" -e POSTGRES_INITDB_ARGS="--auth-local=scram-sha-256 --auth-host=scram-sha-256" \
-        -v "$(cygpath -w "$AQUI/saidas/$HOMOLOG_ID/migracoes"):/docker-entrypoint-initdb.d:ro" postgres:16-alpine > /dev/null
-    for i in $(seq 1 90); do [ "$(docker logs "$ref" 2>&1 | grep -c 'ready to accept connections')" -ge 2 ] && break; sleep 2; done
-    docker exec -i -e PGPASSWORD="$pr" "$ref" psql -X -At -v ON_ERROR_STOP=1 -U nekkora -d nekkora < "$REPO/db/tests/portal-013/sql/c_listagem_catalogo.sql" > "$T/cat_ref.txt" 2>&1 || ok=1
-    docker rm -f -v "$ref" > /dev/null
-    admin_sql nekkora < "$REPO/db/tests/portal-013/sql/c_listagem_catalogo.sql" > "$T/cat_homolog.txt" 2>&1 || ok=1
-    python "$AQUI/lib/catalogo.py" "$T/cat_ref.txt" "$EV/h03_catalogo_referencia_normalizado.txt" nekkora
+    # H03 pos-016 (F-R2b1c-1): expectativas por PERFIL do modelo de migrations do ambiente (testes/h03_perfis.sh), nunca
+    # supondo 001-015. Modelo nao determinado = FALHA fechada (nada e avaliado). Cada conferencia que falha deixa o motivo
+    # em h03_nota.txt.
+    local ok=0 f="$EV/h03_estado.txt" nota="$EV/h03_nota.txt" mig="$AQUI/saidas/$HOMOLOG_ID/migracoes" modelo hmax n
+    : > "$nota"
+    falha3() { echo "FALHA: $*" >> "$nota"; ok=1; }
+    . "$AQUI/testes/h03_perfis.sh"
+    if ! modelo="$(h03_modelo "$mig" "${HOMOLOG_ATE:-015}" 2>> "$nota")" || ! h03_perfil "$modelo" 2>> "$nota"; then
+        echo "FALHA: modelo de migrations nao determinado; H03 nao avalia nada (falha fechada)" >> "$nota"
+        registra H03 FALHA agora "modelo de migrations nao determinado (ver h03_nota.txt)"
+        return
+    fi
+    echo "modelo $modelo (copia $mig, HOMOLOG_ATE=${HOMOLOG_ATE:-015}): perfil H03-$modelo" >> "$nota"
+    hmax="$(admin_sql nekkora -c "SELECT max(version) FROM public.flyway_schema_history WHERE success" 2>&1 | tr -d '\r')"
+    [ "$hmax" = "$modelo" ] || falha3 "historico do banco termina em '$hmax', modelo da copia $modelo"
+    admin_sql nekkora < "$AQUI/sql/h03_estado.sql" > "$f" 2>&1 || falha3 "h03_estado.sql nao executou"
+    ! grep -q '^senha_nao_scram|' "$f" || falha3 "senha nao SCRAM"
+    [ "$(grep '^membership|' "$f")" = "membership|pg_read_all_data->backup_nekkora|admin=false|inherit=true|set=true" ] || falha3 "memberships inesperadas"
+    { [ "$(grep '^atributos|' "$f" | grep -c 'super=true')" = 1 ] && grep -q '^atributos|admin_cluster|login=true|super=true' "$f"; } || falha3 "superusuario diferente de so admin_cluster"
+    grep -q '^atributos|migrador_nekkora|login=true|super=false|createrole=false|createdb=false|bypassrls=false' "$f" || falha3 "migrador com atributo"
+    grep -q '^atributos|backup_nekkora|login=true|super=false|createrole=false|createdb=false|bypassrls=true' "$f" || falha3 "backup_nekkora fora do esperado"
+    ! grep '^atributos|nekkora_' "$f" | grep -qE 'super=true|createrole=true|createdb=true|bypassrls=true|replication=true' || falha3 "papel nekkora_* com atributo elevado"
+    { grep -q "^conexao_servico|nekkora_platform|$HOMOLOG_REDE_INTERNA.20|ssl=true|TLSv1.3" "$f" && grep -q "^conexao_servico|nekkora_portal|$HOMOLOG_REDE_INTERNA.21|ssl=true|TLSv1.3" "$f"; } || falha3 "conexoes dos servicos fora do esperado"
+    ! grep '^hba|' "$f" | grep -qiE '\|trust\||\|error' || falha3 "pg_hba com trust ou erro"
+    grep -qx "login_com_senha|$H03_LOGIN_COM_SENHA" "$f" \
+        || falha3 "papeis com LOGIN e senha: '$(grep '^login_com_senha|' "$f" | cut -d'|' -f2)' <> perfil $modelo '$H03_LOGIN_COM_SENHA'"
+    # invariantes das migrations do PERFIL, reexecutados sobre o estado atual (transacao desfeita)
+    if h03_invariantes_sql "$mig" > "$T/invariantes.sql" 2>> "$nota"; then
+        admin_sql nekkora < "$T/invariantes.sql" > "$EV/h03_invariantes.txt" 2>&1 \
+            && echo "$H03_BLOCOS blocos de invariantes do perfil $modelo sem erro" >> "$EV/h03_invariantes.txt" \
+            || { echo "INVARIANTE FALHOU" >> "$EV/h03_invariantes.txt"; falha3 "invariante do perfil $modelo: $(grep -m1 ERROR "$EV/h03_invariantes.txt" | cut -c1-160)"; }
+    else
+        falha3 "SQL de invariantes do perfil $modelo nao montado"
+    fi
+    # catalogo x referencia DESCARTAVEL instalada pelo modelo SUPORTADO (aplicar_como_migrador.sh), com o instalador normalizado
+    h03_referencia "$HOMOLOG_ID" "$mig" "$modelo" "$REPO/db/bootstrap/aplicar_como_migrador.sh" "$T/cat_ref.txt" \
+        "$REPO/db/tests/portal-013/sql/c_listagem_catalogo.sql" "$EV" || falha3 "referencia do modelo $modelo invalida (ver h03_referencia.txt)"
+    admin_sql nekkora < "$REPO/db/tests/portal-013/sql/c_listagem_catalogo.sql" > "$T/cat_homolog.txt" 2>&1 || falha3 "listagem do catalogo do ambiente"
+    python "$AQUI/lib/catalogo.py" "$T/cat_ref.txt" "$EV/h03_catalogo_referencia_normalizado.txt" migrador_nekkora nekkora 2> /dev/null || : > "$EV/h03_catalogo_referencia_normalizado.txt"
     python "$AQUI/lib/catalogo.py" "$T/cat_homolog.txt" "$EV/h03_catalogo_homologacao_normalizado.txt" migrador_nekkora admin_cluster
     diff "$EV/h03_catalogo_referencia_normalizado.txt" "$EV/h03_catalogo_homologacao_normalizado.txt" > "$EV/h03_catalogo_diff.txt"
     grep -E '^[<>]' "$EV/h03_catalogo_diff.txt" | grep -v flyway_schema_history > "$EV/h03_catalogo_diff_sem_flyway.txt"
-    [ ! -s "$EV/h03_catalogo_diff_sem_flyway.txt" ] && [ -s "$EV/h03_catalogo_referencia_normalizado.txt" ] || ok=1
-    local n; n="$(wc -l < "$EV/h03_catalogo_referencia_normalizado.txt")"
-    [ $ok = 0 ] && registra H03 OK agora "catalogo = instalacao de referencia 001-015 ($n linhas; so difere a tabela do Flyway), com o instalador normalizado; invariantes 012-015 reexecutados; so admin_cluster e superusuario; membership unica pg_read_all_data->backup_nekkora; servicos conectados pelo proprio IP com TLSv1.3; pg_hba sem trust" \
-               || registra H03 FALHA agora "ver h03_*"
+    [ -s "$EV/h03_catalogo_referencia_normalizado.txt" ] || falha3 "catalogo de referencia vazio"
+    [ ! -s "$EV/h03_catalogo_diff_sem_flyway.txt" ] || falha3 "catalogo difere da referencia ($(wc -l < "$EV/h03_catalogo_diff_sem_flyway.txt") linhas fora da tabela do Flyway)"
+    n="$(wc -l < "$EV/h03_catalogo_referencia_normalizado.txt")"
+    [ $ok = 0 ] && registra H03 OK agora "perfil H03-$modelo; catalogo = referencia 001-$modelo instalada pelo modelo suportado ($n linhas; so difere a tabela do Flyway); invariantes do perfil ($H03_BLOCOS blocos) reexecutados; papeis com senha do perfil; so admin_cluster superusuario; membership unica pg_read_all_data->backup_nekkora; servicos pelo proprio IP com TLSv1.3; pg_hba sem trust" \
+               || registra H03 FALHA agora "ver h03_nota.txt e h03_*"
 }
 
 # ================================================================================ H04 rede e TLS
@@ -126,13 +286,13 @@ h04() {
     grep -q 'Verify return code: 0 (ok)' "$T/s_client.txt" && echo "gateway: cadeia verificada (Verify return code 0), $(grep -m1 -oE 'TLSv1\.[0-9]' "$T/s_client.txt")" >> "$f" || ok=1
     if MSYS2_ARG_CONV_EXCL='*' openssl s_client -connect "127.0.0.1:$HOMOLOG_PORTA" -servername "$HOMOLOG_HOST" -tls1_1 </dev/null > "$T/s_client11.txt" 2>&1; then
         echo "gateway aceitou TLS 1.1" >> "$f"; ok=1; else echo "gateway recusa TLS 1.1" >> "$f"; fi
-    # PostgreSQL, a partir do container de ferramentas (10.252.10.31)
+    # PostgreSQL, a partir do container de ferramentas ($HOMOLOG_REDE_INTERNA.31)
     local pg="host=postgres port=5432 dbname=nekkora connect_timeout=5"
     local q="SELECT 'tls='||ssl||' '||version FROM pg_stat_ssl WHERE pid = pg_backend_pid()"
     r="$(ferr psql -X -At "$pg user=admin_cluster sslmode=verify-full sslrootcert=/tls/ca.crt" -c "$q" 2>&1)"; echo "admin verify-full (CA correta): $r" >> "$f"; [ "$r" = "tls=true TLSv1.3" ] || ok=1
     r="$(ferr psql -X -At "$pg user=admin_cluster sslmode=disable" -c "SELECT 1" 2>&1)"; echo "texto claro (sslmode=disable): $(echo "$r" | tail -1 | cut -c1-160)" >> "$f"; echo "$r" | grep -q 'pg_hba.conf rejects connection\|no pg_hba.conf entry' || ok=1
     r="$(ferr psql -X -At "$pg user=admin_cluster sslmode=verify-full sslrootcert=/etc/ssl/certs/ca-certificates.crt" -c "SELECT 1" 2>&1)"; echo "CA errada: $(echo "$r" | tail -1 | cut -c1-160)" >> "$f"; echo "$r" | grep -qi 'certificate verify failed' || ok=1
-    r="$(ferr psql -X -At "hostaddr=10.252.10.10 host=10.252.10.10 port=5432 dbname=nekkora user=admin_cluster sslmode=verify-full sslrootcert=/tls/ca.crt connect_timeout=5" -c "SELECT 1" 2>&1)"; echo "nome do servidor diferente do certificado: $(echo "$r" | tail -1 | cut -c1-160)" >> "$f"; echo "$r" | grep -qi 'does not match host name' || ok=1
+    r="$(ferr psql -X -At "hostaddr=$HOMOLOG_REDE_INTERNA.10 host=$HOMOLOG_REDE_INTERNA.10 port=5432 dbname=nekkora user=admin_cluster sslmode=verify-full sslrootcert=/tls/ca.crt connect_timeout=5" -c "SELECT 1" 2>&1)"; echo "nome do servidor diferente do certificado: $(echo "$r" | tail -1 | cut -c1-160)" >> "$f"; echo "$r" | grep -qi 'does not match host name' || ok=1
     r="$(PGPASSWORD=senha-errada-de-proposito ferr psql -X -At "$pg user=admin_cluster sslmode=verify-full sslrootcert=/tls/ca.crt" -c "SELECT 1" 2>&1)"; echo "senha errada: $(echo "$r" | tail -1 | cut -c1-160)" >> "$f"; echo "$r" | grep -q 'password authentication failed' || ok=1
     r="$(PGPASSWORD="$(cat "$HOMOLOG_SEGREDOS_HOST/senhas/platform")" ferr psql -X -At "$pg user=nekkora_platform sslmode=verify-full sslrootcert=/tls/ca.crt" -c "SELECT 1" 2>&1)"; echo "papel da Platform fora do proprio container: $(echo "$r" | tail -1 | cut -c1-160)" >> "$f"; echo "$r" | grep -q 'pg_hba.conf rejects connection' || ok=1
     r="$(ferr sh -c 'pg_isready -h 1.1.1.1 -p 443 -t 3; echo rc=$?' 2>&1 | tail -1)"; echo "rede interna sem saida (pg_isready 1.1.1.1:443): $r" >> "$f"; [ "$r" = "rc=2" ] || ok=1
@@ -271,11 +431,19 @@ h09() {
     else echo "(c) falha simulada (sem elevacao): implantacao parou (rc=$?), sem nova tentativa" >> "$f"; fi
     [ "$(grep -c 'migrate -target\|-- 900_falha' "$T/h09c.txt")" -le 1 ] || { echo "(c) houve nova tentativa" >> "$f"; ok=1; }
     # (d) a mesma falha DENTRO de uma janela de elevacao: o trap revoga a elevacao
-    printf '900\n' > "$T/elevacao_ensaio.txt"; : > "$T/janelas_de_elevacao.txt"
-    if HOMOLOG_ELEVACAO_ARQ="$T/elevacao_ensaio.txt" HOMOLOG_AUTORIZA_ELEVACAO=1 HOMOLOG_MIGRACOES="$(cygpath -m "$e")" HOMOLOG_MIGRACOES_HOST="$e" HOMOLOG_EVID="$T" \
-        bash "$AQUI/implantacao/implantar.sh" > "$T/h09d.txt" 2>&1; then echo "(d) falha elevada NAO interrompeu" >> "$f"; ok=1
-    else echo "(d) falha simulada dentro da janela de elevacao: parou; janela: $(tr '\n' ' ' < "$T/janelas_de_elevacao.txt" | sed -E 's/[0-9T:.-]+Z //g')" >> "$f"; fi
-    grep -q 'fim    versao=900 SUPERUSER revogado, sessoes encerradas, estado conferido' "$T/janelas_de_elevacao.txt" || { echo "(d) elevacao nao revogada pelo trap" >> "$f"; ok=1; }
+    printf '900 %s\n' "$(sha256sum "$e/900_falha_simulada.sql" | cut -d' ' -f1)" > "$T/elevacao_ensaio.txt"; : > "$T/janelas_de_elevacao.txt"
+    HOMOLOG_ELEVACAO_ARQ="$T/elevacao_ensaio.txt" HOMOLOG_AUTORIZA_ELEVACAO=1 HOMOLOG_MIGRACOES="$(cygpath -m "$e")" HOMOLOG_MIGRACOES_HOST="$e" HOMOLOG_EVID="$T" \
+        bash "$AQUI/implantacao/implantar.sh" > "$T/h09d.txt" 2>&1; rd=$?
+    if [[ "$HOMOLOG_ID" =~ ^ensaio- ]]; then
+        if [ $rd = 0 ]; then echo "(d) falha elevada NAO interrompeu" >> "$f"; ok=1
+        else echo "(d) falha simulada dentro da janela de elevacao: parou; janela: $(tr '\n' ' ' < "$T/janelas_de_elevacao.txt" | sed -E 's/[0-9T:.-]+Z //g')" >> "$f"; fi
+        grep -q 'fim    versao=900 SUPERUSER revogado, sessoes encerradas, estado conferido' "$T/janelas_de_elevacao.txt" || { echo "(d) elevacao nao revogada pelo trap" >> "$f"; ok=1; }
+    else
+        # fora de ambiente descartavel a lista alternativa e recusada antes de qualquer acao (codigo 3, nenhuma janela)
+        if [ $rd = 3 ] && grep -q 'so em ambiente descartavel' "$T/h09d.txt" && [ ! -s "$T/janelas_de_elevacao.txt" ]; then
+            echo "(d) lista alternativa recusada fora de ensaio-* (codigo 3, nenhuma janela)" >> "$f"
+        else echo "(d) lista alternativa NAO recusada fora de ensaio-* (rc=$rd)" >> "$f"; ok=1; fi
+    fi
     [ "$(admin_sql postgres -c "SELECT rolsuper FROM pg_roles WHERE rolname = 'migrador_nekkora'")" = f ] || { echo "migrador ficou elevado" >> "$f"; ok=1; }
     # estado depois de (b)-(d): historico e esquema intactos
     [ "$(admin_sql nekkora -c "SELECT string_agg(version || ':' || success || ':' || checksum, ' ' ORDER BY installed_rank) FROM flyway_schema_history")" = "$hist0" ] \
@@ -353,7 +521,10 @@ h08() {
                || registra H08 FALHA agora "ver h08_segredos.txt (so contagens; nenhum valor impresso)"
 }
 
-h01; h02; h03; h04; h05; h06; h07; h09; r015; h08
+# HOMOLOG_TESTES (opcional, suporte de teste P3-IT): subconjunto, ex. "h02"; padrao = a suite inteira, como antes
+for t_ in ${HOMOLOG_TESTES:-h01 h02 h03 h04 h05 h06 h07 h09 r015 h08}; do
+    case " h01 h02 h03 h04 h05 h06 h07 h09 r015 h08 " in *" $t_ "*) "$t_";; *) echo "teste desconhecido: $t_" >&2; exit 2;; esac
+done
 registra "reutilizada" "-" "evidencia anterior" "suites SQL 012/013/014, restauracao-015 original, atualizacao-populada, 58 testes Maven e E2E 6/6 do commit $HOMOLOG_COMMIT (docs/relatorios/2026-09-26-validacao-api-v1.md); nao repetidas: a homologacao nao muda o schema nem o codigo"
 echo
 column -t -s '|' "$RESUMO" 2>/dev/null || cat "$RESUMO"

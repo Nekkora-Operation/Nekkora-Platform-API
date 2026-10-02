@@ -164,10 +164,27 @@ public class PlatformConfig {
         return new MfaRepository();
     }
 
+    /**
+     * Porta de e-mail. Padrao: {@link LocalMailSender} (so a intencao). {@code nekkora.mail.transport=homologacao} liga
+     * o transporte de HOMOLOGACAO (caixa local, sem envio externo, desfechos simulados), que so existe com
+     * {@code nekkora.environment=ensaio-*} e {@code nekkora.mail.caixa-dir} gravavel: sem isso, a Platform NAO sobe
+     * (nunca cai silenciosamente no local). Qualquer outro valor de transporte tambem impede a partida.
+     */
     @Bean
     @ConditionalOnMissingBean(MailSender.class)
-    MailSender mailSender() {
-        return new LocalMailSender();
+    MailSender mailSender(@org.springframework.beans.factory.annotation.Value("${nekkora.mail.transport:local}") String transport,
+                          @org.springframework.beans.factory.annotation.Value("${nekkora.mail.caixa-dir:}") String caixaDir,
+                          @org.springframework.beans.factory.annotation.Value("${nekkora.environment:}") String environment) {
+        return switch (transport == null ? "" : transport.trim()) {
+            case "", "local" -> new LocalMailSender();
+            case "homologacao" -> {
+                if (caixaDir == null || caixaDir.isBlank()) {
+                    throw new IllegalStateException("nekkora.mail.transport=homologacao exige nekkora.mail.caixa-dir");
+                }
+                yield new com.nekkora.platform.mail.CaixaHomologacaoMailSender(java.nio.file.Path.of(caixaDir), environment);
+            }
+            default -> throw new IllegalStateException("nekkora.mail.transport desconhecido (use local ou homologacao)");
+        };
     }
 
     @Bean

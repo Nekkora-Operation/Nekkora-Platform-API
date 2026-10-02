@@ -1,0 +1,96 @@
+# SOBREPOSICAO da homologacao para ambientes com a 016 (desenho P1a, §2, §3 e §6). Usada pelo runner SO em ambientes
+# criados com a 016 (registrado em ambiente.env, HOMOLOG_COMPOSE_EXTRA); ambientes antigos (ex.: hml03) seguem so com
+# compose.homolog.yml. Nenhum valor secreto neste arquivo.
+#
+# - PostgreSQL: pg_hba/pg_ident GERADOS pelo runner (HOMOLOG_CONFIG) com as regras da 016; ssl_ca_file = CA OPERACIONAL
+#   descartavel do ambiente (so ela valida certificados de cliente dos operadores); ident_file = mapa "ops" (CN = papel).
+# - gateway: nginx.conf gerado com o prefixo da rede interna.
+# - job "operacao" (IP .33, perfil operacao): CLI real dos operadores e ferramenta de homologacao (IdP/CA SIMULADOS, so
+#   ensaio-*). E o UNICO container que recebe a chave da CA operacional e as senhas de nekkora_ops_ca/ops_intake;
+#   credenciais emitidas ficam no volume exclusivo "operadores" (dono conferido por "operadores-init").
+
+volumes:
+  operadores:
+    labels:
+      nekkora.homologacao: ${HOMOLOG_ID:?defina HOMOLOG_ID}
+
+services:
+  postgres:
+    entrypoint:
+      - sh
+      - -ec
+      - >-
+        install -d -o postgres -g postgres -m 700 /tls &&
+        install -o postgres -g postgres -m 600 /tls-src/postgres.key /tls/postgres.key &&
+        install -o postgres -g postgres -m 644 /tls-src/postgres.crt /tls/postgres.crt &&
+        install -o postgres -g postgres -m 644 /tls-src/ops-ca.crt /tls/ops-ca.crt &&
+        exec docker-entrypoint.sh "$$@"
+      - --
+    command:
+      - postgres
+      - -c
+      - hba_file=/etc/nekkora/pg_hba.conf
+      - -c
+      - ident_file=/etc/nekkora/pg_ident.conf
+      - -c
+      - listen_addresses=*
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/tls/postgres.crt
+      - -c
+      - ssl_key_file=/tls/postgres.key
+      - -c
+      - ssl_ca_file=/tls/ops-ca.crt
+      - -c
+      - ssl_min_protocol_version=TLSv1.2
+      - -c
+      - password_encryption=scram-sha-256
+      - -c
+      - log_connections=on
+      - -c
+      - log_disconnections=on
+      - -c
+      - "log_line_prefix=%m [%p] %q%u@%d "
+      - -c
+      - cluster_name=nekkora-homologacao
+    volumes:
+      - ${HOMOLOG_CONFIG:?}/pg_hba.conf:/etc/nekkora/pg_hba.conf:ro
+      - ${HOMOLOG_CONFIG:?}/pg_ident.conf:/etc/nekkora/pg_ident.conf:ro
+
+  gateway:
+    volumes:
+      - ${HOMOLOG_CONFIG:?}/nginx.conf:/etc/nginx/nginx.conf:ro
+
+  operadores-init:
+    profiles: [operacao]
+    image: nekkora-homologacao-operacao:${HOMOLOG_COMMIT:?}
+    labels:
+      nekkora.homologacao: ${HOMOLOG_ID:?}
+    user: root
+    network_mode: none
+    entrypoint: ["sh", "-ec", "install -d -o nekkora -g nekkora -m 700 /operadores && stat -c '%U %a' /operadores"]
+    volumes:
+      - operadores:/operadores
+
+  operacao:
+    profiles: [operacao]
+    image: nekkora-homologacao-operacao:${HOMOLOG_COMMIT:?}
+    build:
+      context: ../../api
+      dockerfile: e2e/Dockerfile.operacao
+      labels:
+        nekkora.homologacao: ${HOMOLOG_ID:?}
+    labels:
+      nekkora.homologacao: ${HOMOLOG_ID:?}
+    env_file: ${HOMOLOG_SEGREDOS:?}/operacao.env
+    read_only: true
+    tmpfs: [/tmp]
+    volumes:
+      - ${HOMOLOG_SEGREDOS:?}/tls/ca.crt:/tls/ca.crt:ro
+      - ${HOMOLOG_SEGREDOS:?}/tls/ops-ca.crt:/tls/ops-ca.crt:ro
+      - ${HOMOLOG_SEGREDOS:?}/tls/ops-ca.key:/tls/ops-ca.key:ro
+      - operadores:/operadores
+    networks:
+      interna:
+        ipv4_address: ${HOMOLOG_REDE_INTERNA:-10.252.10}.33

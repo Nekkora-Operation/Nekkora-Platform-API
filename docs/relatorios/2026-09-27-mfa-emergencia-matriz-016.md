@@ -15,7 +15,8 @@ A migration confere esta matriz no próprio bloco final (§19 da 016), e a suít
 
 | Papel | Tipo | Atributos | Membros | Uso |
 |---|---|---|---|---|
-| `nekkora_ops_mfa_owner` | NOLOGIN | sem SUPERUSER, CREATEDB, CREATEROLE, REPLICATION ou BYPASSRLS | nenhum | Dono das funções operacionais (`public.ops_*` e internas `ops.*`). Nunca conecta |
+| `nekkora_ops_mfa_owner` | NOLOGIN | sem SUPERUSER, CREATEDB, CREATEROLE, REPLICATION ou BYPASSRLS | nenhum | Dono das funções operacionais (`public.ops_*` e internas `ops.*`), **exceto** as funções de gatilho `ops.prevent_*` e os membros da extensão `sslinfo`, que ficam com a identidade de implantação (revisão 5, P4-R1/P4-R2a). Nunca conecta |
+| `migrador_nekkora` | LOGIN (identidade de implantação **declarada** na §19 da 016, revisão 5) | sem atributos fora da janela de elevação | nenhum | Dono do banco e dos objetos que a 016 não reatribui: schema `ops`, tabelas e índices de `ops`, extensão `sslinfo` e seus membros, funções de gatilho `ops.prevent_*`. **Modelo suportado** pela revisão 5; outra topologia (produção pendente) reprova a §19 |
 | `nekkora_ops_mfa` | NOLOGIN (grupo) | idem | papéis `op_*`, sem ADMIN OPTION | Recebe `EXECUTE` só nas 20 funções de operador |
 | `op_<apelido>` | LOGIN, **um por pessoa** | idem, sem senha | — | Operador. Criado pelo DBA **fora** da migration. Só `hostssl … cert map=ops clientname=CN`. Membro **só** de `nekkora_ops_mfa`, conferido no cadastro (`ops.papel_operador_invalido`) |
 | `nekkora_ops_ca` | LOGIN | idem | nenhum | Serviço da CA: resolve sujeito do IdP → papel e registra ou revoga certificados |
@@ -27,7 +28,8 @@ A migration confere esta matriz no próprio bloco final (§19 da 016), e a suít
 ## 2. Schema `ops` e tabelas
 
 - O schema `ops` pertence ao migrador. Só `nekkora_ops_mfa_owner` tem USAGE; nenhum papel de LOGIN tem USAGE.
-- A extensão `sslinfo` fica em `ops`, com EXECUTE só para o dono operacional.
+- A extensão `sslinfo` fica em `ops`, com EXECUTE só para o dono operacional, **além do EXECUTE implícito do dono da extensão** (a identidade de implantação, que a cria na janela de elevação). Revisão 5: a §19 confere dono, ACL exata (`{migrador=X/migrador, nekkora_ops_mfa_owner=X/migrador}`) e EXECUTE efetivo de cada membro.
+- As 11 funções de gatilho `ops.prevent_*` ficam com a identidade de implantação (não são reatribuídas na §18), ACL só do dono; o EXECUTE de função de gatilho não é conferido no disparo.
 - As 14 tabelas pertencem ao migrador. O dono operacional tem SELECT, INSERT e UPDATE nelas (só SELECT e INSERT nas três de auditoria), **sem** DELETE, TRUNCATE, REFERENCES ou TRIGGER.
 - Todas as tabelas têm triggers de imutabilidade e de bloqueio de DELETE e TRUNCATE.
 

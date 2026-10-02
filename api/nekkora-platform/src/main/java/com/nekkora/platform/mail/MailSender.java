@@ -45,4 +45,12 @@ public interface MailSender {
      */
     Outcome sendEmergencyNotice(Kind kind, UUID organization, String recipient, String confirmTokenOrNull, String contestTokenOrNull,
                                 UUID attemptId);
+
+    /**
+     * {@code true} so no transporte de HOMOLOGACAO (caixa local, sem envio externo): todo desfecho dele e gravado no
+     * banco com categoria de simulacao (ex.: ACEITE_SIMULADO), para nunca se confundir com aceite de transporte real.
+     */
+    default boolean simulated() {
+        return false;
+    }
 }

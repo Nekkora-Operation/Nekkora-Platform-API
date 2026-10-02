@@ -144,7 +144,8 @@ public final class EmergencyNotices {
             outcome = MailSender.Outcome.INCERTO;
         }
         recordTransportResult(notice, outcome);
-        LOG.info("evento=aviso_mfa_emergencia.entregue_a_porta tipo={} org={} desfecho={}", kind, i.org(), outcome);
+        LOG.info("evento=aviso_mfa_emergencia.entregue_a_porta tipo={} org={} desfecho={} simulado={}", kind, i.org(), outcome,
+                mail.simulated() ? "sim" : "nao");
         return true;
     }
 
@@ -189,11 +190,13 @@ public final class EmergencyNotices {
 
     /** Resultado vindo do transporte (sincrono ou assincrono), preso a tentativa exata. Idempotente no banco. */
     public void recordTransportResult(UUID notice, MailSender.Outcome outcome) {
+        // transporte de homologacao: o mesmo caminho, com categoria que identifica o desfecho como SIMULADO
+        boolean sim = mail.simulated();
         switch (outcome) {
-            case ENFILEIRADO -> recordResult(notice, ENFILEIRADA, null);
-            case ACEITO_PELO_TRANSPORTE -> recordResult(notice, ACEITA, null);
-            case RECUSADO_DEFINITIVO -> recordResult(notice, FALHOU, "RECUSADO_PELO_TRANSPORTE");
-            case INCERTO -> recordResult(notice, DESCONHECIDO, "RESULTADO_INCERTO");
+            case ENFILEIRADO -> recordResult(notice, ENFILEIRADA, sim ? "FILA_SIMULADA" : null);
+            case ACEITO_PELO_TRANSPORTE -> recordResult(notice, ACEITA, sim ? "ACEITE_SIMULADO" : null);
+            case RECUSADO_DEFINITIVO -> recordResult(notice, FALHOU, sim ? "RECUSA_SIMULADA" : "RECUSADO_PELO_TRANSPORTE");
+            case INCERTO -> recordResult(notice, DESCONHECIDO, sim ? "INCERTO_SIMULADO" : "RESULTADO_INCERTO");
         }
     }
 

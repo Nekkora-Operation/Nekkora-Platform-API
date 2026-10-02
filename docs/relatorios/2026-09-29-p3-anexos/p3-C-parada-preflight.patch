@@ -1,0 +1,289 @@
+diff --git a/ops/homologacao/homologacao.sh b/ops/homologacao/homologacao.sh
+index cfea330..728455b 100644
+--- a/ops/homologacao/homologacao.sh
++++ b/ops/homologacao/homologacao.sh
+@@ -11,6 +11,9 @@
+ #   ops/homologacao/homologacao.sh destruir <id>   remove SO os recursos com o rotulo nekkora.homologacao=<id>
+ #
+ # Recuperacao emergencial de MFA - 016 (desenho P1a; SO ambientes ensaio-*):
++#   ops/homologacao/homologacao.sh criar <id> com HOMOLOG_ATE=016: aplica SO 001-015 e PARA (016 pendente, BLOQUEADO)
++#   HOMOLOG_AUTORIZA_ELEVACAO=1 ops/homologacao/homologacao.sh implantar <id>   aplica a 016 (pre-voo automatico)
++#   ops/homologacao/homologacao.sh concluir-criacao <id>    depois da 016 LIBERADA: senhas, volumes e servicos
+ #   ops/homologacao/homologacao.sh preparar-016 <id>        senhas dos servicos da 016, operadores (DBA + bootstrap),
+ #                                                            organizacao sintetica, credenciais e contatos
+ #   ops/homologacao/homologacao.sh testar-016 <id>          cenarios B5-B8a, B10-B12 do plano (testes/h016.sh)
+@@ -64,6 +67,44 @@ prepara_funcoes() {
+     TRAVA="$AQUI/saidas/$HOMOLOG_ID/implantacao.trava"
+ }
+ 
++# passos da criacao DEPOIS da implantacao (senhas, volumes, liberacao, servicos): usados pelo criar e pelo
++# concluir-criacao (ambientes com a 016, que param antes dela). Exige SEG e EVID.
++pos_implantacao() {
++    echo "== senhas dos servicos (verificadores SCRAM)"
++    VP="$(python "$AQUI/lib/segredos.py" scram "$SEG/senhas/platform" | tr -d '\r')"
++    VO="$(python "$AQUI/lib/segredos.py" scram "$SEG/senhas/portal" | tr -d '\r')"
++    VOPS=()
++    if [ -f "$SEG/senhas/ops_ca" ]; then
++        VOPS=(-v verif_ops_ca="$(python "$AQUI/lib/segredos.py" scram "$SEG/senhas/ops_ca" | tr -d '\r')"
++              -v verif_ops_intake="$(python "$AQUI/lib/segredos.py" scram "$SEG/senhas/ops_intake" | tr -d '\r')")
++    fi
++    admin_sql nekkora -v verif_platform="$VP" -v verif_portal="$VO" "${VOPS[@]}" < "$AQUI/sql/senhas_servicos.sql" > "$EVID/senhas_servicos.txt" 2>&1 || falha "senhas dos servicos"
++    if [ "$HOMOLOG_ATE" = 016 ]; then
++        # volumes EXCLUSIVOS do ensaio: dono e permissao aplicados e CONFERIDOS no Linux do Docker
++        r="$(compose --profile operacao run --rm -T operadores-init 2>/dev/null | tr -d '\r' | tail -1)"
++        [ "$r" = "nekkora 700" ] || falha "volume de operadores sem dono/permissao esperados (obtido: $r)"
++        echo "volume operadores: $r" > "$EVID/volumes.txt"
++    fi
++    if [ "$HOMOLOG_TRANSPORTE" = homologacao ]; then
++        r="$(compose --profile caixa run --rm -T caixa-init 2>/dev/null | tr -d '\r' | tail -1)"
++        [ "$r" = "nekkora 700" ] || falha "volume da caixa sem dono/permissao esperados (obtido: $r)"
++        echo "volume caixa: $r" >> "$EVID/volumes.txt"
++    fi
++
++    confere_liberacao "$TRAVA" > "$EVID/liberacao.txt" 2>&1 || { cat "$EVID/liberacao.txt"; falha "ambiente BLOQUEADO depois da implantacao"; }
++    echo "== Platform, Portal e gateway"
++    compose up -d platform portal gateway > "$EVID/subida_servicos.txt" 2>&1 || falha "subida dos servicos"
++    CA="$SEG/tls/ca.crt"
++    for i in $(seq 1 90); do
++        a="$(curl -s --ssl-no-revoke -o /dev/null -w '%{http_code}' --cacert "$CA" --resolve "$HOMOLOG_HOST:$HOMOLOG_PORTA:127.0.0.1" "https://$HOMOLOG_HOST:$HOMOLOG_PORTA/api/v1/csrf" || true)"
++        b="$(curl -s --ssl-no-revoke -o /dev/null -w '%{http_code}' --cacert "$CA" --resolve "$HOMOLOG_HOST:$HOMOLOG_PORTA:127.0.0.1" "https://$HOMOLOG_HOST:$HOMOLOG_PORTA/portal/api/v1/o/00000000-0000-4000-8000-000000000000/workspaces" || true)"
++        [ "$a" = 200 ] && [ "$b" = 401 ] && break
++        [ "$i" -lt 90 ] || { compose logs --no-color platform portal gateway > "$EVID/falha_servicos.txt" 2>&1; falha "servicos nao responderam (platform=$a portal=$b; ver falha_servicos.txt)"; }
++        sleep 2
++    done
++    echo "AMBIENTE $HOMOLOG_ID CRIADO: https://$HOMOLOG_HOST:$HOMOLOG_PORTA (publicado em $HOMOLOG_BIND). Proximo passo: homologacao.sh testar $HOMOLOG_ID"
++}
++
+ case "$ACAO" in
+ # ======================================================================================================== criar
+ criar)
+@@ -208,41 +249,19 @@ EOF
+     admin_sql postgres -v verif_migrador="$VM" -v verif_backup="$VB" < "$AQUI/sql/bootstrap.sql" > "$EVID/bootstrap.txt" 2>&1 || { cat "$EVID/bootstrap.txt"; falha "bootstrap"; }
+ 
+     echo "== implantacao 001-$HOMOLOG_ATE pela identidade dedicada (elevacao so nas versoes declaradas; a 016 so com a linha de P3)"
+-    HOMOLOG_AUTORIZA_ELEVACAO=1 bash "$AQUI/implantacao/implantar.sh"
+-
+-    echo "== senhas dos servicos (verificadores SCRAM)"
+-    VP="$(python "$AQUI/lib/segredos.py" scram "$SEG/senhas/platform" | tr -d '\r')"
+-    VO="$(python "$AQUI/lib/segredos.py" scram "$SEG/senhas/portal" | tr -d '\r')"
+-    VOPS=()
+-    if [ -f "$SEG/senhas/ops_ca" ]; then
+-        VOPS=(-v verif_ops_ca="$(python "$AQUI/lib/segredos.py" scram "$SEG/senhas/ops_ca" | tr -d '\r')"
+-              -v verif_ops_intake="$(python "$AQUI/lib/segredos.py" scram "$SEG/senhas/ops_intake" | tr -d '\r')")
+-    fi
+-    admin_sql nekkora -v verif_platform="$VP" -v verif_portal="$VO" "${VOPS[@]}" < "$AQUI/sql/senhas_servicos.sql" > "$EVID/senhas_servicos.txt" 2>&1 || falha "senhas dos servicos"
+     if [ "$HOMOLOG_ATE" = 016 ]; then
+-        # volumes EXCLUSIVOS do ensaio: dono e permissao aplicados e CONFERIDOS no Linux do Docker
+-        r="$(compose --profile operacao run --rm -T operadores-init 2>/dev/null | tr -d '\r' | tail -1)"
+-        [ "$r" = "nekkora 700" ] || falha "volume de operadores sem dono/permissao esperados (obtido: $r)"
+-        echo "volume operadores: $r" > "$EVID/volumes.txt"
+-    fi
+-    if [ "$HOMOLOG_TRANSPORTE" = homologacao ]; then
+-        r="$(compose --profile caixa run --rm -T caixa-init 2>/dev/null | tr -d '\r' | tail -1)"
+-        [ "$r" = "nekkora 700" ] || falha "volume da caixa sem dono/permissao esperados (obtido: $r)"
+-        echo "volume caixa: $r" >> "$EVID/volumes.txt"
++        # PARADA VERIFICAVEL (P3): so 001-015; a janela da 016 fica para "implantar", com o pre-voo automatico
++        HOMOLOG_IMPLANTAR_ATE=015 HOMOLOG_AUTORIZA_ELEVACAO=1 bash "$AQUI/implantacao/implantar.sh"
++        { echo "== PARADA ANTES DA 016 ($(date -u +%Y-%m-%dT%H:%M:%SZ))"; confere_liberacao "$TRAVA"; } > "$EVID/parada_antes_016.txt" 2>&1 || true
++        grep -q '^migrador recuperado' "$EVID/parada_antes_016.txt" && grep -q 'faltam: 016;' "$EVID/parada_antes_016.txt" \
++            || { cat "$EVID/parada_antes_016.txt"; falha "parada antes da 016 fora do esperado (ver parada_antes_016.txt)"; }
++        echo "PARADA: 001-015 aplicadas, 016 pendente, migrador 0|0|0 (parada_antes_016.txt). Proximos passos:"
++        echo "  HOMOLOG_AUTORIZA_ELEVACAO=1 homologacao.sh implantar $HOMOLOG_ID   (janela da 016, com pre-voo automatico)"
++        echo "  homologacao.sh concluir-criacao $HOMOLOG_ID"
++        exit 0
+     fi
+-
+-    confere_liberacao "$TRAVA" > "$EVID/liberacao.txt" 2>&1 || { cat "$EVID/liberacao.txt"; falha "ambiente BLOQUEADO depois da implantacao"; }
+-    echo "== Platform, Portal e gateway"
+-    compose up -d platform portal gateway > "$EVID/subida_servicos.txt" 2>&1 || falha "subida dos servicos"
+-    CA="$SEG/tls/ca.crt"
+-    for i in $(seq 1 90); do
+-        a="$(curl -s --ssl-no-revoke -o /dev/null -w '%{http_code}' --cacert "$CA" --resolve "$HOMOLOG_HOST:$HOMOLOG_PORTA:127.0.0.1" "https://$HOMOLOG_HOST:$HOMOLOG_PORTA/api/v1/csrf" || true)"
+-        b="$(curl -s --ssl-no-revoke -o /dev/null -w '%{http_code}' --cacert "$CA" --resolve "$HOMOLOG_HOST:$HOMOLOG_PORTA:127.0.0.1" "https://$HOMOLOG_HOST:$HOMOLOG_PORTA/portal/api/v1/o/00000000-0000-4000-8000-000000000000/workspaces" || true)"
+-        [ "$a" = 200 ] && [ "$b" = 401 ] && break
+-        [ "$i" -lt 90 ] || { compose logs --no-color platform portal gateway > "$EVID/falha_servicos.txt" 2>&1; falha "servicos nao responderam (platform=$a portal=$b; ver falha_servicos.txt)"; }
+-        sleep 2
+-    done
+-    echo "AMBIENTE $HOMOLOG_ID CRIADO: https://$HOMOLOG_HOST:$HOMOLOG_PORTA (publicado em $HOMOLOG_BIND). Proximo passo: homologacao.sh testar $HOMOLOG_ID"
++    HOMOLOG_AUTORIZA_ELEVACAO=1 bash "$AQUI/implantacao/implantar.sh"
++    pos_implantacao
+     ;;
+ 
+ # ======================================================================================================= testar
+@@ -351,6 +370,21 @@ preparar-016)
+     exec bash "$AQUI/testes/h016.sh" preparar
+     ;;
+ 
++# ============================================================================================= concluir-criacao
++# Ambiente com a 016 (criar parou antes dela): depois da 016 aplicada e do ambiente LIBERADO, executa os passos da
++# criacao que ficaram pendentes. Recusa ambiente BLOQUEADO ou com servicos ja criados.
++concluir-criacao)
++    carrega_ambiente "${2:?id}"
++    [[ "$HOMOLOG_ID" =~ ^ensaio- ]] && [ "${HOMOLOG_ATE:-015}" = 016 ] || falha "concluir-criacao so para ensaio-* com a 016"
++    prepara_funcoes
++    SEG="$HOMOLOG_SEGREDOS_HOST"; EVID="$AQUI/saidas/$HOMOLOG_ID"
++    [ -f "$EVID/parada_antes_016.txt" ] || falha "ambiente sem a parada antes da 016"
++    [ -z "$(docker ps -aq --filter "label=com.docker.compose.project=$HOMOLOG_PROJETO" --filter "label=com.docker.compose.service=platform")" ] \
++        || falha "servicos ja criados"
++    confere_liberacao "$TRAVA" > "$EVID/liberacao_antes_de_concluir.txt" 2>&1 || { cat "$EVID/liberacao_antes_de_concluir.txt"; falha "ambiente BLOQUEADO"; }
++    pos_implantacao
++    ;;
++
+ # =================================================================================================== testar-016
+ testar-016)
+     carrega_ambiente "${2:?id}"
+diff --git a/ops/homologacao/implantacao/implantar.sh b/ops/homologacao/implantacao/implantar.sh
+index 8b2c401..ecc5229 100644
+--- a/ops/homologacao/implantacao/implantar.sh
++++ b/ops/homologacao/implantacao/implantar.sh
+@@ -22,6 +22,11 @@
+ #     encerramento abrupto (SIGKILL, queda do host) nao executa nada: a trava e a elevacao podem ficar, e a recuperacao
+ #     independente ("homologacao.sh recuperar") detecta, revoga e confere; enquanto isso o ambiente fica BLOQUEADO;
+ #   - FALHA: sem nova tentativa, sem "flyway repair", sem baseline, sem clean.
++#   - PRE-VOO (P3): versao cuja linha na lista tem terceira coluna (vinculada a um id) so e elevada se
++#     implantacao/preflight/<versao>.sql existir e a consulta terminar com codigo 0 E PREFLIGHT_OK na ultima linha; roda com a trava
++#     obtida, depois do sha256 e do 0|0|0 e ANTES de conceder (saida em preflight_<versao>.txt);
++#   - PARADA (P3): HOMOLOG_IMPLANTAR_ATE=<versao> aplica so ate ela (inclusive); as seguintes ficam pendentes e o
++#     "flyway validate" final ignora SO as pendentes.
+ set -uo pipefail
+ 
+ : "${HOMOLOG_EVID:?}" "${HOMOLOG_MIGRACOES_HOST:?}" "${HOMOLOG_ID:?}"
+@@ -31,6 +36,8 @@ LISTA="${HOMOLOG_ELEVACAO_ARQ:-$DIR_IMPL/elevacao.txt}"
+ TRAVA="${HOMOLOG_TRAVA:-$(cd "$DIR_IMPL/.." && pwd)/saidas/$HOMOLOG_ID/implantacao.trava}"
+ LOG="$HOMOLOG_EVID/implantacao.txt"
+ JANELA="$HOMOLOG_EVID/janelas_de_elevacao.txt"
++ATE_MAX="${HOMOLOG_IMPLANTAR_ATE:-}"
++[ -z "$ATE_MAX" ] || [[ "$ATE_MAX" =~ ^[0-9]{3}$ ]] || { echo "FALHA: HOMOLOG_IMPLANTAR_ATE invalido ($ATE_MAX)" >&2; exit 3; }
+ ELEVADO=""
+ TRAVA_MINHA=""
+ 
+@@ -81,13 +88,16 @@ encerra_com_falha() {
+ 
+ # ---------------------------------------------------------------------------------------------- exclusao e pre-condicoes
+ # ganchos SO de ensaio (recusados fora de ambiente descartavel): largada comum, para disputar a entrada ao mesmo tempo;
+-# pausa num ponto ("antes-de-elevar" ou "antes-do-flyway"), para derrubar a sessao da trava ali
++# pausa num ponto ("antes-de-elevar" ou "antes-do-flyway", em qualquer versao; ou "<ponto>@<versao>", so naquela
++# versao), para derrubar a sessao da trava ou interromper o runner ali
+ if [ -n "${HOMOLOG_ENSAIO_LARGADA:-}${HOMOLOG_ENSAIO_PAUSA:-}" ] && [[ ! "$HOMOLOG_ID" =~ ^ensaio- ]]; then
+     echo "FALHA: ganchos de ensaio so em ambiente descartavel (id ensaio-*)" >&2; exit 3
+ fi
+ if [ -n "${HOMOLOG_ENSAIO_LARGADA:-}" ]; then while [ ! -e "$HOMOLOG_ENSAIO_LARGADA" ]; do sleep 0.05; done; fi
+-ensaio_pausa() {
+-    [ -n "${HOMOLOG_ENSAIO_PAUSA:-}" ] && [ "${HOMOLOG_ENSAIO_PAUSA%%:*}" = "$1" ] || return 0
++ensaio_pausa() {   # $1 ponto, $2 versao (set -u: a variavel so e expandida depois de conferida)
++    [ -n "${HOMOLOG_ENSAIO_PAUSA:-}" ] || return 0
++    local ponto="${HOMOLOG_ENSAIO_PAUSA%%:*}"
++    [ "$ponto" = "$1" ] || [ "$ponto" = "$1@$2" ] || return 0
+     local f="${HOMOLOG_ENSAIO_PAUSA#*:}"
+     touch "$f.chegou"
+     while [ ! -e "$f" ]; do sleep 0.05; done
+@@ -129,6 +139,10 @@ for f in "$HOMOLOG_MIGRACOES_HOST"/[0-9]*.sql; do
+     n="$(basename "$f")"
+     v="${n%%_*}"
+     case " $h " in *" $v:true "*|"$v:true "*) continue;; esac
++    if [ -n "$ATE_MAX" ] && [ "$((10#$v))" -gt "$((10#$ATE_MAX))" ]; then
++        registra "-- PARADA: $n e seguintes NAO aplicadas (HOMOLOG_IMPLANTAR_ATE=$ATE_MAX)"
++        break
++    fi
+     modo=true
+     grep -qE '^\s*BEGIN\s*;' "$f" && modo=false
+     autorizado="$(awk -v v="$v" '$1 == v {print $2}' <(grep -vE '^\s*(#|$)' "$LISTA"))"
+@@ -141,7 +155,17 @@ for f in "$HOMOLOG_MIGRACOES_HOST"/[0-9]*.sql; do
+         [ "$real" = "$autorizado" ] || encerra_com_falha 2 "versao $v: sha256 $real diferente do autorizado ($autorizado); elevacao RECUSADA antes de conceder"
+         ei="$(estado_migrador)"
+         [ "$ei" = "0|0|0" ] || encerra_com_falha 2 "versao $v: estado '$ei' antes de elevar (sessao ativa de outra implantacao?)"
+-        ensaio_pausa antes-de-elevar
++        if [ -n "$alvo" ]; then
++            pf="$DIR_IMPL/preflight/$v.sql"
++            [ -f "$pf" ] || encerra_com_falha 2 "versao $v vinculada a $alvo sem pre-voo ($pf); elevacao RECUSADA antes de conceder"
++            # as DUAS condicoes: consulta com codigo 0 E marcador final PREFLIGHT_OK
++            admin_sql nekkora < "$pf" > "$HOMOLOG_EVID/preflight_$v.txt" 2>&1; rc_pf=$?
++            ult_pf="$(tr -d '\r' < "$HOMOLOG_EVID/preflight_$v.txt" | tail -1)"
++            [ "$rc_pf" = 0 ] && [ "$ult_pf" = PREFLIGHT_OK ] \
++                || encerra_com_falha 2 "versao $v: pre-voo recusou (codigo $rc_pf, ultima linha '$ult_pf'; ver preflight_$v.txt); elevacao RECUSADA antes de conceder"
++            registra "pre-voo da $v: codigo 0 e PREFLIGHT_OK (preflight_$v.txt)"
++        fi
++        ensaio_pausa antes-de-elevar "$v"
+         sql_na_trava "ALTER ROLE migrador_nekkora SUPERUSER" || encerra_com_falha 2 "nao foi possivel conceder a elevacao para $v"
+         ELEVADO="$v"
+         echo "$(agora) inicio versao=$v SUPERUSER concedido (sha256 $real autorizado)" >> "$JANELA"
+@@ -149,7 +173,7 @@ for f in "$HOMOLOG_MIGRACOES_HOST"/[0-9]*.sql; do
+     registra "-- $n (executeInTransaction=$modo${ELEVADO:+, ELEVADA})"
+     confere_trava || encerra_com_falha 6 "trava no banco perdida antes de $n"
+     # (conferencia pontual; a garantia para o Flyway e o initSql, que confere o lock a cada conexao)
+-    ensaio_pausa antes-do-flyway
++    ensaio_pausa antes-do-flyway "$v"
+     if ! flyway -executeInTransaction="$modo" migrate -target="$v" >> "$LOG" 2>&1; then
+         encerra_com_falha 2 "migration $n"
+     fi
+@@ -158,11 +182,15 @@ for f in "$HOMOLOG_MIGRACOES_HOST"/[0-9]*.sql; do
+     fi
+ done
+ 
+-flyway validate >> "$LOG" 2>&1 || encerra_com_falha 1 "flyway validate"
++if [ -n "$ATE_MAX" ]; then
++    flyway -ignoreMigrationPatterns='*:pending' validate >> "$LOG" 2>&1 || encerra_com_falha 1 "flyway validate (pendentes ignoradas: parada em $ATE_MAX)"
++else
++    flyway validate >> "$LOG" 2>&1 || encerra_com_falha 1 "flyway validate"
++fi
+ flyway info > "$HOMOLOG_EVID/flyway_info.txt" 2>&1
+ ef="$(estado_migrador)"
+ [ "$ef" = "0|0|0" ] || encerra_com_falha 4 "conferencia final do migrador: '$ef'"
+ registra "estado final do migrador: 0 atributos elevados, 0 memberships, 0 sessoes"
+ registra "historico depois: $(admin_sql nekkora -c "SELECT string_agg(coalesce(version, '-') || ':' || success, ' ' ORDER BY installed_rank) FROM public.flyway_schema_history")"
+ libera_trava
+-registra "== implantacao OK"
++registra "== implantacao OK${ATE_MAX:+ ate $ATE_MAX (PARADA: versoes seguintes pendentes)}"
+diff --git a/ops/homologacao/implantacao/preflight/016.sql b/ops/homologacao/implantacao/preflight/016.sql
+new file mode 100644
+index 0000000..01527f8
+--- /dev/null
++++ b/ops/homologacao/implantacao/preflight/016.sql
+@@ -0,0 +1,47 @@
++-- Pre-voo da janela de elevacao da 016 (P3). SOMENTE LEITURA; executado por implantacao/implantar.sh como admin_cluster
++-- no banco nekkora, com a trava da implantacao obtida, depois do sha256 e do 0|0|0 e ANTES de conceder SUPERUSER.
++-- E tambem o criterio de "016 NAO aplicada" da reconciliacao (decisao P3, sec. 6): a retomada so eleva se ele passar.
++-- Saida: uma linha "item|OK|detalhe" ou "item|FALHA|detalhe" por conferencia e, por ultimo, PREFLIGHT_OK somente se
++-- TODAS passarem (senao PREFLIGHT_FALHOU). Erro de consulta = sem PREFLIGHT_OK = recusa (falha fechada).
++WITH papeis(r) AS (SELECT unnest(ARRAY['nekkora_ops_mfa_owner', 'nekkora_ops_mfa', 'nekkora_ops_ca', 'nekkora_ops_intake'])),
++c(ordem, item, ok, detalhe) AS (
++    SELECT 1, 'servidor_versao_maior_16',
++           current_setting('server_version_num')::int BETWEEN 160000 AND 169999, current_setting('server_version')
++    UNION ALL
++    SELECT 2, 'sslinfo_disponivel_nao_confiavel_nao_instalada',
++           EXISTS (SELECT 1 FROM pg_available_extension_versions WHERE name = 'sslinfo' AND NOT trusted AND superuser)
++           AND NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'sslinfo'),
++           coalesce((SELECT string_agg(version || ' trusted=' || trusted || ' superuser=' || superuser || ' instalada=' || installed, '; ')
++                     FROM pg_available_extension_versions WHERE name = 'sslinfo'), 'indisponivel')
++    UNION ALL
++    SELECT 3, 'schema_ops_ausente', NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'ops'), '-'
++    UNION ALL
++    SELECT 4, 'mfa_events_sem_ops_request_id',
++           NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'mfa_events'
++                       AND column_name = 'ops_request_id'), '-'
++    UNION ALL
++    SELECT 5, 'historico_001_015_com_sucesso_sem_016_sem_falha',
++           (SELECT count(DISTINCT version) FROM public.flyway_schema_history WHERE success AND version ~ '^0(0[1-9]|1[0-5])$') = 15
++           AND NOT EXISTS (SELECT 1 FROM public.flyway_schema_history WHERE version = '016')
++           AND NOT EXISTS (SELECT 1 FROM public.flyway_schema_history WHERE NOT success),
++           (SELECT coalesce(string_agg(coalesce(version, '-') || ':' || success, ' ' ORDER BY installed_rank), 'vazio') FROM public.flyway_schema_history)
++    UNION ALL
++    SELECT 6, 'migrador_sem_atributo_nem_acl_de_parametro',
++           coalesce((SELECT NOT (rolsuper OR rolcreaterole OR rolcreatedb OR rolbypassrls OR rolreplication)
++                     FROM pg_roles WHERE rolname = 'migrador_nekkora'), false)
++           AND NOT EXISTS (SELECT 1 FROM pg_parameter_acl WHERE array_to_string(paracl, ',') ~ '(^|,)migrador_nekkora='),
++           (SELECT count(*) || ' ACL de parametro no total' FROM pg_parameter_acl)
++    UNION ALL
++    SELECT 7, 'papeis_016_ausentes_ou_compativeis_sem_participacao',
++           NOT EXISTS (SELECT 1 FROM pg_roles g JOIN papeis p ON p.r = g.rolname
++                       WHERE g.rolsuper OR g.rolcreaterole OR g.rolcreatedb OR g.rolreplication OR g.rolbypassrls
++                          OR (g.rolname IN ('nekkora_ops_mfa_owner', 'nekkora_ops_mfa') AND g.rolcanlogin)
++                          OR (g.rolname IN ('nekkora_ops_ca', 'nekkora_ops_intake') AND NOT g.rolcanlogin))
++           AND NOT EXISTS (SELECT 1 FROM pg_auth_members am JOIN pg_roles g ON g.oid IN (am.roleid, am.member) JOIN papeis p ON p.r = g.rolname),
++           coalesce((SELECT string_agg(g.rolname, ',' ORDER BY g.rolname) FROM pg_roles g JOIN papeis p ON p.r = g.rolname), 'nenhum pre-existente')
++)
++SELECT linha FROM (
++    SELECT ordem, item || '|' || CASE WHEN coalesce(ok, false) THEN 'OK' ELSE 'FALHA' END || '|' || coalesce(detalhe, '-') AS linha FROM c
++    UNION ALL
++    SELECT 99, CASE WHEN bool_and(coalesce(ok, false)) AND count(*) = 7 THEN 'PREFLIGHT_OK' ELSE 'PREFLIGHT_FALHOU' END FROM c
++) x ORDER BY ordem;

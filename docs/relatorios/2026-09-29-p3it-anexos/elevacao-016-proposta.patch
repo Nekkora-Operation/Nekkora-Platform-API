@@ -1,0 +1,11 @@
+diff --git a/ops/homologacao/implantacao/elevacao.txt b/ops/homologacao/implantacao/elevacao.txt
+index 59f3177..434e29c 100644
+--- a/ops/homologacao/implantacao/elevacao.txt
++++ b/ops/homologacao/implantacao/elevacao.txt
+@@ -15,3 +15,6 @@
+ 011 38a509845cb4459311b7edfda135ad1ca46203af7387fa45f1e356b200e87ef9
+ 012 d3929cc76261debb47740bb0167d1e3438e00b14e01eca2a793716e5ce8321f4
+ 013 c6192bff305f3888710ef9430751452b7a48a5bc7078691a16e16ddebb4c14d9
++# 016 (P3): terceira coluna = id do UNICO ambiente em que a elevacao desta versao vale; implantar.sh recusa em qualquer
++# outro, antes de conceder. Decisao: docs/relatorios/2026-09-29-mfa-emergencia-homologacao-p3-decisao-elevacao.md
++016 25bef818a7d38c465fffcc5821c1bf9f924ef3cade0f29ec7b79f5b1711fbe61 ensaio-016a
