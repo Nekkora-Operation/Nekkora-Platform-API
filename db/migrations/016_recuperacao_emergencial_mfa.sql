@@ -35,6 +35,13 @@
 --
 -- ELEVACAO: exige superusuario (CREATE ROLE e CREATE EXTENSION sslinfo, extensao nao confiavel), como 011-013.
 --
+-- Revisao 5 (proposta P4-R1): invariante de donos, ACL e EXECUTE de ops por categoria (sec. 19), valido tambem
+-- DEPOIS da retirada da elevacao. MODELO SUPORTADO: a migration e aplicada pela identidade de implantacao DECLARADA
+-- 'migrador_nekkora', dona do banco (ops/homologacao/IMPLANTACAO.md), elevada so durante a janela; os objetos nao
+-- reatribuidos (schema ops, tabelas, indices, extensao sslinfo e seus membros, gatilhos prevent_*) ficam com ela.
+-- Outra topologia (outro papel de implantacao, ou dono do banco diferente dele) NAO e suportada por esta revisao e
+-- reprova a sec. 19. A topologia de producao continua pendente de decisao.
+--
 -- Depende de 001-015. Atomica: uma transacao.
 
 BEGIN;
@@ -3160,11 +3167,110 @@ BEGIN
     IF v_real IS DISTINCT FROM v_esperado THEN
         RAISE EXCEPTION 'matriz de EXECUTE divergente: %', v_real;
     END IF;
-    -- funcoes internas: nenhum papel alem do dono (e superusuarios)
-    SELECT string_agg(p.oid::regprocedure::text || ':' || r.rolname, ', ') INTO v_bad
-    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace, pg_roles r
-    WHERE n.nspname = 'ops' AND NOT r.rolsuper AND r.rolname <> 'nekkora_ops_mfa_owner' AND has_function_privilege(r.oid, p.oid, 'EXECUTE');
-    IF v_bad IS NOT NULL THEN RAISE EXCEPTION 'EXECUTE indevido em funcao interna de ops: %', v_bad; END IF;
+    -- funcoes e objetos de ops (P4-R1 rev. 2, proposta A; substitui "funcoes internas: nenhum papel alem do dono").
+    -- Ordem: identidade de implantacao, DONOS por categoria, ACL explicita EXATA e, por ultimo, EXECUTE EFETIVO.
+    -- A identidade de implantacao e DECLARADA aqui (modelo suportado, ver cabecalho), nunca derivada do catalogo que
+    -- esta sendo validado; o dono do banco so e CONFERIDO contra ela (IMPLANTACAO.md: o migrador e dono do banco).
+    -- Categorias: membros de sslinfo e gatilhos prevent_* -> identidade de implantacao (sec. 2 e 18: nao reatribuidos);
+    -- demais funcoes de ops -> nekkora_ops_mfa_owner (sec. 18). Concessao extra prevista: EXECUTE de nekkora_ops_mfa_owner
+    -- nos membros de sslinfo (sec. 2). Nada e aceito por ser "o dono": o dono so e aceito depois de conferido.
+    DECLARE
+        v_identidade_impl CONSTANT TEXT := 'migrador_nekkora';      -- MODELO SUPORTADO (cabecalho, revisao 5)
+        v_dono_banco TEXT := (SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = current_database());
+        v_gatilhos CONSTANT TEXT[] := ARRAY['prevent_certificate_change', 'prevent_contact_change', 'prevent_entry_change',
+            'prevent_key_state_change', 'prevent_link_change', 'prevent_notice_change', 'prevent_notice_token_change',
+            'prevent_operator_change', 'prevent_permission_change', 'prevent_proof_change', 'prevent_request_change'];
+    BEGIN
+        -- (a1) a identidade declarada existe e nao e papel operacional, de servico, proprietario de funcoes, backup ou operador
+        IF to_regrole(v_identidade_impl) IS NULL OR v_identidade_impl = ANY (v_ops_roles || v_servico || ARRAY[
+               'nekkora_portal_owner', 'nekkora_scheduler_owner', 'nekkora_provisioning_owner', 'nekkora_retention_owner',
+               'nekkora_retention_tables_owner', 'backup_nekkora']) OR v_identidade_impl ~ '^op_' THEN
+            RAISE EXCEPTION 'identidade de implantacao declarada invalida ou inexistente: %', v_identidade_impl;
+        END IF;
+        -- (a2) exigencia do contrato operacional: o dono do banco E a identidade declarada (qualquer outro papel reprova,
+        --      inclusive um fora das listas acima e um superusuario)
+        IF v_dono_banco IS DISTINCT FROM v_identidade_impl THEN
+            RAISE EXCEPTION 'dono do banco (%) diferente da identidade de implantacao declarada (%): modelo nao suportado',
+                v_dono_banco, v_identidade_impl;
+        END IF;
+        -- (b) donos fora de funcoes: schema ops, extensao sslinfo (em ops) e seus membros (em ops), relacoes de ops
+        WITH nao_funcao AS (
+            SELECT 'schema ops'::text AS objeto, pg_get_userbyid(nspowner) AS dono, true AS local_ok
+            FROM pg_namespace WHERE nspname = 'ops'
+            UNION ALL
+            SELECT 'extensao sslinfo', pg_get_userbyid(e.extowner), n.nspname = 'ops'
+            FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace WHERE e.extname = 'sslinfo'
+            UNION ALL
+            SELECT 'membro de sslinfo ' || p.oid::regprocedure::text, pg_get_userbyid(p.proowner), n.nspname = 'ops'
+            FROM pg_depend d JOIN pg_extension e ON e.oid = d.refobjid JOIN pg_proc p ON p.oid = d.objid
+                 JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE e.extname = 'sslinfo' AND d.classid = 'pg_proc'::regclass AND d.refclassid = 'pg_extension'::regclass
+              AND d.deptype = 'e'
+            UNION ALL
+            SELECT c.oid::regclass::text, pg_get_userbyid(c.relowner), true
+            FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'ops'
+        )
+        SELECT string_agg(format('%s[dono %s%s]', objeto, coalesce(dono, '?'), CASE WHEN local_ok THEN '' ELSE ', fora de ops' END),
+                          ', ' ORDER BY objeto COLLATE "C") INTO v_bad
+        FROM nao_funcao WHERE dono IS DISTINCT FROM v_identidade_impl OR NOT local_ok;
+        IF v_bad IS NOT NULL THEN RAISE EXCEPTION 'dono divergente em ops: %', v_bad; END IF;
+        -- (c) funcoes de ops: categoria, dono esperado e ACL explicita exata (concessionario, privilegio, concedente)
+        WITH obj AS (
+            SELECT p.oid::regprocedure::text AS assinatura, p.proname::text AS nome, pg_get_userbyid(p.proowner) AS dono,
+                   p.proacl AS acl, p.prorettype = 'trigger'::regtype AS ret_gatilho, p.prosecdef AS secdef,
+                   (SELECT e.extname::text FROM pg_depend d JOIN pg_extension e ON e.oid = d.refobjid
+                    WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.refclassid = 'pg_extension'::regclass
+                      AND d.deptype = 'e') AS ext
+            FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'ops'
+        ), cat AS (
+            SELECT o.*, CASE
+                WHEN o.ext = 'sslinfo' THEN 'sslinfo'
+                WHEN o.ext IS NOT NULL THEN NULL
+                WHEN o.nome = ANY (v_gatilhos) AND o.ret_gatilho AND NOT o.secdef THEN 'gatilho'
+                WHEN o.nome LIKE 'prevent\_%' OR o.nome LIKE 'ssl\_%' OR o.ret_gatilho OR o.secdef THEN NULL
+                ELSE 'interna' END AS categoria
+            FROM obj o
+        ), esp AS (
+            SELECT c.*,
+                   CASE WHEN c.categoria = 'interna' THEN 'nekkora_ops_mfa_owner'
+                        WHEN c.categoria IN ('sslinfo', 'gatilho') THEN v_identidade_impl END AS dono_esp,
+                   CASE WHEN c.categoria = 'sslinfo' THEN ARRAY['nekkora_ops_mfa_owner'] ELSE ARRAY[]::TEXT[] END AS extras
+            FROM cat c
+        ), acl AS (
+            SELECT e.*,
+                   (SELECT coalesce(array_agg(t.s ORDER BY t.s COLLATE "C"), '{}') FROM (
+                        SELECT CASE WHEN x.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(x.grantee) END || '=' || x.privilege_type
+                               || CASE WHEN x.is_grantable THEN '*' ELSE '' END || '/' || pg_get_userbyid(x.grantor) AS s
+                        FROM aclexplode(coalesce(e.acl, acldefault('f', to_regrole(e.dono)::oid))) x) t) AS acl_real,
+                   (SELECT coalesce(array_agg(t.s ORDER BY t.s COLLATE "C"), '{}') FROM (
+                        SELECT g || '=EXECUTE/' || e.dono_esp AS s FROM unnest(ARRAY[e.dono_esp] || e.extras) g) t) AS acl_esp
+            FROM esp e
+        )
+        SELECT string_agg(format('%s[%s]', v.assinatura, v.motivo), ', ' ORDER BY v.assinatura COLLATE "C") INTO v_bad FROM (
+            SELECT assinatura, 'categoria nao prevista' AS motivo FROM acl WHERE categoria IS NULL
+            UNION ALL
+            SELECT assinatura, format('dono %s, esperado %s', dono, dono_esp) FROM acl
+            WHERE categoria IS NOT NULL AND dono IS DISTINCT FROM dono_esp
+            UNION ALL
+            SELECT assinatura, format('ACL %s, esperada %s', acl_real, acl_esp) FROM acl
+            WHERE categoria IS NOT NULL AND dono = dono_esp AND acl_real IS DISTINCT FROM acl_esp
+            UNION ALL
+            SELECT '(gatilhos prevent_*)', format('%s de %s', count(*) FILTER (WHERE categoria = 'gatilho'), cardinality(v_gatilhos))
+            FROM acl HAVING count(*) FILTER (WHERE categoria = 'gatilho') <> cardinality(v_gatilhos)
+        ) v;
+        IF v_bad IS NOT NULL THEN RAISE EXCEPTION 'funcao de ops fora da matriz de donos e ACL: %', v_bad; END IF;
+        -- (d) EXECUTE efetivo (inclui heranca por participacao): so o dono (ja conferido em c) e, nos membros de sslinfo,
+        -- nekkora_ops_mfa_owner; superusuarios fora (tem tudo). Servicos, operadores, PUBLIC e membros de donos reprovam.
+        SELECT string_agg(p.oid::regprocedure::text || ':' || r.rolname, ', ') INTO v_bad
+        FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace, pg_roles r
+        WHERE n.nspname = 'ops' AND NOT r.rolsuper AND r.oid <> p.proowner
+          AND NOT (r.rolname = 'nekkora_ops_mfa_owner' AND EXISTS (
+                SELECT 1 FROM pg_depend d JOIN pg_extension e ON e.oid = d.refobjid
+                WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.refclassid = 'pg_extension'::regclass
+                  AND d.deptype = 'e' AND e.extname = 'sslinfo'))
+          AND has_function_privilege(r.oid, p.oid, 'EXECUTE');
+        IF v_bad IS NOT NULL THEN RAISE EXCEPTION 'EXECUTE indevido em funcao de ops: %', v_bad; END IF;
+    END;
     -- publicas: SECURITY DEFINER, dono operacional, search_path restrito
     SELECT string_agg(p.oid::regprocedure::text, ', ') INTO v_bad
     FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace

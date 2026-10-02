@@ -38,7 +38,8 @@ import com.nekkora.ops.idp.VerificadorIdp;
 /**
  * PostgreSQL 16 REAL e DESCARTAVEL para a recuperacao emergencial (016): TLS obrigatorio, papeis {@code op_*} so por
  * certificado de cliente da CA operacional de teste ({@code hostssl ... cert map=ops clientname=CN}), demais papeis
- * por senha aleatoria sobre TLS, sem conexao sem TLS. Migrations 001-NNN do repositorio aplicadas pelo entrypoint.
+ * por senha aleatoria sobre TLS, sem conexao sem TLS. Migrations 001-NNN do repositorio aplicadas no modelo do migrador
+ * (db/bootstrap/aplicar_como_migrador.sh: migrador_nekkora dono do banco, elevado so nas versoes que exigem).
  *
  * <p>Fixtures (DECLARADAS, so preparacao): feitas como superusuario. Fixtures TEMPORAIS ({@code recuar*}) deslocam para
  * tras os instantes gravados, como superusuario e com {@code session_replication_role = replica} (sem triggers), SO
@@ -54,8 +55,10 @@ public final class OpsBanco {
     private static OpsBanco instancia;
 
     private final GenericContainer<?> pg;
+    private final Forma forma;
     private final Path dir;
     private final Path raizServidor;
+    private final String raizServidorPem;
     private final String senhaSuper;
     private final Map<String, String> senhas = new ConcurrentHashMap<>();
     private final Pki.Ca caOps;
@@ -72,48 +75,107 @@ public final class OpsBanco {
     public record Org(UUID id, UUID admin, UUID adminMembership, UUID adminFator) {
     }
 
+    /** pg_hba da base compartilhada: op_* so por certificado, demais por senha, sempre TLS pela rede. */
+    public static final String HBA_PADRAO = String.join("\n",
+            "local     all  all                     trust",
+            "hostnossl all  all  0.0.0.0/0          reject",
+            "hostnossl all  all  ::/0               reject",
+            "hostssl   all  /^op_  0.0.0.0/0  cert map=ops clientname=CN",
+            "hostssl   all  /^op_  ::/0       cert map=ops clientname=CN",
+            "hostssl   all  all  0.0.0.0/0          scram-sha-256",
+            "hostssl   all  all  ::/0               scram-sha-256", "");
+    // regex entre aspas: a virgula de {2,40} separaria os campos do pg_ident
+    public static final String IDENT_PADRAO = "ops   \"/^(op_[a-z0-9_]{2,40})$\"   \\1\n";
+
+    /**
+     * Forma da base descartavel. {@link #padrao()} e a base compartilhada da suite; as bases da homologacao (P1c) usam
+     * outro superusuario ({@code admin_cluster}), {@code cluster_name=nekkora-homologacao}, o pg_hba/pg_ident GERADOS e uma
+     * rede Docker propria (alias {@code postgres}), para que o SQL real da homologacao rode sem alteracao.
+     */
+    public record Forma(String superusuario, String cluster, String hba, String ident, org.testcontainers.containers.Network rede,
+                        String alias, String ip, List<String> nomesServidor, List<String> argumentos, Map<String, String> rotulos) {
+
+        public static Forma padrao() {
+            return new Forma("nekkora", "nekkora-ops-teste", HBA_PADRAO, IDENT_PADRAO, null, null, null,
+                    List.of("localhost", "127.0.0.1", "::1", "host.docker.internal"), List.of(), Map.of());
+        }
+
+        /** Forma da homologacao: superusuario admin_cluster e cluster_name nekkora-homologacao (o que o SQL real confere). */
+        public static Forma homologacao(String hba, Map<String, String> rotulos) {
+            return new Forma("admin_cluster", "nekkora-homologacao", hba, IDENT_PADRAO, null, null, null,
+                    List.of("localhost", "127.0.0.1", "::1", "host.docker.internal"), List.of(), rotulos);
+        }
+
+        /** Na rede indicada, com o alias (tambem no certificado do servidor) e, se nao nulo, o IP fixo. */
+        public Forma comRede(org.testcontainers.containers.Network r, String a, String ipFixo) {
+            List<String> nomes = new ArrayList<>(nomesServidor);
+            nomes.add(a);
+            return new Forma(superusuario, cluster, hba, ident, r, a, ipFixo, nomes, argumentos, rotulos);
+        }
+
+        public Forma comArgumentos(String... args) {
+            return new Forma(superusuario, cluster, hba, ident, rede, alias, ip, nomesServidor, List.of(args), rotulos);
+        }
+    }
+
     private OpsBanco(Path migrations) throws Exception {
+        this(migrations, Forma.padrao());
+    }
+
+    private OpsBanco(Path migrations, Forma forma) throws Exception {
+        this.forma = forma;
         dir = Files.createTempDirectory("nekkora-ops-banco-");
         senhaSuper = aleatoria();
         Pki.Ca caInfra = Pki.ca("Nekkora Infra CA Teste");
         caOps = Pki.ca("Nekkora Ops CA Teste");
         KeyPair chaveServidor = Pki.ec();
-        String hba = String.join("\n",
-                "local     all  all                     trust",
-                "hostnossl all  all  0.0.0.0/0          reject",
-                "hostnossl all  all  ::/0               reject",
-                "hostssl   all  /^op_  0.0.0.0/0  cert map=ops clientname=CN",
-                "hostssl   all  /^op_  ::/0       cert map=ops clientname=CN",
-                "hostssl   all  all  0.0.0.0/0          scram-sha-256",
-                "hostssl   all  all  ::/0               scram-sha-256", "");
-        // regex entre aspas: a virgula de {2,40} separaria os campos do pg_ident
-        String ident = "ops   \"/^(op_[a-z0-9_]{2,40})$\"   \\1\n";
         GenericContainer<?> c = new GenericContainer<>(IMAGEM)
-                .withEnv("POSTGRES_DB", "nekkora").withEnv("POSTGRES_USER", "nekkora").withEnv("POSTGRES_PASSWORD", senhaSuper)
+                .withEnv("POSTGRES_DB", "nekkora").withEnv("POSTGRES_USER", forma.superusuario()).withEnv("POSTGRES_PASSWORD", senhaSuper)
                 .withExposedPorts(5432)
-                .withCopyToContainer(Transferable.of(hba), "/etc/nekkora/pg_hba.conf")
-                .withCopyToContainer(Transferable.of(ident), "/etc/nekkora/pg_ident.conf")
+                .withCopyToContainer(Transferable.of(forma.hba()), "/etc/nekkora/pg_hba.conf")
+                .withCopyToContainer(Transferable.of(forma.ident()), "/etc/nekkora/pg_ident.conf")
                 .withCopyToContainer(Transferable.of(Pki.pem(caOps.certificado())), "/tls-src/ops-ca.crt")
                 .withCopyToContainer(Transferable.of(Pki.pemChave(chaveServidor.getPrivate())), "/tls-src/server.key")
                 .withCommand("sh", "-c", "mkdir -p /var/lib/postgresql/tls && cp /tls-src/* /var/lib/postgresql/tls/"
                         + " && chown -R postgres:postgres /var/lib/postgresql/tls && chmod 600 /var/lib/postgresql/tls/server.key"
-                        + " && exec docker-entrypoint.sh postgres -c cluster_name=nekkora-ops-teste -c ssl=on"
+                        + " && exec docker-entrypoint.sh postgres -c cluster_name=" + forma.cluster() + " -c ssl=on"
                         + " -c ssl_cert_file=/var/lib/postgresql/tls/server.crt -c ssl_key_file=/var/lib/postgresql/tls/server.key"
                         + " -c ssl_ca_file=/var/lib/postgresql/tls/ops-ca.crt -c hba_file=/etc/nekkora/pg_hba.conf"
-                        + " -c ident_file=/etc/nekkora/pg_ident.conf -c log_connections=on")
+                        + " -c ident_file=/etc/nekkora/pg_ident.conf -c log_connections=on"
+                        + forma.argumentos().stream().map(a -> " -c " + a).reduce("", String::concat))
                 .waitingFor(Wait.forLogMessage(".*database system is ready to accept connections.*\\n", 2)
                         .withStartupTimeout(Duration.ofMinutes(3)));
-        try (Stream<Path> files = Files.list(migrations)) {
-            for (Path f : files.filter(p -> p.getFileName().toString().matches("^\\d{3}_.*\\.sql$")).sorted().toList()) {
-                c = c.withCopyFileToContainer(MountableFile.forHostPath(f), "/docker-entrypoint-initdb.d/" + f.getFileName());
+        if (forma.rede() != null) {
+            c = c.withNetwork(forma.rede()).withNetworkAliases(forma.alias());
+            if (forma.ip() != null) {
+                c = c.withCreateContainerCmdModifier(cmd -> cmd.withIpv4Address(forma.ip()));
             }
         }
+        if (!forma.rotulos().isEmpty()) {
+            c = c.withLabels(forma.rotulos());
+        }
+        // modelo suportado pela 016 (revisao 5): migrations fora do initdb.d, aplicadas como migrador_nekkora (dono do banco,
+        // elevado so nas versoes que exigem, retirada conferida, sec. 19 da 016 de novo depois da retirada)
+        try (Stream<Path> files = Files.list(migrations)) {
+            for (Path f : files.filter(p -> p.getFileName().toString().matches("^\\d{3}_.*\\.sql$")).sorted().toList()) {
+                c = c.withCopyFileToContainer(MountableFile.forHostPath(f), "/nekkora/migracoes/" + f.getFileName());
+            }
+        }
+        c = c.withCopyFileToContainer(MountableFile.forHostPath(migrations.resolveSibling("bootstrap/aplicar_como_migrador.sh"), 0755),
+                "/docker-entrypoint-initdb.d/000_aplicar_como_migrador.sh");
         // o certificado do servidor depende do host que o Testcontainers expoe: SAN com os nomes usuais do host local
-        c = c.withCopyToContainer(Transferable.of(Pki.pem(Pki.servidor(caInfra, chaveServidor.getPublic(),
-                List.of("localhost", "127.0.0.1", "::1", "host.docker.internal")))), "/tls-src/server.crt");
+        c = c.withCopyToContainer(Transferable.of(Pki.pem(Pki.servidor(caInfra, chaveServidor.getPublic(), forma.nomesServidor()))),
+                "/tls-src/server.crt");
         pg = c;
         pg.start();
+        String log = pg.getLogs();
+        if (log.contains("aplicar_como_migrador: FALHA") || !log.matches("(?s).*aplicar_como_migrador: fim db=nekkora aplicadas=\\d+ estado=0\\|0\\|0.*")
+                || !log.contains("aplicar_como_migrador: invariantes_016_pos_retirada=OK")) {
+            throw new IllegalStateException("base de teste fora do modelo do migrador:\n"
+                    + log.lines().filter(l -> l.contains("aplicar_como_migrador")).reduce("", (a, b) -> a + b + "\n"));
+        }
         raizServidor = Pki.escrever(dir, "raiz-servidor.pem", Pki.pem(caInfra.certificado()));
+        raizServidorPem = Pki.pem(caInfra.certificado());
         try (Connection con = superusuario(); Statement st = con.createStatement()) {
             for (String papel : SERVICOS) {
                 String s = aleatoria();
@@ -124,6 +186,39 @@ public final class OpsBanco {
         VerificadorIdp verificador = new VerificadorIdp(IdpSimulado.EMISSOR, IdpSimulado.AUDIENCIA, idp.chavePublica(), Clock.systemUTC());
         emissor = new EmissorCertificados(caOps.chaves().getPrivate(), caOps.certificado(), verificador,
                 () -> comoServico("nekkora_ops_ca"), Clock.systemUTC());
+    }
+
+    /** Base NOVA e EXCLUSIVA com a forma indicada (quem cria encerra com {@link #encerrar()}). */
+    public static OpsBanco nova(Forma forma) {
+        try {
+            return new OpsBanco(raizDoRepositorio().resolve("db/migrations"), forma);
+        } catch (Exception e) {
+            throw new IllegalStateException("nao foi possivel subir o PostgreSQL com TLS de teste", e);
+        }
+    }
+
+    public void encerrar() {
+        pg.stop();
+    }
+
+    public GenericContainer<?> container() {
+        return pg;
+    }
+
+    public Forma forma() {
+        return forma;
+    }
+
+    /** Certificado raiz do servidor (PEM), para montar em containers clientes. */
+    public String raizServidorPem() {
+        return raizServidorPem;
+    }
+
+    /** IP do servidor na rede propria da forma (o que {@code inet_server_addr()} devolve para um cliente dessa rede). */
+    public String ipNaRede() {
+        return pg.getContainerInfo().getNetworkSettings().getNetworks().values().stream()
+                .filter(n -> forma.rede() != null && forma.rede().getId().equals(n.getNetworkID())).findFirst()
+                .orElseThrow().getIpAddress();
     }
 
     public static synchronized OpsBanco compartilhado() {
@@ -191,7 +286,12 @@ public final class OpsBanco {
     }
 
     public Connection superusuario() throws SQLException {
-        return DriverManager.getConnection(url(), tls("nekkora", senhaSuper));
+        return DriverManager.getConnection(url(), tls(forma.superusuario(), senhaSuper));
+    }
+
+    /** Senha EFEMERA do superusuario desta base (so para clientes de teste, ex.: psql num container da mesma rede). */
+    public String senhaSuperusuario() {
+        return senhaSuper;
     }
 
     public Connection comoServico(String papel) throws SQLException {

@@ -20,7 +20,7 @@ import org.testcontainers.utility.MountableFile;
 
 /**
  * PostgreSQL 16 REAL para testes de integracao: container descartavel (Testcontainers, nome e porta
- * aleatorios; nunca a stack principal), migrations 001-NNN do repositorio aplicadas pelo entrypoint numa base
+ * aleatorios; nunca a stack principal), migrations 001-NNN do repositorio aplicadas no modelo do migrador numa base
  * vazia, e senhas ALEATORIAS por execucao para os papeis LOGIN reais (nenhuma credencial versionada). Os testes
  * conectam COMO os papeis reais (nekkora_platform, nekkora_portal, ...), nunca como superusuario, exceto na
  * preparacao de fixture e nas verificacoes declaradas.
@@ -44,13 +44,19 @@ public final class RealDatabase {
                 .withExposedPorts(5432)
                 .waitingFor(Wait.forLogMessage(".*database system is ready to accept connections.*\\n", 2)
                         .withStartupTimeout(Duration.ofMinutes(3)));
+        // modelo suportado pela 016 (revisao 5): as migrations NAO vao para o initdb.d (seriam aplicadas pelo superusuario);
+        // db/bootstrap/aplicar_como_migrador.sh as aplica como migrador_nekkora, dono do banco, elevado so nas versoes
+        // que exigem, com retirada conferida e a sec. 19 da 016 de novo depois da retirada
         try (Stream<Path> files = Files.list(migrations)) {
             for (Path f : files.filter(p -> p.getFileName().toString().matches("^\\d{3}_.*\\.sql$")).sorted().toList()) {
-                c = c.withCopyFileToContainer(MountableFile.forHostPath(f), "/docker-entrypoint-initdb.d/" + f.getFileName());
+                c = c.withCopyFileToContainer(MountableFile.forHostPath(f), "/nekkora/migracoes/" + f.getFileName());
             }
         }
+        c = c.withCopyFileToContainer(MountableFile.forHostPath(migrations.resolveSibling("bootstrap/aplicar_como_migrador.sh"), 0755),
+                "/docker-entrypoint-initdb.d/000_aplicar_como_migrador.sh");
         pg = c;
         pg.start();
+        conferirModeloDoMigrador(pg.getLogs());
         try (Connection con = connectAsSuperuser(); Statement st = con.createStatement()) {
             for (String role : ROLES) {
                 String s = randomPassword();
@@ -117,6 +123,15 @@ public final class RealDatabase {
     /** Linhas do log do servidor (stderr do container) - para as verificacoes de token fora do log. */
     public String serverLog() {
         return pg.getLogs();
+    }
+
+    /** A base so serve se o script do modelo terminou com o migrador 0|0|0 e, com a 016, com a sec. 19 pos-retirada OK. */
+    static void conferirModeloDoMigrador(String log) {
+        if (log.contains("aplicar_como_migrador: FALHA") || !log.matches("(?s).*aplicar_como_migrador: fim db=nekkora aplicadas=\\d+ estado=0\\|0\\|0.*")
+                || !log.contains("aplicar_como_migrador: invariantes_016_pos_retirada=OK")) {
+            throw new IllegalStateException("base de teste fora do modelo do migrador (ver log do container):\n"
+                    + log.lines().filter(l -> l.contains("aplicar_como_migrador")).reduce("", (a, b) -> a + b + "\n"));
+        }
     }
 
     private static String randomPassword() {

@@ -1,0 +1,37 @@
+# Banco de desenvolvimento NO MODELO SUPORTADO pela 016 (revisao 5), so para VOLUME NOVO.
+#
+#   docker compose -f docker-compose.modelo.yml up -d
+#
+# Projeto, container, volume e porta PROPRIOS: nunca usa o volume da stack principal (docker-compose.yml, projeto
+# nekkora-platform, volume nekkora_postgres_data), que continua com a configuracao anterior ate decisao propria.
+# As migrations NAO vao para o initdb.d (seriam aplicadas pelo superusuario): db/bootstrap/aplicar_como_migrador.sh aplica
+# como migrador_nekkora, dono do banco, com SUPERUSER so em 011/012/013/016 e BYPASSRLS so na 014, retirada conferida,
+# sec. 19 da 016 depois da retirada e o marcador "nekkora-inicializacao-completa" so no fim do sucesso.
+# Saude: healthy SO com o marcador. Volume com initdb falho ou interrompido sobe ao reiniciar, mas fica unhealthy e nao e
+# uma instalacao valida: remover o volume deste projeto (docker compose -f docker-compose.modelo.yml down -v) e subir de novo.
+name: nekkora-modelo
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nekkora-postgres-modelo
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nekkora}
+      POSTGRES_USER: ${POSTGRES_USER:-nekkora}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nekkora}
+    ports:
+      - "${POSTGRES_MODELO_PORT:-5433}:5432"
+    volumes:
+      - nekkora_modelo_postgres_data:/var/lib/postgresql/data
+      - ./db/migrations:/nekkora/migracoes:ro
+      - ./db/bootstrap/aplicar_como_migrador.sh:/docker-entrypoint-initdb.d/000_aplicar_como_migrador.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nekkora} -d ${POSTGRES_DB:-nekkora} && psql -U ${POSTGRES_USER:-nekkora} -d ${POSTGRES_DB:-nekkora} -Atc \"SELECT shobj_description(oid, 'pg_database') FROM pg_database WHERE datname = current_database()\" | grep -q '^nekkora-inicializacao-completa '"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 180s
+
+volumes:
+  nekkora_modelo_postgres_data:
