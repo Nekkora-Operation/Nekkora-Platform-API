@@ -31,6 +31,13 @@ server:
 
 nekkora:
   public-origin: ${NEKKORA_ORIGEM_PUBLICA}
+  # ambiente e porta de e-mail: padrao local (so a intencao). "homologacao" so em ambiente descartavel ensaio-* (P1a, sec. 4)
+  environment: ${NEKKORA_AMBIENTE:}
+  mail:
+    transport: ${NEKKORA_MAIL_TRANSPORTE:local}
+    caixa-dir: ${NEKKORA_MAIL_CAIXA:}
+  emergency-notices:
+    enabled: ${NEKKORA_AVISOS_EMERGENCIA:false}
   trusted-proxies: ${NEKKORA_PROXIES_CONFIAVEIS:127.0.0.1/32,::1/128}
   database:
     url: ${NEKKORA_DB_URL}
