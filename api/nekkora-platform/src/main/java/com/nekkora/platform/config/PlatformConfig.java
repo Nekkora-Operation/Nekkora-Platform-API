@@ -144,6 +144,18 @@ public class PlatformConfig {
         return new IdentityHmac(p.keys().hmacId(), Base64.getDecoder().decode(p.keys().hmac()));
     }
 
+    /** Cursor das rotas internas: subchave derivada da chave HMAC de servico (DC-15); a rotacao dela invalida os cursores. */
+    @Bean
+    com.nekkora.platform.paging.CursorCodec cursorCodec(PlatformProperties p) {
+        return new com.nekkora.platform.paging.CursorCodec(p.keys().hmacId(), Base64.getDecoder().decode(p.keys().hmac()));
+    }
+
+    /** Regra unica de acesso por workspace (contrato GAP-02/03/06, §1.2), compartilhada pelas rotas internas. */
+    @Bean
+    com.nekkora.platform.access.WorkspaceAccess workspaceAccess() {
+        return new com.nekkora.platform.access.WorkspaceAccess();
+    }
+
     @Bean
     PlatformProperties.Session sessionConfig(PlatformProperties p) {
         return p.session();
