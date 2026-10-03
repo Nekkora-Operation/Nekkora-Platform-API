@@ -1,0 +1,539 @@
+openapi: 3.1.0
+info:
+  title: Nekkora Platform API v1 - PROPOSTA GAP-02/GAP-03/GAP-06 (rotas internas de leitura)
+  version: 0.6.0-gap06
+  description: >
+    SUPERADO (DC-14, decisao da responsavel em 2026-10-03): a fonte do contrato HTTP v1 e api/openapi/nekkora-api-v1.yaml,
+    que consolida estas 13 rotas e as anteriores. Este anexo fica como historico da proposta.
+    REVISAO 2 aprovada tecnicamente (2026-10-03). Decididos pela responsavel: DC-01, DC-02, DC-03, DC-15 e (2026-10-03) DC-04..DC-13; so DC-14 pendente.
+    Implementado: GAP-02 (getMyPermissions, listMyWorkspacePermissions) GAP-03 (listMembers, listClientGrants, listClients) e GAP-06 (oito rotas de leitura); ver x-estado. Demais rotas: proposta, nao implementadas. Cobre so as rotas novas da primeira entrega do
+    frontend interno (D-INV-01). As rotas ja existentes (contrato 8.7 e MFA emergencial) entram na consolidacao (GAP-05).
+    Duvidas de contrato marcadas com x-duvida (IDs DC-xx do documento 2026-10-02-api-v1-contrato-gap02-03-06-proposta.md);
+    nenhuma DC esta decidida. Ordem das verificacoes em toda rota: 401 -> 400 (formato de parametros, UUID malformado,
+    cursor) -> 403 (conta externa; permissao organizacional) -> 404 (workspace ou recurso de workspace inexistente, de
+    outra organizacao ou sem acesso, corpo identico). Paginacao keyset sobre o estado atual, autorizacao reaplicada a cada
+    pagina; sem garantia de ausencia de repeticao/omissao sob mudanca concorrente; mudancas que nao retiram autorizacao nao
+    causam erro, revogacao pode causar 401/403/404 (documento, secao 1.4). Listas por nome ordenam pela chave limitada
+    left(name, 48) COLLATE "C" + id; o nome completo e devolvido (secao 1.5.1). Autorizacao por
+    workspace: componente unico compartilhado (documento, secao 1.2).
+servers:
+  - url: https://{host}
+    description: Gateway publico (caminho publicado = caminho interno)
+    variables:
+      host: { default: homologacao.nekkora.test }
+security:
+  - sessionCookie: []
+tags:
+  - name: GAP-02 permissoes
+  - name: GAP-03 administracao
+  - name: GAP-06 leitura interna
+
+paths:
+  /api/v1/o/{org}/me/permissions:
+    get:
+      tags: [GAP-02 permissoes]
+      operationId: getMyPermissions
+      x-estado: implementado (GAP-02; PermissionsController; MyPermissionsRouteIT, PermissionCatalogIT)
+      summary: Permissoes organizacionais e validas em todos os workspaces do usuario interno autenticado
+      description: >
+        organization.permissions pode conter qualquer dos 23 codigos (PermissionCode). allWorkspaces.permissions contem so
+        codigos de workspace (WorkspacePermissionCode), derivados das atribuicoes organizacionais (regra a, DC-01).
+        Atribuicoes explicitas por workspace ficam em /me/permissions/workspaces (paginada, DC-03).
+        Efetivo em W = allWorkspaces.permissions U permissoes de W na rota paginada. Codigo de papel ou permissao
+        desconhecido pelo catalogo, ou permissao organizacional em papel de workspace -> 500 (nunca omitido).
+        Apenas apoio a interface: cada rota autoriza no backend.
+      x-duvida: [DC-01, DC-03]
+      parameters: [ { $ref: '#/components/parameters/Org' } ]
+      responses:
+        '200':
+          description: Permissoes
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyPermissions' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/CatalogInconsistent' }
+
+  /api/v1/o/{org}/me/permissions/workspaces:
+    get:
+      tags: [GAP-02 permissoes]
+      operationId: listMyWorkspacePermissions
+      x-estado: implementado (GAP-02; PermissionsController; MyPermissionsRouteIT)
+      summary: Atribuicoes explicitas de workspace do usuario (regra b), paginadas, sem truncar
+      description: Um item por workspace com ao menos uma atribuicao ativa (inclusive arquivado ou suspenso). Sem limite de volume.
+      x-ordenacao: workspaceId asc (imutavel)
+      x-duvida: [DC-03]
+      parameters:
+        - $ref: '#/components/parameters/Org'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: Pagina de atribuicoes por workspace, content: { application/json: { schema: { $ref: '#/components/schemas/WorkspacePermissionsPage' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/CatalogInconsistent' }
+
+  /api/v1/o/{org}/members:
+    get:
+      tags: [GAP-03 administracao]
+      operationId: listMembers
+      x-estado: implementado (GAP-03; AdminReadController; AdminReadRoutesIT)
+      summary: Lista membros internos (exige org.manage)
+      x-ordenacao: createdAt asc, membershipId asc
+      x-duvida: [DC-04]
+      parameters:
+        - $ref: '#/components/parameters/Org'
+        - { name: status, in: query, required: false, schema: { type: array, maxItems: 4, uniqueItems: true, items: { $ref: '#/components/schemas/MembershipStatus' } }, style: form, explode: true }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: Pagina de membros, content: { application/json: { schema: { $ref: '#/components/schemas/MemberPage' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/CatalogInconsistent' }
+
+  /api/v1/o/{org}/client-grants:
+    get:
+      tags: [GAP-03 administracao]
+      operationId: listClientGrants
+      x-estado: implementado (GAP-03; AdminReadController; AdminReadRoutesIT)
+      summary: Lista concessoes de acesso externo (exige external_access.manage)
+      description: >
+        EXCECAO documentada a regra geral do 404: clientId/workspaceId sao filtros de rota organizacional. Inexistente ou
+        de outra organizacao -> 200 com items vazio (nao revela existencia). UUID malformado -> 400.
+      x-ordenacao: createdAt desc, grantId desc
+      x-duvida: [DC-05]
+      parameters:
+        - $ref: '#/components/parameters/Org'
+        - { name: status, in: query, schema: { type: array, maxItems: 4, uniqueItems: true, items: { $ref: '#/components/schemas/GrantStatus' } }, style: form, explode: true }
+        - { name: clientId, in: query, schema: { type: string, format: uuid }, description: 'inexistente ou de outra organizacao -> lista vazia; malformado -> 400' }
+        - { name: workspaceId, in: query, schema: { type: string, format: uuid }, description: 'inexistente ou de outra organizacao -> lista vazia; malformado -> 400' }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: Pagina de concessoes, content: { application/json: { schema: { $ref: '#/components/schemas/GrantPage' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/CatalogInconsistent' }
+
+  /api/v1/o/{org}/clients:
+    get:
+      tags: [GAP-03 administracao]
+      operationId: listClients
+      x-estado: implementado (GAP-03; AdminReadController; AdminReadRoutesIT, OrganizationPermissionTest)
+      summary: Lista clientes (org.manage ou external_access.manage)
+      x-ordenacao: left(name, 48) COLLATE "C" asc, clientId asc (nomes iguais nos 48 primeiros pontos de codigo ficam em ordem de id)
+      x-duvida: [DC-06]
+      parameters:
+        - $ref: '#/components/parameters/Org'
+        - { name: status, in: query, schema: { type: array, maxItems: 3, uniqueItems: true, items: { $ref: '#/components/schemas/ResourceStatus' } }, style: form, explode: true }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: Pagina de clientes, content: { application/json: { schema: { $ref: '#/components/schemas/ClientPage' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/CatalogInconsistent' }
+
+  /api/v1/o/{org}/workspaces:
+    get:
+      tags: [GAP-06 leitura interna]
+      operationId: listWorkspaces
+      x-estado: implementado (GAP-06; ProductReadController/ProductReads; ProductReadRoutesIT, ProductReadMatrixIT)
+      summary: Workspaces visiveis (automation.read efetivo); sem nenhum -> lista vazia
+      x-ordenacao: left(name, 48) COLLATE "C" asc, workspaceId asc (nomes iguais nos 48 primeiros pontos de codigo ficam em ordem de id)
+      x-duvida: [DC-01]
+      parameters:
+        - $ref: '#/components/parameters/Org'
+        - { name: status, in: query, schema: { type: array, maxItems: 3, uniqueItems: true, items: { $ref: '#/components/schemas/ResourceStatus' } }, style: form, explode: true }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: Pagina de workspaces, content: { application/json: { schema: { $ref: '#/components/schemas/WorkspacePage' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/CatalogInconsistent' }
+
+  /api/v1/o/{org}/workspaces/{workspaceId}:
+    get:
+      tags: [GAP-06 leitura interna]
+      operationId: getWorkspace
+      x-estado: implementado (GAP-06; ProductReadController/ProductReads; ProductReadRoutesIT, ProductReadMatrixIT)
+      summary: Detalhe; inexistente, de outra organizacao ou sem acesso -> 404 identico; UUID malformado -> 400
+      parameters: [ { $ref: '#/components/parameters/Org' }, { $ref: '#/components/parameters/WorkspaceId' } ]
+      responses:
+        '200': { description: Workspace, content: { application/json: { schema: { $ref: '#/components/schemas/Workspace' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/CatalogInconsistent' }
+
+  /api/v1/o/{org}/workspaces/{workspaceId}/automations:
+    get:
+      tags: [GAP-06 leitura interna]
+      operationId: listAutomations
+      x-estado: implementado (GAP-06; ProductReadController/ProductReads; ProductReadRoutesIT, ProductReadMatrixIT)
+      summary: Automacoes do workspace (automation.read em W; sem acesso -> 404)
+      x-ordenacao: left(name, 48) COLLATE "C" asc, automationId asc (nomes iguais nos 48 primeiros pontos de codigo ficam em ordem de id)
+      x-duvida: [DC-07]
+      parameters:
+        - $ref: '#/components/parameters/Org'
+        - $ref: '#/components/parameters/WorkspaceId'
+        - { name: status, in: query, schema: { type: array, maxItems: 3, uniqueItems: true, items: { $ref: '#/components/schemas/ResourceStatus' } }, style: form, explode: true }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: Pagina de automacoes, content: { application/json: { schema: { $ref: '#/components/schemas/AutomationPage' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/CatalogInconsistent' }
+
+  /api/v1/o/{org}/automations/{automationId}:
+    get:
+      tags: [GAP-06 leitura interna]
+      operationId: getAutomation
+      x-estado: implementado (GAP-06; ProductReadController/ProductReads; ProductReadRoutesIT, ProductReadMatrixIT)
+      summary: Detalhe da automacao (sem command_json, sem criador)
+      x-duvida: [DC-08, DC-09]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { $ref: '#/components/parameters/AutomationId' } ]
+      responses:
+        '200': { description: Automacao, content: { application/json: { schema: { $ref: '#/components/schemas/Automation' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/CatalogInconsistent' }
+
+  /api/v1/o/{org}/automations/{automationId}/versions:
+    get:
+      tags: [GAP-06 leitura interna]
+      operationId: listAutomationVersions
+      x-estado: implementado (GAP-06; ProductReadController/ProductReads; ProductReadRoutesIT, ProductReadMatrixIT)
+      summary: Versoes da automacao (sem command_json)
+      x-ordenacao: versionNumber desc (unico por automacao)
+      x-duvida: [DC-08]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { $ref: '#/components/parameters/AutomationId' }, { $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/Limit' } ]
+      responses:
+        '200': { description: Pagina de versoes, content: { application/json: { schema: { $ref: '#/components/schemas/AutomationVersionPage' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/CatalogInconsistent' }
+
+  /api/v1/o/{org}/executions:
+    get:
+      tags: [GAP-06 leitura interna]
+      operationId: listExecutions
+      x-estado: implementado (GAP-06; ProductReadController/ProductReads; ProductReadRoutesIT, ProductReadMatrixIT)
+      summary: Execucoes de workspaces visiveis; sem nenhum workspace -> lista vazia
+      description: >
+        workspaceId ou automationId inexistente, de outra organizacao ou sem acesso -> 404 (regra geral, sem a excecao de
+        /client-grants). workspaceId e automationId acessiveis mas incompativeis -> 200 vazio. Periodo sobre createdAt,
+        intervalo semiaberto [from, to): from inclusivo, to exclusivo; cada limite e opcional; com os dois: to < from -> 400,
+        to = from -> 200 vazio, to - from > 366 dias exatos (366 x 24 h) -> 400. Data sem fuso -> 400. limit limita o
+        resultado, nao o trabalho da consulta: custo com periodo aberto depende da medicao do DC-07.
+      x-ordenacao: createdAt desc, executionId desc
+      x-duvida: [DC-07]
+      parameters:
+        - $ref: '#/components/parameters/Org'
+        - { name: workspaceId, in: query, schema: { type: string, format: uuid } }
+        - { name: automationId, in: query, schema: { type: string, format: uuid } }
+        - { name: status, in: query, schema: { type: array, maxItems: 6, uniqueItems: true, items: { $ref: '#/components/schemas/ExecutionStatus' } }, style: form, explode: true }
+        - { name: from, in: query, schema: { type: string, format: date-time }, description: 'inclusivo (createdAt >= from); ausente = sem limite inferior; exige fuso' }
+        - { name: to, in: query, schema: { type: string, format: date-time }, description: 'exclusivo (createdAt < to); ausente = sem limite superior; exige fuso' }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: Pagina de execucoes, content: { application/json: { schema: { $ref: '#/components/schemas/ExecutionPage' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/CatalogInconsistent' }
+
+  /api/v1/o/{org}/executions/{executionId}:
+    get:
+      tags: [GAP-06 leitura interna]
+      operationId: getExecution
+      x-estado: implementado (GAP-06; ProductReadController/ProductReads; ProductReadRoutesIT, ProductReadMatrixIT)
+      summary: Detalhe da execucao (sem errorSummary, command_snapshot, pid, exit_code, Worker/Agent)
+      x-duvida: [DC-08, DC-09, DC-10, DC-11]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { $ref: '#/components/parameters/ExecutionId' } ]
+      responses:
+        '200': { description: Execucao, content: { application/json: { schema: { $ref: '#/components/schemas/ExecutionDetail' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/CatalogInconsistent' }
+
+  /api/v1/o/{org}/executions/{executionId}/events:
+    get:
+      tags: [GAP-06 leitura interna]
+      operationId: listExecutionEvents
+      x-estado: implementado (GAP-06; ProductReadController/ProductReads; ProductReadRoutesIT, ProductReadMatrixIT)
+      summary: Eventos da execucao (sem payload); execucao sem acesso -> 404 (diferente do portal)
+      x-ordenacao: sequence asc (unico por execucao)
+      x-duvida: [DC-08, DC-12]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { $ref: '#/components/parameters/ExecutionId' }, { $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/Limit' } ]
+      responses:
+        '200': { description: Pagina de eventos, content: { application/json: { schema: { $ref: '#/components/schemas/ExecutionEventPage' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/CatalogInconsistent' }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-nekkora_session
+      description: Sessao emitida pelo fluxo de login com MFA (contrato 8.7). Rotas GET - sem X-CSRF-Token. {org} malformado -> 401.
+  parameters:
+    Org: { name: org, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 401 (nenhuma sessao e resolvida)' }
+    WorkspaceId: { name: workspaceId, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+    AutomationId: { name: automationId, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+    ExecutionId: { name: executionId, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string, maxLength: 1024, pattern: '^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$' }
+      description: >
+        Opaco e assinado: base64url(payload) "." base64url(HMAC-SHA256). Vinculado a rota, organizacao, vinculo da sessao,
+        recurso pai, filtros (impressao canonica; limit fora) e ordenacao. Posicao = chave de ordenacao de tamanho limitado
+        (prefixo de 48 pontos de codigo + id, ou campos de tamanho fixo); id da chave como impressao de 11 caracteres.
+        O servidor nunca emite cursor maior que 872 caracteres (pior caso calculado, documento secao 1.5.1); aceita ate
+        1024. Nao e autoridade: autorizacao reaplicada a cada pagina. Malformado, adulterado, de outra
+        rota/organizacao/vinculo/pai, com filtros ou ordenacao diferentes, ou de chave desconhecida (inclusive apos
+        rotacao da chave) -> 400. Sem expiracao por tempo. Chave: x-duvida DC-15.
+      x-duvida: [DC-15]
+    Limit: { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 25 }, description: 'fora de 1-100 ou nao inteiro -> 400; pode mudar entre paginas' }
+  responses:
+    InvalidRequest: { description: 'Parametro invalido: UUID malformado, limit, status, data, periodo ou cursor', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: invalid_request } } } }
+    Unauthenticated: { description: Sem sessao valida na organizacao da rota, content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: unauthenticated } } } }
+    Forbidden: { description: Conta externa ou sem a permissao organizacional exigida, content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
+    NotFound: { description: Inexistente, de outra organizacao ou sem acesso ao workspace (resposta identica), content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: not_found } } } }
+    CatalogInconsistent: { description: 'Codigo de papel, permissao ou rotulo de status desconhecido, ou permissao organizacional em papel de workspace (nunca omitido silenciosamente)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: internal_error } } } }
+    RateLimited:
+      description: Limite R7
+      headers: { Retry-After: { schema: { type: integer } } }
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: rate_limited } } }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, rate_limited, internal_error, service_unavailable] } }
+    WorkspacePermissionCode:
+      description: 'Permissoes de workspace (13): podem aparecer em allWorkspaces e em atribuicoes de workspace.'
+      type: string
+      enum: [workspace.configure, role.assign_operator_viewer, automation.read, automation.execute, logs.read,
+             automation.manage, automation.publish,
+             workspace_parameter.read, workspace_parameter.manage, workspace_secret.read, workspace_secret.manage,
+             automation_schedule.read, automation_schedule.manage]
+    OrganizationOnlyPermissionCode:
+      description: 'Permissoes organizacionais (10): so aparecem em organization.permissions.'
+      type: string
+      enum: [org.manage, workspace.lifecycle, role.assign_admin_roles, external_access.manage,
+             worker.manage, agent.manage, agent_credential.manage, worker_agent.assign, worker_workspace.authorize,
+             identity.mfa.reset]
+    PermissionCode:
+      description: 'Catalogo completo de public.permissions (migrations 003, 004, 005, 008, 009, 014): 23 codigos.'
+      anyOf:
+        - $ref: '#/components/schemas/WorkspacePermissionCode'
+        - $ref: '#/components/schemas/OrganizationOnlyPermissionCode'
+    RoleCode: { type: string, enum: [ORG_ADMIN, WORKSPACE_ADMIN, OPERATOR, VIEWER] }
+    OrganizationRoleCode: { type: string, enum: [ORG_ADMIN] }
+    WorkspaceRoleCode: { type: string, enum: [WORKSPACE_ADMIN, OPERATOR, VIEWER] }
+    MembershipStatus: { type: string, enum: [pending, active, suspended, revoked] }
+    AccountStatus: { type: string, enum: [pending, active, suspended, closed] }
+    GrantStatus: { type: string, enum: [pending, active, suspended, revoked] }
+    ResourceStatus: { type: string, enum: [active, suspended, archived] }
+    ExecutionStatus: { type: string, enum: [pending, starting, running, succeeded, failed, cancelled] }
+    ExecutionStatusReason: { type: [string, 'null'], enum: [process_completed, start_failed, process_failed, cancelled_before_dispatch, cancel_confirmed, queue_deadline_exceeded, null] }
+    MyPermissions:
+      type: object
+      required: [organizationId, membershipId, organization, allWorkspaces, hasWorkspaceAssignments]
+      properties:
+        organizationId: { type: string, format: uuid }
+        membershipId: { type: string, format: uuid }
+        organization:
+          type: object
+          required: [roles, permissions]
+          properties:
+            roles: { type: array, uniqueItems: true, items: { $ref: '#/components/schemas/OrganizationRoleCode' } }
+            permissions: { type: array, uniqueItems: true, maxItems: 23, items: { $ref: '#/components/schemas/PermissionCode' } }
+        allWorkspaces:
+          type: object
+          required: [permissions]
+          x-duvida: DC-01
+          properties:
+            permissions: { type: array, uniqueItems: true, maxItems: 13, items: { $ref: '#/components/schemas/WorkspacePermissionCode' } }
+        hasWorkspaceAssignments: { type: boolean, description: 'existe ao menos uma atribuicao de workspace ativa (consultar /me/permissions/workspaces)' }
+    WorkspacePermissions:
+      type: object
+      required: [workspaceId, roles, permissions]
+      properties:
+        workspaceId: { type: string, format: uuid }
+        roles: { type: array, uniqueItems: true, minItems: 1, items: { $ref: '#/components/schemas/WorkspaceRoleCode' } }
+        permissions: { type: array, uniqueItems: true, maxItems: 13, items: { $ref: '#/components/schemas/WorkspacePermissionCode' } }
+    WorkspacePermissionsPage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/WorkspacePermissions' } }, nextCursor: { type: [string, 'null'] } } }
+    Member:
+      type: object
+      required: [membershipId, userId, displayName, email, emailVerified, accountStatus, membershipStatus, mfaConfigured, organizationRoles, createdAt]
+      properties:
+        membershipId: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        displayName: { type: string }
+        email: { type: string }
+        emailVerified: { type: boolean }
+        accountStatus: { $ref: '#/components/schemas/AccountStatus' }
+        membershipStatus: { $ref: '#/components/schemas/MembershipStatus' }
+        mfaConfigured: { type: boolean, description: 'fator com confirmed_at preenchido e disabled_at nulo', x-duvida: DC-04 }
+        organizationRoles: { type: array, uniqueItems: true, items: { $ref: '#/components/schemas/OrganizationRoleCode' } }
+        createdAt: { type: string, format: date-time }
+    MemberPage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/Member' } }, nextCursor: { type: [string, 'null'] } } }
+    ClientRef: { type: object, required: [clientId, name], properties: { clientId: { type: string, format: uuid }, name: { type: string } } }
+    WorkspaceRef: { type: object, required: [workspaceId, name], properties: { workspaceId: { type: string, format: uuid }, name: { type: string } } }
+    ClientGrant:
+      type: object
+      required: [grantId, status, client, workspace, externalAccount, approvedAt, startsAt, expiresAt, nextReviewAt, lastAccessAt, revokedAt, createdAt]
+      properties:
+        grantId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/GrantStatus' }
+        client: { $ref: '#/components/schemas/ClientRef' }
+        workspace: { $ref: '#/components/schemas/WorkspaceRef' }
+        externalAccount:
+          type: object
+          required: [clientMembershipId, userId, displayName, email, membershipStatus]
+          properties:
+            clientMembershipId: { type: string, format: uuid }
+            userId: { type: string, format: uuid }
+            displayName: { type: string }
+            email: { type: string }
+            membershipStatus: { $ref: '#/components/schemas/MembershipStatus' }
+        approvedAt: { type: [string, 'null'], format: date-time }
+        startsAt: { type: string, format: date-time }
+        expiresAt: { type: [string, 'null'], format: date-time }
+        nextReviewAt: { type: [string, 'null'], format: date-time }
+        lastAccessAt: { type: [string, 'null'], format: date-time }
+        revokedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+    GrantPage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/ClientGrant' } }, nextCursor: { type: [string, 'null'] } } }
+    Client:
+      type: object
+      required: [clientId, name, status, createdAt, updatedAt]
+      properties:
+        clientId: { type: string, format: uuid }
+        name: { type: string }
+        status: { $ref: '#/components/schemas/ResourceStatus' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ClientPage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/Client' } }, nextCursor: { type: [string, 'null'] } } }
+    Workspace:
+      type: object
+      required: [workspaceId, name, description, status, client, createdAt, updatedAt]
+      properties:
+        workspaceId: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/ResourceStatus' }
+        client: { oneOf: [ { $ref: '#/components/schemas/ClientRef' }, { type: 'null' } ] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    WorkspacePage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/Workspace' } }, nextCursor: { type: [string, 'null'] } } }
+    Automation:
+      type: object
+      required: [automationId, workspaceId, name, description, status, latestPublishedVersion, createdAt, updatedAt]
+      properties:
+        automationId: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/ResourceStatus' }
+        latestPublishedVersion:
+          oneOf:
+            - type: object
+              required: [automationVersionId, versionNumber, publishedAt]
+              properties: { automationVersionId: { type: string, format: uuid }, versionNumber: { type: integer }, publishedAt: { type: string, format: date-time } }
+            - type: 'null'
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    AutomationPage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/Automation' } }, nextCursor: { type: [string, 'null'] } } }
+    AutomationVersion:
+      type: object
+      required: [automationVersionId, versionNumber, status, publishedAt, createdAt]
+      properties:
+        automationVersionId: { type: string, format: uuid }
+        versionNumber: { type: integer }
+        status: { type: string, enum: [draft, published] }
+        publishedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+    AutomationVersionPage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/AutomationVersion' } }, nextCursor: { type: [string, 'null'] } } }
+    Execution:
+      type: object
+      required: [executionId, workspaceId, automation, automationVersion, origin, status, statusReason, createdAt, startedAt, finishedAt, durationMs, cancelRequestedAt]
+      properties:
+        executionId: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        automation: { type: object, required: [automationId, name], properties: { automationId: { type: string, format: uuid }, name: { type: string } } }
+        automationVersion: { type: object, required: [automationVersionId, versionNumber], properties: { automationVersionId: { type: string, format: uuid }, versionNumber: { type: integer } } }
+        origin: { type: string, enum: [manual, scheduled] }
+        status: { $ref: '#/components/schemas/ExecutionStatus' }
+        statusReason: { $ref: '#/components/schemas/ExecutionStatusReason' }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: [string, 'null'], format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
+        durationMs:
+          type: [integer, 'null']
+          minimum: 0
+          description: 'finishedAt - startedAt em milissegundos inteiros (truncado); nulo se startedAt ou finishedAt for nulo; nunca calculado contra o relogio atual'
+        cancelRequestedAt: { type: [string, 'null'], format: date-time }
+    ExecutionDetail:
+      allOf:
+        - $ref: '#/components/schemas/Execution'
+        - type: object
+          required: [retryOfExecutionId, requestedBy]
+          description: 'errorSummary retirado ate a sanitizacao ser comprovada (x-duvida DC-10).'
+          properties:
+            retryOfExecutionId: { type: [string, 'null'], format: uuid }
+            requestedBy:
+              oneOf:
+                - { type: object, required: [membershipId, displayName], properties: { membershipId: { type: string, format: uuid }, displayName: { type: string } } }
+                - { type: 'null' }
+              description: 'solicitante; nulo em execucao agendada'
+              x-duvida: DC-09
+    ExecutionPage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/Execution' } }, nextCursor: { type: [string, 'null'] } } }
+    ExecutionEvent:
+      type: object
+      required: [sequence, type, occurredAt, receivedAt]
+      properties:
+        sequence: { type: integer }
+        type: { type: string, enum: [process_started, process_succeeded, process_failed, process_start_failed, process_cancelled] }
+        occurredAt: { type: string, format: date-time }
+        receivedAt: { type: string, format: date-time }
+    ExecutionEventPage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/ExecutionEvent' } }, nextCursor: { type: [string, 'null'] } } }
