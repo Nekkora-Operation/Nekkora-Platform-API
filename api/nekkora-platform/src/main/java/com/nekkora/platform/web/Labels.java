@@ -28,8 +28,19 @@ public final class Labels {
         MEMBERSHIP(Map.of(1, "pending", 2, "active", 3, "suspended", 4, "revoked")),
         /** client_workspace_grants.status: 1=PENDING, 2=ACTIVE, 3=SUSPENDED, 4=REVOKED. */
         GRANT(Map.of(1, "pending", 2, "active", 3, "suspended", 4, "revoked")),
-        /** clients.status e workspaces.status: 1=ACTIVE, 2=SUSPENDED, 3=ARCHIVED. */
-        RESOURCE(Map.of(1, "active", 2, "suspended", 3, "archived"));
+        /** clients.status, workspaces.status e automations.status: 1=ACTIVE, 2=SUSPENDED, 3=ARCHIVED. */
+        RESOURCE(Map.of(1, "active", 2, "suspended", 3, "archived")),
+        /** automation_versions.status: 1=DRAFT, 2=PUBLISHED. */
+        VERSION(Map.of(1, "draft", 2, "published")),
+        /** executions.status (006), mesmos rotulos do portal. */
+        EXECUTION_STATUS(Map.of(1, "pending", 2, "starting", 3, "running", 4, "succeeded", 5, "failed", 6, "cancelled")),
+        /** executions.status_reason (006). */
+        EXECUTION_REASON(Map.of(1, "process_completed", 2, "start_failed", 3, "process_failed", 4, "cancelled_before_dispatch",
+                5, "cancel_confirmed", 6, "queue_deadline_exceeded")),
+        /** executions.origin (009): 1=MANUAL, 2=SCHEDULED. */
+        ORIGIN(Map.of(1, "manual", 2, "scheduled")),
+        /** execution_events.event_type (007). */
+        EVENT_TYPE(Map.of(1, "process_started", 2, "process_succeeded", 3, "process_failed", 4, "process_start_failed", 5, "process_cancelled"));
 
         private final Map<Integer, String> labels;
 

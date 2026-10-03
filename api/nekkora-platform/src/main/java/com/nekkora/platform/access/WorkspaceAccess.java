@@ -179,6 +179,42 @@ public final class WorkspaceAccess {
         return role(code, scope);
     }
 
+    /** Execucao resolvida na organizacao da rota: workspace e automacao (para os filtros e o detalhe). */
+    public record ExecutionScope(UUID workspaceId, UUID automationId) {
+    }
+
+    /**
+     * GAP-06: automacao da ORGANIZACAO DA ROTA + regra por workspace. Inexistente, de outra organizacao ou sem acesso ->
+     * o mesmo 404 de {@link #requireWorkspace}; a consistencia do catalogo e conferida em todos os casos (500 com log).
+     * Devolve o workspace da automacao.
+     */
+    public UUID requireAutomation(JdbcClient j, UUID org, UUID membership, UUID automation, String permission) {
+        UUID workspace = j.sql("SELECT workspace_id FROM public.automations WHERE organization_id = :org AND automation_id = :automation")
+                .param("org", org).param("automation", automation).query(UUID.class).optional().orElse(null);
+        if (workspace == null) {
+            requireWorkspacePermission(permission);
+            requireConsistent(j, org, membership);
+            throw new ApiException(ApiError.NOT_FOUND, "automacao");
+        }
+        requireWorkspace(j, org, membership, workspace, permission);
+        return workspace;
+    }
+
+    /** GAP-06: execucao da ORGANIZACAO DA ROTA + regra por workspace, com o mesmo 404 e a mesma consistencia. */
+    public ExecutionScope requireExecution(JdbcClient j, UUID org, UUID membership, UUID execution, String permission) {
+        ExecutionScope scope = j.sql("SELECT workspace_id, automation_id FROM public.executions WHERE organization_id = :org AND execution_id = :execution")
+                .param("org", org).param("execution", execution)
+                .query((rs, n) -> new ExecutionScope(rs.getObject("workspace_id", UUID.class), rs.getObject("automation_id", UUID.class)))
+                .optional().orElse(null);
+        if (scope == null) {
+            requireWorkspacePermission(permission);
+            requireConsistent(j, org, membership);
+            throw new ApiException(ApiError.NOT_FOUND, "execucao");
+        }
+        requireWorkspace(j, org, membership, scope.workspaceId(), permission);
+        return scope;
+    }
+
     /** Sem a permissao: 404 identico para inexistente, de outra organizacao e sem acesso (§1.3, linha 5). */
     public void requireWorkspace(JdbcClient j, UUID org, UUID membership, UUID workspace, String permission) {
         if (!hasWorkspacePermission(j, org, membership, workspace, permission)) {

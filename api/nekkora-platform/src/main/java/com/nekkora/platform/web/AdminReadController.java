@@ -221,20 +221,7 @@ public class AdminReadController {
         internal(s);
         List<Map<String, Object>> rows = tx.inOrganization(org, Mode.READ_ONLY, j -> {
             access.requireAnyOrganizationPermission(j, org, s.membershipId(), "org.manage", "external_access.manage");
-            StringBuilder sql = new StringBuilder("""
-                    SELECT c.client_id, c.name, left(c.name, :prefix) AS sort_key, c.status, c.created_at, c.updated_at
-                      FROM public.clients c
-                     WHERE c.organization_id = :org
-                    """);
-            if (codes != null) {
-                sql.append(" AND c.status IN (:status)");
-            }
-            if (after != null) {
-                // mesma expressao do ORDER BY (§1.5.1): o cursor guarda exatamente a chave de ordenacao limitada
-                sql.append(" AND (left(c.name, :prefix) COLLATE \"C\", c.client_id) > (CAST(:afterKey AS text) COLLATE \"C\", :afterId)");
-            }
-            sql.append(" ORDER BY left(c.name, :prefix) COLLATE \"C\", c.client_id LIMIT :max");
-            JdbcClient.StatementSpec q = j.sql(sql.toString()).param("org", org).param("prefix", NAME_SORT_PREFIX).param("max", pageSize + 1);
+            JdbcClient.StatementSpec q = j.sql(clientsSql(codes != null, after != null)).param("org", org).param("prefix", NAME_SORT_PREFIX).param("max", pageSize + 1);
             if (codes != null) {
                 q = q.param("status", codes);
             }
@@ -255,6 +242,23 @@ public class AdminReadController {
         Map<String, Object> r = page(rows, pageSize, last -> cursors.encode(scope, List.of(last.get(SORT_KEY), last.get("clientId"))));
         rows.forEach(m -> m.remove(SORT_KEY));
         return r;
+    }
+
+    /** SQL da M03 (tambem usado pela medicao do DC-07, para medir exatamente o texto da rota). */
+    public static String clientsSql(boolean status, boolean after) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT c.client_id, c.name, left(c.name, :prefix) AS sort_key, c.status, c.created_at, c.updated_at
+                  FROM public.clients c
+                 WHERE c.organization_id = :org
+                """);
+        if (status) {
+            sql.append(" AND c.status IN (:status)");
+        }
+        if (after) {
+            // mesma expressao do ORDER BY (§1.5.1): o cursor guarda exatamente a chave de ordenacao limitada
+            sql.append(" AND (left(c.name, :prefix) COLLATE \"C\", c.client_id) > (CAST(:afterKey AS text) COLLATE \"C\", :afterId)");
+        }
+        return sql.append(" ORDER BY left(c.name, :prefix) COLLATE \"C\", c.client_id LIMIT :max").toString();
     }
 
     // ------------------------------------------------------------------ comum
