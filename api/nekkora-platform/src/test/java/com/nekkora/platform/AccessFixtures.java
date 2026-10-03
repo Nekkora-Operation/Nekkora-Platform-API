@@ -79,6 +79,38 @@ final class AccessFixtures {
         return new TestRole(id, code);
     }
 
+    /** Cliente com id e nome escolhidos (nome passado por parametro: aceita controles, aspas e Unicode). */
+    static UUID namedClient(UUID org, UUID id, String name, int status) {
+        try (Connection c = DB.connectAsSuperuser();
+             PreparedStatement ps = c.prepareStatement("INSERT INTO clients (client_id, organization_id, name, status) VALUES (?, ?, ?, ?)")) {
+            ps.setObject(1, id);
+            ps.setObject(2, org);
+            ps.setString(3, name);
+            ps.setInt(4, status);
+            ps.executeUpdate();
+            return id;
+        } catch (Exception e) {
+            throw new IllegalStateException("cliente da massa falhou", e);
+        }
+    }
+
+    static void renameClient(UUID client, String name) {
+        try (Connection c = DB.connectAsSuperuser(); PreparedStatement ps = c.prepareStatement("UPDATE clients SET name = ? WHERE client_id = ?")) {
+            ps.setString(1, name);
+            ps.setObject(2, client);
+            ps.executeUpdate();
+        } catch (Exception e) {
+            throw new IllegalStateException("renomear cliente falhou", e);
+        }
+    }
+
+    /** Fator TOTP de massa (segredo de zeros: nunca usado para autenticar). */
+    static void mfaFactor(UUID org, UUID user, boolean confirmed, boolean disabled) {
+        DB.asSuperuser("INSERT INTO user_mfa_factors (organization_id, user_id, factor_type, secret_ciphertext, secret_nonce, key_id, confirmed_at, "
+                + "disabled_at) VALUES ('" + org + "', '" + user + "', 1, decode(repeat('00', 36), 'hex'), decode(repeat('00', 12), 'hex'), 'k1', "
+                + (confirmed ? "now()" : "NULL") + ", " + (disabled ? "now()" : "NULL") + ")");
+    }
+
     static UUID namedWorkspace(UUID org, String name, int status) {
         UUID w = UUID.randomUUID();
         DB.asSuperuser("INSERT INTO workspaces (workspace_id, organization_id, client_id, name, status) VALUES ('" + w + "', '" + org

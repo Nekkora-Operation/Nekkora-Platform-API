@@ -32,8 +32,9 @@ public final class WorkspaceAccess {
 
     /**
      * Condicao de visibilidade sobre {@code public.workspaces w}, com parametros nomeados {@code access_org},
-     * {@code access_membership} e {@code access_permission}. Mesma regra em toda rota; so pode ser executada por
-     * {@link #visibleWorkspacesQuery}, que confere a consistencia do catalogo antes.
+     * {@code access_membership} e {@code access_permission}. Mesma regra em toda rota. Os caminhos implementados a
+     * executam por {@link #visibleWorkspacesQuery}, que confere a consistencia do catalogo antes; a constante e publica
+     * e NAO impede uso direto, entao rotas novas devem usar so os metodos deste componente (parecer da C1 da GAP-02).
      */
     public static final String VISIBLE_WORKSPACE_CONDITION = """
             w.organization_id = :access_org
@@ -60,6 +61,23 @@ public final class WorkspaceAccess {
         public List<String> allWorkspacesPermissions() {
             return permissions.stream().filter(PermissionCatalog.permissions(PermissionCatalog.Scope.WORKSPACE)::contains).toList();
         }
+    }
+
+    /** Fonte das permissoes ORGANIZACIONAIS disponiveis ao vinculo (substituivel so em teste do componente). */
+    @FunctionalInterface
+    interface OrganizationPermissionSource {
+        Set<String> load(JdbcClient j, UUID org, UUID membership);
+    }
+
+    private final OrganizationPermissionSource organizationPermissions;
+
+    public WorkspaceAccess() {
+        this.organizationPermissions = (j, org, membership) -> Set.copyOf(organizationGrant(j, org, membership).permissions());
+    }
+
+    /** So para o teste do componente: fornece conjuntos controlados mantendo a logica de decisao real. */
+    WorkspaceAccess(OrganizationPermissionSource source) {
+        this.organizationPermissions = source;
     }
 
     /** Atribuicoes explicitas (regra b) de um workspace. */
@@ -121,6 +139,44 @@ public final class WorkspaceAccess {
                     }
                     return null;
                 }).list();
+    }
+
+    /**
+     * Permissao ORGANIZACIONAL do vinculo (atribuicoes organizacionais ativas), com a consistencia do catalogo conferida
+     * antes (500 com log se inconsistente). {@code permission} precisa ser de escopo organizacao (erro de programacao
+     * se nao for).
+     */
+    public boolean hasOrganizationPermission(JdbcClient j, UUID org, UUID membership, String permission) {
+        requireOrganizationPermissionCodes(permission);
+        return organizationPermissions.load(j, org, membership).contains(permission);
+    }
+
+    /** Exige AO MENOS UMA das permissoes organizacionais ({@code required}); sem nenhuma -> 403. */
+    public void requireAnyOrganizationPermission(JdbcClient j, UUID org, UUID membership, String... required) {
+        requireOrganizationPermissionCodes(required);
+        Set<String> available = organizationPermissions.load(j, org, membership);
+        for (String p : required) {
+            if (available.contains(p)) {
+                return;
+            }
+        }
+        throw ApiException.forbidden("permissao_organizacional");
+    }
+
+    private static void requireOrganizationPermissionCodes(String... codes) {
+        if (codes == null || codes.length == 0) {
+            throw new IllegalStateException("nenhuma permissao exigida (erro de programacao)");
+        }
+        for (String c : codes) {
+            if (PermissionCatalog.permissionScope(c).orElse(null) != PermissionCatalog.Scope.ORGANIZATION) {
+                throw new IllegalStateException("permissao organizacional esperada (erro de programacao)");
+            }
+        }
+    }
+
+    /** Codigo de papel validado no catalogo para o escopo (fora do catalogo -> 500 com log). */
+    public static String validatedRole(String code, PermissionCatalog.Scope scope) {
+        return role(code, scope);
     }
 
     /** Sem a permissao: 404 identico para inexistente, de outra organizacao e sem acesso (§1.3, linha 5). */

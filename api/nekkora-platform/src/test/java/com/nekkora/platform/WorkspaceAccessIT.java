@@ -209,4 +209,44 @@ class WorkspaceAccessIT extends PlatformTestBase {
         }
         return n;
     }
+
+    /**
+     * GAP-03: permissao ORGANIZACIONAL com a fonte real (atribuicoes do banco, papel nekkora_platform) e a mesma politica
+     * de consistencia da C1: papel fora do catalogo -> 500 com log, mesmo trazendo a permissao exigida; controles com
+     * ORG_ADMIN e OPERATOR.
+     */
+    @Test
+    void organizationPermissionUsesTheCatalogConsistencyPolicy(CapturedOutput output) {
+        Org o = newOrganization();
+        UUID w1 = newWorkspace(o, null);
+        UUID operator = membershipOf(o.id(), internalUser(o, true, 2).id());
+        assignWorkspaceRole(o.id(), operator, w1, "OPERATOR", o.adminMembership());
+        AccessFixtures.TestRole orgRole = AccessFixtures.roleOutsideCatalog(1, "org.manage");
+        UUID unknownOrg = membershipOf(o.id(), internalUser(o, true, 2).id());
+        assignOrgRole(o.id(), unknownOrg, orgRole.code(), o.adminMembership());
+        AccessFixtures.TestRole wsRole = AccessFixtures.roleOutsideCatalog(2, "automation.read");
+        UUID adminWithBadWorkspaceRole = membershipOf(o.id(), internalUser(o, true, 2).id());
+        assignOrgRole(o.id(), adminWithBadWorkspaceRole, "ORG_ADMIN", o.adminMembership());
+        assignWorkspaceRole(o.id(), adminWithBadWorkspaceRole, w1, wsRole.code(), o.adminMembership());
+
+        assertThat(hasOrg(o.id(), o.adminMembership(), "org.manage")).as("controle: ORG_ADMIN").isTrue();
+        assertThat(hasOrg(o.id(), o.adminMembership(), "external_access.manage")).isTrue();
+        assertThat(hasOrg(o.id(), operator, "org.manage")).as("controle: OPERATOR").isFalse();
+        assertThatThrownBy(() -> tx.inOrganization(o.id(), Mode.READ_ONLY, j -> {
+            access.requireAnyOrganizationPermission(j, o.id(), operator, "org.manage", "external_access.manage");
+            return null;
+        })).isInstanceOf(ApiException.class).satisfies(e -> assertThat(((ApiException) e).apiError()).isEqualTo(ApiError.FORBIDDEN));
+        int logsBefore = count(output.getOut(), "evento=api.catalogo_desconhecido");
+        assertServerError(() -> hasOrg(o.id(), unknownOrg, "org.manage"));
+        assertServerError(() -> hasOrg(o.id(), adminWithBadWorkspaceRole, "org.manage"));
+        assertServerError(() -> tx.inOrganization(o.id(), Mode.READ_ONLY, j -> {
+            access.requireAnyOrganizationPermission(j, o.id(), unknownOrg, "org.manage", "external_access.manage");
+            return null;
+        }));
+        assertThat(count(output.getOut(), "evento=api.catalogo_desconhecido") - logsBefore).isEqualTo(3);
+    }
+
+    private boolean hasOrg(UUID org, UUID membership, String permission) {
+        return tx.inOrganization(org, Mode.READ_ONLY, j -> access.hasOrganizationPermission(j, org, membership, permission));
+    }
 }
