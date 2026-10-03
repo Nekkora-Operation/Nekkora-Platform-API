@@ -215,6 +215,66 @@ class EmergencyRecoveryFlowIT {
     }
 
     /**
+     * GAP-01 (API-V1-INV-01): complemento da rota de CONTESTACAO (rota publica por token; sem 401 por ausencia de sessao).
+     * CSRF/Origin recusados sem efeito; uso unico (reuso -> 400, estado mantido); token vencido (fixture temporal declarada,
+     * a mesma de recuarSolicitacao: o token de contestacao vale ate o t_total de 72 h) -> 400 sem cancelar.
+     */
+    @Test
+    void contestacaoExigeCsrfEOrigemEDeUsoUnicoERecusaTokenVencido() {
+        Cenarios.Equipe eq = C.equipe();
+        Cenarios.Alvo al = C.alvo();
+        UUID org = al.org().id();
+        DB.outroAdmin(al.org());
+        UUID s = C.preAprovada(eq, al);
+        int i0 = mail.sent.size();
+        notices.dispatchPending();
+        String contestar = enviadosDesde(i0).stream().filter(m -> m.kind() == MailSender.Kind.NOTICE_MFA_EMERGENCY_ADMIN).findFirst().orElseThrow()
+                .contestToken();
+        String hash = com.nekkora.core.token.Tokens.sha256Hex(contestar);
+        String estadoAntes = C.estado(s);
+
+        BrowserClient semCsrf = navegador();
+        semCsrf.csrf = null;
+        assertThat(semCsrf.post("/api/v1/o/" + org + "/auth/mfa-emergencia/aviso/contestar", "{\"token\":\"" + contestar + "\"}").status())
+                .as("sem CSRF de pre-autenticacao").isEqualTo(403);
+        BrowserClient estranho = navegador();
+        estranho.origin = "https://atacante.test";
+        assertThat(postarAviso(estranho, org, "contestar", contestar).status()).as("outra origem").isEqualTo(403);
+        BrowserClient semOrigem = navegador();
+        semOrigem.origin = null;
+        assertThat(postarAviso(semOrigem, org, "contestar", contestar).status()).as("sem Origin nem Referer").isEqualTo(403);
+        assertThat(C.estado(s)).as("recusas de CSRF/Origin sem efeito no estado").isEqualTo(estadoAntes);
+        assertThat(DB.valor(Boolean.class, "SELECT used_at IS NULL FROM ops.ops_mfa_notice_tokens WHERE token_hash = ?", hash))
+                .as("token intacto").isTrue();
+
+        BrowserClient n = navegador();
+        assertThat(postarAviso(n, org, "contestar", contestar).status()).as("controle: contestacao valida").isEqualTo(204);
+        assertThat(C.estado(s)).isEqualTo("CANCELADA");
+        BrowserClient.Response reuso = postarAviso(n, org, "contestar", contestar);
+        assertThat(reuso.status()).as("token de contestacao reutilizado").isEqualTo(400);
+        assertThat(reuso.body()).isEqualTo("{\"error\":\"invalid_request\"}");
+        assertThat(C.estado(s)).as("reuso sem efeito").isEqualTo("CANCELADA");
+
+        // vencimento: outra solicitacao, deslocada alem do t_total (72 h) - o token de contestacao vence com ela
+        Cenarios.Alvo al2 = C.alvo();
+        UUID org2 = al2.org().id();
+        DB.outroAdmin(al2.org());
+        UUID s2 = C.preAprovada(eq, al2);
+        int i1 = mail.sent.size();
+        notices.dispatchPending();
+        String contestar2 = enviadosDesde(i1).stream().filter(m -> m.kind() == MailSender.Kind.NOTICE_MFA_EMERGENCY_ADMIN
+                && m.org().equals(org2)).findFirst().orElseThrow().contestToken();
+        DB.recuarSolicitacao(s2, java.time.Duration.ofHours(73));
+        String estadoVencida = C.estado(s2);
+        BrowserClient.Response vencido = postarAviso(navegador(), org2, "contestar", contestar2);
+        assertThat(vencido.status()).as("token de contestacao vencido").isEqualTo(400);
+        assertThat(vencido.body()).isEqualTo("{\"error\":\"invalid_request\"}");
+        assertThat(C.estado(s2)).as("vencido nao cancela").isEqualTo(estadoVencida).isNotEqualTo("CANCELADA");
+        assertThat(DB.valor(Boolean.class, "SELECT used_at IS NULL FROM ops.ops_mfa_notice_tokens WHERE token_hash = ?",
+                com.nekkora.core.token.Tokens.sha256Hex(contestar2))).as("vencido nao e consumido").isTrue();
+    }
+
+    /**
      * Item 6: token nao atribuivel (outra organizacao na rota, desconhecido, malformado) - mesma resposta publica, nenhuma
      * escrita em organizacao nenhuma; recusa atribuivel - registrada na organizacao do token. O log leva so finalidade,
      * categoria, organizacao DA ROTA, estado da R7 e correlacao: nunca token, hash, destinatario ou link. Controle positivo:
