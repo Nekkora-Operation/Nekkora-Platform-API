@@ -461,6 +461,151 @@ confere "escritor externo do IT com a mesma regra (Windows + caminho exato; sena
 confere "ferramenta do runner (Linux) com o protocolo inalterado: mkdir da trava, anexa, rmdir" \
     "grep -qF 'mkdir /caixa/controle.trava && { printf \"%s\\n\" \"\$1\" >> /caixa/controle.conf; rmdir /caixa/controle.trava; }' '$AQUI/homologacao.sh'"
 
+echo "== 19. aplicacao web no gateway (ensaio-frontend, F1.5 P-A; a prova de roteamento e testes/test_gateway_frontend.sh)"
+GF="$AQUI/lib/gateway_frontend.py"
+confere "modelo do nginx com a ancora 'location / { return 404; }' exatamente uma vez" \
+    "[ \"\$(python -c 'import sys; sys.path.insert(0, sys.argv[1]); import gateway_frontend as g; print(open(sys.argv[2], encoding=\"utf-8\").read().count(g.ANCORA))' '$AQUI/lib' '$AQUI/gateway/nginx.modelo')\" = 1 ]"
+python "$GF" aplicar "$TMP/nginx.conf" "$TMP/nginx.frontend.conf" > /dev/null 2>&1 || nok "bloco da aplicacao nao aplicado ao nginx gerado"
+confere "nginx da aplicacao = gerado + bloco, e mais nada (rotas /api/v1/ e /portal/api/v1/ do modelo intactas)" "python '$GF' conferir '$TMP/nginx.conf' '$TMP/nginx.frontend.conf' > /dev/null"
+confere "aplicar de novo sobre o ja aplicado e recusado" "! python '$GF' aplicar '$TMP/nginx.frontend.conf' '$TMP/nginx.frontend2.conf' > /dev/null 2>&1"
+confere "bloco sem error_page, sem proxy_intercept_errors e sem proxy_pass novo" \
+    "! python -c 'import sys; sys.path.insert(0, sys.argv[1]); import gateway_frontend as g; b = g.BLOCO_APLICACAO; sys.exit(0 if (\"error_page\" in b or \"intercept\" in b or \"proxy_pass\" in b) else 1)' '$AQUI/lib'"
+mkdir -p "$TMP/spa"
+if ( export HOMOLOG_PROJETO=nekkora-homologacao-ensaio-validacao HOMOLOG_ID=ensaio-validacao HOMOLOG_SEGREDOS="$S" HOMOLOG_COMMIT=0000000 \
+        HOMOLOG_PORTA=55999 HOMOLOG_MIGRACOES="$TMP/mig" HOMOLOG_SQL="$AQUI/sql" HOMOLOG_CONFIG="$TMP/config" HOMOLOG_REDE_INTERNA=10.252.20 \
+        HOMOLOG_REDE_BORDA=10.252.21 HOMOLOG_FRONTEND_DIST="$TMP/spa"
+     docker compose -f "$B" -f "$O16" -f "$AQUI/compose.frontend.yml" config > "$TMP/frontend.yml" 2>"$TMP/compose.err" ); then
+    ok "base + 016 + frontend renderiza"
+else
+    nok "frontend nao renderiza: $(head -3 "$TMP/compose.err")"
+fi
+confere "build montado SO no gateway, em /spa, somente leitura" "python - '$TMP/frontend.yml' <<'PY'
+import re, sys
+t = open(sys.argv[1], encoding='utf-8').read()
+servicos = re.split(r'(?m)^  (?=[a-z][a-z0-9-]*:$)', t.split('\nservices:\n', 1)[1].split('\n' + 'volumes:', 1)[0].split('\nnetworks:', 1)[0])
+com = [b.split(':', 1)[0] for b in servicos if 'target: /spa' in b]
+gw = next(b for b in servicos if b.startswith('gateway:'))
+bloco = gw[gw.index('target: /spa') - 200:gw.index('target: /spa') + 60]
+sys.exit(0 if com == ['gateway'] and 'read_only: true' in bloco else 1)
+PY"
+confere "sem HOMOLOG_FRONTEND_DIST a sobreposicao nao renderiza (falha fechada)" \
+    "! ( export HOMOLOG_PROJETO=x HOMOLOG_ID=ensaio-validacao HOMOLOG_SEGREDOS='$S' HOMOLOG_COMMIT=0 HOMOLOG_PORTA=55999 HOMOLOG_MIGRACOES='$TMP/mig' HOMOLOG_SQL='$AQUI/sql' HOMOLOG_CONFIG='$TMP/config'; unset HOMOLOG_FRONTEND_DIST; docker compose -f '$B' -f '$O16' -f '$AQUI/compose.frontend.yml' config > /dev/null 2>&1 )"
+# recusas do criar (nada e criado): par web/lib em repositorios Git TEMPORARIOS deste teste
+ZERO=0000000000000000000000000000000000000000
+# recusa + MOTIVO: a mensagem tem de ser a esperada (uma recusa posterior, por outro motivo, nao vale)
+recusa_fe() { local msg="$1"; shift; recusa "$@"; grep -qF -- "$msg" "$TMP/recusa.txt" || nok "recusa por outro motivo: $1 (esperado: $msg)"; }
+gitc() { git -c user.name=validacao -c user.email=validacao@nekkora.test -c core.autocrlf=false -c commit.gpgsign=false "$@"; }
+W="$TMP/web_par"; L="$W/node_modules/nekkora-lib"
+mkdir -p "$L" && printf 'node_modules/\ndist/\n' > "$W/.gitignore" && echo web > "$W/arquivo.txt" && echo lib > "$L/arquivo.txt"
+( cd "$W" && gitc init -q && gitc add -A && gitc commit -q -m web ) && ( cd "$L" && gitc init -q && gitc add -A && gitc commit -q -m lib ) || nok "repositorios temporarios do par"
+CW="$(git -C "$W" rev-parse HEAD)"; CL="$(git -C "$L" rev-parse HEAD)"
+recusa_fe "so em ambiente descartavel" "aplicacao web fora de ensaio-*" hml-validacao-fw HOMOLOG_ATE=016 HOMOLOG_FRONTEND_WEB="$W" HOMOLOG_FRONTEND_COMMIT="$CW" HOMOLOG_FRONTEND_LIB_COMMIT="$CL"
+recusa_fe "exige HOMOLOG_ATE=016" "aplicacao web com HOMOLOG_ATE=015" ensaio-validacao-fa HOMOLOG_ATE=015 HOMOLOG_FRONTEND_WEB="$W" HOMOLOG_FRONTEND_COMMIT="$CW" HOMOLOG_FRONTEND_LIB_COMMIT="$CL"
+recusa_fe "exige HOMOLOG_FRONTEND_COMMIT e HOMOLOG_FRONTEND_LIB_COMMIT" "aplicacao web sem o commit da lib" ensaio-validacao-fb HOMOLOG_ATE=016 HOMOLOG_FRONTEND_WEB="$W" HOMOLOG_FRONTEND_COMMIT="$CW"
+recusa_fe "sem HOMOLOG_FRONTEND_WEB" "commit do web sem HOMOLOG_FRONTEND_WEB" ensaio-validacao-fc HOMOLOG_ATE=016 HOMOLOG_FRONTEND_COMMIT="$CW" HOMOLOG_FRONTEND_LIB_COMMIT="$CL"
+recusa_fe "sha completos (40 hexadecimais)" "commit abreviado" ensaio-validacao-fd HOMOLOG_ATE=016 HOMOLOG_FRONTEND_WEB="$W" HOMOLOG_FRONTEND_COMMIT="${CW:0:12}" HOMOLOG_FRONTEND_LIB_COMMIT="$CL"
+recusa_fe "aplicacao web: HEAD" "web com HEAD diferente do declarado" ensaio-validacao-fe HOMOLOG_ATE=016 HOMOLOG_FRONTEND_WEB="$W" HOMOLOG_FRONTEND_COMMIT="$ZERO" HOMOLOG_FRONTEND_LIB_COMMIT="$CL"
+recusa_fe "lib ligada: HEAD" "lib com HEAD diferente do declarado" ensaio-validacao-ff HOMOLOG_ATE=016 HOMOLOG_FRONTEND_WEB="$W" HOMOLOG_FRONTEND_COMMIT="$CW" HOMOLOG_FRONTEND_LIB_COMMIT="$ZERO"
+recusa_fe "nao e repositorio Git" "diretorio do web que nao e repositorio" ensaio-validacao-fg HOMOLOG_ATE=016 HOMOLOG_FRONTEND_WEB="$TMP/mig" HOMOLOG_FRONTEND_COMMIT="$CW" HOMOLOG_FRONTEND_LIB_COMMIT="$CL"
+echo sujo > "$W/nao_rastreado.txt"
+recusa_fe "aplicacao web: copia de trabalho com alteracoes" "web com arquivo nao ignorado" ensaio-validacao-fh HOMOLOG_ATE=016 HOMOLOG_FRONTEND_WEB="$W" HOMOLOG_FRONTEND_COMMIT="$CW" HOMOLOG_FRONTEND_LIB_COMMIT="$CL"
+rm -f "$W/nao_rastreado.txt"; echo alterado >> "$L/arquivo.txt"
+recusa_fe "lib ligada: copia de trabalho com alteracoes" "lib com alteracao" ensaio-validacao-fi HOMOLOG_ATE=016 HOMOLOG_FRONTEND_WEB="$W" HOMOLOG_FRONTEND_COMMIT="$CW" HOMOLOG_FRONTEND_LIB_COMMIT="$CL"
+( cd "$L" && gitc checkout -q -- arquivo.txt )
+# par correto: o frontend e aceito e a criacao segue ate a recusa SEGUINTE (lista da 016 sem a linha), sem criar nada
+recusa "par web/lib conferido passa e a criacao para na lista da 016" ensaio-validacao-fj HOMOLOG_ATE=016 HOMOLOG_FRONTEND_WEB="$W" HOMOLOG_FRONTEND_COMMIT="$CW" HOMOLOG_FRONTEND_LIB_COMMIT="$CL"
+confere "  (a recusa acima foi a da lista da 016, nao a do par)" "grep -q 'a 016 exige a linha de elevacao' '$TMP/recusa.txt'"
+confere "criar compila e copia o build DEPOIS da fotografia da lista e ANTES dos segredos" \
+    "awk '/registro_fontes_imagens \"\\\$REPO\"/ {a=NR} /frontend_preparar \"\\\$FRONTEND_WEB\"/ {b=NR} /segredos.py\" gerar/ && !c {c=NR} END {exit !(a && b && c && a < b && b < c)}' '$AQUI/homologacao.sh'"
+
+echo "== 20. semeadura, jornadas e sessao do ensaio-frontend (F1.5 P-A; banco real: testes/test_semear_frontend_banco.sh)"
+H="$AQUI/homologacao.sh"; SQLS="$AQUI/sql/semear_frontend.sql"; SQLX="$AQUI/sql/sessao_frontend.sql"; ORQ="$AQUI/lib/semear_frontend.py"
+bloco_fe() { awk '/^semear-frontend\|jornadas-frontend\|frontend-sessao\)/ {p=1} p {print} p && /^    ;;$/ {exit}' "$H"; }
+confere "acoes do frontend SO em ensaio-* criado com a aplicacao web e LIBERADO" \
+    "bloco_fe | grep -qF '[[ \"\$HOMOLOG_ID\" =~ ^ensaio- ]] && [ -n \"\${HOMOLOG_FRONTEND_DIST:-}\" ]' && bloco_fe | grep -qF 'confere_liberacao \"\$TRAVA\" > /dev/null || falha'"
+confere "jornadas pelo runner SO pelo gateway com TLS conferido (--alvo + --ca); o modo --teste-http nunca e usado pelo runner" \
+    "bloco_fe | grep -qF -- '--alvo \"https://\$HOMOLOG_HOST:\$HOMOLOG_PORTA\" --ca' && ! grep -q -- '--teste-http' '$H'"
+confere "frontend-sessao so com 'absoluta' (inatividade so com o relogio real)" "bloco_fe | grep -qF '[ \"\${3:-}\" = absoluta ] || falha'"
+confere "sessao: SO a conta exclusiva expira@ da Nekkora Demo, SO 'absoluta', e o UPDATE so encurta expires_at" \
+    "grep -qF \"x.email = 'expira@demo.nekkora.test' AND g.name = 'Nekkora Demo'\" '$SQLX' && grep -qF \"IF t <> 'absoluta' THEN\" '$SQLX' \
+     && [ \"\$(grep -c 'UPDATE user_sessions' '$SQLX')\" = 1 ] && grep -qF \"UPDATE user_sessions SET expires_at = created_at + interval '1 millisecond'\" '$SQLX' \
+     && ! grep -E 'SET .*(created_at|last_seen_at|mfa_verified_at|revoked_at) *=' '$SQLX' | grep -v 'expires_at = created_at' | grep -q ."
+confere "semeadura: recusa de semeadura existente ANTES da primeira escrita; conferencia ANTES do COMMIT; um BEGIN e um COMMIT" \
+    "awk '/^DO [$][$]/ {d=NR} d && /SEMEADURA_RECUSADA/ && !r {r=NR} d && /^    INSERT INTO/ && !i {i=NR} /CONFERENCIA antes do COMMIT/ {c=NR} /^COMMIT;/ {m=NR} END {exit !(d && r && i && r < i && c && m && c < m)}' '$SQLS' \
+     && [ \"\$(grep -c '^BEGIN;' '$SQLS')\" = 1 ] && [ \"\$(grep -c '^COMMIT;' '$SQLS')\" = 1 ]"
+confere "semeadura: primeiro ORG_ADMIN so pelo provision_first_org_admin (012); nenhum dado real (dominio sintetico)" \
+    "grep -qF 'PERFORM provision_first_org_admin(' '$SQLS' && grep -qF \"DOMINIO = 'demo.nekkora.test'\" '$ORQ'"
+confere "orquestrador: plano com as credenciais gravado (atomico e EXCLUSIVO) ANTES de enviar a transacao ao banco" \
+    "awk '/grava_atomico\(pend, plano, exclusivo=True\)/ && !g {g=NR} /roda\(bash, a.psql, script_sql/ && !s {s=NR} END {exit !(g && s && g < s)}' '$ORQ'"
+confere "orquestrador (P-A-R1): trava obtida ANTES do estado; promocao confere a identidade, grava o mapa e SO DEPOIS renomeia" \
+    "awk '/^def semear\(a\):/ {d=1} d && /if not trava.adquire\(\):/ && !t {t=NR} d && /return _semear\(a, bash\)/ && !c {c=NR} END {exit !(t && c && t < c)}' '$ORQ' \
+     && awk '/^def promove\(/ {d=1} d && /identidade\(atual\) != identidade\(plano\)/ && !i {i=NR} d && /^    grava_mapa\(evid, plano\)/ && !m {m=NR} d && /^    _renomeia\(pend, fin\)/ && !r {r=NR} END {exit !(i && m && r && i < m && m < r)}' '$ORQ'"
+JF="$AQUI/testes/jornadas_frontend.py"
+confere "seletor (P-B-C1): so sessoes-pos-revogacao e expiracao-absoluta sao selecionaveis; O5 limitada a 2" \
+    "grep -qxF \"JORNADAS_SELECIONAVEIS = ('sessoes-pos-revogacao', 'expiracao-absoluta')\" '$JF' && grep -q '^O5_MAXIMO = 2 ' '$JF'"
+confere "seletor: validado ANTES de qualquer requisicao ou arquivo (valida_selecao antes do OpenAPI, do alvo e do relatorio)" \
+    "awk '/selecao = valida_selecao\(a\)/ && !v {v=NR} /alvo = Alvo\(a\)/ && !t {t=NR} /rel = Relatorio\(a.evid\)/ && !r {r=NR} END {exit !(v && t && r && v < t && v < r)}' '$JF'"
+SG="$AQUI/lib/selecao_gateway.sh"
+confere "runner (P-B-C1-R1): com --somente, jornadas SO por selecao_executa (guardas do gateway); sem --somente, exec direto; UMA definicao do comando" \
+    "bloco_fe | awk '/JORN=\(python \"\\\$AQUI\/testes\/jornadas_frontend.py\"/ {c++; if (!j) j=NR} /\[ -n \"\\\$SOMENTE\" \] \|\| exec \"\\\$\{JORN\[@\]\}\"/ && !e {e=NR} /\. \"\\\$AQUI\/lib\/selecao_gateway.sh\"/ && !l {l=NR} /selecao_executa \"\\\$J\" \"\\\$\{JORN\[@\]\}\" \|\| rc=\\\$\?/ && !s {s=NR} END {exit !(c == 1 && j < e && e < l && l < s)}' \
+     && [ \"\$(bloco_fe | grep -c 'jornadas_frontend.py')\" = 1 ] && ! bloco_fe | grep -q 'compose logs'"
+confere "guardas: coleta do gateway verificada SEPARADA da contagem (ps em execucao, logs e filtro com codigo conferido; nada de || true nem 2>/dev/null na coleta)" \
+    "awk '/^coleta_gateway\(\) \{/ {d=1} d {print} d && /^\}/ {exit}' '$SG' > '$TMP/coleta.txt' && grep -qF 'compose ps -q --status running gateway' '$TMP/coleta.txt' \
+     && grep -qF 'compose logs --no-color --timestamps --since \"\$desde\" gateway' '$TMP/coleta.txt' && ! grep -qE '\|\| true|2>/dev/null' '$TMP/coleta.txt' \
+     && [ \"\$(grep -c 'return 1' '$TMP/coleta.txt')\" = 4 ]"
+confere "guardas: pre-condicao ANTES da unica chamada; conferencia final desde o MESMO inicio; inconclusiva = codigo 3; funcional e conferencia em arquivos separados" \
+    "awk '/^selecao_executa\(\) \{/ {d=1} d && /coleta_gateway \"\\\$desde\" \"\\\$J\/pre_condicao_gateway.txt\"/ && !p {p=NR} d && /^    \"\\\$@\" \|\| rc=\\\$\?/ {c++; if (!x) x=NR} d && /coleta_gateway \"\\\$desde\" \"\\\$J\/gateway_janela.txt\"/ && !f {f=NR} END {exit !(p && x && f && p < x && x < f && c == 1)}' '$SG' \
+     && grep -qF '[ \"\$inconclusiva\" = 0 ] || return 3' '$SG' && grep -qF 'resultado_funcional.txt' '$SG' && grep -qF 'conferencia_trafego.txt' '$SG' \
+     && ! grep -q 'IGUAIS\|sem trafego concorrente' '$SG'"
+confere "credenciais de navegacao (P-C-T): so contas uso=navegacao; entrega pela area de transferencia fora do historico; nenhum valor na saida; TOTP com passo posterior registrado antes" \
+    "PYTHONDONTWRITEBYTECODE=1 python '$AQUI/testes/test_credencial_navegacao.py' > '$TMP/cred.txt' 2>&1 && grep -q '^OK' '$TMP/cred.txt' && ! grep -q 'skipped' '$TMP/cred.txt' \
+     && grep -qF \"if c.get('uso') != NAVEGACAO:\" '$AQUI/lib/credencial_navegacao.py' && ! grep -qE 'print\([^)]*valor|escreve\([^)]*\{valor' '$AQUI/lib/credencial_navegacao.py'"
+confere "procedimento do gateway (P-C-R2): referencia do preparo reconferida antes de escrever; coleta verificada (selecao_gateway.sh); falhas sem escrita nem reload: testes/test_gateway_tipos.sh" \
+    "bash '$AQUI/testes/test_gateway_tipos.sh' > '$TMP/gw_tipos.txt' 2>&1 && grep -q '^RESULTADO: procedimento do gateway OK' '$TMP/gw_tipos.txt' \
+     && grep -qF '. \"\$GT_OPS/lib/selecao_gateway.sh\"' '$AQUI/lib/gateway_tipos.sh' && ! grep -E 'logs .*\| *grep -c' '$AQUI/lib/gateway_tipos.sh' | grep -q ."
+confere "guardas da selecao com compose controlado (coleta falha, trafego recente, uma chamada, final inconclusiva, sucesso): testes/test_selecao_gateway.sh" \
+    "bash '$AQUI/testes/test_selecao_gateway.sh' > '$TMP/selecao_gw.txt' 2>&1 && grep -q '^RESULTADO: guardas da selecao OK' '$TMP/selecao_gw.txt'"
+SNAKE="$(ls "$HOME"/.m2/repository/org/yaml/snakeyaml/2.6/snakeyaml-2.6.jar 2>/dev/null)"
+if [ -n "$SNAKE" ] && java -cp "$(cygpath -m "$SNAKE" 2>/dev/null || echo "$SNAKE")" "$(cygpath -m "$AQUI/lib/OpenApiJson.java" 2>/dev/null || echo "$AQUI/lib/OpenApiJson.java")" \
+        "$(cygpath -m "$REPO/api/openapi/nekkora-api-v1.yaml" 2>/dev/null || echo "$REPO/api/openapi/nekkora-api-v1.yaml")" "$(cygpath -m "$TMP/openapi.json" 2>/dev/null || echo "$TMP/openapi.json")" > "$TMP/openapi_conv.txt" 2>&1; then
+    ok "OpenAPI convertido para as jornadas ($(tail -1 "$TMP/openapi_conv.txt" | cut -c1-90))"
+else
+    nok "conversao do OpenAPI (SnakeYAML 2.6 do repositorio Maven local)"
+fi
+confere "testes unitarios das ferramentas (validador com controles, date-time, TOTP RFC 6238, catalogo, estados do orquestrador, gateway, modo de teste; contrato real sem restricao fora do escopo)" \
+    "OPENAPI_JSON='$(cygpath -w "$TMP/openapi.json" 2>/dev/null || echo "$TMP/openapi.json")' PYTHONIOENCODING=utf-8 python '$AQUI/testes/test_frontend_ferramentas.py' > '$TMP/unit_fe.txt' 2>&1 && grep -q '^OK' '$TMP/unit_fe.txt' && ! grep -q 'skipped' '$TMP/unit_fe.txt'"
+
+echo "== 21. validacao administrativa da F6a (F6a-V-T; banco real: testes/test_semear_f6a_banco.sh)"
+S6="$AQUI/lib/semear_f6a.py"; SQL6="$AQUI/sql/semear_f6a.sql"; VF6="$AQUI/testes/validar_f6a.py"; FA="$AQUI/lib/frontend_atualizar.sh"
+bloco_f6a() { awk '/^semear-f6a\|validar-f6a\)/ {p=1} p {print} p && /^    ;;$/ {exit}' "$H"; }
+confere "bloco da F1.5 com o rotulo aprovado; acoes da F6a num bloco PROPRIO, com as mesmas exigencias (ensaio-*, aplicacao web, LIBERADO)" \
+    "grep -qx 'semear-frontend|jornadas-frontend|frontend-sessao)' '$H' && bloco_f6a | grep -qF '[[ \"\$HOMOLOG_ID\" =~ ^ensaio- ]] && [ -n \"\${HOMOLOG_FRONTEND_DIST:-}\" ]' \
+     && bloco_f6a | grep -qF 'confere_liberacao \"\$TRAVA\" > /dev/null || falha'"
+confere "validar-f6a preparar/conferir SO por selecao_executa (pre-condicao de 31 s, UMA chamada, conferencia de trafego), pelo gateway com TLS conferido" \
+    "bloco_f6a | awk '/\. \"\\\$AQUI\/lib\/selecao_gateway.sh\"/ && !l {l=NR} /selecao_executa \"\\\$J\" \"\\\$\{VF\[@\]\}\" \"\\\$sub\"/ && !s {s=NR} END {exit !(l && s && l < s)}' \
+     && bloco_f6a | grep -qF -- '--alvo \"https://\$HOMOLOG_HOST:\$HOMOLOG_PORTA\" --ca' && [ \"\$(bloco_f6a | grep -c 'exec \"\${VF\[@\]}\" \(preparar\|conferir\)')\" = 0 ]"
+confere "semeadura complementar: MESMA trava da F1.5; base da F1.5 CONCLUIDA exigida antes do estado; plano gravado (atomico e EXCLUSIVO) antes da transacao; promocao confere a identidade, grava o mapa e SO DEPOIS renomeia" \
+    "grep -qF 'trava = sf.Trava(a.segredos)' '$S6' && awk '/^def _semear/ {d=1} d && /est_base != .CONCLUIDA./ && !b {b=NR} d && /est, plano = estado\(/ && !e {e=NR} d && /sf.grava_atomico\(pend, plano, exclusivo=True\)/ && !g {g=NR} d && /sf.roda\(bash, a.psql, script_sql/ && !s {s=NR} END {exit !(b && e && g && s && b < e && g < s)}' '$S6' \
+     && awk '/^def promove\(/ {d=1} d && /identidade\(atual\) != identidade\(plano\)/ && !i {i=NR} d && /^    grava_mapa\(evid, plano\)/ && !m {m=NR} d && /sf._renomeia\(pend, fin\)/ && !r {r=NR} END {exit !(i && m && r && i < m && m < r)}' '$S6'"
+confere "SQL complementar: recusa de f6av-* existente ANTES da primeira escrita; conferencia ANTES do COMMIT; um BEGIN e um COMMIT; so INSERT (nenhum UPDATE/DELETE)" \
+    "awk '/^DO [$][$]/ {d=NR} d && /SEMEADURA_F6A_RECUSADA: ja existe conta f6av/ && !r {r=NR} d && /^        INSERT INTO/ && !i {i=NR} /CONFERENCIA antes do COMMIT/ {c=NR} /^COMMIT;/ {m=NR} END {exit !(d && r && i && r < i && c && m && c < m)}' '$SQL6' \
+     && [ \"\$(grep -c '^BEGIN;' '$SQL6')\" = 1 ] && [ \"\$(grep -c '^COMMIT;' '$SQL6')\" = 1 ] && ! grep -qE '^[^-]*\b(UPDATE|DELETE FROM)\b' '$SQL6'"
+confere "contas complementares: prefixo f6av-, dominio sintetico, uso f6a-alvo (fora da navegacao e das jornadas)" \
+    "grep -qxF \"PREFIXO = 'f6av-'\" '$S6' && grep -qxF \"USO = 'f6a-alvo'\" '$S6' && grep -qxF 'DOMINIO = sf.DOMINIO' '$S6'"
+confere "credencial totp-reuso: SO com a autorizacao de uso unico (removida ANTES da entrega), passo = ultimo entregue e <= last_used_step; nenhum passo novo" \
+    "awk '/if tipo == .totp-reuso.:/ {d=1} d && /if passo != m.get\(.ultimo_passo.\)/ && !u {u=NR} d && /passo > aceito/ && !a {a=NR} d && /os.remove\(aut\)/ && !r {r=NR} d && /valor = totp\(m\[.totp.\], passo\)/ && !v {v=NR} d && /elif tipo == .senha.:/ {ok = (u && a && r && v && r < v && a < r && u < r); exit} END {exit !ok}' '$AQUI/lib/credencial_navegacao.py' \
+     && ! awk '/if tipo == .totp-reuso.:/ {d=1} d && /elif tipo == .senha.:/ {exit} d {print}' '$AQUI/lib/credencial_navegacao.py' | grep -q \"m\[.ultimo_passo.\] =\""
+confere "verificador: so SELECT no banco (nenhum INSERT/UPDATE/DELETE nas consultas); nada sensivel na foto (colunas sensiveis fora do JSON)" \
+    "! grep -nE \"(INSERT INTO|UPDATE [a-z_]+ SET|DELETE FROM)\" '$VF6' | grep -q . && grep -qF \"(to_jsonb(t) - {sens})::text\" '$VF6' \
+     && grep -qF \"SENSIVEL = re.compile(r'(hash|token|secret|nonce|ciphertext|password|csrf)', re.I)\" '$VF6'"
+confere "atualizacao do frontend: coleta do gateway pelo selecao_gateway.sh; referencia ANTES da coleta; copia de seguranca ANTES de escrever; recria SO o gateway; falha depois da escrita pede reverter (sem nova tentativa)" \
+    "grep -qF '. \"\$FA_OPS/lib/selecao_gateway.sh\"' '$FA' && awk '/^fa_aplicar\(\) \{/ {d=1} d && /^    fa_confere_referencia$/ && !r {r=NR} d && /^    fa_sem_trafego$/ && !t {t=NR} d && /cp -p \"\\\$FA_ENV\" \"\\\$FA_BKP\"/ && !c {c=NR} d && /cat \"\\\$FA_D\/ambiente.env.novo\" > \"\\\$FA_ENV\"/ && !w {w=NR} d && /^\}/ {exit !(r && t && c && w && r < t && t < c && c < w)}' '$FA' \
+     && [ \"\$(grep -v '^ *#' '$FA' | grep -c 'compose up -d --no-deps --force-recreate gateway')\" = 1 ] && ! grep -E 'logs .*\| *grep -c' '$FA' | grep -q ."
+confere "procedimento da atualizacao do frontend com compose controlado (preparo, recusas sem escrita nem up, falhas pedindo reverter, caminho valido e reversao): testes/test_frontend_atualizar.sh" \
+    "bash '$AQUI/testes/test_frontend_atualizar.sh' > '$TMP/fa.txt' 2>&1 && grep -q '^RESULTADO: atualizacao do frontend OK' '$TMP/fa.txt'"
+confere "verificador e reuso de TOTP (docker, regras da atora, anti-replay, totp-reuso, intencoes, ritmo, fases): testes/test_validar_f6a.py" \
+    "PYTHONDONTWRITEBYTECODE=1 PYTHONIOENCODING=utf-8 python '$AQUI/testes/test_validar_f6a.py' > '$TMP/vf6.txt' 2>&1 && grep -q '^OK' '$TMP/vf6.txt' && ! grep -q 'skipped' '$TMP/vf6.txt'"
+
 echo
 [ "$falhas" = 0 ] && echo "RESULTADO: validacao estatica OK" || echo "RESULTADO: $falhas falha(s)"
 [ "$falhas" = 0 ]
