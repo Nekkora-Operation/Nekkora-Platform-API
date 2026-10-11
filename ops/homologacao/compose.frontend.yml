@@ -1,0 +1,9 @@
+# Sobreposicao do ensaio-frontend (F1.5, decisao F-6 (a)): o gateway serve a aplicacao web na MESMA origem HTTPS das
+# APIs (cookies __Host- e Origin conferido pelo CSRF continuam os homologados). O build e a copia imutavel desta
+# execucao (saidas/<id>/frontend-dist, par web + lib registrado em frontend_dist.txt), montada SOMENTE LEITURA so no
+# gateway; o nginx.conf efetivo e o gerado + bloco da aplicacao (lib/gateway_frontend.py), montado pelo compose.016.yml.
+# So com HOMOLOG_ATE=016 em id ensaio-* (recusas no criar).
+services:
+  gateway:
+    volumes:
+      - ${HOMOLOG_FRONTEND_DIST:?}:/spa:ro

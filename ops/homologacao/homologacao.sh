@@ -24,6 +24,28 @@
 # Semeadura pre-014 (R2b-0; SO ensaio-*, com o runner pausado por HOMOLOG_ENSAIO_PAUSA=antes-de-elevar@014:<arquivo>):
 #   ops/homologacao/homologacao.sh semear-pre014 <id>                 18 sessoes sinteticas (sql/fixture_014_pre.sql)
 #   ops/homologacao/homologacao.sh conferir-semente014 <id> antes|depois   conferencia somente leitura (testes/semente_014.sh)
+# Ensaio-frontend (F1.5; SO ambiente criado com a aplicacao web, HOMOLOG_FRONTEND_WEB, e LIBERADO):
+#   ops/homologacao/homologacao.sh semear-frontend <id> [estado]   massa sintetica numa transacao (lib/semear_frontend.py,
+#                                                    sql/semear_frontend.sql), como admin_cluster; credenciais em
+#                                                    <segredos>/frontend (fora do Git), gravadas ANTES da transacao
+#   ops/homologacao/homologacao.sh jornadas-frontend <id> preparar-contas|executar [--mutacoes] [--inatividade-real]
+#                                                    jornadas HTTP pelo gateway (TLS conferido pela CA do ambiente)
+#   ops/homologacao/homologacao.sh jornadas-frontend <id> executar --somente <lista> --vinculo-stop <texto>
+#                                                    (P-B-C1) SO as jornadas nomeadas (continuacao de STOP), pelas
+#                                                    guardas de lib/selecao_gateway.sh (P-B-C1-R1): coleta do gateway
+#                                                    verificada; >= 31 s sem requisicao imediatamente antes; UMA chamada;
+#                                                    conferencia de trafego separada do resultado funcional (codigos 3/4/5)
+#   ops/homologacao/homologacao.sh frontend-sessao <id> absoluta    operacao DECLARADA: encurta o prazo absoluto das
+#                                                    sessoes ativas SO da conta exclusiva expira@ (sql/sessao_frontend.sql)
+# Validacao administrativa da F6a (F6a-V-T; mesmo ambiente, mesmas exigencias):
+#   ops/homologacao/homologacao.sh semear-f6a <id> [estado]   massa COMPLEMENTAR f6av-* numa transacao (lib/semear_f6a.py,
+#                                                    sql/semear_f6a.sql), como admin_cluster, sobre a da F1.5 CONCLUIDA
+#   ops/homologacao/homologacao.sh validar-f6a <id> preparar|conferir <fase>   pela API, sob as guardas de
+#                                                    lib/selecao_gateway.sh (pre-condicao de 31 s, UMA chamada, conferencia
+#                                                    de trafego); fases: inicial|suspensao|reativacao|stepup-negado|mfa|revogacao
+#   ops/homologacao/homologacao.sh validar-f6a <id> anti-replay | foto <rotulo> | comparar <antes> <depois> [opcoes] |
+#                                                    intencoes <desde> [TIPO=N ...]   (sem trafego no gateway)
+#   bash lib/frontend_atualizar.sh preparar|aplicar|conferir|reverter ...   atualizacao do build no gateway (D-V-1 (a))
 #
 # Variaveis (opcionais): HOMOLOG_HOST (nome da origem; padrao homologacao.nekkora.test), HOMOLOG_PORTA (55643),
 # HOMOLOG_BIND (interface publicada; padrao 127.0.0.1 - para a equipe, a interface da rede interna da empresa),
@@ -32,6 +54,10 @@
 # 015 com HOMOLOG_REDE_INTERNA/BORDA fora do padrao SO em id ensaio-*, com pg_hba/nginx gerados - compose.015-rede.yml),
 # HOMOLOG_REDE_INTERNA / HOMOLOG_REDE_BORDA (prefixos /24; padrao 10.252.10 / 10.252.11; com HOMOLOG_ATE=015 so o
 # padrao, salvo em ensaio-*), HOMOLOG_TRANSPORTE (vazio ou "homologacao": transporte de e-mail de homologacao, so ensaio-* com a 016).
+# Aplicacao web no gateway (ensaio-frontend, F1.5; SO ensaio-* com HOMOLOG_ATE=016): HOMOLOG_FRONTEND_WEB (repositorio do
+# web, com node_modules/nekkora-lib ligado), HOMOLOG_FRONTEND_COMMIT e HOMOLOG_FRONTEND_LIB_COMMIT (sha completos do PAR
+# validado; as duas copias de trabalho limpas e nesses commits). O criar compila a lib e o web, copia o build para
+# saidas/<id>/frontend-dist (registro em frontend_dist.txt) e o gateway o serve (compose.frontend.yml, lib/gateway_frontend.py).
 # Nunca toca a stack principal (nekkora-postgres / 5432), nem recursos sem o rotulo desta execucao; nunca usa limpeza
 # por prefixo, "down -v" generico ou "prune".
 set -euo pipefail
@@ -54,7 +80,8 @@ prepara_funcoes() {
     # ambientes anteriores (ex.: hml03) nao tem estas variaveis: valem os padroes do desenho anterior
     HOMOLOG_REDE_INTERNA="${HOMOLOG_REDE_INTERNA:-10.252.10}"; HOMOLOG_REDE_BORDA="${HOMOLOG_REDE_BORDA:-10.252.11}"
     HOMOLOG_COMPOSE_EXTRA="${HOMOLOG_COMPOSE_EXTRA:-}"; HOMOLOG_CONFIG="${HOMOLOG_CONFIG:-}"; HOMOLOG_TRANSPORTE="${HOMOLOG_TRANSPORTE:-}"
-    export HOMOLOG_REDE_INTERNA HOMOLOG_REDE_BORDA HOMOLOG_COMPOSE_EXTRA HOMOLOG_CONFIG HOMOLOG_TRANSPORTE
+    HOMOLOG_FRONTEND_DIST="${HOMOLOG_FRONTEND_DIST:-}"
+    export HOMOLOG_REDE_INTERNA HOMOLOG_REDE_BORDA HOMOLOG_COMPOSE_EXTRA HOMOLOG_CONFIG HOMOLOG_TRANSPORTE HOMOLOG_FRONTEND_DIST
     PGPASSWORD="$(cat "$HOMOLOG_SEGREDOS_HOST/postgres_admin")"
     export PGPASSWORD
     COMPOSE_ARQ="$(mixed "$AQUI/compose.homolog.yml")"   # formato C:/...: vale com e sem MSYS_NO_PATHCONV
@@ -110,6 +137,13 @@ pos_implantacao() {
         [ "$i" -lt 90 ] || { compose logs --no-color platform portal gateway > "$EVID/falha_servicos.txt" 2>&1; falha "servicos nao responderam (platform=$a portal=$b; ver falha_servicos.txt)"; }
         sleep 2
     done
+    if [ -n "$HOMOLOG_FRONTEND_DIST" ]; then
+        f="$(curl -s --ssl-no-revoke -o "$EVID/aplicacao_index.html" -w '%{http_code}' --cacert "$CA" --resolve "$HOMOLOG_HOST:$HOMOLOG_PORTA:127.0.0.1" \
+            "https://$HOMOLOG_HOST:$HOMOLOG_PORTA/o/00000000-0000-4000-8000-000000000000/execucoes" || true)"
+        [ "$f" = 200 ] && cmp -s "$EVID/aplicacao_index.html" "$EVID/frontend-dist/index.html" \
+            || falha "aplicacao web nao servida pelo gateway (status $f ou index diferente do build)"
+        echo "aplicacao web: URL direta de tela -> 200 com o index do build" > "$EVID/aplicacao.txt"
+    fi
     echo "AMBIENTE $HOMOLOG_ID CRIADO: https://$HOMOLOG_HOST:$HOMOLOG_PORTA (publicado em $HOMOLOG_BIND). Proximo passo: homologacao.sh testar $HOMOLOG_ID"
 }
 
@@ -134,6 +168,16 @@ criar)
     python "$AQUI/lib/redes.py" prefixo "$HOMOLOG_REDE_INTERNA" || falha "HOMOLOG_REDE_INTERNA invalido (a.b.c)"
     python "$AQUI/lib/redes.py" prefixo "$HOMOLOG_REDE_BORDA" || falha "HOMOLOG_REDE_BORDA invalido (a.b.c)"
     case "$HOMOLOG_TRANSPORTE" in ""|homologacao) ;; *) falha "HOMOLOG_TRANSPORTE invalido (vazio ou homologacao)";; esac
+    FRONTEND_WEB="${HOMOLOG_FRONTEND_WEB:-}"; FRONTEND_COMMIT="${HOMOLOG_FRONTEND_COMMIT:-}"; FRONTEND_LIB_COMMIT="${HOMOLOG_FRONTEND_LIB_COMMIT:-}"
+    if [ -n "$FRONTEND_WEB" ]; then
+        [[ "$HOMOLOG_ID" =~ ^ensaio- ]] || falha "aplicacao web no gateway so em ambiente descartavel (id ensaio-*)"
+        [ "$HOMOLOG_ATE" = 016 ] || falha "aplicacao web no gateway exige HOMOLOG_ATE=016 (nginx gerado do modelo)"
+        [ -n "$FRONTEND_COMMIT" ] && [ -n "$FRONTEND_LIB_COMMIT" ] || falha "aplicacao web exige HOMOLOG_FRONTEND_COMMIT e HOMOLOG_FRONTEND_LIB_COMMIT (par validado)"
+        . "$AQUI/lib/frontend_dist.sh"
+        m="$(frontend_conferir "$FRONTEND_WEB" "$FRONTEND_COMMIT" "$FRONTEND_LIB_COMMIT")" || falha "aplicacao web recusada: $m"
+    elif [ -n "$FRONTEND_COMMIT$FRONTEND_LIB_COMMIT" ]; then
+        falha "HOMOLOG_FRONTEND_COMMIT/HOMOLOG_FRONTEND_LIB_COMMIT sem HOMOLOG_FRONTEND_WEB"
+    fi
     REDE_015_ENSAIO=""
     case "$HOMOLOG_ATE" in
         015) if [ "$HOMOLOG_REDE_INTERNA.$HOMOLOG_REDE_BORDA" != "10.252.10.10.252.11" ]; then
@@ -194,6 +238,11 @@ criar)
     SHA_LISTA_CRIACAO="$(eh_registrar "$LISTA_CRIACAO" "$([ -n "${HOMOLOG_ELEVACAO_ARQ:-}" ] && echo alternativa-ensaio || echo operacional)" "$EVID" "$HOMOLOG_ID")" \
         && [[ "$SHA_LISTA_CRIACAO" =~ ^[0-9a-f]{64}$ ]] || falha "fotografia historica da lista de elevacao nao preservada; nenhum recurso foi criado"
     registro_fontes_imagens "$REPO" "$HOMOLOG_COMMIT" > "$EVID/fontes_imagens.txt"
+    if [ -n "$FRONTEND_WEB" ]; then
+        echo "== aplicacao web (par web $FRONTEND_COMMIT + lib $FRONTEND_LIB_COMMIT): build e copia imutavel"
+        m="$(frontend_preparar "$FRONTEND_WEB" "$FRONTEND_COMMIT" "$FRONTEND_LIB_COMMIT" "$EVID/frontend-dist" "$EVID/frontend_dist.txt")" \
+            || falha "build da aplicacao web: $m (nenhum segredo ou recurso Docker foi criado)"
+    fi
     HOMOLOG_SEGREDOS="$(mixed "$SEG")"
     HOMOLOG_SEGREDOS_HOST="$SEG"
     HOMOLOG_MIGRACOES="$(mixed "$EVID/migracoes")"
@@ -216,7 +265,10 @@ HOMOLOG_REDE_BORDA=$HOMOLOG_REDE_BORDA
 HOMOLOG_TRANSPORTE=$HOMOLOG_TRANSPORTE
 HOMOLOG_REDE_015_ENSAIO=$REDE_015_ENSAIO
 HOMOLOG_CONFIG="$({ [ "$HOMOLOG_ATE" = 016 ] || [ -n "$REDE_015_ENSAIO" ]; } && mixed "$EVID/config")"
-HOMOLOG_COMPOSE_EXTRA="$([ "$HOMOLOG_ATE" = 016 ] && echo compose.016.yml)$([ -n "$REDE_015_ENSAIO" ] && echo compose.015-rede.yml)$([ "$HOMOLOG_TRANSPORTE" = homologacao ] && echo " compose.caixa.yml")"
+HOMOLOG_COMPOSE_EXTRA="$([ "$HOMOLOG_ATE" = 016 ] && echo compose.016.yml)$([ -n "$REDE_015_ENSAIO" ] && echo compose.015-rede.yml)$([ "$HOMOLOG_TRANSPORTE" = homologacao ] && echo " compose.caixa.yml")$([ -n "$FRONTEND_WEB" ] && echo " compose.frontend.yml")"
+HOMOLOG_FRONTEND_DIST="$([ -n "$FRONTEND_WEB" ] && mixed "$EVID/frontend-dist")"
+HOMOLOG_FRONTEND_COMMIT=$FRONTEND_COMMIT
+HOMOLOG_FRONTEND_LIB_COMMIT=$FRONTEND_LIB_COMMIT
 HOMOLOG_CRIADO_EM=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 HOMOLOG_ELEVACAO_CRIACAO_SHA256=$SHA_LISTA_CRIACAO
 EOF
@@ -259,7 +311,14 @@ EOF
         mkdir -p "$EVID/config"
         python "$AQUI/lib/redes.py" gerar "$AQUI/postgres/pg_hba.modelo" "$EVID/config/pg_hba.conf" INTERNA="$HOMOLOG_REDE_INTERNA" || falha "pg_hba gerado"
         python "$AQUI/lib/redes.py" gerar "$AQUI/postgres/pg_ident.modelo" "$EVID/config/pg_ident.conf" || falha "pg_ident gerado"
-        python "$AQUI/lib/redes.py" gerar "$AQUI/gateway/nginx.modelo" "$EVID/config/nginx.conf" INTERNA="$HOMOLOG_REDE_INTERNA" || falha "nginx gerado"
+        if [ -n "$FRONTEND_WEB" ]; then
+            python "$AQUI/lib/redes.py" gerar "$AQUI/gateway/nginx.modelo" "$EVID/config/nginx.base.conf" INTERNA="$HOMOLOG_REDE_INTERNA" || falha "nginx gerado"
+            python "$AQUI/lib/gateway_frontend.py" aplicar "$EVID/config/nginx.base.conf" "$EVID/config/nginx.conf" || falha "nginx da aplicacao web"
+            python "$AQUI/lib/gateway_frontend.py" conferir "$EVID/config/nginx.base.conf" "$EVID/config/nginx.conf" > "$EVID/config/nginx_aplicacao.txt" \
+                || falha "nginx da aplicacao web diferente do gerado + bloco"
+        else
+            python "$AQUI/lib/redes.py" gerar "$AQUI/gateway/nginx.modelo" "$EVID/config/nginx.conf" INTERNA="$HOMOLOG_REDE_INTERNA" || falha "nginx gerado"
+        fi
     fi
     if [ -n "$REDE_015_ENSAIO" ]; then
         echo "== configuracao gerada do caminho 015 (pg_hba, nginx) para a rede $HOMOLOG_REDE_INTERNA.0/24 (sub-rede de ensaio)"
@@ -640,6 +699,147 @@ conferir-semente014)
             echo "janela da 014 ($J): $ini .. $fim"
             exec bash "$AQUI/testes/semente_014.sh" depois "$MAN" "$ini" "$fim" ;;
         *) falha "modo invalido (antes|depois)" ;;
+    esac
+    ;;
+
+# ============================================================================================== semear-frontend
+# Massa SINTETICA do ensaio-frontend. Como admin_cluster (o administrador do cluster DO ENSAIO, socket local, o mesmo da
+# fixture da 016): nao e janela de elevacao do migrador. Estados e garantias em lib/semear_frontend.py.
+semear-frontend|jornadas-frontend|frontend-sessao)
+    carrega_ambiente "${2:?id}"
+    prepara_funcoes
+    [[ "$HOMOLOG_ID" =~ ^ensaio- ]] && [ -n "${HOMOLOG_FRONTEND_DIST:-}" ] \
+        || falha "$ACAO so em ambiente ensaio-* criado com a aplicacao web (HOMOLOG_FRONTEND_WEB)"
+    confere_liberacao "$TRAVA" > /dev/null || falha "ambiente BLOQUEADO (ver homologacao.sh estado $HOMOLOG_ID)"
+    export HOMOLOG_BASH="${HOMOLOG_BASH:-$(mixed "$(command -v bash)")}"
+    [ -f "C:/Program Files/Git/bin/bash.exe" ] && HOMOLOG_BASH="C:/Program Files/Git/bin/bash.exe"
+    EVF="$AQUI/saidas/$HOMOLOG_ID/frontend"; mkdir -p "$EVF"
+    case "$ACAO" in
+    semear-frontend)
+        if [ "${3:-}" = estado ]; then
+            exec python "$AQUI/lib/semear_frontend.py" estado --segredos "$HOMOLOG_SEGREDOS" --psql "admin_sql nekkora"
+        fi
+        [ -z "${3:-}" ] || falha "uso: semear-frontend <id> [estado]"
+        jar="$(mixed "$REPO/api/nekkora-platform/target/nekkora-platform-0.1.0-SNAPSHOT.jar")"
+        tc="$(mixed "$REPO/api/nekkora-platform/target/test-classes")"
+        [ -f "$jar" ] && [ -f "$REPO/api/nekkora-platform/target/test-classes/com/nekkora/platform/auth/crypto/PhcTool.class" ] \
+            || falha "PhcTool indisponivel (jar e test-classes do build do criar)"
+        exec python "$AQUI/lib/semear_frontend.py" semear --segredos "$HOMOLOG_SEGREDOS" --evid "$(mixed "$EVF/semeadura")" \
+            --sql "$(mixed "$AQUI/sql/semear_frontend.sql")" --psql "admin_sql nekkora" \
+            --phc "java -Dloader.path='$tc' -Dloader.main=com.nekkora.platform.auth.crypto.PhcTool -cp '$jar' org.springframework.boot.loader.launch.PropertiesLauncher 65536 3"
+        ;;
+    jornadas-frontend)
+        sub="${3:?preparar-contas|executar}"; shift 3
+        case "$sub" in preparar-contas|executar) ;; *) falha "subcomando invalido (preparar-contas|executar)";; esac
+        SOMENTE=""; VINCULO=""; OPC=()
+        while [ $# -gt 0 ]; do
+            case "$1" in
+                --mutacoes|--inatividade-real) OPC+=("$1"); shift ;;
+                --somente) [ $# -ge 2 ] || falha "--somente sem valor"; SOMENTE="$2"; OPC+=(--somente "$2"); shift 2 ;;
+                --vinculo-stop) [ $# -ge 2 ] || falha "--vinculo-stop sem valor"; VINCULO="$2"; OPC+=(--vinculo-stop "$2"); shift 2 ;;
+                *) falha "opcao invalida: $1" ;;
+            esac
+        done
+        set -- "${OPC[@]}"
+        SNAKE="$(ls "$HOME"/.m2/repository/org/yaml/snakeyaml/2.6/snakeyaml-2.6.jar 2>/dev/null)" || falha "SnakeYAML 2.6 ausente no repositorio Maven local"
+        J="$EVF/jornadas-$(date -u +%Y%m%dT%H%M%SZ)"; mkdir -p "$J"
+        java -cp "$(mixed "$SNAKE")" "$(mixed "$AQUI/lib/OpenApiJson.java")" "$(mixed "$REPO/api/openapi/nekkora-api-v1.yaml")" "$(mixed "$J/openapi.json")" \
+            > "$J/openapi_conversao.txt" 2>&1 || falha "conversao do OpenAPI (ver $J/openapi_conversao.txt)"
+        JORN=(python "$AQUI/testes/jornadas_frontend.py" "$sub" --segredos "$HOMOLOG_SEGREDOS" --evid "$(mixed "$J")" \
+            --openapi-json "$(mixed "$J/openapi.json")" --openapi-yaml "$(mixed "$REPO/api/openapi/nekkora-api-v1.yaml")" \
+            --alvo "https://$HOMOLOG_HOST:$HOMOLOG_PORTA" --ca "$(mixed "$HOMOLOG_SEGREDOS_HOST/tls/ca.crt")" \
+            --psql "admin_sql nekkora" --sql-sessao "$(mixed "$AQUI/sql/sessao_frontend.sql")" "$@")
+        [ -n "$SOMENTE" ] || exec "${JORN[@]}"
+        # SELECAO (P-B-C1-R1): pre-condicao imediatamente antes das jornadas, UMA chamada e conferencia de trafego,
+        # tudo em lib/selecao_gateway.sh (codigo: o das jornadas; 3 = conferencia inconclusiva; 4/5 = nenhuma jornada)
+        . "$AQUI/lib/selecao_gateway.sh"
+        rc=0
+        selecao_executa "$J" "${JORN[@]}" || rc=$?
+        exit "$rc"
+        ;;
+    frontend-sessao)
+        [ "${3:-}" = absoluta ] || falha "uso: frontend-sessao <id> absoluta (inatividade so com o relogio real, nas jornadas)"
+        PLANO="$HOMOLOG_SEGREDOS_HOST/frontend/semeadura.json"
+        [ -f "$PLANO" ] || falha "semeadura do frontend nao concluida"
+        read -r U O < <(python -c "import json,sys; p=json.load(open(sys.argv[1], encoding='utf-8')); c=next(x for x in p['contas'] if x['chave']=='expira'); print(c['user_id'], p['orgs'][0]['id'])" "$(mixed "$PLANO")" | tr -d '\r')
+        { echo "== frontend-sessao absoluta $(date -u +%Y-%m-%dT%H:%M:%SZ) conta=expira usuario=$U"
+          admin_sql nekkora -v usuario="$U" -v organizacao="$O" -v tipo=absoluta < "$AQUI/sql/sessao_frontend.sql" 2>&1 | tr -d '\r'; } | tee -a "$EVF/operacoes_sessao.txt"
+        grep -q "SESSOES_ENVELHECIDAS=" "$EVF/operacoes_sessao.txt" || falha "operacao de sessao recusada (ver $EVF/operacoes_sessao.txt)"
+        ;;
+    esac
+    ;;
+# ==================================================================================== semear-f6a / validar-f6a
+# Validacao administrativa da F6a (F6a-V-T): massa COMPLEMENTAR f6av-* (lib/semear_f6a.py, sobre a da F1.5) e o
+# verificador (testes/validar_f6a.py). Mesmas exigencias do bloco acima (ensaio-* com a aplicacao web e LIBERADO).
+semear-f6a|validar-f6a)
+    carrega_ambiente "${2:?id}"
+    prepara_funcoes
+    [[ "$HOMOLOG_ID" =~ ^ensaio- ]] && [ -n "${HOMOLOG_FRONTEND_DIST:-}" ] \
+        || falha "$ACAO so em ambiente ensaio-* criado com a aplicacao web (HOMOLOG_FRONTEND_WEB)"
+    confere_liberacao "$TRAVA" > /dev/null || falha "ambiente BLOQUEADO (ver homologacao.sh estado $HOMOLOG_ID)"
+    export HOMOLOG_BASH="${HOMOLOG_BASH:-$(mixed "$(command -v bash)")}"
+    [ -f "C:/Program Files/Git/bin/bash.exe" ] && HOMOLOG_BASH="C:/Program Files/Git/bin/bash.exe"
+    EVF="$AQUI/saidas/$HOMOLOG_ID/frontend"; mkdir -p "$EVF"
+    case "$ACAO" in
+    semear-f6a)
+        if [ "${3:-}" = estado ]; then
+            exec python "$AQUI/lib/semear_f6a.py" estado --segredos "$HOMOLOG_SEGREDOS" --psql "admin_sql nekkora" --evid "$(mixed "$EVF/semeadura-f6a")"
+        fi
+        [ -z "${3:-}" ] || falha "uso: semear-f6a <id> [estado]"
+        jar="$(mixed "$REPO/api/nekkora-platform/target/nekkora-platform-0.1.0-SNAPSHOT.jar")"
+        tc="$(mixed "$REPO/api/nekkora-platform/target/test-classes")"
+        [ -f "$jar" ] && [ -f "$REPO/api/nekkora-platform/target/test-classes/com/nekkora/platform/auth/crypto/PhcTool.class" ] \
+            || falha "PhcTool indisponivel (jar e test-classes do build do criar)"
+        exec python "$AQUI/lib/semear_f6a.py" semear --segredos "$HOMOLOG_SEGREDOS" --evid "$(mixed "$EVF/semeadura-f6a")" \
+            --sql "$(mixed "$AQUI/sql/semear_f6a.sql")" --psql "admin_sql nekkora" \
+            --phc "java -Dloader.path='$tc' -Dloader.main=com.nekkora.platform.auth.crypto.PhcTool -cp '$jar' org.springframework.boot.loader.launch.PropertiesLauncher 65536 3"
+        ;;
+    validar-f6a)
+        sub="${3:?preparar|conferir|anti-replay|foto|comparar|intencoes}"; shift 3
+        V="$EVF/validacao-f6a"; mkdir -p "$V"
+        VF=(python "$AQUI/testes/validar_f6a.py")
+        case "$sub" in
+            preparar|conferir)
+                if [ "$sub" = preparar ]; then [ $# = 0 ] || falha "uso: validar-f6a <id> preparar"; else [ $# = 1 ] || falha "uso: validar-f6a <id> conferir <fase>"; fi
+                SNAKE="$(ls "$HOME"/.m2/repository/org/yaml/snakeyaml/2.6/snakeyaml-2.6.jar 2>/dev/null)" || falha "SnakeYAML 2.6 ausente no repositorio Maven local"
+                J="$V/$sub${1:+-$1}-$(date -u +%Y%m%dT%H%M%SZ)"; mkdir -p "$J"
+                java -cp "$(mixed "$SNAKE")" "$(mixed "$AQUI/lib/OpenApiJson.java")" "$(mixed "$REPO/api/openapi/nekkora-api-v1.yaml")" "$(mixed "$J/openapi.json")" \
+                    > "$J/openapi_conversao.txt" 2>&1 || falha "conversao do OpenAPI (ver $J/openapi_conversao.txt)"
+                # mesmas guardas da selecao de jornadas: pre-condicao, UMA chamada e conferencia de trafego (codigos 3/4/5)
+                . "$AQUI/lib/selecao_gateway.sh"
+                rc=0
+                selecao_executa "$J" "${VF[@]}" "$sub" "$@" --segredos "$HOMOLOG_SEGREDOS" --evid "$(mixed "$J")" \
+                    --openapi-json "$(mixed "$J/openapi.json")" --openapi-yaml "$(mixed "$REPO/api/openapi/nekkora-api-v1.yaml")" \
+                    --alvo "https://$HOMOLOG_HOST:$HOMOLOG_PORTA" --ca "$(mixed "$HOMOLOG_SEGREDOS_HOST/tls/ca.crt")" --psql "admin_sql nekkora" || rc=$?
+                exit "$rc"
+                ;;
+            anti-replay)
+                [ $# = 0 ] || falha "uso: validar-f6a <id> anti-replay"
+                exec "${VF[@]}" anti-replay --segredos "$HOMOLOG_SEGREDOS" --psql "admin_sql nekkora"
+                ;;
+            foto)
+                [[ "${1:-}" =~ ^[a-z0-9-]+$ ]] && [ $# = 1 ] || falha "uso: validar-f6a <id> foto <rotulo>"
+                [ ! -e "$V/foto-$1.json" ] || falha "foto $1 ja existe (nao se sobrescreve)"
+                exec "${VF[@]}" foto "$(mixed "$V/foto-$1.json")" --segredos "$HOMOLOG_SEGREDOS" --psql "admin_sql nekkora"
+                ;;
+            comparar)
+                [ $# -ge 2 ] || falha "uso: validar-f6a <id> comparar <rotulo_antes> <rotulo_depois> [--logins-admin N --stepups N --gateway-novo PASTA]"
+                a1="$1"; a2="$2"; shift 2
+                exec "${VF[@]}" comparar "$(mixed "$V/foto-$a1.json")" "$(mixed "$V/foto-$a2.json")" --segredos "$HOMOLOG_SEGREDOS" \
+                    --evid "$(mixed "$V/comparacao-$a1-$a2")" "$@"
+                ;;
+            intencoes)
+                [ $# -ge 1 ] || falha "uso: validar-f6a <id> intencoes <desde> [TIPO=N ...]"
+                d="$1"; shift
+                [[ "$d" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || falha "desde: instante UTC (AAAA-MM-DDTHH:MM:SSZ)"
+                ESP=(); [ $# = 0 ] || ESP=(--esperado "$@")
+                # compose e exportada (export -f em prepara_funcoes): o bash chamado pelo verificador a enxerga
+                exec "${VF[@]}" intencoes --segredos "$HOMOLOG_SEGREDOS" --desde "$d" \
+                    --logs-cmd "compose logs --no-color --since $d platform" "${ESP[@]}"
+                ;;
+            *) falha "subcomando invalido: $sub" ;;
+        esac
+        ;;
     esac
     ;;
 
