@@ -21,6 +21,8 @@ import com.nekkora.core.token.Tokens;
 import com.nekkora.core.web.ApiError;
 import com.nekkora.core.web.ErrorResponses;
 import com.nekkora.core.web.RequestContext;
+import com.nekkora.platform.identity.IdentitySessionResolver;
+import com.nekkora.platform.identity.IdentitySessionResolver.IdentityPrincipal;
 import com.nekkora.platform.mfa.MfaRepository;
 import com.nekkora.platform.session.ValidSession;
 
@@ -29,7 +31,8 @@ import com.nekkora.platform.session.ValidSession;
  * configurada (ou {@code Referer} da mesma origem, se {@code Origin} faltar) e (2) token sincronizador em
  * {@code X-CSRF-Token}, comparado em tempo constante com o estado DO CONTEXTO que a requisicao apresenta:
  * pre-autenticacao (Redis, pelo cookie __Host-nekkora_pre), desafio (auth_challenges.csrf_token, pelo cookie
- * __Host-nekkora_mfa) ou sessao (user_sessions.csrf_token, da sessao ja validada). Logout sem sessao valida e
+ * __Host-nekkora_mfa) ou sessao (user_sessions.csrf_token, da sessao ja validada); na entrada geral, desafio e sessao de
+ * identidade (identity_auth_challenges / identity_sessions, pelos cookies __Host-nekkora_id_mfa e __Host-nekkora_id). Logout sem sessao valida e
  * no-op (nada a proteger). Falha -> 403 generico. Roda depois da autorizacao (rota protegida sem sessao -> 401).
  */
 public final class CsrfFilter extends OncePerRequestFilter {
@@ -41,12 +44,14 @@ public final class CsrfFilter extends OncePerRequestFilter {
     private final PreAuthCsrf pre;
     private final OrgTransactions tx;
     private final MfaRepository mfa;
+    private final IdentitySessionResolver identities;
 
-    public CsrfFilter(String publicOrigin, PreAuthCsrf pre, OrgTransactions tx, MfaRepository mfa) {
+    public CsrfFilter(String publicOrigin, PreAuthCsrf pre, OrgTransactions tx, MfaRepository mfa, IdentitySessionResolver identities) {
         this.origin = URI.create(publicOrigin).normalize().toString().replaceAll("/+$", "");
         this.pre = pre;
         this.tx = tx;
         this.mfa = mfa;
+        this.identities = identities;
     }
 
     @Override
@@ -70,6 +75,17 @@ public final class CsrfFilter extends OncePerRequestFilter {
                 case CHALLENGE -> challengeMatches(req, token);
                 case LOGOUT -> principal == null || Tokens.constantTimeEquals(((ValidSession) principal).csrfToken(), token);
                 case SESSION -> principal instanceof ValidSession s && Tokens.constantTimeEquals(s.csrfToken(), token);
+                // entrada geral: CSRF do desafio de identidade (cookie __Host-nekkora_id_mfa) ou da sessao de identidade
+                case IDENTITY_CHALLENGE -> token != null && identities.challengeCsrf(Cookies.read(req, Cookies.IDENTITY_CHALLENGE))
+                        .map(expected -> Tokens.constantTimeEquals(expected, token)).orElse(false);
+                case IDENTITY_SESSION -> {
+                    IdentityPrincipal p = IdentityFilter.principalOrNull(req);
+                    yield p != null && Tokens.constantTimeEquals(p.csrfToken(), token);
+                }
+                case IDENTITY_LOGOUT -> {
+                    IdentityPrincipal p = IdentityFilter.principalOrNull(req);
+                    yield p == null || Tokens.constantTimeEquals(p.csrfToken(), token);
+                }
             };
         } catch (LimiterUnavailable e) {
             LOG.warn("evento=csrf.indisponivel contexto={} correlacao={}", ctx, RequestContext.correlation());

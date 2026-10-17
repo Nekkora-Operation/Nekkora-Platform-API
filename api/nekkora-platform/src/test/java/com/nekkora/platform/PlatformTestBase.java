@@ -158,8 +158,24 @@ public abstract class PlatformTestBase {
         return w;
     }
 
+    /** Organizacao da conta (leitura de superusuario) - para o contexto exigido pela 017 nas escritas de fixture. */
+    protected static UUID organizationOf(UUID user) {
+        try (Connection c = DB.connectAsSuperuser();
+             PreparedStatement ps = c.prepareStatement("SELECT organization_id FROM users WHERE user_id = ?")) {
+            ps.setObject(1, user);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new IllegalStateException("conta inexistente na fixture: " + user);
+                }
+                return rs.getObject(1, UUID.class);
+            }
+        } catch (java.sql.SQLException e) {
+            throw new IllegalStateException("fixture falhou (sqlstate " + e.getSQLState() + ")", e);
+        }
+    }
+
     private static void insertUser(UUID org, UUID u, int kind, String email, boolean verified, int status) {
-        DB.asSuperuser("INSERT INTO users (user_id, organization_id, account_type, email, email_verified_at, status, display_name) VALUES ('"
+        DB.asSuperuserIn(org, "INSERT INTO users (user_id, organization_id, account_type, email, email_verified_at, status, display_name) VALUES ('"
                 + u + "', '" + org + "', " + kind + ", '" + email + "', " + (verified ? "now()" : "NULL") + ", " + status + ", 'Pessoa de teste')",
                 "INSERT INTO user_credentials (user_id, password_hash) VALUES ('" + u + "', '" + HASHER.generate(PASSWORD.toCharArray()) + "')");
     }
@@ -263,9 +279,18 @@ public abstract class PlatformTestBase {
     public static final class TestMailSender implements MailSender {
         public final List<SentMessage> sent = new CopyOnWriteArrayList<>();
         public volatile Outcome outcome = Outcome.ACEITO_PELO_TRANSPORTE;
+        /** Transporte SIMULADO deliberadamente lento (ms) ou com falha, so em {@link #send}; desligados por padrao. */
+        public volatile long delayMs;
+        public volatile boolean fail;
 
         @Override
         public void send(Kind kind, UUID organization, String recipient, String tokenOrNull) {
+            if (delayMs > 0) {
+                pause(delayMs);
+            }
+            if (fail) {
+                throw new IllegalStateException("falha simulada do transporte de teste");
+            }
             sent.add(new SentMessage(kind, organization, recipient, tokenOrNull, null));
         }
 

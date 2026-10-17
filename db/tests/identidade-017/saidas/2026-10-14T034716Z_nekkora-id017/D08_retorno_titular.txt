@@ -1,0 +1,18 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+BEGIN
+              set_config              
+--------------------------------------
+ ed5d9ccc-e2fb-4708-9773-be92f5017d06
+(1 row)
+
+INSERT 0 1
+UPDATE 1
+INSERT 0 1
+                    afirma                    
+----------------------------------------------
+ ok: titular de S1 de volta pela porta antiga
+(1 row)
+
+COMMIT

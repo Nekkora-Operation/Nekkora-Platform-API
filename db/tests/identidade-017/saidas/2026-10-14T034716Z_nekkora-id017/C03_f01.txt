@@ -1,0 +1,49 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+             afirma             
+--------------------------------
+ ok: papel nekkora_provisioning
+(1 row)
+
+       afirma        
+---------------------
+ ok: O1 provisionada
+(1 row)
+
+       afirma        
+---------------------
+ ok: O2 provisionada
+(1 row)
+
+       afirma        
+---------------------
+ ok: O3 provisionada
+(1 row)
+

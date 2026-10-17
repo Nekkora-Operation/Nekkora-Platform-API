@@ -1,0 +1,53 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+              nova_conta              
+--------------------------------------
+ 12896fc8-db3a-4cff-94cf-f214f5879e64
+(1 row)
+
+BEGIN
+ ctx 
+-----
+ 
+(1 row)
+
+INSERT 0 1
+INSERT 0 3
+COMMIT
+              sessao_org              
+--------------------------------------
+ 8abbbba5-477c-4d70-bdd3-092ef4d68a20
+(1 row)
+
+          resultado          
+-----------------------------
+ controle 016 preparacao: ok
+(1 row)
+

@@ -1,0 +1,49 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+                             afirma                              
+-----------------------------------------------------------------
+ ok: I-1/I-2 identity_users da identidade ivo: so a conta criada
+(1 row)
+
+                     afirma                     
+------------------------------------------------
+ ok: I-2 evento de provisionamento cadastro_web
+(1 row)
+
+    afirma    
+--------------
+ ok: I-5 teto
+(1 row)
+
+         resultado         
+---------------------------
+ grupo I (verificacao): ok
+(1 row)
+

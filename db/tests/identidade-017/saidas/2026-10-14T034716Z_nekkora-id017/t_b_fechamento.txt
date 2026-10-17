@@ -1,0 +1,104 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+SELECT 1
+NOTICE:  rejeitado como esperado [23514] conta vinculada a identidade nao autentica nem cadastra fator por credencial local (auth_challenges)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+E B-1: ok
+NOTICE:  rejeitado como esperado [23514] conta vinculada a identidade nao autentica nem cadastra fator por credencial local (user_mfa_factors)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+E B-2: ok
+NOTICE:  rejeitado como esperado [P0001] fator de MFA desabilitado e imutavel (factor_id=1e71abb0-2e61-4a13-91d0-0b1310c8587a)
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+E B-3: ok
+NOTICE:  rejeitado como esperado [23514] conta vinculada a identidade nao autentica nem cadastra fator por credencial local (user_mfa_recovery_codes)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+E B-4: ok
+NOTICE:  rejeitado como esperado [23514] conta vinculada a identidade nao autentica nem cadastra fator por credencial local (password_reset_tokens)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+E B-5: ok
+NOTICE:  rejeitado como esperado [23514] conta vinculada a identidade nao autentica nem cadastra fator por credencial local (email_verification_tokens)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+E B-6: ok
+NOTICE:  rejeitado como esperado [23514] conta vinculada a identidade nao autentica nem cadastra fator por credencial local (user_credentials)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+E B-7: ok
+BEGIN
+ ctx 
+-----
+ 
+(1 row)
+
+UPDATE 1
+DO
+                       afirma                       
+----------------------------------------------------
+ ok: B-8 conta nao vinculada: sete escritas aceitas
+(1 row)
+
+COMMIT
+E B-8: ok
+  resultado  
+-------------
+ grupo B: ok
+(1 row)
+

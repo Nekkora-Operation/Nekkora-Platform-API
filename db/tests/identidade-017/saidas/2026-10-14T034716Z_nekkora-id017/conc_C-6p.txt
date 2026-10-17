@@ -1,0 +1,71 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+BEGIN
+ step_up 
+---------
+ 
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ 2055239b-d784-4fff-92ad-cf2bc22c7212
+(1 row)
+
+               desafio_vinculo               
+---------------------------------------------
+ maxBCkQ_PXfB7tHrGCCDfttlrg_F0iiwvNjCnBobzeA
+(1 row)
+
+               desafio_vinculo               
+---------------------------------------------
+ haP7rfVdIIjE6pM6ZpE8O8-gNX1sjTszXGALebCM9SA
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+COMMIT
+ resultado 
+-----------
+ C-6p: ok
+(1 row)
+

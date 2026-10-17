@@ -1,0 +1,71 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+BEGIN
+           nova_identidade            
+--------------------------------------
+ b4612a23-8d77-47ee-a46f-1e5b288c27c3
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ d79edd20-c1b6-4205-868a-0721483f8739
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ fc22b0d9-a443-4569-a366-d5f19b44e8e1
+(1 row)
+
+     identity_mfa_enroll_pending      
+--------------------------------------
+ b4dfeceb-ded4-455d-b427-0175975a82e1
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+COMMIT
+ resultado 
+-----------
+ K-2p: ok
+(1 row)
+

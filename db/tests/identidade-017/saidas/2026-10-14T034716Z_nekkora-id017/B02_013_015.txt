@@ -1,0 +1,9 @@
+aplicar_como_migrador: inicio db=nekkora intervalo=013-015 elevar=[011 012 013 016 017] bypassrls=[014] dono_do_banco=migrador_nekkora estado=0|0|0
+aplicar_como_migrador: inicio versao=013 SUPERUSER concedido (c6192bff305f3888710ef9430751452b7a48a5bc7078691a16e16ddebb4c14d9)
+aplicar_como_migrador: fim    versao=013 SUPERUSER revogado, estado 0|0|0
+aplicar_como_migrador: aplicada versao=013 elevada=SUPERUSER arquivo=013_portal_externo.sql
+aplicar_como_migrador: inicio versao=014 BYPASSRLS concedido (5e5726b9a8f58d319b6b17dcbf7801c21e258999b003d25a023680f0d271d8fc)
+aplicar_como_migrador: fim    versao=014 BYPASSRLS revogado, estado 0|0|0
+aplicar_como_migrador: aplicada versao=014 elevada=BYPASSRLS arquivo=014_mfa_sessoes.sql
+aplicar_como_migrador: aplicada versao=015 elevada=nao arquivo=015_restauracao_logica.sql
+aplicar_como_migrador: fim db=nekkora aplicadas=3 estado=0|0|0

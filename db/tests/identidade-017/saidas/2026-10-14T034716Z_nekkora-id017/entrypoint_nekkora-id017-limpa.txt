@@ -1,0 +1,31 @@
+/usr/local/bin/docker-entrypoint.sh: sourcing /docker-entrypoint-initdb.d/000_aplicar_como_migrador.sh
+aplicar_como_migrador: inicio db=nekkora intervalo=000-017 elevar=[011 012 013 016 017] bypassrls=[014] dono_do_banco=migrador_nekkora estado=0|0|0
+aplicar_como_migrador: aplicada versao=001 elevada=nao arquivo=001_initial.sql
+aplicar_como_migrador: aplicada versao=002 elevada=nao arquivo=002_identity.sql
+aplicar_como_migrador: aplicada versao=003 elevada=nao arquivo=003_access_control.sql
+aplicar_como_migrador: aplicada versao=004 elevada=nao arquivo=004_workers_agents.sql
+aplicar_como_migrador: aplicada versao=005 elevada=nao arquivo=005_automations_versions.sql
+aplicar_como_migrador: aplicada versao=006 elevada=nao arquivo=006_executions.sql
+aplicar_como_migrador: aplicada versao=007 elevada=nao arquivo=007_events_logs.sql
+aplicar_como_migrador: aplicada versao=008 elevada=nao arquivo=008_parametros_secrets.sql
+aplicar_como_migrador: aplicada versao=009 elevada=nao arquivo=009_agendamentos.sql
+aplicar_como_migrador: aplicada versao=010 elevada=nao arquivo=010_recursos_limites_retencao.sql
+aplicar_como_migrador: inicio versao=011 SUPERUSER concedido (38a509845cb4459311b7edfda135ad1ca46203af7387fa45f1e356b200e87ef9)
+aplicar_como_migrador: fim    versao=011 SUPERUSER revogado, estado 0|0|0
+aplicar_como_migrador: aplicada versao=011 elevada=SUPERUSER arquivo=011_fechamento_expurgo.sql
+aplicar_como_migrador: inicio versao=012 SUPERUSER concedido (d3929cc76261debb47740bb0167d1e3438e00b14e01eca2a793716e5ce8321f4)
+aplicar_como_migrador: fim    versao=012 SUPERUSER revogado, estado 0|0|0
+aplicar_como_migrador: aplicada versao=012 elevada=SUPERUSER arquivo=012_security_rls.sql
+aplicar_como_migrador: inicio versao=013 SUPERUSER concedido (c6192bff305f3888710ef9430751452b7a48a5bc7078691a16e16ddebb4c14d9)
+aplicar_como_migrador: fim    versao=013 SUPERUSER revogado, estado 0|0|0
+aplicar_como_migrador: aplicada versao=013 elevada=SUPERUSER arquivo=013_portal_externo.sql
+aplicar_como_migrador: inicio versao=014 BYPASSRLS concedido (5e5726b9a8f58d319b6b17dcbf7801c21e258999b003d25a023680f0d271d8fc)
+aplicar_como_migrador: fim    versao=014 BYPASSRLS revogado, estado 0|0|0
+aplicar_como_migrador: aplicada versao=014 elevada=BYPASSRLS arquivo=014_mfa_sessoes.sql
+aplicar_como_migrador: aplicada versao=015 elevada=nao arquivo=015_restauracao_logica.sql
+aplicar_como_migrador: inicio versao=017 SUPERUSER concedido (90b8ddbcceac1319e9d4f71932e4af287ab1cdef67feacb6d71cfdc77db1c160)
+aplicar_como_migrador: fim    versao=017 SUPERUSER revogado, estado 0|0|0
+aplicar_como_migrador: aplicada versao=017 elevada=SUPERUSER arquivo=017_identidade_cadastro.sql
+aplicar_como_migrador: marcador: nekkora-inicializacao-completa versao=017
+aplicar_como_migrador: fim db=nekkora aplicadas=16 estado=0|0|0
+PostgreSQL init process complete; ready for start up.

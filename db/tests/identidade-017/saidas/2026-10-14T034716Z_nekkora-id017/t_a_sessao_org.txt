@@ -1,0 +1,136 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+                 como                 
+--------------------------------------
+ 722ddc73-762e-4666-ae7f-d45e43e94f33
+(1 row)
+
+SELECT 1
+                   afirma                    
+---------------------------------------------
+ ok: sessao expirada da fixture f03 presente
+(1 row)
+
+     afirma     
+----------------
+ ok: A-1 aceito
+(1 row)
+
+E A-1: ok
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] sessao nova exige fator de MFA confirmado e ativo
+E A-2: ok
+NOTICE:  rejeitado como esperado [23514] sessao nova exige fator de MFA confirmado e ativo
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+E A-3: ok
+     afirma     
+----------------
+ ok: A-4 aceito
+(1 row)
+
+E A-4: ok
+NOTICE:  rejeitado como esperado [23514] sessao nova exige fator de MFA confirmado e ativo
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+E A-5: ok
+NOTICE:  rejeitado como esperado [23514] sessao nova exige fator de MFA confirmado e ativo
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+E A-6: ok
+            nova_sessao_id            
+--------------------------------------
+ 072c9529-ff60-4fc2-9403-d3b02ab0be92
+(1 row)
+
+UPDATE 1
+NOTICE:  rejeitado como esperado [23514] sessao nova exige fator de MFA confirmado e ativo
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+E A-7: ok
+NOTICE:  rejeitado como esperado [23514] sessao nova exige fator de MFA confirmado e ativo
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+E A-8: ok
+NOTICE:  rejeitado como esperado [23514] sessao nova exige fator de MFA confirmado e ativo
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+E A-9: ok
+BEGIN
+ ctx 
+-----
+ 
+(1 row)
+
+                            afirma                             
+---------------------------------------------------------------
+ ok: A-10 fator da conta vinculada desabilitado, linha mantida
+(1 row)
+
+COMMIT
+E A-10: ok
+NOTICE:  rejeitado como esperado [23514] sessao nova exige conta visivel no contexto
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+  resultado  
+-------------
+ grupo A: ok
+(1 row)
+

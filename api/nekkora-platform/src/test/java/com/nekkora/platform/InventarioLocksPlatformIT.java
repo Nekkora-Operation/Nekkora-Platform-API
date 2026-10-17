@@ -201,7 +201,7 @@ class InventarioLocksPlatformIT {
         OpsBanco.Org org = DB.organizacao();
         UUID u = DB.membro(org);
         String bruto = Tokens.newToken();
-        DB.sql("INSERT INTO email_verification_tokens (user_id, target_email, token_hash, expires_at) SELECT user_id, email, '"
+        DB.sqlNa(org.id(), "INSERT INTO email_verification_tokens (user_id, target_email, token_hash, expires_at) SELECT user_id, email, '"
                 + Tokens.sha256Hex(bruto) + "', now() + interval '1 hour' FROM users WHERE user_id = '" + u + "'");
         try (Connection suspensao = portao(org.id())) {
             executar(suspensao, "SELECT 1 FROM users WHERE user_id = '" + u + "' FOR UPDATE");
@@ -228,7 +228,8 @@ class InventarioLocksPlatformIT {
 
     private static String tokenDeEmail(UUID user, String extra) {
         String bruto = Tokens.newToken();
-        DB.sql("INSERT INTO email_verification_tokens (user_id, target_email, token_hash, created_at, expires_at" + (extra == null ? "" : ", revoked_at")
+        UUID org = DB.valor(UUID.class, "SELECT organization_id FROM users WHERE user_id = ?", user);
+        DB.sqlNa(org, "INSERT INTO email_verification_tokens (user_id, target_email, token_hash, created_at, expires_at" + (extra == null ? "" : ", revoked_at")
                 + ") SELECT user_id, email, '" + Tokens.sha256Hex(bruto) + "', "
                 + ("VENCIDO".equals(extra) ? "now() - interval '2 hours', now() - interval '1 hour'" : "now(), now() + interval '1 hour'")
                 + (extra == null ? "" : "REVOGADO".equals(extra) ? ", now()" : ", NULL")

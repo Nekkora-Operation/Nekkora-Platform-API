@@ -1,0 +1,199 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+SELECT 1
+                        afirma                        
+------------------------------------------------------
+ ok: L resolve_login sem resultado: naoexiste@ex.test
+ ok: L resolve_login sem resultado: ana
+ ok: L resolve_login sem resultado: ANA@EX.TEST
+ ok: L resolve_login sem resultado: %@ex.test
+ ok: L resolve_login sem resultado: NULL
+(5 rows)
+
+                afirma                 
+---------------------------------------
+ ok: L resolve_login controle positivo
+(1 row)
+
+                   afirma                    
+---------------------------------------------
+ ok: L sessao sem prova: L/nada
+ ok: L sessao sem prova: abc
+ ok: L sessao sem prova: 
+ ok: L sessao sem prova: L/revogada
+ ok: L sessao sem prova: sessao/ana-expirada
+ ok: L sessao sem prova: L/rest
+(6 rows)
+
+                      afirma                       
+---------------------------------------------------
+ ok: L alvo: organizacao sem vinculo da identidade
+(1 row)
+
+                 afirma                 
+----------------------------------------
+ ok: L alvo: vinculo interno nao ACTIVE
+(1 row)
+
+              afirma              
+----------------------------------
+ ok: L alvo: organizacao suspensa
+(1 row)
+
+            afirma             
+-------------------------------
+ ok: L alvo: controle positivo
+(1 row)
+
+                            afirma                            
+--------------------------------------------------------------
+ ok: L vinculacao recusada: sem step-up
+ ok: L vinculacao recusada: step-up vencido
+ ok: L vinculacao recusada: sessao restrita
+ ok: L vinculacao recusada: sessao revogada
+ ok: L vinculacao recusada: desafio de outro par
+ ok: L vinculacao recusada: desafio consumido
+ ok: L vinculacao recusada: desafio revogado
+ ok: L vinculacao recusada: desafio vencido
+ ok: L vinculacao recusada: organizacao divergente do desafio
+ ok: L vinculacao recusada: organizacao suspensa
+ ok: L vinculacao recusada: desafio inexistente
+(11 rows)
+
+NOTICE:  rejeitado como esperado [23514] e-mail da conta difere do da identidade
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+                   afirma                    
+---------------------------------------------
+ ok: L criacao recusada: L/sem-step
+ ok: L criacao recusada: L/step-velho
+ ok: L criacao recusada: L/rest
+ ok: L criacao recusada: L/revogada
+ ok: L criacao recusada: L/nada
+ ok: L criacao recusada: sessao/ana-expirada
+(6 rows)
+
+                                 afirma                                  
+-------------------------------------------------------------------------
+ ok: L cadastro de pendente recusado: desafio inexistente
+ ok: L cadastro de pendente recusado: desafio consumido
+ ok: L cadastro de pendente recusado: sessao sem step-up nem recuperacao
+ ok: L cadastro de pendente recusado: step-up vencido
+ ok: L cadastro de pendente recusado: sem prova
+ ok: L cadastro de pendente recusado: duas provas ao mesmo tempo
+(6 rows)
+
+                 como                 
+--------------------------------------
+ bb69128a-6ae7-43e2-824c-c6443d49020f
+(1 row)
+
+                 como                 
+--------------------------------------
+ e73263e0-0a09-4927-9eb0-6e4414bfdfec
+(1 row)
+
+                                      afirma                                       
+-----------------------------------------------------------------------------------
+ ok: L confirmacao do primeiro recusada: fator de outra identidade (ja confirmado)
+ ok: L confirmacao do primeiro recusada: desafio consumido
+ ok: L confirmacao do primeiro recusada: desafio inexistente
+ ok: L confirmacao do primeiro recusada: sete codigos
+ ok: L confirmacao do primeiro recusada: dezessete codigos
+ ok: L confirmacao do primeiro recusada: codigo repetido
+ ok: L confirmacao do primeiro recusada: codigo fora do formato
+(7 rows)
+
+                 como                 
+--------------------------------------
+ 8e2f643c-f826-4de8-b9fe-b3c248066b4d
+(1 row)
+
+                                afirma                                
+----------------------------------------------------------------------
+ ok: L troca recusada: fator novo de outra identidade
+ ok: L troca recusada: fator novo ja confirmado (de outra identidade)
+ ok: L troca recusada: fator novo ja confirmado (o proprio)
+(3 rows)
+
+                 afirma                  
+-----------------------------------------
+ ok: L troca recusada: codigos invalidos
+(1 row)
+
+                 como                 
+--------------------------------------
+ 8e2f643c-f826-4de8-b9fe-b3c248066b4d
+(1 row)
+
+                              afirma                              
+------------------------------------------------------------------
+ ok: L login_complete recusado: desafio inexistente
+ ok: L login_complete recusado: finalidade 2 (cadastro) no login
+ ok: L login_complete recusado: desafio consumido
+ ok: L login_complete recusado: passo TOTP repetido
+ ok: L login_complete recusado: codigo de recuperacao inexistente
+ ok: L login_complete recusado: sem passo
+ ok: L login_complete recusado: metodo invalido
+(7 rows)
+
+                       afirma                        
+-----------------------------------------------------
+ ok: L login_complete recusado: parametros da sessao
+(1 row)
+
+                         afirma                          
+---------------------------------------------------------
+ ok: L troca de senha recusada: sem step-up
+ ok: L troca de senha recusada: step-up vencido
+ ok: L troca de senha recusada: sessao restrita
+ ok: L troca de senha recusada: sessao revogada
+ ok: L troca de senha recusada: hash esperado divergente
+ ok: L troca de senha recusada: sessao inexistente
+(6 rows)
+
+                         afirma                          
+---------------------------------------------------------
+ ok: L troca de senha recusada: senha nova igual a atual
+(1 row)
+
+  resultado  
+-------------
+ grupo L: ok
+(1 row)
+

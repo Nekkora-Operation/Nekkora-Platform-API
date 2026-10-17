@@ -1,0 +1,24 @@
+certificado op_cad: OK
+cadastro op_ver: OK c8b948ef-6c26-40cd-b5a8-cceb683cc34a
+habilitacao op_ver VERIFICAR: OK
+habilitacao op_ver CONSULTAR: OK
+habilitacao op_ver CANCELAR: OK
+certificado op_ver: OK
+cadastro op_apr: OK f22c2c8f-c1d5-47eb-b463-d48d8b6a59cb
+habilitacao op_apr APROVAR: OK
+habilitacao op_apr CONSULTAR: OK
+certificado op_apr: OK
+cadastro op_exe: OK 83618a3b-c406-4d55-996a-4593f19a5ddf
+habilitacao op_exe EXECUTAR: OK
+habilitacao op_exe CONSULTAR: OK
+certificado op_exe: OK
+retorno ed5d9ccc-e2fb-4708-9773-be92f5017d06: OK 22575a78-ddfc-45f9-b5e9-5e6616775916
+abertura ed5d9ccc-e2fb-4708-9773-be92f5017d06: OK 5eeb6c6c-64c8-4119-b6f3-bc0da74d707d
+verificacao ed5d9ccc-e2fb-4708-9773-be92f5017d06: OK VERIFICADA
+pre-aprovacao S1: OK PRE_APROVADA
+NOTICE:  avisos: 1 emitidos (fluxo de banco, entrega simulada); confirmacao do titular: ACEITO
+aprovacao final S1: OK APROVADA
+retorno a94a8b2d-ce4c-408b-aa33-1b9448923d08: OK 8050bc82-5b61-4fc7-8b3c-785fe2de7e92
+abertura a94a8b2d-ce4c-408b-aa33-1b9448923d08: OK 21417cc7-5362-4eb6-accf-7c794a8e7fc4
+verificacao a94a8b2d-ce4c-408b-aa33-1b9448923d08: OK VERIFICADA
+estados antes da 017: APROVADA,VERIFICADA

@@ -1,0 +1,6 @@
+aplicar_como_migrador: inicio db=nekkora intervalo=017-017 elevar=[011 012 013 016 017] bypassrls=[014] dono_do_banco=migrador_nekkora estado=0|0|0
+aplicar_como_migrador: inicio versao=017 SUPERUSER concedido (90b8ddbcceac1319e9d4f71932e4af287ab1cdef67feacb6d71cfdc77db1c160)
+aplicar_como_migrador: fim    versao=017 SUPERUSER revogado, estado 0|0|0
+aplicar_como_migrador: aplicada versao=017 elevada=SUPERUSER arquivo=017_identidade_cadastro.sql
+aplicar_como_migrador: marcador: nekkora-inicializacao-completa versao=017
+aplicar_como_migrador: fim db=nekkora aplicadas=1 estado=0|0|0

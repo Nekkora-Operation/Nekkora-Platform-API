@@ -158,7 +158,7 @@ class ClienteH016IT {
         String s2 = "sintetica-" + b64(9).replaceAll("[^A-Za-z0-9]", "x");
         String e1 = "titular-" + adm1.toString().substring(0, 8) + "@homologacao-016.test";
         String e2 = "outro-" + adm2.toString().substring(0, 8) + "@homologacao-016.test";
-        DB.sql("INSERT INTO organizations (organization_id, name, status) VALUES ('" + org + "', 'Homologacao 016 sintetica ensaio-p1c-cliente', 1)",
+        DB.sqlNa(org, "INSERT INTO organizations (organization_id, name, status) VALUES ('" + org + "', 'Homologacao 016 sintetica ensaio-p1c-cliente', 1)",
                 "INSERT INTO users (user_id, organization_id, account_type, email, email_verified_at, status, display_name) VALUES ('" + adm1 + "', '"
                         + org + "', 1, '" + e1 + "', now(), 2, 'Titular 016'), ('" + adm2 + "', '" + org + "', 1, '" + e2 + "', now(), 2, 'Outro admin 016')",
                 "INSERT INTO user_credentials (user_id, password_hash) VALUES ('" + adm1 + "', '" + HASHER.generate(s1.toCharArray()) + "'), ('" + adm2

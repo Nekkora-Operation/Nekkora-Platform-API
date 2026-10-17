@@ -1,0 +1,922 @@
+3a4,10
+> colacl|auth_challenges|consumed_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|auth_challenges|credential_hash|nekkora_identity_owner|UPDATE|grant=f
+> colacl|auth_challenges|invalidated_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|auth_challenges|invalidated_at|nekkora_identity_owner|UPDATE|grant=f
+> colacl|auth_challenges|organization_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|auth_challenges|pending_password_hash|nekkora_identity_owner|UPDATE|grant=f
+> colacl|auth_challenges|user_id|nekkora_identity_owner|SELECT|grant=f
+30a38,42
+> colacl|email_verification_tokens|consumed_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|email_verification_tokens|created_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|email_verification_tokens|revoked_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|email_verification_tokens|revoked_at|nekkora_identity_owner|UPDATE|grant=f
+> colacl|email_verification_tokens|user_id|nekkora_identity_owner|SELECT|grant=f
+49a62,150
+> colacl|identities|display_name|nekkora_identity_owner|SELECT|grant=f
+> colacl|identities|display_name|nekkora_platform|INSERT|grant=f
+> colacl|identities|display_name|nekkora_platform|UPDATE|grant=f
+> colacl|identities|email_normalized|nekkora_identity_owner|SELECT|grant=f
+> colacl|identities|email_verified_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|identities|email_verified_at|nekkora_platform|UPDATE|grant=f
+> colacl|identities|email|nekkora_identity_owner|SELECT|grant=f
+> colacl|identities|email|nekkora_platform|INSERT|grant=f
+> colacl|identities|identity_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|identities|identity_id|nekkora_platform|INSERT|grant=f
+> colacl|identities|status|nekkora_identity_owner|SELECT|grant=f
+> colacl|identities|status|nekkora_platform|INSERT|grant=f
+> colacl|identities|status|nekkora_platform|UPDATE|grant=f
+> colacl|identities|updated_at|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_auth_challenges|attempts|nekkora_platform|UPDATE|grant=f
+> colacl|identity_auth_challenges|challenge_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_auth_challenges|consumed_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_auth_challenges|consumed_at|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_auth_challenges|credential_hash|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_auth_challenges|credential_hash|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_auth_challenges|credential_hash|nekkora_platform|INSERT|grant=f
+> colacl|identity_auth_challenges|credential_hash|nekkora_platform|UPDATE|grant=f
+> colacl|identity_auth_challenges|csrf_token|nekkora_platform|INSERT|grant=f
+> colacl|identity_auth_challenges|expires_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_auth_challenges|expires_at|nekkora_platform|INSERT|grant=f
+> colacl|identity_auth_challenges|identity_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_auth_challenges|identity_id|nekkora_platform|INSERT|grant=f
+> colacl|identity_auth_challenges|invalidated_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_auth_challenges|invalidated_at|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_auth_challenges|invalidated_at|nekkora_platform|UPDATE|grant=f
+> colacl|identity_auth_challenges|pending_password_hash|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_auth_challenges|pending_password_hash|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_auth_challenges|pending_password_hash|nekkora_platform|INSERT|grant=f
+> colacl|identity_auth_challenges|pending_password_hash|nekkora_platform|UPDATE|grant=f
+> colacl|identity_auth_challenges|purpose|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_auth_challenges|purpose|nekkora_platform|INSERT|grant=f
+> colacl|identity_auth_challenges|token_hash|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_auth_challenges|token_hash|nekkora_platform|INSERT|grant=f
+> colacl|identity_credentials|identity_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_credentials|identity_id|nekkora_platform|INSERT|grant=f
+> colacl|identity_credentials|password_changed_at|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_credentials|password_hash|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_credentials|password_hash|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_credentials|password_hash|nekkora_platform|INSERT|grant=f
+> colacl|identity_email_tokens|consumed_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_email_tokens|consumed_at|nekkora_platform|UPDATE|grant=f
+> colacl|identity_email_tokens|expires_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_email_tokens|expires_at|nekkora_platform|INSERT|grant=f
+> colacl|identity_email_tokens|identity_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_email_tokens|identity_id|nekkora_platform|INSERT|grant=f
+> colacl|identity_email_tokens|purpose|nekkora_platform|INSERT|grant=f
+> colacl|identity_email_tokens|revoked_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_email_tokens|revoked_at|nekkora_platform|UPDATE|grant=f
+> colacl|identity_email_tokens|target_email|nekkora_platform|INSERT|grant=f
+> colacl|identity_email_tokens|token_hash|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_email_tokens|token_hash|nekkora_platform|INSERT|grant=f
+> colacl|identity_email_tokens|token_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_events|correlation_id|nekkora_platform|INSERT|grant=f
+> colacl|identity_events|event_type|nekkora_platform|INSERT|grant=f
+> colacl|identity_events|identity_id|nekkora_platform|INSERT|grant=f
+> colacl|identity_events|target_organization_id|nekkora_platform|INSERT|grant=f
+> colacl|identity_link_challenges|account_credential_hash|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_link_challenges|account_credential_hash|nekkora_platform|INSERT|grant=f
+> colacl|identity_link_challenges|account_credential_hash|nekkora_platform|UPDATE|grant=f
+> colacl|identity_link_challenges|attempts|nekkora_platform|UPDATE|grant=f
+> colacl|identity_link_challenges|consumed_at|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_link_challenges|expires_at|nekkora_platform|INSERT|grant=f
+> colacl|identity_link_challenges|identity_id|nekkora_platform|INSERT|grant=f
+> colacl|identity_link_challenges|revoked_at|nekkora_platform|UPDATE|grant=f
+> colacl|identity_link_challenges|token_hash|nekkora_platform|INSERT|grant=f
+> colacl|identity_link_challenges|user_id|nekkora_platform|INSERT|grant=f
+> colacl|identity_mfa_factors|confirmed_at|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_mfa_factors|disabled_at|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_mfa_factors|last_used_step|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_mfa_factors|last_used_step|nekkora_platform|UPDATE|grant=f
+> colacl|identity_mfa_recovery_codes|invalidated_at|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_mfa_recovery_codes|used_at|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_mfa_recovery_codes|used_in_identity_session_id|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_sessions|csrf_token|nekkora_identity_owner|INSERT|grant=f
+> colacl|identity_sessions|expires_at|nekkora_identity_owner|INSERT|grant=f
+> colacl|identity_sessions|identity_id|nekkora_identity_owner|INSERT|grant=f
+> colacl|identity_sessions|last_seen_at|nekkora_platform|UPDATE|grant=f
+> colacl|identity_sessions|mfa_step_up_at|nekkora_platform|UPDATE|grant=f
+> colacl|identity_sessions|mfa_verified_at|nekkora_identity_owner|INSERT|grant=f
+> colacl|identity_sessions|recovery_cleared_at|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_sessions|recovery_used_at|nekkora_identity_owner|INSERT|grant=f
+> colacl|identity_sessions|revoked_at|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_sessions|revoked_at|nekkora_platform|UPDATE|grant=f
+> colacl|identity_sessions|session_token_hash|nekkora_identity_owner|INSERT|grant=f
+53a155,171
+> colacl|organization_memberships|account_type|nekkora_identity_owner|INSERT|grant=f
+> colacl|organization_memberships|membership_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|organization_memberships|organization_id|nekkora_identity_owner|INSERT|grant=f
+> colacl|organization_memberships|organization_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|organization_memberships|status|nekkora_identity_owner|INSERT|grant=f
+> colacl|organization_memberships|status|nekkora_identity_owner|SELECT|grant=f
+> colacl|organization_memberships|user_id|nekkora_identity_owner|INSERT|grant=f
+> colacl|organization_memberships|user_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|organization_role_assignments|membership_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|organization_role_assignments|organization_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|organization_role_assignments|role_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|organization_role_assignments|status|nekkora_identity_owner|SELECT|grant=f
+> colacl|organizations|legal_name|nekkora_identity_owner|INSERT|grant=f
+> colacl|organizations|name|nekkora_identity_owner|INSERT|grant=f
+> colacl|organizations|name|nekkora_identity_owner|SELECT|grant=f
+> colacl|organizations|organization_id|nekkora_identity_owner|INSERT|grant=f
+> colacl|organizations|organization_id|nekkora_identity_owner|SELECT|grant=f
+54a173,174
+> colacl|organizations|status|nekkora_identity_owner|INSERT|grant=f
+> colacl|organizations|status|nekkora_identity_owner|SELECT|grant=f
+55a176,198
+> colacl|organizations|updated_at|nekkora_identity_owner|UPDATE|grant=f
+> colacl|password_reset_tokens|consumed_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|password_reset_tokens|created_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|password_reset_tokens|revoked_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|password_reset_tokens|revoked_at|nekkora_identity_owner|UPDATE|grant=f
+> colacl|password_reset_tokens|user_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|roles|code|nekkora_identity_owner|SELECT|grant=f
+> colacl|roles|role_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|user_credentials|password_hash|nekkora_identity_owner|SELECT|grant=f
+> colacl|user_credentials|user_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|user_mfa_factors|confirmed_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|user_mfa_factors|created_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|user_mfa_factors|disabled_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|user_mfa_factors|disabled_at|nekkora_identity_owner|UPDATE|grant=f
+> colacl|user_mfa_factors|organization_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|user_mfa_factors|user_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|user_mfa_recovery_codes|created_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|user_mfa_recovery_codes|invalidated_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|user_mfa_recovery_codes|invalidated_at|nekkora_identity_owner|UPDATE|grant=f
+> colacl|user_mfa_recovery_codes|organization_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|user_mfa_recovery_codes|used_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|user_mfa_recovery_codes|user_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|user_sessions|created_at|nekkora_identity_owner|SELECT|grant=f
+57a201
+> colacl|user_sessions|identity_session_id|nekkora_identity_owner|SELECT|grant=f
+59a204
+> colacl|user_sessions|organization_id|nekkora_identity_owner|SELECT|grant=f
+60a206,207
+> colacl|user_sessions|revoked_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|user_sessions|revoked_at|nekkora_identity_owner|UPDATE|grant=f
+61a209
+> colacl|user_sessions|session_id|nekkora_identity_owner|SELECT|grant=f
+63a212
+> colacl|user_sessions|user_id|nekkora_identity_owner|SELECT|grant=f
+64a214,215
+> colacl|users|account_type|nekkora_identity_owner|INSERT|grant=f
+> colacl|users|account_type|nekkora_identity_owner|SELECT|grant=f
+65a217,220
+> colacl|users|display_name|nekkora_identity_owner|INSERT|grant=f
+> colacl|users|email_normalized|nekkora_identity_owner|SELECT|grant=f
+> colacl|users|email_verified_at|nekkora_identity_owner|INSERT|grant=f
+> colacl|users|email_verified_at|nekkora_identity_owner|SELECT|grant=f
+66a222,225
+> colacl|users|email|nekkora_identity_owner|INSERT|grant=f
+> colacl|users|email|nekkora_identity_owner|SELECT|grant=f
+> colacl|users|organization_id|nekkora_identity_owner|INSERT|grant=f
+> colacl|users|organization_id|nekkora_identity_owner|SELECT|grant=f
+67a227,228
+> colacl|users|status|nekkora_identity_owner|INSERT|grant=f
+> colacl|users|status|nekkora_identity_owner|SELECT|grant=f
+68a230,231
+> colacl|users|updated_at|nekkora_identity_owner|UPDATE|grant=f
+> colacl|users|user_id|nekkora_identity_owner|SELECT|grant=f
+289a453,492
+> col|identities|created_at|timestamp with time zone|notnull=t|default=now()|gen=
+> col|identities|display_name|text|notnull=t|default=|gen=
+> col|identities|email_normalized|text|notnull=f|default=lower(email)|gen=s
+> col|identities|email_verified_at|timestamp with time zone|notnull=f|default=|gen=
+> col|identities|email|text|notnull=t|default=|gen=
+> col|identities|identity_id|uuid|notnull=t|default=gen_random_uuid()|gen=
+> col|identities|status|smallint|notnull=t|default=|gen=
+> col|identities|updated_at|timestamp with time zone|notnull=t|default=now()|gen=
+> col|identity_auth_challenges|attempts|smallint|notnull=t|default=0|gen=
+> col|identity_auth_challenges|challenge_id|uuid|notnull=t|default=gen_random_uuid()|gen=
+> col|identity_auth_challenges|consumed_at|timestamp with time zone|notnull=f|default=|gen=
+> col|identity_auth_challenges|created_at|timestamp with time zone|notnull=t|default=now()|gen=
+> col|identity_auth_challenges|credential_hash|text|notnull=f|default=|gen=
+> col|identity_auth_challenges|csrf_token|text|notnull=t|default=|gen=
+> col|identity_auth_challenges|expires_at|timestamp with time zone|notnull=t|default=|gen=
+> col|identity_auth_challenges|identity_id|uuid|notnull=t|default=|gen=
+> col|identity_auth_challenges|invalidated_at|timestamp with time zone|notnull=f|default=|gen=
+> col|identity_auth_challenges|pending_password_hash|text|notnull=f|default=|gen=
+> col|identity_auth_challenges|purpose|smallint|notnull=t|default=|gen=
+> col|identity_auth_challenges|token_hash|text|notnull=t|default=|gen=
+> col|identity_credentials|created_at|timestamp with time zone|notnull=t|default=now()|gen=
+> col|identity_credentials|identity_id|uuid|notnull=t|default=|gen=
+> col|identity_credentials|password_changed_at|timestamp with time zone|notnull=t|default=now()|gen=
+> col|identity_credentials|password_hash|text|notnull=t|default=|gen=
+> col|identity_credentials|updated_at|timestamp with time zone|notnull=t|default=now()|gen=
+> col|identity_email_tokens|consumed_at|timestamp with time zone|notnull=f|default=|gen=
+> col|identity_email_tokens|created_at|timestamp with time zone|notnull=t|default=now()|gen=
+> col|identity_email_tokens|expires_at|timestamp with time zone|notnull=t|default=|gen=
+> col|identity_email_tokens|identity_id|uuid|notnull=t|default=|gen=
+> col|identity_email_tokens|purpose|smallint|notnull=t|default=|gen=
+> col|identity_email_tokens|revoked_at|timestamp with time zone|notnull=f|default=|gen=
+> col|identity_email_tokens|target_email|text|notnull=t|default=|gen=
+> col|identity_email_tokens|token_hash|text|notnull=t|default=|gen=
+> col|identity_email_tokens|token_id|uuid|notnull=t|default=gen_random_uuid()|gen=
+> col|identity_events|correlation_id|uuid|notnull=t|default=|gen=
+> col|identity_events|created_at|timestamp with time zone|notnull=t|default=now()|gen=
+> col|identity_events|event_id|uuid|notnull=t|default=gen_random_uuid()|gen=
+> col|identity_events|event_type|smallint|notnull=t|default=|gen=
+> col|identity_events|identity_id|uuid|notnull=t|default=|gen=
+> col|identity_events|target_organization_id|uuid|notnull=f|default=|gen=
+301a505,532
+> col|identity_link_challenges|account_credential_hash|text|notnull=f|default=|gen=
+> col|identity_link_challenges|attempts|smallint|notnull=t|default=0|gen=
+> col|identity_link_challenges|challenge_id|uuid|notnull=t|default=gen_random_uuid()|gen=
+> col|identity_link_challenges|consumed_at|timestamp with time zone|notnull=f|default=|gen=
+> col|identity_link_challenges|created_at|timestamp with time zone|notnull=t|default=now()|gen=
+> col|identity_link_challenges|expires_at|timestamp with time zone|notnull=t|default=|gen=
+> col|identity_link_challenges|identity_id|uuid|notnull=t|default=|gen=
+> col|identity_link_challenges|revoked_at|timestamp with time zone|notnull=f|default=|gen=
+> col|identity_link_challenges|token_hash|text|notnull=t|default=|gen=
+> col|identity_link_challenges|user_id|uuid|notnull=t|default=|gen=
+> col|identity_mfa_factors|confirmed_at|timestamp with time zone|notnull=f|default=|gen=
+> col|identity_mfa_factors|created_at|timestamp with time zone|notnull=t|default=now()|gen=
+> col|identity_mfa_factors|disabled_at|timestamp with time zone|notnull=f|default=|gen=
+> col|identity_mfa_factors|factor_id|uuid|notnull=t|default=gen_random_uuid()|gen=
+> col|identity_mfa_factors|factor_type|smallint|notnull=t|default=|gen=
+> col|identity_mfa_factors|identity_id|uuid|notnull=t|default=|gen=
+> col|identity_mfa_factors|key_id|text|notnull=t|default=|gen=
+> col|identity_mfa_factors|last_used_step|bigint|notnull=f|default=|gen=
+> col|identity_mfa_factors|secret_ciphertext|bytea|notnull=t|default=|gen=
+> col|identity_mfa_factors|secret_nonce|bytea|notnull=t|default=|gen=
+> col|identity_mfa_recovery_codes|code_hash|text|notnull=t|default=|gen=
+> col|identity_mfa_recovery_codes|code_id|uuid|notnull=t|default=gen_random_uuid()|gen=
+> col|identity_mfa_recovery_codes|created_at|timestamp with time zone|notnull=t|default=now()|gen=
+> col|identity_mfa_recovery_codes|factor_id|uuid|notnull=t|default=|gen=
+> col|identity_mfa_recovery_codes|identity_id|uuid|notnull=t|default=|gen=
+> col|identity_mfa_recovery_codes|invalidated_at|timestamp with time zone|notnull=f|default=|gen=
+> col|identity_mfa_recovery_codes|used_at|timestamp with time zone|notnull=f|default=|gen=
+> col|identity_mfa_recovery_codes|used_in_identity_session_id|uuid|notnull=f|default=|gen=
+308a540,555
+> col|identity_sessions|created_at|timestamp with time zone|notnull=t|default=now()|gen=
+> col|identity_sessions|csrf_token|text|notnull=t|default=|gen=
+> col|identity_sessions|expires_at|timestamp with time zone|notnull=t|default=|gen=
+> col|identity_sessions|identity_id|uuid|notnull=t|default=|gen=
+> col|identity_sessions|identity_session_id|uuid|notnull=t|default=gen_random_uuid()|gen=
+> col|identity_sessions|last_seen_at|timestamp with time zone|notnull=t|default=now()|gen=
+> col|identity_sessions|mfa_step_up_at|timestamp with time zone|notnull=f|default=|gen=
+> col|identity_sessions|mfa_verified_at|timestamp with time zone|notnull=t|default=|gen=
+> col|identity_sessions|recovery_cleared_at|timestamp with time zone|notnull=f|default=|gen=
+> col|identity_sessions|recovery_used_at|timestamp with time zone|notnull=f|default=|gen=
+> col|identity_sessions|revoked_at|timestamp with time zone|notnull=f|default=|gen=
+> col|identity_sessions|session_token_hash|text|notnull=t|default=|gen=
+> col|identity_users|identity_id|uuid|notnull=t|default=|gen=
+> col|identity_users|link_channel|text|notnull=t|default=|gen=
+> col|identity_users|linked_at|timestamp with time zone|notnull=t|default=now()|gen=
+> col|identity_users|user_id|uuid|notnull=t|default=|gen=
+438a686
+> col|user_sessions|identity_session_id|uuid|notnull=f|default=|gen=
+743a992,1031
+> con|identities|identities_check|CHECK (((status <> 2) OR (email_verified_at IS NOT NULL)))
+> con|identities|identities_display_name_check|CHECK ((btrim(display_name) <> ''::text))
+> con|identities|identities_email_check1|CHECK ((email = btrim(email)))
+> con|identities|identities_email_check2|CHECK ((email !~ '\s'::text))
+> con|identities|identities_email_check|CHECK ((btrim(email) <> ''::text))
+> con|identities|identities_email_normalized_key|UNIQUE (email_normalized)
+> con|identities|identities_pkey|PRIMARY KEY (identity_id)
+> con|identities|identities_status_check|CHECK ((status = ANY (ARRAY[1, 2, 3, 4])))
+> con|identity_auth_challenges|identity_auth_challenges_attempts_check|CHECK (((attempts >= 0) AND (attempts <= 5)))
+> con|identity_auth_challenges|identity_auth_challenges_check1|CHECK (((consumed_at IS NULL) OR (invalidated_at IS NULL)))
+> con|identity_auth_challenges|identity_auth_challenges_check2|CHECK ((((consumed_at IS NULL) AND (invalidated_at IS NULL)) = (credential_hash IS NOT NULL)))
+> con|identity_auth_challenges|identity_auth_challenges_check3|CHECK ((((consumed_at IS NULL) AND (invalidated_at IS NULL)) OR (pending_password_hash IS NULL)))
+> con|identity_auth_challenges|identity_auth_challenges_check|CHECK (((expires_at > created_at) AND (expires_at <= (created_at + '00:05:00'::interval))))
+> con|identity_auth_challenges|identity_auth_challenges_credential_hash_check|CHECK (((credential_hash IS NULL) OR (btrim(credential_hash) <> ''::text)))
+> con|identity_auth_challenges|identity_auth_challenges_csrf_token_check|CHECK ((csrf_token ~ '^[A-Za-z0-9_-]{43}$'::text))
+> con|identity_auth_challenges|identity_auth_challenges_identity_id_fkey|FOREIGN KEY (identity_id) REFERENCES identities(identity_id) ON DELETE RESTRICT
+> con|identity_auth_challenges|identity_auth_challenges_pending_password_hash_check|CHECK (((pending_password_hash IS NULL) OR (btrim(pending_password_hash) <> ''::text)))
+> con|identity_auth_challenges|identity_auth_challenges_pkey|PRIMARY KEY (challenge_id)
+> con|identity_auth_challenges|identity_auth_challenges_purpose_check|CHECK ((purpose = ANY (ARRAY[1, 2])))
+> con|identity_auth_challenges|identity_auth_challenges_token_hash_check|CHECK ((token_hash ~ '^[0-9a-f]{64}$'::text))
+> con|identity_auth_challenges|identity_auth_challenges_token_hash_key|UNIQUE (token_hash)
+> con|identity_credentials|identity_credentials_identity_id_fkey|FOREIGN KEY (identity_id) REFERENCES identities(identity_id) ON DELETE RESTRICT
+> con|identity_credentials|identity_credentials_password_hash_check|CHECK ((btrim(password_hash) <> ''::text))
+> con|identity_credentials|identity_credentials_pkey|PRIMARY KEY (identity_id)
+> con|identity_email_tokens|identity_email_tokens_check1|CHECK (((consumed_at IS NULL) OR (revoked_at IS NULL)))
+> con|identity_email_tokens|identity_email_tokens_check2|CHECK (((consumed_at IS NULL) OR (consumed_at >= created_at)))
+> con|identity_email_tokens|identity_email_tokens_check3|CHECK (((revoked_at IS NULL) OR (revoked_at >= created_at)))
+> con|identity_email_tokens|identity_email_tokens_check|CHECK (((expires_at > created_at) AND (expires_at <= (created_at + '24:00:00'::interval))))
+> con|identity_email_tokens|identity_email_tokens_identity_id_fkey|FOREIGN KEY (identity_id) REFERENCES identities(identity_id) ON DELETE RESTRICT
+> con|identity_email_tokens|identity_email_tokens_pkey|PRIMARY KEY (token_id)
+> con|identity_email_tokens|identity_email_tokens_purpose_check|CHECK ((purpose = 1))
+> con|identity_email_tokens|identity_email_tokens_target_email_check1|CHECK ((target_email = btrim(target_email)))
+> con|identity_email_tokens|identity_email_tokens_target_email_check2|CHECK ((target_email !~ '\s'::text))
+> con|identity_email_tokens|identity_email_tokens_target_email_check|CHECK ((btrim(target_email) <> ''::text))
+> con|identity_email_tokens|identity_email_tokens_token_hash_check|CHECK ((token_hash ~ '^[0-9a-f]{64}$'::text))
+> con|identity_email_tokens|identity_email_tokens_token_hash_key|UNIQUE (token_hash)
+> con|identity_events|identity_events_event_type_check|CHECK (((event_type >= 1) AND (event_type <= 14)))
+> con|identity_events|identity_events_identity_id_fkey|FOREIGN KEY (identity_id) REFERENCES identities(identity_id) ON DELETE RESTRICT
+> con|identity_events|identity_events_pkey|PRIMARY KEY (event_id)
+> con|identity_events|identity_events_target_organization_id_fkey|FOREIGN KEY (target_organization_id) REFERENCES organizations(organization_id) ON DELETE RESTRICT
+759a1048,1078
+> con|identity_link_challenges|identity_link_challenges_account_credential_hash_check|CHECK (((account_credential_hash IS NULL) OR (btrim(account_credential_hash) <> ''::text)))
+> con|identity_link_challenges|identity_link_challenges_attempts_check|CHECK (((attempts >= 0) AND (attempts <= 5)))
+> con|identity_link_challenges|identity_link_challenges_check1|CHECK (((consumed_at IS NULL) OR (revoked_at IS NULL)))
+> con|identity_link_challenges|identity_link_challenges_check2|CHECK ((((consumed_at IS NULL) AND (revoked_at IS NULL)) = (account_credential_hash IS NOT NULL)))
+> con|identity_link_challenges|identity_link_challenges_check|CHECK (((expires_at > created_at) AND (expires_at <= (created_at + '00:05:00'::interval))))
+> con|identity_link_challenges|identity_link_challenges_identity_id_fkey|FOREIGN KEY (identity_id) REFERENCES identities(identity_id) ON DELETE RESTRICT
+> con|identity_link_challenges|identity_link_challenges_pkey|PRIMARY KEY (challenge_id)
+> con|identity_link_challenges|identity_link_challenges_token_hash_check|CHECK ((token_hash ~ '^[0-9a-f]{64}$'::text))
+> con|identity_link_challenges|identity_link_challenges_token_hash_key|UNIQUE (token_hash)
+> con|identity_link_challenges|identity_link_challenges_user_id_fkey|FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE RESTRICT
+> con|identity_mfa_factors|identity_mfa_factors_check1|CHECK (((disabled_at IS NULL) OR (disabled_at >= created_at)))
+> con|identity_mfa_factors|identity_mfa_factors_check2|CHECK (((last_used_step IS NULL) OR (confirmed_at IS NOT NULL)))
+> con|identity_mfa_factors|identity_mfa_factors_check|CHECK (((confirmed_at IS NULL) OR (confirmed_at >= created_at)))
+> con|identity_mfa_factors|identity_mfa_factors_factor_type_check|CHECK ((factor_type = 1))
+> con|identity_mfa_factors|identity_mfa_factors_identity_id_factor_id_key|UNIQUE (identity_id, factor_id)
+> con|identity_mfa_factors|identity_mfa_factors_identity_id_fkey|FOREIGN KEY (identity_id) REFERENCES identities(identity_id) ON DELETE RESTRICT
+> con|identity_mfa_factors|identity_mfa_factors_key_id_check|CHECK ((key_id ~ '^[A-Za-z0-9._-]{1,64}$'::text))
+> con|identity_mfa_factors|identity_mfa_factors_last_used_step_check|CHECK ((last_used_step >= 0))
+> con|identity_mfa_factors|identity_mfa_factors_pkey|PRIMARY KEY (factor_id)
+> con|identity_mfa_factors|identity_mfa_factors_secret_ciphertext_check|CHECK ((octet_length(secret_ciphertext) = 36))
+> con|identity_mfa_factors|identity_mfa_factors_secret_nonce_check|CHECK ((octet_length(secret_nonce) = 12))
+> con|identity_mfa_recovery_codes|identity_mfa_recovery_codes_check1|CHECK (((used_at IS NULL) OR (invalidated_at IS NULL)))
+> con|identity_mfa_recovery_codes|identity_mfa_recovery_codes_check2|CHECK (((used_at IS NULL) OR (used_at >= created_at)))
+> con|identity_mfa_recovery_codes|identity_mfa_recovery_codes_check3|CHECK (((invalidated_at IS NULL) OR (invalidated_at >= created_at)))
+> con|identity_mfa_recovery_codes|identity_mfa_recovery_codes_check|CHECK (((used_at IS NULL) = (used_in_identity_session_id IS NULL)))
+> con|identity_mfa_recovery_codes|identity_mfa_recovery_codes_code_hash_check|CHECK ((code_hash ~ '^[0-9a-f]{64}$'::text))
+> con|identity_mfa_recovery_codes|identity_mfa_recovery_codes_factor_id_code_hash_key|UNIQUE (factor_id, code_hash)
+> con|identity_mfa_recovery_codes|identity_mfa_recovery_codes_identity_id_factor_id_fkey|FOREIGN KEY (identity_id, factor_id) REFERENCES identity_mfa_factors(identity_id, factor_id) ON DELETE RESTRICT
+> con|identity_mfa_recovery_codes|identity_mfa_recovery_codes_pkey|PRIMARY KEY (code_id)
+> con|identity_mfa_recovery_codes|identity_mfa_recovery_codes_used_in_identity_session_id_fkey|FOREIGN KEY (used_in_identity_session_id) REFERENCES identity_sessions(identity_session_id) ON DELETE RESTRICT
+> con|identity_mfa_recovery_codes|trg_identity_mfa_recovery_codes_sessao_restrita|TRIGGER DEFERRABLE INITIALLY DEFERRED
+765a1085,1099
+> con|identity_sessions|identity_sessions_check1|CHECK ((last_seen_at >= created_at))
+> con|identity_sessions|identity_sessions_check2|CHECK (((revoked_at IS NULL) OR (revoked_at >= created_at)))
+> con|identity_sessions|identity_sessions_check3|CHECK (((recovery_cleared_at IS NULL) OR ((recovery_used_at IS NOT NULL) AND (recovery_cleared_at >= recovery_used_at))))
+> con|identity_sessions|identity_sessions_check|CHECK (((expires_at > created_at) AND (expires_at <= (created_at + '12:00:00'::interval))))
+> con|identity_sessions|identity_sessions_csrf_token_check|CHECK ((csrf_token ~ '^[A-Za-z0-9_-]{43}$'::text))
+> con|identity_sessions|identity_sessions_identity_id_fkey|FOREIGN KEY (identity_id) REFERENCES identities(identity_id) ON DELETE RESTRICT
+> con|identity_sessions|identity_sessions_pkey|PRIMARY KEY (identity_session_id)
+> con|identity_sessions|identity_sessions_session_token_hash_check|CHECK ((session_token_hash ~ '^[0-9a-f]{64}$'::text))
+> con|identity_sessions|identity_sessions_session_token_hash_key|UNIQUE (session_token_hash)
+> con|identity_users|identity_users_identity_id_fkey|FOREIGN KEY (identity_id) REFERENCES identities(identity_id) ON DELETE RESTRICT
+> con|identity_users|identity_users_link_channel_check|CHECK ((link_channel = ANY (ARRAY['cadastro_web'::text, 'vinculacao'::text])))
+> con|identity_users|identity_users_pkey|PRIMARY KEY (identity_id, user_id)
+> con|identity_users|identity_users_user_id_fkey|FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE RESTRICT
+> con|identity_users|identity_users_user_id_key|UNIQUE (user_id)
+> con|identity_users|trg_identity_users_fechamento|TRIGGER DEFERRABLE INITIALLY DEFERRED
+891a1226
+> con|user_sessions|user_sessions_identity_session_id_fkey|FOREIGN KEY (identity_session_id) REFERENCES identity_sessions(identity_session_id) ON DELETE RESTRICT
+1031a1367,1368
+> fnacl|check_identity_link_closure()|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|check_identity_recovery_code_session()|nekkora_identity_owner|EXECUTE|grant=f
+1069a1407,1408
+> fnacl|enforce_identity_link_challenge_insert()|migrador_nekkora|EXECUTE|grant=f
+> fnacl|enforce_identity_session_insert()|migrador_nekkora|EXECUTE|grant=f
+1106a1446,1490
+> fnacl|identity_account_is_linked(uuid,uuid)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_account_is_linked(uuid,uuid)|nekkora_platform|EXECUTE|grant=f
+> fnacl|identity_challenge_lookup(text)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_challenge_lookup(text)|nekkora_platform|EXECUTE|grant=f
+> fnacl|identity_challenge_resolve(text)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_check_context(uuid,uuid)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_create_organization(text,text,text)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_create_organization(text,text,text)|nekkora_platform|EXECUTE|grant=f
+> fnacl|identity_create_organization_impl(text,text,text)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_email_token_lookup(text)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_email_token_lookup(text)|nekkora_platform|EXECUTE|grant=f
+> fnacl|identity_link_account(text,text,uuid)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_link_account(text,text,uuid)|nekkora_platform|EXECUTE|grant=f
+> fnacl|identity_link_account_impl(text,text,uuid)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_login_complete(text,text,bigint,text,text,text,timestamp with time zone)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_login_complete(text,text,bigint,text,text,text,timestamp with time zone)|nekkora_platform|EXECUTE|grant=f
+> fnacl|identity_mfa_confirm_first(text,uuid,text[],bigint,text,text,timestamp with time zone)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_mfa_confirm_first(text,uuid,text[],bigint,text,text,timestamp with time zone)|nekkora_platform|EXECUTE|grant=f
+> fnacl|identity_mfa_enroll_pending(text,text,bytea,bytea,text)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_mfa_enroll_pending(text,text,bytea,bytea,text)|nekkora_platform|EXECUTE|grant=f
+> fnacl|identity_mfa_replace(text,uuid,text[])|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_mfa_replace(text,uuid,text[])|nekkora_platform|EXECUTE|grant=f
+> fnacl|identity_org_creation_allowed(text)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_org_creation_allowed(text)|nekkora_platform|EXECUTE|grant=f
+> fnacl|identity_org_session_allowed(uuid,uuid,uuid)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_org_session_allowed(uuid,uuid,uuid)|nekkora_platform|EXECUTE|grant=f
+> fnacl|identity_org_session_target(text,uuid)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_org_session_target(text,uuid)|nekkora_platform|EXECUTE|grant=f
+> fnacl|identity_organizations(text)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_organizations(text)|nekkora_platform|EXECUTE|grant=f
+> fnacl|identity_password_change(text,text,text)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_password_change(text,text,text)|nekkora_platform|EXECUTE|grant=f
+> fnacl|identity_require_read_committed()|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_resolve_login(text)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_resolve_login(text)|nekkora_platform|EXECUTE|grant=f
+> fnacl|identity_session_can_replace_factor(timestamp with time zone,timestamp with time zone,boolean,timestamp with time zone)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_session_lookup(text)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_session_lookup(text)|nekkora_platform|EXECUTE|grant=f
+> fnacl|identity_session_proof(uuid,timestamp with time zone,text)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_session_resolve(text)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_signup_state(text)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_signup_state(text)|nekkora_platform|EXECUTE|grant=f
+> fnacl|identity_token_hash(text)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_valid_code_hashes(text[])|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_valid_session_params(text,text,timestamp with time zone)|nekkora_identity_owner|EXECUTE|grant=f
+1185a1570,1574
+> fnacl|prevent_identity_auth_challenge_change()|migrador_nekkora|EXECUTE|grant=f
+> fnacl|prevent_identity_change()|migrador_nekkora|EXECUTE|grant=f
+> fnacl|prevent_identity_credential_change()|migrador_nekkora|EXECUTE|grant=f
+> fnacl|prevent_identity_email_token_change()|migrador_nekkora|EXECUTE|grant=f
+> fnacl|prevent_identity_link_challenge_change()|migrador_nekkora|EXECUTE|grant=f
+1187a1577,1578
+> fnacl|prevent_identity_session_change()|migrador_nekkora|EXECUTE|grant=f
+> fnacl|prevent_local_token_change()|migrador_nekkora|EXECUTE|grant=f
+1199a1591
+> fnacl|prevent_user_credential_reassignment()|migrador_nekkora|EXECUTE|grant=f
+1217a1610,1612
+> fnacl|protect_identity_mfa_factor()|migrador_nekkora|EXECUTE|grant=f
+> fnacl|protect_identity_recovery_code()|migrador_nekkora|EXECUTE|grant=f
+> fnacl|provision_first_org_admin(uuid,uuid,uuid,text,uuid)|nekkora_identity_owner|EXECUTE|grant=f
+1221a1617
+> fnacl|provision_resource_limit(uuid,integer,smallint,bigint,uuid)|nekkora_identity_owner|EXECUTE|grant=f
+1230a1627
+> fnacl|refuse_local_entry_for_linked_account()|migrador_nekkora|EXECUTE|grant=f
+1249a1647,1648
+> fn|check_identity_link_closure()|owner=nekkora_identity_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=2aa5b12ad33a334ad37fdaf9ac490fcf
+> fn|check_identity_recovery_code_session()|owner=nekkora_identity_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=a8214d60069c31a9200b6a2311671c5e
+1268a1668,1669
+> fn|enforce_identity_link_challenge_insert()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=d00c882bb9a62b4b97e237375391f170
+> fn|enforce_identity_session_insert()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=9469e4ef3e30519dd0f198e5ad1c6880
+1278c1679
+< fn|enforce_user_session_mfa_on_insert()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=02946d059390c19be81c644923fa1534
+---
+> fn|enforce_user_session_mfa_on_insert()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=044e778ee0ae943c9206a075efa3bd5c
+1287a1689,1716
+> fn|identity_account_is_linked(uuid,uuid)|owner=nekkora_identity_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=boolean|md5=2a03b7ac87fb9261b7848df729b72b1c
+> fn|identity_challenge_lookup(text)|owner=nekkora_identity_owner|secdef=t|vol=s|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(challenge_id uuid, identity_id uuid)|md5=9d12719ccc8f9c93d4245ca2aff8a3ad
+> fn|identity_challenge_resolve(text)|owner=nekkora_identity_owner|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=record|md5=d409ef666db08e82cc30d9ad1207ff7e
+> fn|identity_check_context(uuid,uuid)|owner=nekkora_identity_owner|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=void|md5=f6569eaf8297dd09bb9fe0c6a7173355
+> fn|identity_create_organization(text,text,text)|owner=nekkora_identity_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=uuid|md5=6759e020330ddba263871cd9466a07ee
+> fn|identity_create_organization_impl(text,text,text)|owner=nekkora_identity_owner|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=uuid|md5=66216c7be20a2cf65628903b87f09de6
+> fn|identity_email_token_lookup(text)|owner=nekkora_identity_owner|secdef=t|vol=s|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(token_id uuid, identity_id uuid)|md5=5053b77fcc3afbd2e411ffd1fece9285
+> fn|identity_link_account(text,text,uuid)|owner=nekkora_identity_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=boolean|md5=2f05b6ab790e6036b9024a8297ca492a
+> fn|identity_link_account_impl(text,text,uuid)|owner=nekkora_identity_owner|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=boolean|md5=e9d8d1a7fd3984859457b712ff157f26
+> fn|identity_login_complete(text,text,bigint,text,text,text,timestamp with time zone)|owner=nekkora_identity_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(o_status text, o_identity_session_id uuid)|md5=884adf85d73a5de14cd76f0f0bf59503
+> fn|identity_mfa_confirm_first(text,uuid,text[],bigint,text,text,timestamp with time zone)|owner=nekkora_identity_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(o_status text, o_identity_session_id uuid)|md5=2730e8c065e2623a703d96c9db83509a
+> fn|identity_mfa_enroll_pending(text,text,bytea,bytea,text)|owner=nekkora_identity_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=uuid|md5=09ada6598d1beb0f041c3164cc3172e5
+> fn|identity_mfa_replace(text,uuid,text[])|owner=nekkora_identity_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=boolean|md5=8d421c0601657ec8b5e23dbf37675d29
+> fn|identity_org_creation_allowed(text)|owner=nekkora_identity_owner|secdef=t|vol=s|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=boolean|md5=bdfed3d89ac1dc8a6cc6674bfdeb3cce
+> fn|identity_org_session_allowed(uuid,uuid,uuid)|owner=nekkora_identity_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=boolean|md5=f8e28dcc2e8e8c0f6680622d5e0b11ca
+> fn|identity_org_session_target(text,uuid)|owner=nekkora_identity_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(organization_id uuid, user_id uuid)|md5=10a8fbd2d5d1ad76bc42d979d4bfc4cb
+> fn|identity_organizations(text)|owner=nekkora_identity_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(organization_id uuid, name text, role_codes text[])|md5=684414f483e80fb05b8e6b2be3a6733a
+> fn|identity_password_change(text,text,text)|owner=nekkora_identity_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=boolean|md5=4e483759f9e2c1d22d232a3cc81fa58f
+> fn|identity_require_read_committed()|owner=nekkora_identity_owner|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=void|md5=ed7a653ffaf2b62466aca474539dcf7a
+> fn|identity_resolve_login(text)|owner=nekkora_identity_owner|secdef=t|vol=s|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(identity_id uuid, status smallint, email_verified_at timestamp with time zone, password_hash text, tem_fator_confirmado boolean)|md5=f38964dd70c0035edc30c8a118b214f8
+> fn|identity_session_can_replace_factor(timestamp with time zone,timestamp with time zone,boolean,timestamp with time zone)|owner=nekkora_identity_owner|secdef=f|vol=i|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=boolean|md5=179d5702e1ca2a7c8a62c6199839eb87
+> fn|identity_session_lookup(text)|owner=nekkora_identity_owner|secdef=t|vol=s|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(identity_session_id uuid, identity_id uuid)|md5=fccd4f7075ffa42854288c371555d9ea
+> fn|identity_session_proof(uuid,timestamp with time zone,text)|owner=nekkora_identity_owner|secdef=f|vol=v|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=boolean|md5=705f26985a39d067628fab08b5ae00dd
+> fn|identity_session_resolve(text)|owner=nekkora_identity_owner|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=record|md5=fe2b08835d348f403c0e27c2b9b7ac0f
+> fn|identity_signup_state(text)|owner=nekkora_identity_owner|secdef=t|vol=s|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(identity_id uuid, status smallint)|md5=0bb5cfe273c8de5cf17e733b5be1aa18
+> fn|identity_token_hash(text)|owner=nekkora_identity_owner|secdef=f|vol=i|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=text|md5=a7655f6cff99deb3e2d27eba91c3efa0
+> fn|identity_valid_code_hashes(text[])|owner=nekkora_identity_owner|secdef=f|vol=i|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=boolean|md5=ea0af9e7a2acda7129db70d6566f708a
+> fn|identity_valid_session_params(text,text,timestamp with time zone)|owner=nekkora_identity_owner|secdef=f|vol=v|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=boolean|md5=7588d6f6a124f018eea8048de2d34b4e
+1328a1758,1762
+> fn|prevent_identity_auth_challenge_change()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=9eacda11bed9560aae45d1a88bf135e8
+> fn|prevent_identity_change()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=5fb6fef60f8f2fa96d8509e49d060c43
+> fn|prevent_identity_credential_change()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=caaad149a9e3c788d28034bbb0a201bd
+> fn|prevent_identity_email_token_change()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=93fc5e51c82d379d495cacaf9a2ff919
+> fn|prevent_identity_link_challenge_change()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=af0aa9c28a466f3a3c2932052d8d3140
+1329a1764,1765
+> fn|prevent_identity_session_change()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=49c41db91b7a8f7635cba9f247e0d113
+> fn|prevent_local_token_change()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=08905a2d8c1e3b02e0c1fb197e085cb4
+1337c1773,1774
+< fn|prevent_user_session_reactivation()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=c1755ca326405788ed20d8d550cfd190
+---
+> fn|prevent_user_credential_reassignment()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=f64a9107ec5bcdf6b147bc0ba33a40e2
+> fn|prevent_user_session_reactivation()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=7d01bf2101a56e59f2b5a6279777ddf1
+1346a1784,1785
+> fn|protect_identity_mfa_factor()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=7e3e0b4a7e55962db9237a776c70adc8
+> fn|protect_identity_recovery_code()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=1adb6d794a47a7ea0a5d15d8f1f2914b
+1353a1793
+> fn|refuse_local_entry_for_linked_account()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=864e1dc10dd7303436e5acbb18635572
+1370a1811,1812
+> idx|CREATE INDEX ix_identity_auth_challenges_ativos ON public.identity_auth_challenges USING btree (identity_id) WHERE ((consumed_at IS NULL) AND (invalidated_at IS NULL))
+> idx|CREATE INDEX ix_identity_events_identity ON public.identity_events USING btree (identity_id)
+1371a1814,1815
+> idx|CREATE INDEX ix_identity_mfa_recovery_codes_vivos ON public.identity_mfa_recovery_codes USING btree (identity_id) WHERE ((used_at IS NULL) AND (invalidated_at IS NULL))
+> idx|CREATE INDEX ix_identity_sessions_identity ON public.identity_sessions USING btree (identity_id) WHERE (revoked_at IS NULL)
+1378a1823
+> idx|CREATE INDEX ix_user_sessions_identity_session ON public.user_sessions USING btree (identity_session_id) WHERE (identity_session_id IS NOT NULL)
+1427a1873,1880
+> idx|CREATE UNIQUE INDEX identities_email_normalized_key ON public.identities USING btree (email_normalized)
+> idx|CREATE UNIQUE INDEX identities_pkey ON public.identities USING btree (identity_id)
+> idx|CREATE UNIQUE INDEX identity_auth_challenges_pkey ON public.identity_auth_challenges USING btree (challenge_id)
+> idx|CREATE UNIQUE INDEX identity_auth_challenges_token_hash_key ON public.identity_auth_challenges USING btree (token_hash)
+> idx|CREATE UNIQUE INDEX identity_credentials_pkey ON public.identity_credentials USING btree (identity_id)
+> idx|CREATE UNIQUE INDEX identity_email_tokens_pkey ON public.identity_email_tokens USING btree (token_id)
+> idx|CREATE UNIQUE INDEX identity_email_tokens_token_hash_key ON public.identity_email_tokens USING btree (token_hash)
+> idx|CREATE UNIQUE INDEX identity_events_pkey ON public.identity_events USING btree (event_id)
+1429a1883,1888
+> idx|CREATE UNIQUE INDEX identity_link_challenges_pkey ON public.identity_link_challenges USING btree (challenge_id)
+> idx|CREATE UNIQUE INDEX identity_link_challenges_token_hash_key ON public.identity_link_challenges USING btree (token_hash)
+> idx|CREATE UNIQUE INDEX identity_mfa_factors_identity_id_factor_id_key ON public.identity_mfa_factors USING btree (identity_id, factor_id)
+> idx|CREATE UNIQUE INDEX identity_mfa_factors_pkey ON public.identity_mfa_factors USING btree (factor_id)
+> idx|CREATE UNIQUE INDEX identity_mfa_recovery_codes_factor_id_code_hash_key ON public.identity_mfa_recovery_codes USING btree (factor_id, code_hash)
+> idx|CREATE UNIQUE INDEX identity_mfa_recovery_codes_pkey ON public.identity_mfa_recovery_codes USING btree (code_id)
+1431a1891,1894
+> idx|CREATE UNIQUE INDEX identity_sessions_pkey ON public.identity_sessions USING btree (identity_session_id)
+> idx|CREATE UNIQUE INDEX identity_sessions_session_token_hash_key ON public.identity_sessions USING btree (session_token_hash)
+> idx|CREATE UNIQUE INDEX identity_users_pkey ON public.identity_users USING btree (identity_id, user_id)
+> idx|CREATE UNIQUE INDEX identity_users_user_id_key ON public.identity_users USING btree (user_id)
+1472a1936,1937
+> idx|CREATE UNIQUE INDEX ux_identity_mfa_factors_confirmado ON public.identity_mfa_factors USING btree (identity_id) WHERE ((disabled_at IS NULL) AND (confirmed_at IS NOT NULL))
+> idx|CREATE UNIQUE INDEX ux_identity_mfa_factors_pendente ON public.identity_mfa_factors USING btree (identity_id) WHERE ((disabled_at IS NULL) AND (confirmed_at IS NULL))
+1500a1966
+> nspacl|public|nekkora_identity_owner|USAGE|grant=f
+1509a1976
+> pol|auth_challenges|identity_function_context|ALL|PERMISSIVE|{nekkora_identity_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+1540a2008
+> pol|email_verification_tokens|identity_function_context|ALL|PERMISSIVE|{nekkora_identity_owner}|using=(EXISTS ( SELECT 1    FROM users u   WHERE ((u.user_id = email_verification_tokens.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid))))|check=(EXISTS ( SELECT 1    FROM users u   WHERE ((u.user_id = email_verification_tokens.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid))))
+1547a2016,2025
+> pol|identities|identity_function_scope|ALL|PERMISSIVE|{nekkora_identity_owner}|using=true|check=true
+> pol|identities|identity_request_context|ALL|PERMISSIVE|{nekkora_platform}|using=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)|check=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+> pol|identity_auth_challenges|identity_function_scope|ALL|PERMISSIVE|{nekkora_identity_owner}|using=true|check=true
+> pol|identity_auth_challenges|identity_request_context|ALL|PERMISSIVE|{nekkora_platform}|using=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)|check=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+> pol|identity_credentials|identity_function_scope|ALL|PERMISSIVE|{nekkora_identity_owner}|using=true|check=true
+> pol|identity_credentials|identity_request_context|ALL|PERMISSIVE|{nekkora_platform}|using=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)|check=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+> pol|identity_email_tokens|identity_function_scope|ALL|PERMISSIVE|{nekkora_identity_owner}|using=true|check=true
+> pol|identity_email_tokens|identity_request_context|ALL|PERMISSIVE|{nekkora_platform}|using=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)|check=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+> pol|identity_events|identity_function_scope|ALL|PERMISSIVE|{nekkora_identity_owner}|using=true|check=true
+> pol|identity_events|identity_request_context|ALL|PERMISSIVE|{nekkora_platform}|using=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)|check=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+1549a2028,2033
+> pol|identity_link_challenges|identity_function_scope|ALL|PERMISSIVE|{nekkora_identity_owner}|using=true|check=true
+> pol|identity_link_challenges|identity_request_context|ALL|PERMISSIVE|{nekkora_platform}|using=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)|check=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+> pol|identity_mfa_factors|identity_function_scope|ALL|PERMISSIVE|{nekkora_identity_owner}|using=true|check=true
+> pol|identity_mfa_factors|identity_request_context|ALL|PERMISSIVE|{nekkora_platform}|using=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)|check=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+> pol|identity_mfa_recovery_codes|identity_function_scope|ALL|PERMISSIVE|{nekkora_identity_owner}|using=true|check=true
+> pol|identity_mfa_recovery_codes|identity_request_context|ALL|PERMISSIVE|{nekkora_platform}|using=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)|check=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+1551a2036,2038
+> pol|identity_sessions|identity_function_scope|ALL|PERMISSIVE|{nekkora_identity_owner}|using=true|check=true
+> pol|identity_sessions|identity_request_context|ALL|PERMISSIVE|{nekkora_platform}|using=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)|check=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+> pol|identity_users|identity_function_scope|ALL|PERMISSIVE|{nekkora_identity_owner}|using=true|check=true
+1556a2044
+> pol|organization_memberships|identity_function_context|ALL|PERMISSIVE|{nekkora_identity_owner}|using=((organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) OR (EXISTS ( SELECT 1    FROM identity_users iu   WHERE ((iu.user_id = organization_memberships.user_id) AND (iu.identity_id = (NULLIF(current_setting('nekkora.fn_identity_id'::text, true), ''::text))::uuid)))))|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+1564a2053
+> pol|organization_role_assignments|identity_function_context|ALL|PERMISSIVE|{nekkora_identity_owner}|using=((organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) OR (EXISTS ( SELECT 1    FROM (identity_users iu      JOIN organization_memberships m ON ((m.user_id = iu.user_id)))   WHERE ((m.organization_id = organization_role_assignments.organization_id) AND (m.membership_id = organization_role_assignments.membership_id) AND (iu.identity_id = (NULLIF(current_setting('nekkora.fn_identity_id'::text, true), ''::text))::uuid)))))|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+1568a2058
+> pol|organizations|identity_function_context|ALL|PERMISSIVE|{nekkora_identity_owner}|using=((organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) OR (EXISTS ( SELECT 1    FROM (identity_users iu      JOIN users u ON ((u.user_id = iu.user_id)))   WHERE ((u.organization_id = organizations.organization_id) AND (iu.identity_id = (NULLIF(current_setting('nekkora.fn_identity_id'::text, true), ''::text))::uuid)))))|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+1571a2062
+> pol|password_reset_tokens|identity_function_context|ALL|PERMISSIVE|{nekkora_identity_owner}|using=(EXISTS ( SELECT 1    FROM users u   WHERE ((u.user_id = password_reset_tokens.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid))))|check=(EXISTS ( SELECT 1    FROM users u   WHERE ((u.user_id = password_reset_tokens.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid))))
+1572a2064
+> pol|user_credentials|identity_function_context|ALL|PERMISSIVE|{nekkora_identity_owner}|using=(EXISTS ( SELECT 1    FROM users u   WHERE ((u.user_id = user_credentials.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid))))|check=(EXISTS ( SELECT 1    FROM users u   WHERE ((u.user_id = user_credentials.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid))))
+1573a2066
+> pol|user_mfa_factors|identity_function_context|ALL|PERMISSIVE|{nekkora_identity_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+1574a2068
+> pol|user_mfa_recovery_codes|identity_function_context|ALL|PERMISSIVE|{nekkora_identity_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+1575a2070
+> pol|user_sessions|identity_function_context|ALL|PERMISSIVE|{nekkora_identity_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+1579a2075
+> pol|users|identity_function_context|ALL|PERMISSIVE|{nekkora_identity_owner}|using=((organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) OR (EXISTS ( SELECT 1    FROM identity_users iu   WHERE ((iu.user_id = users.user_id) AND (iu.identity_id = (NULLIF(current_setting('nekkora.fn_identity_id'::text, true), ''::text))::uuid)))))|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+2105a2602,2696
+> relacl|identities_email_normalized_key|migrador_nekkora|DELETE|grant=f
+> relacl|identities_email_normalized_key|migrador_nekkora|INSERT|grant=f
+> relacl|identities_email_normalized_key|migrador_nekkora|REFERENCES|grant=f
+> relacl|identities_email_normalized_key|migrador_nekkora|SELECT|grant=f
+> relacl|identities_email_normalized_key|migrador_nekkora|TRIGGER|grant=f
+> relacl|identities_email_normalized_key|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identities_email_normalized_key|migrador_nekkora|UPDATE|grant=f
+> relacl|identities_pkey|migrador_nekkora|DELETE|grant=f
+> relacl|identities_pkey|migrador_nekkora|INSERT|grant=f
+> relacl|identities_pkey|migrador_nekkora|REFERENCES|grant=f
+> relacl|identities_pkey|migrador_nekkora|SELECT|grant=f
+> relacl|identities_pkey|migrador_nekkora|TRIGGER|grant=f
+> relacl|identities_pkey|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identities_pkey|migrador_nekkora|UPDATE|grant=f
+> relacl|identities|migrador_nekkora|DELETE|grant=f
+> relacl|identities|migrador_nekkora|INSERT|grant=f
+> relacl|identities|migrador_nekkora|REFERENCES|grant=f
+> relacl|identities|migrador_nekkora|SELECT|grant=f
+> relacl|identities|migrador_nekkora|TRIGGER|grant=f
+> relacl|identities|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identities|migrador_nekkora|UPDATE|grant=f
+> relacl|identities|nekkora_platform|SELECT|grant=f
+> relacl|identity_auth_challenges_pkey|migrador_nekkora|DELETE|grant=f
+> relacl|identity_auth_challenges_pkey|migrador_nekkora|INSERT|grant=f
+> relacl|identity_auth_challenges_pkey|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_auth_challenges_pkey|migrador_nekkora|SELECT|grant=f
+> relacl|identity_auth_challenges_pkey|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_auth_challenges_pkey|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_auth_challenges_pkey|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_auth_challenges_token_hash_key|migrador_nekkora|DELETE|grant=f
+> relacl|identity_auth_challenges_token_hash_key|migrador_nekkora|INSERT|grant=f
+> relacl|identity_auth_challenges_token_hash_key|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_auth_challenges_token_hash_key|migrador_nekkora|SELECT|grant=f
+> relacl|identity_auth_challenges_token_hash_key|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_auth_challenges_token_hash_key|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_auth_challenges_token_hash_key|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_auth_challenges|migrador_nekkora|DELETE|grant=f
+> relacl|identity_auth_challenges|migrador_nekkora|INSERT|grant=f
+> relacl|identity_auth_challenges|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_auth_challenges|migrador_nekkora|SELECT|grant=f
+> relacl|identity_auth_challenges|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_auth_challenges|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_auth_challenges|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_auth_challenges|nekkora_platform|SELECT|grant=f
+> relacl|identity_credentials_pkey|migrador_nekkora|DELETE|grant=f
+> relacl|identity_credentials_pkey|migrador_nekkora|INSERT|grant=f
+> relacl|identity_credentials_pkey|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_credentials_pkey|migrador_nekkora|SELECT|grant=f
+> relacl|identity_credentials_pkey|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_credentials_pkey|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_credentials_pkey|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_credentials|migrador_nekkora|DELETE|grant=f
+> relacl|identity_credentials|migrador_nekkora|INSERT|grant=f
+> relacl|identity_credentials|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_credentials|migrador_nekkora|SELECT|grant=f
+> relacl|identity_credentials|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_credentials|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_credentials|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_email_tokens_pkey|migrador_nekkora|DELETE|grant=f
+> relacl|identity_email_tokens_pkey|migrador_nekkora|INSERT|grant=f
+> relacl|identity_email_tokens_pkey|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_email_tokens_pkey|migrador_nekkora|SELECT|grant=f
+> relacl|identity_email_tokens_pkey|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_email_tokens_pkey|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_email_tokens_pkey|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_email_tokens_token_hash_key|migrador_nekkora|DELETE|grant=f
+> relacl|identity_email_tokens_token_hash_key|migrador_nekkora|INSERT|grant=f
+> relacl|identity_email_tokens_token_hash_key|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_email_tokens_token_hash_key|migrador_nekkora|SELECT|grant=f
+> relacl|identity_email_tokens_token_hash_key|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_email_tokens_token_hash_key|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_email_tokens_token_hash_key|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_email_tokens|migrador_nekkora|DELETE|grant=f
+> relacl|identity_email_tokens|migrador_nekkora|INSERT|grant=f
+> relacl|identity_email_tokens|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_email_tokens|migrador_nekkora|SELECT|grant=f
+> relacl|identity_email_tokens|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_email_tokens|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_email_tokens|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_email_tokens|nekkora_platform|SELECT|grant=f
+> relacl|identity_events_pkey|migrador_nekkora|DELETE|grant=f
+> relacl|identity_events_pkey|migrador_nekkora|INSERT|grant=f
+> relacl|identity_events_pkey|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_events_pkey|migrador_nekkora|SELECT|grant=f
+> relacl|identity_events_pkey|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_events_pkey|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_events_pkey|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_events|migrador_nekkora|DELETE|grant=f
+> relacl|identity_events|migrador_nekkora|INSERT|grant=f
+> relacl|identity_events|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_events|migrador_nekkora|SELECT|grant=f
+> relacl|identity_events|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_events|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_events|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_events|nekkora_identity_owner|INSERT|grant=f
+2129a2721,2791
+> relacl|identity_link_challenges_pkey|migrador_nekkora|DELETE|grant=f
+> relacl|identity_link_challenges_pkey|migrador_nekkora|INSERT|grant=f
+> relacl|identity_link_challenges_pkey|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_link_challenges_pkey|migrador_nekkora|SELECT|grant=f
+> relacl|identity_link_challenges_pkey|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_link_challenges_pkey|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_link_challenges_pkey|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_link_challenges_token_hash_key|migrador_nekkora|DELETE|grant=f
+> relacl|identity_link_challenges_token_hash_key|migrador_nekkora|INSERT|grant=f
+> relacl|identity_link_challenges_token_hash_key|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_link_challenges_token_hash_key|migrador_nekkora|SELECT|grant=f
+> relacl|identity_link_challenges_token_hash_key|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_link_challenges_token_hash_key|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_link_challenges_token_hash_key|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_link_challenges|migrador_nekkora|DELETE|grant=f
+> relacl|identity_link_challenges|migrador_nekkora|INSERT|grant=f
+> relacl|identity_link_challenges|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_link_challenges|migrador_nekkora|SELECT|grant=f
+> relacl|identity_link_challenges|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_link_challenges|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_link_challenges|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_link_challenges|nekkora_identity_owner|SELECT|grant=f
+> relacl|identity_link_challenges|nekkora_platform|SELECT|grant=f
+> relacl|identity_mfa_factors_identity_id_factor_id_key|migrador_nekkora|DELETE|grant=f
+> relacl|identity_mfa_factors_identity_id_factor_id_key|migrador_nekkora|INSERT|grant=f
+> relacl|identity_mfa_factors_identity_id_factor_id_key|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_mfa_factors_identity_id_factor_id_key|migrador_nekkora|SELECT|grant=f
+> relacl|identity_mfa_factors_identity_id_factor_id_key|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_mfa_factors_identity_id_factor_id_key|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_mfa_factors_identity_id_factor_id_key|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_mfa_factors_pkey|migrador_nekkora|DELETE|grant=f
+> relacl|identity_mfa_factors_pkey|migrador_nekkora|INSERT|grant=f
+> relacl|identity_mfa_factors_pkey|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_mfa_factors_pkey|migrador_nekkora|SELECT|grant=f
+> relacl|identity_mfa_factors_pkey|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_mfa_factors_pkey|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_mfa_factors_pkey|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_mfa_factors|migrador_nekkora|DELETE|grant=f
+> relacl|identity_mfa_factors|migrador_nekkora|INSERT|grant=f
+> relacl|identity_mfa_factors|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_mfa_factors|migrador_nekkora|SELECT|grant=f
+> relacl|identity_mfa_factors|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_mfa_factors|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_mfa_factors|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_mfa_factors|nekkora_identity_owner|INSERT|grant=f
+> relacl|identity_mfa_factors|nekkora_identity_owner|SELECT|grant=f
+> relacl|identity_mfa_factors|nekkora_platform|SELECT|grant=f
+> relacl|identity_mfa_recovery_codes_factor_id_code_hash_key|migrador_nekkora|DELETE|grant=f
+> relacl|identity_mfa_recovery_codes_factor_id_code_hash_key|migrador_nekkora|INSERT|grant=f
+> relacl|identity_mfa_recovery_codes_factor_id_code_hash_key|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_mfa_recovery_codes_factor_id_code_hash_key|migrador_nekkora|SELECT|grant=f
+> relacl|identity_mfa_recovery_codes_factor_id_code_hash_key|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_mfa_recovery_codes_factor_id_code_hash_key|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_mfa_recovery_codes_factor_id_code_hash_key|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_mfa_recovery_codes_pkey|migrador_nekkora|DELETE|grant=f
+> relacl|identity_mfa_recovery_codes_pkey|migrador_nekkora|INSERT|grant=f
+> relacl|identity_mfa_recovery_codes_pkey|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_mfa_recovery_codes_pkey|migrador_nekkora|SELECT|grant=f
+> relacl|identity_mfa_recovery_codes_pkey|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_mfa_recovery_codes_pkey|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_mfa_recovery_codes_pkey|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_mfa_recovery_codes|migrador_nekkora|DELETE|grant=f
+> relacl|identity_mfa_recovery_codes|migrador_nekkora|INSERT|grant=f
+> relacl|identity_mfa_recovery_codes|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_mfa_recovery_codes|migrador_nekkora|SELECT|grant=f
+> relacl|identity_mfa_recovery_codes|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_mfa_recovery_codes|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_mfa_recovery_codes|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_mfa_recovery_codes|nekkora_identity_owner|INSERT|grant=f
+> relacl|identity_mfa_recovery_codes|nekkora_identity_owner|SELECT|grant=f
+> relacl|identity_mfa_recovery_codes|nekkora_platform|SELECT|grant=f
+2151a2814,2859
+> relacl|identity_sessions_pkey|migrador_nekkora|DELETE|grant=f
+> relacl|identity_sessions_pkey|migrador_nekkora|INSERT|grant=f
+> relacl|identity_sessions_pkey|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_sessions_pkey|migrador_nekkora|SELECT|grant=f
+> relacl|identity_sessions_pkey|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_sessions_pkey|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_sessions_pkey|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_sessions_session_token_hash_key|migrador_nekkora|DELETE|grant=f
+> relacl|identity_sessions_session_token_hash_key|migrador_nekkora|INSERT|grant=f
+> relacl|identity_sessions_session_token_hash_key|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_sessions_session_token_hash_key|migrador_nekkora|SELECT|grant=f
+> relacl|identity_sessions_session_token_hash_key|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_sessions_session_token_hash_key|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_sessions_session_token_hash_key|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_sessions|migrador_nekkora|DELETE|grant=f
+> relacl|identity_sessions|migrador_nekkora|INSERT|grant=f
+> relacl|identity_sessions|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_sessions|migrador_nekkora|SELECT|grant=f
+> relacl|identity_sessions|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_sessions|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_sessions|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_sessions|nekkora_identity_owner|SELECT|grant=f
+> relacl|identity_sessions|nekkora_platform|SELECT|grant=f
+> relacl|identity_users_pkey|migrador_nekkora|DELETE|grant=f
+> relacl|identity_users_pkey|migrador_nekkora|INSERT|grant=f
+> relacl|identity_users_pkey|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_users_pkey|migrador_nekkora|SELECT|grant=f
+> relacl|identity_users_pkey|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_users_pkey|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_users_pkey|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_users_user_id_key|migrador_nekkora|DELETE|grant=f
+> relacl|identity_users_user_id_key|migrador_nekkora|INSERT|grant=f
+> relacl|identity_users_user_id_key|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_users_user_id_key|migrador_nekkora|SELECT|grant=f
+> relacl|identity_users_user_id_key|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_users_user_id_key|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_users_user_id_key|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_users|migrador_nekkora|DELETE|grant=f
+> relacl|identity_users|migrador_nekkora|INSERT|grant=f
+> relacl|identity_users|migrador_nekkora|REFERENCES|grant=f
+> relacl|identity_users|migrador_nekkora|SELECT|grant=f
+> relacl|identity_users|migrador_nekkora|TRIGGER|grant=f
+> relacl|identity_users|migrador_nekkora|TRUNCATE|grant=f
+> relacl|identity_users|migrador_nekkora|UPDATE|grant=f
+> relacl|identity_users|nekkora_identity_owner|INSERT|grant=f
+> relacl|identity_users|nekkora_identity_owner|SELECT|grant=f
+2256a2965,2978
+> relacl|ix_identity_auth_challenges_ativos|migrador_nekkora|DELETE|grant=f
+> relacl|ix_identity_auth_challenges_ativos|migrador_nekkora|INSERT|grant=f
+> relacl|ix_identity_auth_challenges_ativos|migrador_nekkora|REFERENCES|grant=f
+> relacl|ix_identity_auth_challenges_ativos|migrador_nekkora|SELECT|grant=f
+> relacl|ix_identity_auth_challenges_ativos|migrador_nekkora|TRIGGER|grant=f
+> relacl|ix_identity_auth_challenges_ativos|migrador_nekkora|TRUNCATE|grant=f
+> relacl|ix_identity_auth_challenges_ativos|migrador_nekkora|UPDATE|grant=f
+> relacl|ix_identity_events_identity|migrador_nekkora|DELETE|grant=f
+> relacl|ix_identity_events_identity|migrador_nekkora|INSERT|grant=f
+> relacl|ix_identity_events_identity|migrador_nekkora|REFERENCES|grant=f
+> relacl|ix_identity_events_identity|migrador_nekkora|SELECT|grant=f
+> relacl|ix_identity_events_identity|migrador_nekkora|TRIGGER|grant=f
+> relacl|ix_identity_events_identity|migrador_nekkora|TRUNCATE|grant=f
+> relacl|ix_identity_events_identity|migrador_nekkora|UPDATE|grant=f
+2263a2986,2999
+> relacl|ix_identity_mfa_recovery_codes_vivos|migrador_nekkora|DELETE|grant=f
+> relacl|ix_identity_mfa_recovery_codes_vivos|migrador_nekkora|INSERT|grant=f
+> relacl|ix_identity_mfa_recovery_codes_vivos|migrador_nekkora|REFERENCES|grant=f
+> relacl|ix_identity_mfa_recovery_codes_vivos|migrador_nekkora|SELECT|grant=f
+> relacl|ix_identity_mfa_recovery_codes_vivos|migrador_nekkora|TRIGGER|grant=f
+> relacl|ix_identity_mfa_recovery_codes_vivos|migrador_nekkora|TRUNCATE|grant=f
+> relacl|ix_identity_mfa_recovery_codes_vivos|migrador_nekkora|UPDATE|grant=f
+> relacl|ix_identity_sessions_identity|migrador_nekkora|DELETE|grant=f
+> relacl|ix_identity_sessions_identity|migrador_nekkora|INSERT|grant=f
+> relacl|ix_identity_sessions_identity|migrador_nekkora|REFERENCES|grant=f
+> relacl|ix_identity_sessions_identity|migrador_nekkora|SELECT|grant=f
+> relacl|ix_identity_sessions_identity|migrador_nekkora|TRIGGER|grant=f
+> relacl|ix_identity_sessions_identity|migrador_nekkora|TRUNCATE|grant=f
+> relacl|ix_identity_sessions_identity|migrador_nekkora|UPDATE|grant=f
+2312a3049,3055
+> relacl|ix_user_sessions_identity_session|migrador_nekkora|DELETE|grant=f
+> relacl|ix_user_sessions_identity_session|migrador_nekkora|INSERT|grant=f
+> relacl|ix_user_sessions_identity_session|migrador_nekkora|REFERENCES|grant=f
+> relacl|ix_user_sessions_identity_session|migrador_nekkora|SELECT|grant=f
+> relacl|ix_user_sessions_identity_session|migrador_nekkora|TRIGGER|grant=f
+> relacl|ix_user_sessions_identity_session|migrador_nekkora|TRUNCATE|grant=f
+> relacl|ix_user_sessions_identity_session|migrador_nekkora|UPDATE|grant=f
+2834a3578,3591
+> relacl|ux_identity_mfa_factors_confirmado|migrador_nekkora|DELETE|grant=f
+> relacl|ux_identity_mfa_factors_confirmado|migrador_nekkora|INSERT|grant=f
+> relacl|ux_identity_mfa_factors_confirmado|migrador_nekkora|REFERENCES|grant=f
+> relacl|ux_identity_mfa_factors_confirmado|migrador_nekkora|SELECT|grant=f
+> relacl|ux_identity_mfa_factors_confirmado|migrador_nekkora|TRIGGER|grant=f
+> relacl|ux_identity_mfa_factors_confirmado|migrador_nekkora|TRUNCATE|grant=f
+> relacl|ux_identity_mfa_factors_confirmado|migrador_nekkora|UPDATE|grant=f
+> relacl|ux_identity_mfa_factors_pendente|migrador_nekkora|DELETE|grant=f
+> relacl|ux_identity_mfa_factors_pendente|migrador_nekkora|INSERT|grant=f
+> relacl|ux_identity_mfa_factors_pendente|migrador_nekkora|REFERENCES|grant=f
+> relacl|ux_identity_mfa_factors_pendente|migrador_nekkora|SELECT|grant=f
+> relacl|ux_identity_mfa_factors_pendente|migrador_nekkora|TRIGGER|grant=f
+> relacl|ux_identity_mfa_factors_pendente|migrador_nekkora|TRUNCATE|grant=f
+> relacl|ux_identity_mfa_factors_pendente|migrador_nekkora|UPDATE|grant=f
+3178a3936,3948
+> rel|identities_email_normalized_key|i|owner=migrador_nekkora|rls=f|force=f
+> rel|identities_pkey|i|owner=migrador_nekkora|rls=f|force=f
+> rel|identities|r|owner=migrador_nekkora|rls=t|force=t
+> rel|identity_auth_challenges_pkey|i|owner=migrador_nekkora|rls=f|force=f
+> rel|identity_auth_challenges_token_hash_key|i|owner=migrador_nekkora|rls=f|force=f
+> rel|identity_auth_challenges|r|owner=migrador_nekkora|rls=t|force=t
+> rel|identity_credentials_pkey|i|owner=migrador_nekkora|rls=f|force=f
+> rel|identity_credentials|r|owner=migrador_nekkora|rls=t|force=t
+> rel|identity_email_tokens_pkey|i|owner=migrador_nekkora|rls=f|force=f
+> rel|identity_email_tokens_token_hash_key|i|owner=migrador_nekkora|rls=f|force=f
+> rel|identity_email_tokens|r|owner=migrador_nekkora|rls=t|force=t
+> rel|identity_events_pkey|i|owner=migrador_nekkora|rls=f|force=f
+> rel|identity_events|r|owner=migrador_nekkora|rls=t|force=t
+3181a3952,3960
+> rel|identity_link_challenges_pkey|i|owner=migrador_nekkora|rls=f|force=f
+> rel|identity_link_challenges_token_hash_key|i|owner=migrador_nekkora|rls=f|force=f
+> rel|identity_link_challenges|r|owner=migrador_nekkora|rls=t|force=t
+> rel|identity_mfa_factors_identity_id_factor_id_key|i|owner=migrador_nekkora|rls=f|force=f
+> rel|identity_mfa_factors_pkey|i|owner=migrador_nekkora|rls=f|force=f
+> rel|identity_mfa_factors|r|owner=migrador_nekkora|rls=t|force=t
+> rel|identity_mfa_recovery_codes_factor_id_code_hash_key|i|owner=migrador_nekkora|rls=f|force=f
+> rel|identity_mfa_recovery_codes_pkey|i|owner=migrador_nekkora|rls=f|force=f
+> rel|identity_mfa_recovery_codes|r|owner=migrador_nekkora|rls=t|force=t
+3184a3964,3969
+> rel|identity_sessions_pkey|i|owner=migrador_nekkora|rls=f|force=f
+> rel|identity_sessions_session_token_hash_key|i|owner=migrador_nekkora|rls=f|force=f
+> rel|identity_sessions|r|owner=migrador_nekkora|rls=t|force=t
+> rel|identity_users_pkey|i|owner=migrador_nekkora|rls=f|force=f
+> rel|identity_users_user_id_key|i|owner=migrador_nekkora|rls=f|force=f
+> rel|identity_users|r|owner=migrador_nekkora|rls=t|force=t
+3199a3985,3986
+> rel|ix_identity_auth_challenges_ativos|i|owner=migrador_nekkora|rls=f|force=f
+> rel|ix_identity_events_identity|i|owner=migrador_nekkora|rls=f|force=f
+3200a3988,3989
+> rel|ix_identity_mfa_recovery_codes_vivos|i|owner=migrador_nekkora|rls=f|force=f
+> rel|ix_identity_sessions_identity|i|owner=migrador_nekkora|rls=f|force=f
+3207a3997
+> rel|ix_user_sessions_identity_session|i|owner=migrador_nekkora|rls=f|force=f
+3273a4064,4065
+> rel|ux_identity_mfa_factors_confirmado|i|owner=migrador_nekkora|rls=f|force=f
+> rel|ux_identity_mfa_factors_pendente|i|owner=migrador_nekkora|rls=f|force=f
+3317a4110
+> trg|auth_challenges|trg_auth_challenges_refuse_linked|enabled=O|CREATE TRIGGER trg_auth_challenges_refuse_linked BEFORE INSERT OR UPDATE ON public.auth_challenges FOR EACH ROW EXECUTE FUNCTION refuse_local_entry_for_linked_account('consumed_at,invalidated_at', 'credential_hash,pending_password_hash')
+3359a4153,4154
+> trg|email_verification_tokens|trg_email_verification_tokens_prevent_change|enabled=O|CREATE TRIGGER trg_email_verification_tokens_prevent_change BEFORE UPDATE ON public.email_verification_tokens FOR EACH ROW EXECUTE FUNCTION prevent_local_token_change()
+> trg|email_verification_tokens|trg_email_verification_tokens_refuse_linked|enabled=O|CREATE TRIGGER trg_email_verification_tokens_refuse_linked BEFORE INSERT OR UPDATE ON public.email_verification_tokens FOR EACH ROW EXECUTE FUNCTION refuse_local_entry_for_linked_account('consumed_at,revoked_at', '')
+3370a4166,4187
+> trg|identities|trg_identities_prevent_change|enabled=O|CREATE TRIGGER trg_identities_prevent_change BEFORE UPDATE ON public.identities FOR EACH ROW EXECUTE FUNCTION prevent_identity_change()
+> trg|identities|trg_identities_set_updated_at|enabled=O|CREATE TRIGGER trg_identities_set_updated_at BEFORE UPDATE ON public.identities FOR EACH ROW EXECUTE FUNCTION set_updated_at()
+> trg|identity_auth_challenges|trg_identity_auth_challenges_prevent_change|enabled=O|CREATE TRIGGER trg_identity_auth_challenges_prevent_change BEFORE UPDATE ON public.identity_auth_challenges FOR EACH ROW EXECUTE FUNCTION prevent_identity_auth_challenge_change()
+> trg|identity_auth_challenges|trg_identity_auth_challenges_prevent_delete|enabled=O|CREATE TRIGGER trg_identity_auth_challenges_prevent_delete BEFORE DELETE ON public.identity_auth_challenges FOR EACH ROW EXECUTE FUNCTION prevent_delete()
+> trg|identity_auth_challenges|trg_identity_auth_challenges_prevent_truncate|enabled=O|CREATE TRIGGER trg_identity_auth_challenges_prevent_truncate BEFORE TRUNCATE ON public.identity_auth_challenges FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|identity_credentials|trg_identity_credentials_prevent_change|enabled=O|CREATE TRIGGER trg_identity_credentials_prevent_change BEFORE UPDATE ON public.identity_credentials FOR EACH ROW EXECUTE FUNCTION prevent_identity_credential_change()
+> trg|identity_credentials|trg_identity_credentials_set_updated_at|enabled=O|CREATE TRIGGER trg_identity_credentials_set_updated_at BEFORE UPDATE ON public.identity_credentials FOR EACH ROW EXECUTE FUNCTION set_updated_at()
+> trg|identity_email_tokens|trg_identity_email_tokens_prevent_change|enabled=O|CREATE TRIGGER trg_identity_email_tokens_prevent_change BEFORE UPDATE ON public.identity_email_tokens FOR EACH ROW EXECUTE FUNCTION prevent_identity_email_token_change()
+> trg|identity_email_tokens|trg_identity_email_tokens_prevent_delete|enabled=O|CREATE TRIGGER trg_identity_email_tokens_prevent_delete BEFORE DELETE ON public.identity_email_tokens FOR EACH ROW EXECUTE FUNCTION prevent_delete()
+> trg|identity_email_tokens|trg_identity_email_tokens_prevent_truncate|enabled=O|CREATE TRIGGER trg_identity_email_tokens_prevent_truncate BEFORE TRUNCATE ON public.identity_email_tokens FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|identity_events|trg_identity_events_prevent_delete|enabled=O|CREATE TRIGGER trg_identity_events_prevent_delete BEFORE DELETE ON public.identity_events FOR EACH ROW EXECUTE FUNCTION prevent_delete()
+> trg|identity_events|trg_identity_events_prevent_truncate|enabled=O|CREATE TRIGGER trg_identity_events_prevent_truncate BEFORE TRUNCATE ON public.identity_events FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|identity_events|trg_identity_events_prevent_update|enabled=O|CREATE TRIGGER trg_identity_events_prevent_update BEFORE UPDATE ON public.identity_events FOR EACH ROW EXECUTE FUNCTION prevent_update()
+> trg|identity_link_challenges|trg_identity_link_challenges_enforce_insert|enabled=O|CREATE TRIGGER trg_identity_link_challenges_enforce_insert BEFORE INSERT ON public.identity_link_challenges FOR EACH ROW EXECUTE FUNCTION enforce_identity_link_challenge_insert()
+> trg|identity_link_challenges|trg_identity_link_challenges_prevent_change|enabled=O|CREATE TRIGGER trg_identity_link_challenges_prevent_change BEFORE UPDATE ON public.identity_link_challenges FOR EACH ROW EXECUTE FUNCTION prevent_identity_link_challenge_change()
+> trg|identity_link_challenges|trg_identity_link_challenges_prevent_delete|enabled=O|CREATE TRIGGER trg_identity_link_challenges_prevent_delete BEFORE DELETE ON public.identity_link_challenges FOR EACH ROW EXECUTE FUNCTION prevent_delete()
+> trg|identity_link_challenges|trg_identity_link_challenges_prevent_truncate|enabled=O|CREATE TRIGGER trg_identity_link_challenges_prevent_truncate BEFORE TRUNCATE ON public.identity_link_challenges FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|identity_mfa_factors|trg_identity_mfa_factors_prevent_truncate|enabled=O|CREATE TRIGGER trg_identity_mfa_factors_prevent_truncate BEFORE TRUNCATE ON public.identity_mfa_factors FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|identity_mfa_factors|trg_identity_mfa_factors_protect|enabled=O|CREATE TRIGGER trg_identity_mfa_factors_protect BEFORE INSERT OR DELETE OR UPDATE ON public.identity_mfa_factors FOR EACH ROW EXECUTE FUNCTION protect_identity_mfa_factor()
+> trg|identity_mfa_recovery_codes|trg_identity_mfa_recovery_codes_prevent_truncate|enabled=O|CREATE TRIGGER trg_identity_mfa_recovery_codes_prevent_truncate BEFORE TRUNCATE ON public.identity_mfa_recovery_codes FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|identity_mfa_recovery_codes|trg_identity_mfa_recovery_codes_protect|enabled=O|CREATE TRIGGER trg_identity_mfa_recovery_codes_protect BEFORE INSERT OR DELETE OR UPDATE ON public.identity_mfa_recovery_codes FOR EACH ROW EXECUTE FUNCTION protect_identity_recovery_code()
+> trg|identity_mfa_recovery_codes|trg_identity_mfa_recovery_codes_sessao_restrita|enabled=O|CREATE CONSTRAINT TRIGGER trg_identity_mfa_recovery_codes_sessao_restrita AFTER UPDATE ON public.identity_mfa_recovery_codes DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (((new.used_at IS NOT NULL) AND (old.used_at IS NULL))) EXECUTE FUNCTION check_identity_recovery_code_session()
+3373a4191,4198
+> trg|identity_sessions|trg_identity_sessions_enforce_insert|enabled=O|CREATE TRIGGER trg_identity_sessions_enforce_insert BEFORE INSERT ON public.identity_sessions FOR EACH ROW EXECUTE FUNCTION enforce_identity_session_insert()
+> trg|identity_sessions|trg_identity_sessions_prevent_change|enabled=O|CREATE TRIGGER trg_identity_sessions_prevent_change BEFORE UPDATE ON public.identity_sessions FOR EACH ROW EXECUTE FUNCTION prevent_identity_session_change()
+> trg|identity_sessions|trg_identity_sessions_prevent_delete|enabled=O|CREATE TRIGGER trg_identity_sessions_prevent_delete BEFORE DELETE ON public.identity_sessions FOR EACH ROW EXECUTE FUNCTION prevent_delete()
+> trg|identity_sessions|trg_identity_sessions_prevent_truncate|enabled=O|CREATE TRIGGER trg_identity_sessions_prevent_truncate BEFORE TRUNCATE ON public.identity_sessions FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|identity_users|trg_identity_users_fechamento|enabled=O|CREATE CONSTRAINT TRIGGER trg_identity_users_fechamento AFTER INSERT ON public.identity_users DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION check_identity_link_closure()
+> trg|identity_users|trg_identity_users_prevent_delete|enabled=O|CREATE TRIGGER trg_identity_users_prevent_delete BEFORE DELETE ON public.identity_users FOR EACH ROW EXECUTE FUNCTION prevent_delete()
+> trg|identity_users|trg_identity_users_prevent_truncate|enabled=O|CREATE TRIGGER trg_identity_users_prevent_truncate BEFORE TRUNCATE ON public.identity_users FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|identity_users|trg_identity_users_prevent_update|enabled=O|CREATE TRIGGER trg_identity_users_prevent_update BEFORE UPDATE ON public.identity_users FOR EACH ROW EXECUTE FUNCTION prevent_update()
+3405a4231,4234
+> trg|password_reset_tokens|trg_password_reset_tokens_prevent_change|enabled=O|CREATE TRIGGER trg_password_reset_tokens_prevent_change BEFORE UPDATE ON public.password_reset_tokens FOR EACH ROW EXECUTE FUNCTION prevent_local_token_change()
+> trg|password_reset_tokens|trg_password_reset_tokens_refuse_linked|enabled=O|CREATE TRIGGER trg_password_reset_tokens_refuse_linked BEFORE INSERT OR UPDATE ON public.password_reset_tokens FOR EACH ROW EXECUTE FUNCTION refuse_local_entry_for_linked_account('consumed_at,revoked_at', '')
+> trg|user_credentials|trg_user_credentials_prevent_reassignment|enabled=O|CREATE TRIGGER trg_user_credentials_prevent_reassignment BEFORE UPDATE ON public.user_credentials FOR EACH ROW EXECUTE FUNCTION prevent_user_credential_reassignment()
+> trg|user_credentials|trg_user_credentials_refuse_linked|enabled=O|CREATE TRIGGER trg_user_credentials_refuse_linked BEFORE INSERT OR UPDATE ON public.user_credentials FOR EACH ROW EXECUTE FUNCTION refuse_local_entry_for_linked_account('senha')
+3409a4239
+> trg|user_mfa_factors|trg_user_mfa_factors_refuse_linked|enabled=O|CREATE TRIGGER trg_user_mfa_factors_refuse_linked BEFORE INSERT OR UPDATE ON public.user_mfa_factors FOR EACH ROW EXECUTE FUNCTION refuse_local_entry_for_linked_account('disabled_at', '')
+3412a4243
+> trg|user_mfa_recovery_codes|trg_user_mfa_recovery_codes_refuse_linked|enabled=O|CREATE TRIGGER trg_user_mfa_recovery_codes_refuse_linked BEFORE INSERT OR UPDATE ON public.user_mfa_recovery_codes FOR EACH ROW EXECUTE FUNCTION refuse_local_entry_for_linked_account('used_at,invalidated_at', '')

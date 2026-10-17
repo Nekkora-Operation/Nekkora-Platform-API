@@ -41,6 +41,8 @@ public record PlatformProperties(
             int r5PerIdentity, int r5PerIp, Duration r5Window,
             int r6Capacity, double r6PerSecond,
             int r7Capacity, double r7PerSecond,
-            Duration recoveryResponseFloor) {
+            Duration recoveryResponseFloor,
+            int r10Exchanges, Duration r10Window,
+            int r11Creations, Duration r11Window) {
     }
 }

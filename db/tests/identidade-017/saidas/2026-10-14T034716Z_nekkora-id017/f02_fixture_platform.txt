@@ -1,0 +1,217 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+              nova_conta              
+--------------------------------------
+ c2318f8e-1754-40ee-ad2f-88e7b4d0e8f8
+(1 row)
+
+              nova_conta              
+--------------------------------------
+ e898a9d3-1980-4856-b5f1-ecd4a9728082
+(1 row)
+
+              nova_conta              
+--------------------------------------
+ 61d819c6-3f4e-42a4-8714-f0b18ba8af7e
+(1 row)
+
+              nova_conta              
+--------------------------------------
+ a4837bd2-8f80-4432-9d8e-9737acf32fc3
+(1 row)
+
+              nova_conta              
+--------------------------------------
+ 19140730-edc6-4407-9a55-9a2a74d14bef
+(1 row)
+
+              nova_conta              
+--------------------------------------
+ 70dd6110-2603-4efd-8042-4533ce78f5e8
+(1 row)
+
+              nova_conta              
+--------------------------------------
+ 70fc0cfe-288c-4f28-ac8a-7d02a6bdfc79
+(1 row)
+
+              nova_conta              
+--------------------------------------
+ f56fe658-3377-496a-8f07-8b45be3affab
+ c78e5f18-c716-47ff-a223-e3730bf7e6b4
+ 4daf46dc-4bed-4e75-9923-b36eae1b0f5f
+ 331d94d9-52a4-4bbd-8ae7-e0752928d3bd
+ 830d2694-e502-4258-be7f-a8547a95b8dd
+ b8f22cd7-226e-475a-af97-5239060a0d00
+ bfb3ac01-eaf5-4619-9d4b-db466b5ccc5e
+ 19bb8009-5217-4f97-a626-da2cadd71e92
+ 3c8fe44c-1864-457d-9050-6eb7ac68eec0
+ 608762ac-f3fa-4866-b7ba-b8882aa3de8d
+ 2d7043cb-04c6-415a-91c4-370f026aca7a
+ d2a4c551-8ad3-4f98-a0f2-3e3283aa9a7a
+ 0e04edd7-16f3-42e4-bd5a-7cb1fe0cb973
+ 3c520a60-1e3f-4287-8410-4a9ffdbe19ed
+ 32b75472-1571-4b47-bceb-003b2527a0d4
+ 13e0133d-7ac0-4711-863e-744cab3af378
+ c50619ca-efc9-46b9-9a64-00dba3ef7952
+ 3ce02bb2-ca16-4bbf-b978-9596b056a3e2
+ 27e95750-0aae-4aa6-b38a-225b9f60a68c
+ 00daf27a-af38-453e-84b3-943475193d83
+(20 rows)
+
+              nova_conta              
+--------------------------------------
+ 44a0d796-226a-4cdd-8772-63ec3717c172
+(1 row)
+
+              nova_conta              
+--------------------------------------
+ 157ba121-f54c-4f6c-b3e8-a8f49dde46d0
+(1 row)
+
+              nova_conta              
+--------------------------------------
+ 1cf3f5a1-aa30-4e7b-aad8-6dcd25228bc2
+(1 row)
+
+           nova_identidade            
+--------------------------------------
+ 722ddc73-762e-4666-ae7f-d45e43e94f33
+ 355edd39-c0dc-42e8-8995-2bfdb56d2efe
+ d400b626-1bb9-467f-b589-5e418eeabc3d
+ e8e78242-71a4-48af-b0c5-9db92d268aee
+ ccc311ff-3c08-434f-b674-9f2e2b44be32
+ 752c60ae-e037-4bf0-baf0-2f0ce51af8d0
+(6 rows)
+
+           nova_identidade            
+--------------------------------------
+ 8a043fe7-d09a-4983-99f4-6b215ae5d2f6
+(1 row)
+
+           nova_identidade            
+--------------------------------------
+ a86a3774-07e0-4713-96af-0e4fd68baad4
+ 6cd8fade-e9d3-4641-a9e8-30b99ae7c636
+ 87b7487e-6244-496a-81de-a76c79bbd3ff
+ abbab533-f887-49b3-bb76-e49c3a536678
+ 8b7231e5-19bc-4fa2-bd5a-442799212eef
+ a2ce5107-122f-4712-99e6-264124d5d5cf
+ 993a933c-3cbe-4f7c-8b0f-bc81415edea2
+ 6faa686b-3a1c-40d4-8816-a03ea4892fb7
+ e53f7b07-484c-4387-bd2d-fd3fd7c2b1f2
+ 09e3ed3d-2347-4610-a840-cb20353cfda2
+ 5715985a-3106-439f-a98a-904dbe70fb11
+ bc6d782b-057f-4f6a-a9bf-4d37ba1381db
+ af503b89-c363-44a7-bc88-79b182d1f6b6
+ 601fba4e-36d5-49ef-b6db-c4d8f484bf36
+ ead775bf-ef43-40dd-8557-9c7e7074fe7c
+ c6ee2dce-1c77-4457-9938-1adc1dd01245
+ bf738005-81c5-44f7-8bb0-4d02803e9307
+ 30336fc2-5459-44dc-86a4-0775c20d491b
+ c532334d-29ec-44ff-9032-c92dcb97340c
+ 803ed6e4-f98c-4518-b1e3-42b23dec49e9
+(20 rows)
+
+           nova_identidade            
+--------------------------------------
+ c176ed24-a9a2-4dda-8dad-99b3de943ad6
+ f6a0e367-6be3-45a5-bf7e-3b6f041faa65
+ 8df9ba18-ac43-46c4-8851-38dcec7bdf16
+ 0ffb8c32-23ce-492d-ab04-06450fe71717
+ 259bfd69-901b-4ffc-bd51-948a55c5c0da
+ 3fc3b9e8-9904-4e13-ad3f-4fde64135276
+ 9a661640-c0bb-42e7-8c84-7e8272c1aaf4
+ 185058e7-2d03-4290-95dc-c021032bef6e
+ 0fc8c4a5-1348-4fbe-b2b8-eaa153f4c167
+(9 rows)
+
+            nova_sessao_id            
+--------------------------------------
+ fa1b29d7-abb2-443a-96bf-77e0cb8c4247
+ 0cfbf564-d174-4c5b-995e-c09ff15c0757
+ a2474729-7da6-4e5f-a718-43c22fe64cad
+ e8daba46-f6cc-4ddb-a30e-1e437a013dad
+ c712c259-3bb0-49dd-8dbe-320b2ec6d9a0
+ 8c0cffd6-797e-46ad-a755-85b44f037404
+(6 rows)
+
+            nova_sessao_id            
+--------------------------------------
+ 6286387c-607d-4aae-9981-e9c94e045b80
+ c3010398-4f8b-4f54-a5cf-dbf2e17929e2
+ 5775d505-0e00-43e8-b54e-bb7f5979e8c2
+ 1032accf-8961-4b1f-9703-005a49587f9a
+ 52c714f6-b643-4d78-8a0f-3849fceca606
+ 034c06d2-429f-4dc3-bd8a-645b7914f538
+ 138a8af6-edb9-4af7-bbd4-053421635e78
+ fdc2d5e5-7c36-4faf-b808-34d7735d32a6
+ 64494035-31f9-41c4-85b5-d73013148205
+ c69e6ece-f03e-43a4-8689-f33a348f1a86
+ a7772e0f-5d3a-4dbe-bfa6-ea0f963e954a
+ db490921-c9fa-4853-a4f0-bd006355d5c6
+ 5be865c3-aaac-4138-89aa-c23d2750ecbf
+ 12e19385-a591-4a6f-b8f9-79a8ac1f4aba
+ 4286c88a-e5aa-472e-b49b-ed0a5ffa6604
+ 56ace713-ae59-4b68-9459-3a17d1dbe2ce
+ 02ac3de7-e98b-4116-847e-f6510bbf2035
+ 5fcaeb58-e166-47fe-9a3c-0c2b4744634b
+ 6f39923c-1e76-4139-959b-c72550c55ab1
+ e0db8fd0-5a7c-4bdf-b285-bb0eacc3d18b
+(20 rows)
+
+                   afirma                    
+---------------------------------------------
+ ok: fixture: ana@ex.test vinculada em O1
+ ok: fixture: xavier@ex.test vinculada em O1
+ ok: fixture: gabi@ex.test vinculada em O1
+(3 rows)
+
+              afirma               
+-----------------------------------
+ ok: fixture: jose vinculada em O2
+(1 row)
+
+              afirma               
+-----------------------------------
+ ok: fixture: olga vinculada em O3
+(1 row)
+
+      resultado       
+----------------------
+ fixture platform: ok
+(1 row)
+
+E f02: ok

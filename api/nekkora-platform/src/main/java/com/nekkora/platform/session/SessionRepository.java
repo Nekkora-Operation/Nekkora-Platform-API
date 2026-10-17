@@ -29,7 +29,8 @@ public final class SessionRepository {
      * ({@code FOR UPDATE}); DEPOIS captura UM instante ({@code clock_timestamp()}) e avalia tudo com ele (§11.4):
      * revogacao, prazo absoluto, inatividade (30 min interna / 15 min externa), conta ACTIVE com e-mail
      * verificado, organizacao ativa, vinculo ativo (interno: organization_memberships; externo: client_memberships
-     * e cliente ativo) e marcador de MFA. Valida -> toca last_seen_at com o MESMO instante, so se a ultima escrita
+     * e cliente ativo) e marcador de MFA; e, na sessao nascida da troca por sessao de organizacao, a sessao de
+     * identidade de origem (DC-17.4). Valida -> toca last_seen_at com o MESMO instante, so se a ultima escrita
      * tem mais de 1 min. {@code travar=false}: so avalia (ator dentro de uma transacao de negocio).
      */
     public Optional<ValidSession> validate(JdbcClient j, UUID org, String tokenHash, boolean lock) {
@@ -49,7 +50,12 @@ public final class SessionRepository {
                        (s.revoked_at IS NULL AND s.mfa_verified_at IS NOT NULL AND s.csrf_token IS NOT NULL
                         AND s.expires_at > t.agora
                         AND s.last_seen_at > t.agora - CASE WHEN u.account_type = 1 THEN ?::interval ELSE ?::interval END
-                        AND u.status = 2 AND u.email_verified_at IS NOT NULL AND o.status = 1) AS valida,
+                        AND u.status = 2 AND u.email_verified_at IS NOT NULL AND o.status = 1
+                        -- DC-17.4: sessao nascida da troca (identity_session_id preenchido) so vale enquanto a sessao de
+                        -- identidade de origem estiver ativa, nao restrita, e a conta ainda ligada a ela (auxiliar da 017,
+                        -- com a conferencia do contexto). Sessao do login por organizacao: inalterada
+                        AND CASE WHEN s.identity_session_id IS NULL THEN true
+                                 ELSE public.identity_org_session_allowed(s.organization_id, s.user_id, s.identity_session_id) END) AS valida,
                        CASE WHEN u.account_type = 1 THEN
                            (SELECT om.membership_id FROM public.organization_memberships om
                              WHERE om.user_id = u.user_id AND om.organization_id = u.organization_id AND om.status = 2)
@@ -89,16 +95,7 @@ public final class SessionRepository {
     public UUID create(JdbcClient j, UUID org, UUID user, short accountType, String tokenHash, String csrfToken) {
         Duration inactivity = accountType == ValidSession.INTERNAL ? cfg.internalInactivity() : cfg.externalInactivity();
         OffsetDateTime currentTime = j.sql("SELECT clock_timestamp()").query(OffsetDateTime.class).single();
-        j.sql("""
-                UPDATE public.user_sessions SET revoked_at = ?
-                 WHERE session_id IN (
-                     SELECT session_id FROM public.user_sessions
-                      WHERE user_id = ? AND organization_id = ? AND revoked_at IS NULL AND expires_at > ?
-                        AND last_seen_at > ? - ?::interval
-                      ORDER BY created_at DESC, session_id DESC
-                      OFFSET ?)
-                """).param(currentTime).param(user).param(org).param(currentTime).param(currentTime).param(interval(inactivity))
-                .param(cfg.maxPerAccount() - 1).update();
+        revokeExcess(j, org, user, currentTime, inactivity);
         return j.sql("""
                 INSERT INTO public.user_sessions (organization_id, user_id, session_token_hash, created_at, expires_at, last_seen_at,
                                                   mfa_verified_at, csrf_token)
@@ -107,6 +104,27 @@ public final class SessionRepository {
                 """).param(org).param(user).param(tokenHash).param(currentTime).param(currentTime).param(interval(cfg.absolute()))
                 .param(currentTime).param(currentTime).param(csrfToken)
                 .query(UUID.class).single();
+    }
+
+    /**
+     * Sessao de conta VINCULADA, nascida da troca (desenho §6.5 e porta do levantamento de modularidade, §4.3): mesma
+     * politica de {@link #create} (limite por conta, um instante so), mais {@code identity_session_id} e o marcador de MFA
+     * HERDADO da sessao de identidade. O prazo absoluto nao passa do da sessao de identidade ({@code naoDepoisDe}). Quem
+     * chama ja travou a organizacao {@code FOR SHARE}; a trigger da 017 trava a conta e reconfere vinculo, sessao de
+     * identidade e elegibilidade (ramo 2). Devolve o prazo gravado.
+     */
+    public OffsetDateTime createLinked(JdbcClient j, UUID org, UUID user, UUID identitySession, OffsetDateTime mfaVerifiedAt,
+                                       OffsetDateTime notAfter, String tokenHash, String csrfToken) {
+        OffsetDateTime currentTime = j.sql("SELECT clock_timestamp()").query(OffsetDateTime.class).single();
+        revokeExcess(j, org, user, currentTime, cfg.internalInactivity());
+        return j.sql("""
+                INSERT INTO public.user_sessions (organization_id, user_id, session_token_hash, created_at, expires_at, last_seen_at,
+                                                  mfa_verified_at, csrf_token, identity_session_id)
+                VALUES (?, ?, ?, ?, least(? + ?::interval, ?), ?, ?, ?, ?)
+                RETURNING expires_at
+                """).param(org).param(user).param(tokenHash).param(currentTime).param(currentTime).param(interval(cfg.absolute())).param(notAfter)
+                .param(currentTime).param(mfaVerifiedAt).param(csrfToken).param(identitySession)
+                .query(OffsetDateTime.class).single();
     }
 
     public int revokeByToken(JdbcClient j, UUID org, String tokenHash) {
@@ -123,6 +141,20 @@ public final class SessionRepository {
     public void recordStepUp(JdbcClient j, UUID session) {
         j.sql("UPDATE public.user_sessions SET mfa_step_up_at = clock_timestamp() WHERE session_id = ? AND revoked_at IS NULL")
                 .param(session).update();
+    }
+
+    /** Limite por conta: revoga as ativas mais antigas para que, com a nova, sejam no maximo {@code maximoPorConta}. */
+    private void revokeExcess(JdbcClient j, UUID org, UUID user, OffsetDateTime currentTime, Duration inactivity) {
+        j.sql("""
+                UPDATE public.user_sessions SET revoked_at = ?
+                 WHERE session_id IN (
+                     SELECT session_id FROM public.user_sessions
+                      WHERE user_id = ? AND organization_id = ? AND revoked_at IS NULL AND expires_at > ?
+                        AND last_seen_at > ? - ?::interval
+                      ORDER BY created_at DESC, session_id DESC
+                      OFFSET ?)
+                """).param(currentTime).param(user).param(org).param(currentTime).param(currentTime).param(interval(inactivity))
+                .param(cfg.maxPerAccount() - 1).update();
     }
 
     public static String interval(Duration d) {

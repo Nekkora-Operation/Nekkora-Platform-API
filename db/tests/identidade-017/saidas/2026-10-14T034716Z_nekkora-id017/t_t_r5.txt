@@ -1,0 +1,192 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+SELECT 1
+            nova_sessao_id            
+--------------------------------------
+ 0c494fcc-1de1-470f-8d0e-ccb8fc5e41b8
+(1 row)
+
+              afirma              
+----------------------------------
+ ok: T-1 sessao comum: pode criar
+(1 row)
+
+       afirma       
+--------------------
+ ok: T-2 token nulo
+(1 row)
+
+            afirma             
+-------------------------------
+ ok: T-2 token fora do formato
+(1 row)
+
+           afirma           
+----------------------------
+ ok: T-2 token desconhecido
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ 3a936da5-1f71-4fc6-bbf3-46312ff4f038
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+         afirma          
+-------------------------
+ ok: T-3 sessao expirada
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ 6ae8305d-d662-4339-abda-2d27a794d9a6
+(1 row)
+
+              afirma              
+----------------------------------
+ ok: T-4 antes da revogacao: pode
+(1 row)
+
+UPDATE 1
+         afirma          
+-------------------------
+ ok: T-4 sessao revogada
+(1 row)
+
+                  afirma                   
+-------------------------------------------
+ ok: T-4 controle: a outra sessao continua
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ ec273298-5dee-4651-a061-9fa0f0976035
+(1 row)
+
+UPDATE 1
+         afirma          
+-------------------------
+ ok: T-5 sessao restrita
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ 582fd3e7-9e5a-4347-9156-98e4be4a9b54
+(1 row)
+
+              afirma              
+----------------------------------
+ ok: T-6 antes da suspensao: pode
+(1 row)
+
+                 como                 
+--------------------------------------
+ fcc04880-d861-4b31-9027-db4fc03f3515
+(1 row)
+
+UPDATE 1
+           afirma            
+-----------------------------
+ ok: T-6 identidade suspensa
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ f76cc231-e1bb-4f39-9b8b-e6f6b38bee15
+(1 row)
+
+DO
+             afirma              
+---------------------------------
+ ok: T-7 teto atingido: nao pode
+(1 row)
+
+                   afirma                   
+--------------------------------------------
+ ok: T-7 a criacao recusa por conta propria
+(1 row)
+
+         afirma         
+------------------------
+ ok: T-8 consulta: pode
+(1 row)
+
+                afirma                
+--------------------------------------
+ ok: T-8 sem step-up a criacao recusa
+(1 row)
+
+BEGIN
+             afirma             
+--------------------------------
+ ok: T-9 em transacao READ ONLY
+(1 row)
+
+COMMIT
+              afirma               
+-----------------------------------
+ ok: T-9 STABLE e SECURITY DEFINER
+(1 row)
+
+E T-9: ok
+                 como                 
+--------------------------------------
+ adbb1706-1864-42ca-93e4-24bb274af559
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+NOTICE:  rejeitado como esperado [23514] new row for relation "identity_events" violates check constraint "identity_events_event_type_check"
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] new row for relation "identity_events" violates check constraint "identity_events_event_type_check"
+E T-E: ok
+  resultado  
+-------------
+ grupo T: ok
+(1 row)
+

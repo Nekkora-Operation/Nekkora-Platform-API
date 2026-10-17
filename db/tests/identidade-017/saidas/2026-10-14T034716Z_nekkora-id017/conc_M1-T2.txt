@@ -1,0 +1,42 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+BEGIN
+ERROR:  FALHA DE ASSERCAO: operacao deveria ter falhado (esperado 23514), mas teve sucesso: SELECT pg_temp.ctx('17000000-0000-0000-0000-000000000001'); INSERT INTO auth_challenges (organization_id, user_id, token_hash, purpose, credential_hash, csrf_token, expires_at) VALUES ('17000000-0000-0000-0000-000000000001', '13e0133d-7ac0-4711-863e-744cab3af378', '344ce7e29075879b9f9ca6c5367f8941dfcaf0e920569b01a011967c7736b691', 1, 'h', '0lQ3IFc8uOIqzTHj6pvy0f57eAEnQApuxgcF13jXybA', now() + interval '4 minutes')
+CONTEXT:  PL/pgSQL function pg_temp_3.espera_erro(text,text,text) line 12 at RAISE

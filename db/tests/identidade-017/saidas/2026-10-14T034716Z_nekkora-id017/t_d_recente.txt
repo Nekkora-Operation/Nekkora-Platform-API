@@ -1,0 +1,225 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+            nova_sessao_id            
+--------------------------------------
+ 7ad96cad-03cd-4ddb-a2ac-eab7bc195082
+(1 row)
+
+      afirma       
+-------------------
+ ok: D-1 permitido
+(1 row)
+
+                       afirma                       
+----------------------------------------------------
+ ok: D-1 estado final 1 confirmado, 8 codigos novos
+(1 row)
+
+E D-1: ok
+                    afirma                    
+----------------------------------------------
+ ok: D-2 sessao vencida nao cadastra pendente
+(1 row)
+
+      afirma      
+------------------
+ ok: D-2 recusado
+(1 row)
+
+       afirma       
+--------------------
+ ok: D-2 sem efeito
+(1 row)
+
+E D-2: ok
+            nova_sessao_id            
+--------------------------------------
+ f56be861-9230-4396-9742-5d978c52cd94
+(1 row)
+
+      afirma      
+------------------
+ ok: D-3 recusado
+(1 row)
+
+       afirma       
+--------------------
+ ok: D-3 sem efeito
+(1 row)
+
+E D-3: ok
+            nova_sessao_id            
+--------------------------------------
+ 95e2a386-3f5f-4945-b3b7-050933c124c3
+(1 row)
+
+      afirma       
+-------------------
+ ok: D-4 permitido
+(1 row)
+
+        afirma        
+----------------------
+ ok: D-4 estado final
+(1 row)
+
+E D-4: ok
+            nova_sessao_id            
+--------------------------------------
+ a4d93b0b-cf91-4a38-9b44-ea7a1530572c
+(1 row)
+
+UPDATE 1
+      afirma      
+------------------
+ ok: D-5 recusado
+(1 row)
+
+       afirma       
+--------------------
+ ok: D-5 sem efeito
+(1 row)
+
+E D-5: ok
+            nova_sessao_id            
+--------------------------------------
+ c28bac14-7229-4671-9b3c-0060f6705020
+(1 row)
+
+UPDATE 1
+      afirma      
+------------------
+ ok: D-6 recusado
+(1 row)
+
+       afirma       
+--------------------
+ ok: D-6 sem efeito
+(1 row)
+
+E D-6: ok
+            nova_sessao_id            
+--------------------------------------
+ 2d152a1a-874f-4f46-815d-9efcc20a75b2
+(1 row)
+
+                   desafio                   
+---------------------------------------------
+ xAtgMlPDmpG5IPhfUKgiK3hZoXvCHujz4EYzPTvsLDA
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ 183a67ed-fa3b-4ed5-ac88-e5ee2ce7cb07
+(1 row)
+
+                            afirma                             
+---------------------------------------------------------------
+ ok: D-7 em T0: fator antigo e 7 codigos restantes preservados
+(1 row)
+
+                  afirma                   
+-------------------------------------------
+ ok: D-7 em T0: so a sessao restrita ativa
+(1 row)
+
+                          afirma                           
+-----------------------------------------------------------
+ ok: D-7 em T0: desafio pendente invalidado, hashes limpos
+(1 row)
+
+                     afirma                     
+------------------------------------------------
+ ok: D-7 em T0: codigo aponta a sessao restrita
+(1 row)
+
+E D-7: ok
+            nova_sessao_id            
+--------------------------------------
+ 81a522ed-1d00-461f-9090-722b97ec5f5d
+(1 row)
+
+        afirma        
+----------------------
+ ok: D-8 T1 concluido
+(1 row)
+
+                afirma                
+--------------------------------------
+ ok: D-8 so os 10 codigos novos vivos
+(1 row)
+
+              afirma               
+-----------------------------------
+ ok: D-8 fator antigo desabilitado
+(1 row)
+
+           afirma            
+-----------------------------
+ ok: D-8 restricao levantada
+(1 row)
+
+              afirma              
+----------------------------------
+ ok: D-8 demais sessoes revogadas
+(1 row)
+
+E D-8: ok
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_sessions
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ 6341f63a-3cf8-4333-8f26-08d4eb2b779f
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] step-up no futuro estenderia a janela
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+E D-9: ok
+  resultado  
+-------------
+ grupo D: ok
+(1 row)
+

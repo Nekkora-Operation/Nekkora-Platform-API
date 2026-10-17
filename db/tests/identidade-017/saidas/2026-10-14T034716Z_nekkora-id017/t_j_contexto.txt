@@ -1,0 +1,105 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+SELECT 1
+NOTICE:  rejeitado como esperado [42501] contexto organizacional ausente ou divergente
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] contexto organizacional ausente ou divergente
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] conta fora do contexto organizacional
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+ ok: rejeitado [42501]
+(2 rows)
+
+NOTICE:  rejeitado como esperado [42501] conta fora do contexto organizacional
+NOTICE:  rejeitado como esperado [42501] contexto organizacional ausente ou divergente
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] contexto organizacional ausente ou divergente
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] conta fora do contexto organizacional
+NOTICE:  rejeitado como esperado [42501] conta fora do contexto organizacional
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+ ok: rejeitado [42501]
+(2 rows)
+
+NOTICE:  rejeitado como esperado [23514] conta nao encontrada no contexto ao escrever em auth_challenges
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] conta nao encontrada no contexto ao escrever em password_reset_tokens
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+BEGIN
+ ctx 
+-----
+ 
+(1 row)
+
+             afirma             
+--------------------------------
+ ok: J-6 ana vinculada, bia nao
+(1 row)
+
+COMMIT
+E J: ok
+  resultado  
+-------------
+ grupo J: ok
+(1 row)
+

@@ -1,0 +1,252 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+              nova_conta              
+--------------------------------------
+ ce8df75a-1b0e-47a8-a95f-ca207db9795f
+(1 row)
+
+CREATE FUNCTION
+ povoa 
+-------
+ 
+(1 row)
+
+ povoa 
+-------
+ 
+(1 row)
+
+               desafio_vinculo               
+---------------------------------------------
+ zIVDNUML2PoHXTcSVoZEQYju__G0gEFFnXRKYDiFIpA
+(1 row)
+
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ como 
+------
+ 
+(1 row)
+
+                               afirma                                
+---------------------------------------------------------------------
+ ok: P-1 sem contexto: nenhuma linha em nenhuma tabela de identidade
+(1 row)
+
+                    afirma                     
+-----------------------------------------------
+ ok: P-1 sem contexto: UPDATE nao alcanca nada
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] new row violates row-level security policy for table "identity_events"
+NOTICE:  rejeitado como esperado [42501] new row violates row-level security policy for table "identities"
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+                 como                 
+--------------------------------------
+ deaeccdb-5fb8-4a8f-8129-1d2a69314322
+(1 row)
+
+                               afirma                                
+---------------------------------------------------------------------
+ ok: P-2 contexto A: linhas de A em todas as tabelas (1/1/8/3/2/1/1)
+(1 row)
+
+                             afirma                              
+-----------------------------------------------------------------
+ ok: P-3 contexto A: nenhuma linha de B, em nenhuma tabela filha
+(1 row)
+
+                                                            afirma                                                             
+-------------------------------------------------------------------------------------------------------------------------------
+ ok: P-3 contexto A: UPDATE em linhas de B afeta zero linhas, em cada tabela com UPDATE (codigos: sem UPDATE desde a R3, S-11)
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] new row violates row-level security policy for table "identity_events"
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_sessions
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] new row violates row-level security policy for table "identity_auth_challenges"
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] new row violates row-level security policy for table "identity_email_tokens"
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+                 como                 
+--------------------------------------
+ df83332e-e609-4ebf-a2a3-5b2876f904dd
+(1 row)
+
+           afirma           
+----------------------------
+ ok: P-4 troca A -> B: so B
+(1 row)
+
+                 como                 
+--------------------------------------
+ deaeccdb-5fb8-4a8f-8129-1d2a69314322
+(1 row)
+
+           afirma           
+----------------------------
+ ok: P-4 troca B -> A: so A
+(1 row)
+
+RESET
+BEGIN
+SET
+                 afirma                  
+-----------------------------------------
+ ok: P-4 SET LOCAL B dentro da transacao
+(1 row)
+
+COMMIT
+                                    afirma                                    
+------------------------------------------------------------------------------
+ ok: P-4 depois do COMMIT: o contexto local nao vaza para a proxima transacao
+(1 row)
+
+                 como                 
+--------------------------------------
+ deaeccdb-5fb8-4a8f-8129-1d2a69314322
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_credentials
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_credentials
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_credentials
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] new row violates row-level security policy for table "identity_credentials"
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+                       afirma                        
+-----------------------------------------------------
+ ok: P-5 o hash sai so pelo contrato de autenticacao
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_users
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+                     afirma                     
+------------------------------------------------
+ ok: P-7 signup_state sem resultado: pa
+ ok: P-7 signup_state sem resultado: PA@EX.TEST
+ ok: P-7 signup_state sem resultado: %@ex.test
+ ok: P-7 signup_state sem resultado: pa@ex.%
+ ok: P-7 signup_state sem resultado: 
+ ok: P-7 signup_state sem resultado: NULL
+(6 rows)
+
+           afirma           
+----------------------------
+ ok: P-7 signup_state exato
+(1 row)
+
+                                                   afirma                                                   
+------------------------------------------------------------------------------------------------------------
+ ok: P-7 consulta por token sem resultado: abc
+ ok: P-7 consulta por token sem resultado: 
+ ok: P-7 consulta por token sem resultado: NULL
+ ok: P-7 consulta por token sem resultado: %
+ ok: P-7 consulta por token sem resultado: BgT8dOAtzVp5dnujMNL3s7BzeZqfvtU6RiolTKJN7sA
+ ok: P-7 consulta por token sem resultado: 206ebc864968c9b6d57c8a9152258b7628a8f94ff87a4c14a8d8a4a8164451d0
+(6 rows)
+
+               afirma               
+------------------------------------
+ ok: P-7 consultas exatas por token
+(1 row)
+
+UPDATE 1
+UPDATE 1
+UPDATE 1
+                     afirma                     
+------------------------------------------------
+ ok: P-7 revogada, invalidado e consumido: nada
+(1 row)
+
+                        afirma                        
+------------------------------------------------------
+ ok: P-7 formato exato das quatro funcoes de consulta
+(1 row)
+
+E P: ok
+  resultado  
+-------------
+ grupo P: ok
+(1 row)
+

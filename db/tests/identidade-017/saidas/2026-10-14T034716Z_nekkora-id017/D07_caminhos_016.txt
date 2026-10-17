@@ -1,0 +1,10 @@
+certificado op_ver: OK
+certificado op_apr: OK
+certificado op_exe: OK
+execucao S1: OK EXECUTADA
+consulta S1: OK EXECUTADA reset=true
+efeitos do reset de S1 (fator, codigos, desafios, sessoes) e mfa_events tipo 4: conferidos
+pre-aprovacao S2: OK PRE_APROVADA
+NOTICE:  avisos: 1 emitidos (fluxo de banco, entrega simulada); confirmacao do titular: nenhum
+titular de S1 de volta: fator novo e sessao pela porta antiga
+estados depois: EXECUTADA,PRE_APROVADA

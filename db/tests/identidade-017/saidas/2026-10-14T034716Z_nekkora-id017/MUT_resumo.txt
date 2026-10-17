@@ -1,0 +1,25 @@
+M1: DETECTADA (operacao deveria ter falhado (esperado 23514), mas teve sucesso: SELECT pg_temp.ctx('17000000-0000-0000-0000-00000000000)
+M1: restaurada
+M2: DETECTADA (operacao deveria ter falhado (esperado 23514), mas teve sucesso: SELECT pg_temp.sessao_org('17000000-0000-0000-0000-0000)
+M2: restaurada
+M3: DETECTADA (R-2 sob M3: desafio expirado durante a espera nao autoriza)
+M3a: restaurada
+M3b: restaurada
+M4: DETECTADA (V-1 sob M4: desafio vencido nao autoriza)
+M4: restaurada
+M6: DETECTADA (S-5 sob M6: prova de senha obsoleta nao gera sessao)
+M6: restaurada
+M7: DETECTADA (S-9 sob M7: desafio pendente invalidado na troca)
+M7: restaurada
+M5: DETECTADA (V-4 sob M5: desafio vencido nao vincula)
+M5: restaurada
+M8: DETECTADA (sem o lock da organizacao, a sessao emitida durante a desativacao do vinculo ficou ativa)
+M8: restaurada
+M9: DETECTADA (operacao deveria ter falhado (esperado 23514), mas teve sucesso: SELECT pg_temp.sessao_org('17000000-0000-0000-0000-0000)
+M9: restaurada
+M10: DETECTADA (sem a exigencia de READ COMMITTED, REPEATABLE READ emitiu com o snapshot antigo: sessao ativa, vinculo inativo)
+M10: restaurada
+M11: DETECTADA (T-5 sob M11: sessao restrita)
+M11: restaurada
+M12: DETECTADA (T-7 sob M12: teto atingido)
+M12: restaurada

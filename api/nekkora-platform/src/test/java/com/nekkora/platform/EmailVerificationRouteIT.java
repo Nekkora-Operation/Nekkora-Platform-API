@@ -34,7 +34,7 @@ class EmailVerificationRouteIT extends PlatformTestBase {
     /** Semeia um token para a conta; {@code expiresSql} e a expressao de expires_at (ex.: "now() + interval '24 hours'"). */
     private static String seed(TestUser u, String createdSql, String expiresSql, boolean revoked) {
         String token = Tokens.newToken();
-        DB.asSuperuser("INSERT INTO email_verification_tokens (user_id, target_email, token_hash, created_at, expires_at, revoked_at) VALUES ('"
+        DB.asSuperuserIn(organizationOf(u.id()), "INSERT INTO email_verification_tokens (user_id, target_email, token_hash, created_at, expires_at, revoked_at) VALUES ('"
                 + u.id() + "', '" + u.email() + "', '" + Tokens.sha256Hex(token) + "', " + createdSql + ", " + expiresSql + ", "
                 + (revoked ? "now()" : "NULL") + ")");
         return token;

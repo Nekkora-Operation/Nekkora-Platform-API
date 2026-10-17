@@ -1,0 +1,72 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+BEGIN
+ ctx 
+-----
+ 
+(1 row)
+
+ count 
+-------
+    29
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [40001]
+(1 row)
+
+NOTICE:  rejeitado como esperado [40001] could not serialize access due to concurrent update
+ pg_sleep 
+----------
+ 
+(1 row)
+
+COMMIT
+ resultado  
+------------
+ C-9-T2: ok
+(1 row)
+

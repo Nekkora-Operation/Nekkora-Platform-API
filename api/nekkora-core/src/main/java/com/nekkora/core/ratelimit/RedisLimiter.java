@@ -65,6 +65,28 @@ public final class RedisLimiter {
             return 1
             """, Long.class);
 
+    /**
+     * Reserva numa janela deslizante: confere e registra no MESMO script (sem corrida entre requisicoes). Com a janela
+     * cheia, nada e registrado e devolve {0, ms ate a entrada mais antiga sair}; senao {1, membro registrado}.
+     */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static final DefaultRedisScript<List> RESERVE_SCRIPT = new DefaultRedisScript<>("""
+            local t = redis.call('TIME')
+            local agora = tonumber(t[1]) * 1000 + math.floor(tonumber(t[2]) / 1000)
+            local janela = tonumber(ARGV[1])
+            redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', agora - janela)
+            if redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[2]) then
+              local o = redis.call('ZRANGE', KEYS[1], 0, 0, 'WITHSCORES')
+              return {0, tostring(math.max(1, tonumber(o[2]) + janela - agora))}
+            end
+            local seq = redis.call('INCR', KEYS[2])
+            redis.call('PEXPIRE', KEYS[2], janela)
+            local m = agora .. ':' .. seq
+            redis.call('ZADD', KEYS[1], agora, m)
+            redis.call('PEXPIRE', KEYS[1], janela)
+            return {1, m}
+            """, List.class);
+
     private final StringRedisTemplate redis;
 
     public RedisLimiter(StringRedisTemplate redis) {
@@ -92,6 +114,23 @@ public final class RedisLimiter {
 
     public void notBefore(String key, Duration delay, Duration ttl) {
         callRedis(() -> redis.execute(DELAY_SCRIPT, List.of(key), Long.toString(delay.toMillis()), Long.toString(ttl.toMillis())));
+    }
+
+    /** Resultado de {@link #reserve}: reservado (com o membro, para {@link #release}) ou janela cheia (com a espera). */
+    public record Reservation(boolean granted, String member, long waitMs) {
+    }
+
+    /** Reserva uma entrada na janela, se houver menos de {@code max}. Atomico. */
+    public Reservation reserve(String key, Duration window, int max) {
+        List<?> r = callRedis(() -> redis.execute(RESERVE_SCRIPT, List.of(key, key + ":seq"), Long.toString(window.toMillis()), Integer.toString(max)));
+        boolean ok = ((Number) r.get(0)).longValue() == 1;
+        String v = String.valueOf(r.get(1));
+        return ok ? new Reservation(true, v, 0) : new Reservation(false, null, Long.parseLong(v));
+    }
+
+    /** Devolve uma reserva (o membro devolvido por {@link #reserve}). */
+    public void release(String key, String member) {
+        callRedis(() -> redis.opsForZSet().remove(key, member));
     }
 
     public void deleteKeys(String... keys) {

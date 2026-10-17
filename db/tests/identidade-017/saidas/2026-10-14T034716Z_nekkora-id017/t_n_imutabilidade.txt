@@ -1,0 +1,221 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+              nova_conta              
+--------------------------------------
+ 8ffbbf0c-b1d8-47ed-80c0-0cc3d3f16659
+(1 row)
+
+              nova_conta              
+--------------------------------------
+ 4b83033e-564e-43a4-824d-d8c4d80a65bd
+(1 row)
+
+           nova_identidade            
+--------------------------------------
+ c3ea0a2d-c209-4643-ba24-6f8b50b6502a
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ 600667bb-ccb9-4efb-8ec3-931d656502c9
+(1 row)
+
+SELECT 1
+BEGIN
+ ctx 
+-----
+ 
+(1 row)
+
+INSERT 0 6
+INSERT 0 4
+INSERT 0 6
+INSERT 0 3
+UPDATE 1
+INSERT 0 1
+COMMIT
+CREATE FUNCTION
+NOTICE:  rejeitado como esperado [23514] dono, hash, prazo e origem do token de password_reset_tokens sao imutaveis
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] dono, hash, prazo e origem do token de password_reset_tokens sao imutaveis
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] dono, hash, prazo e origem do token de password_reset_tokens sao imutaveis
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] dono, hash, prazo e origem do token de email_verification_tokens sao imutaveis
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] dono, hash, prazo e origem do token de email_verification_tokens sao imutaveis
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] dono, hash, prazo e origem do token de password_reset_tokens sao imutaveis
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+ executa 
+---------
+ 
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] token de password_reset_tokens consumido ou revogado e imutavel
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] token de password_reset_tokens consumido ou revogado e imutavel
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] credencial local nao muda de conta (user_id e created_at imutaveis)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] credencial local nao muda de conta (user_id e created_at imutaveis)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] transicao terminal em auth_challenges so altera as colunas terminais e a limpeza prevista (alteradas junto: attempts)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] transicao terminal em auth_challenges so altera as colunas terminais e a limpeza prevista (alteradas junto: credential_hash)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] transicao terminal em user_mfa_factors so altera as colunas terminais e a limpeza prevista (alteradas junto: key_id)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] transicao terminal em user_mfa_factors so altera as colunas terminais e a limpeza prevista (alteradas junto: secret_ciphertext)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+E N-negativos: ok
+BEGIN
+ ctx 
+-----
+ 
+(1 row)
+
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+UPDATE 1
+                      afirma                      
+--------------------------------------------------
+ ok: N-P escritas legitimas do Java atual aceitas
+(1 row)
+
+COMMIT
+E N-positivos: ok
+           nova_identidade            
+--------------------------------------
+ 6519cacc-f952-47ab-b541-b7c7e805f2f9
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ 7cd4bf33-eb85-4028-8c6d-e75c65624d75
+(1 row)
+
+BEGIN
+ ctx 
+-----
+ 
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+COMMIT
+              sessao_org              
+--------------------------------------
+ 734e8a49-2a8c-4ac2-a3a3-dd082f31e1d1
+(1 row)
+
+                    afirma                    
+----------------------------------------------
+ ok: N-V vinculacao com estado vivo concluida
+(1 row)
+
+E N-V: ok
+  resultado  
+-------------
+ grupo N: ok
+(1 row)
+

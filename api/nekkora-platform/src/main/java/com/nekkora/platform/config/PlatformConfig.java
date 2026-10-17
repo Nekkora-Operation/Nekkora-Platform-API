@@ -21,6 +21,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import com.nekkora.core.db.ConnectionResetDataSource;
+import com.nekkora.core.db.IdentityTransactions;
 import com.nekkora.core.db.OrgTransactions;
 import com.nekkora.core.ratelimit.RedisLimiter;
 import com.nekkora.core.web.BodyLimitFilter;
@@ -91,6 +92,12 @@ public class PlatformConfig {
     @Bean
     OrgTransactions orgTransactions(PlatformTransactionManager tm, JdbcClient jdbc) {
         return new OrgTransactions(tm, jdbc);
+    }
+
+    /** Contexto de identidade da 017 (contrato da integracao Java, §1). Infraestrutura: as rotas que o usam vem depois. */
+    @Bean
+    IdentityTransactions identityTransactions(PlatformTransactionManager tm, JdbcClient jdbc) {
+        return new IdentityTransactions(tm, jdbc);
     }
 
     @Bean
