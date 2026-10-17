@@ -326,6 +326,26 @@ public final class OpsBanco {
         }
     }
 
+    /**
+     * Como {@link #sql}, numa transacao com {@code nekkora.organization_id} = {@code organizacao} (contrato da integracao
+     * Java, §3.2): desde a 017, INSERT e UPDATE nao terminal nas tabelas da entrada local exigem o contexto da organizacao
+     * da conta, inclusive para o superusuario.
+     */
+    public void sqlNa(UUID organizacao, String... comandos) {
+        try (Connection con = superusuario()) {
+            con.setAutoCommit(false);
+            try (Statement st = con.createStatement()) {
+                st.execute("SELECT set_config('nekkora.organization_id', '" + organizacao + "', true)");
+                for (String s : comandos) {
+                    st.execute(s);
+                }
+            }
+            con.commit();
+        } catch (SQLException e) {
+            throw new IllegalStateException("fixture falhou (sqlstate " + e.getSQLState() + "): " + e.getMessage(), e);
+        }
+    }
+
     public <T> T valor(Class<T> tipo, String consulta, Object... params) {
         try (Connection con = superusuario(); PreparedStatement ps = con.prepareStatement(consulta)) {
             for (int i = 0; i < params.length; i++) {
@@ -515,21 +535,21 @@ public final class OpsBanco {
     }
 
     private void usuario(UUID org, UUID u) {
-        sql("INSERT INTO users (user_id, organization_id, account_type, email, email_verified_at, status, display_name) VALUES ('"
+        sqlNa(org, "INSERT INTO users (user_id, organization_id, account_type, email, email_verified_at, status, display_name) VALUES ('"
                 + u + "', '" + org + "', 1, 'p-" + u.toString().substring(0, 8) + "@org.test', now(), 2, 'Pessoa sintetica')",
             "INSERT INTO user_credentials (user_id, password_hash) VALUES ('" + u + "', 'hash-sintetico-" + hex(8) + "')");
     }
 
     public UUID fatorConfirmado(UUID org, UUID user) {
         UUID f = UUID.randomUUID();
-        sql("INSERT INTO user_mfa_factors (factor_id, organization_id, user_id, factor_type, secret_ciphertext, secret_nonce, key_id, created_at, confirmed_at) "
+        sqlNa(org, "INSERT INTO user_mfa_factors (factor_id, organization_id, user_id, factor_type, secret_ciphertext, secret_nonce, key_id, created_at, confirmed_at) "
                 + "VALUES ('" + f + "', '" + org + "', '" + user + "', 1, '\\x" + hex(36) + "', '\\x" + hex(12) + "', 'k1', now() - interval '1 day', now() - interval '1 day')");
         return f;
     }
 
     /** Sessao ativa, desafio ativo e dois codigos de recuperacao - para conferir os efeitos do reset. */
     public void estadoDeAcesso(UUID org, UUID user, UUID fator) {
-        sql("INSERT INTO user_sessions (organization_id, user_id, session_token_hash, expires_at, mfa_verified_at, csrf_token) VALUES ('"
+        sqlNa(org, "INSERT INTO user_sessions (organization_id, user_id, session_token_hash, expires_at, mfa_verified_at, csrf_token) VALUES ('"
                 + org + "', '" + user + "', '" + hex(32) + "', now() + interval '8 hours', now(), '" + csrf() + "')",
             "INSERT INTO auth_challenges (organization_id, user_id, token_hash, purpose, credential_hash, csrf_token, expires_at) VALUES ('"
                 + org + "', '" + user + "', '" + hex(32) + "', 1, 'hash-sintetico', '" + csrf() + "', now() + interval '4 minutes')",

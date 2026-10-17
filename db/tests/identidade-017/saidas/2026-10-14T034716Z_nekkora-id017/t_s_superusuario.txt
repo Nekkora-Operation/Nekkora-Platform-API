@@ -1,0 +1,54 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: sessao de superusuario
+(1 row)
+
+SET
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+RESET
+NOTICE:  rejeitado como esperado [23514] marca de recuperacao ou de MFA no futuro
+CREATE FUNCTION
+NOTICE:  rejeitado como esperado [23514] codigo de recuperacao consumido sem sessao restrita da mesma identidade
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+         resultado          
+----------------------------
+ grupo S (superusuario): ok
+(1 row)
+

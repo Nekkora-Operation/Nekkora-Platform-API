@@ -39,7 +39,7 @@ class MfaAtomicCompletionIT extends PlatformTestBase {
 
     /** Encurta o prazo do unico desafio pendente da conta para ~2 s. */
     private static void expireChallengeSoon(UUID user) {
-        DB.asSuperuser("ALTER TABLE auth_challenges DISABLE TRIGGER trg_auth_challenges_prevent_change",
+        DB.asSuperuserIn(organizationOf(user), "ALTER TABLE auth_challenges DISABLE TRIGGER trg_auth_challenges_prevent_change",
                 "UPDATE auth_challenges SET expires_at = clock_timestamp() + interval '2 seconds' WHERE user_id = '" + user
                         + "' AND consumed_at IS NULL AND invalidated_at IS NULL",
                 "ALTER TABLE auth_challenges ENABLE TRIGGER trg_auth_challenges_prevent_change");

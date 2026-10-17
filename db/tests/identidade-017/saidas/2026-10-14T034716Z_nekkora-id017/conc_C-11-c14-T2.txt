@@ -1,0 +1,57 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+BEGIN
+NOTICE:  rejeitado como esperado [23514] conta vinculada a identidade nao autentica nem cadastra fator por credencial local (email_verification_tokens)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+COMMIT
+    resultado    
+-----------------
+ C-11-c14-T2: ok
+(1 row)
+

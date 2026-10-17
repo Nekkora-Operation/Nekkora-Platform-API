@@ -1,0 +1,62 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+BEGIN
+           nova_identidade            
+--------------------------------------
+ 498134c2-b033-4633-ba01-de0ae38b87a4
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ 1f1cd6be-ff51-435f-a73b-667e201c071e
+(1 row)
+
+                   desafio                   
+---------------------------------------------
+ 2nukJWTPdf-orHWPYMtP6PI9AZcBFTLAEC3cmXXy5nA
+(1 row)
+
+    afirma    
+--------------
+ ok: M7 troca
+(1 row)
+
+ERROR:  FALHA DE ASSERCAO: S-9 sob M7: desafio pendente invalidado na troca
+CONTEXT:  PL/pgSQL function pg_temp_3.afirma(boolean,text) line 4 at RAISE

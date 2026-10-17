@@ -1,0 +1,227 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+           nova_identidade            
+--------------------------------------
+ 20c88303-cb25-4a10-ac95-6fa90c8fdf85
+ 9ac2d946-7a53-4be8-8aea-ca590a6a48fb
+ 6ca236d1-6a98-4d54-8b57-67dd074ee2c6
+ 801fa296-906b-4f1d-8a12-f6ad3e34f0fd
+ 0089a3c8-040c-41e5-afff-ef8e737223f7
+ 454adfd3-b22f-4479-a203-a7c73925c428
+ 99383808-24dd-45bf-bb9d-721947e49343
+ 0446fda0-cf50-47b8-9e45-20c86dc11c38
+ 81c4319b-6d3f-4de8-8343-f0dcbf9496d8
+(9 rows)
+
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+SELECT 1
+                   desafio                   
+---------------------------------------------
+ ZjbJK8c8sr3UTEInHz88cebtnuxPxMNefwWuE0K4BWA
+(1 row)
+
+        afirma         
+-----------------------
+ ok: S-1 sessao criada
+(1 row)
+
+                    afirma                     
+-----------------------------------------------
+ ok: S-1 efeitos: consumo, passo, sessao comum
+(1 row)
+
+                   desafio                   
+---------------------------------------------
+ ub0gjrnTN-eCrkO6pvQtG4xT33M43a2tZfDAo7b6V5A
+(1 row)
+
+              afirma               
+-----------------------------------
+ ok: S-2 passo repetido sem efeito
+(1 row)
+
+                   desafio                   
+---------------------------------------------
+ TTGaty1JRpH6VxtWCVtI2EOZOYaNVVZtngvjz3AyUnA
+(1 row)
+
+                   desafio                   
+---------------------------------------------
+ 6UhGoAzWuh-Sdnbq4YcsC46Y361vjYfq6JGJPU22SCA
+(1 row)
+
+                     afirma                      
+-------------------------------------------------
+ ok: S-3 cada funcao so consome a sua finalidade
+(1 row)
+
+                                            afirma                                             
+-----------------------------------------------------------------------------------------------
+ ok: S-3 controle: o desafio de cadastro continuava vivo e a confirmacao inicial cria a sessao
+(1 row)
+
+                   desafio                   
+---------------------------------------------
+ Ml590Qo-_bLMbpCXkosDk2nDfX7W7t4Lc4SQPa9y5WA
+(1 row)
+
+                      afirma                       
+---------------------------------------------------
+ ok: S-4 re-hash aplicado com a credencial vigente
+(1 row)
+
+                   desafio                   
+---------------------------------------------
+ _mQ3zz-97TZ-nxA9NPnUKvRgSE8sDsWGgL5nOdTyRuA
+(1 row)
+
+                   desafio                   
+---------------------------------------------
+ VfrmktLHTJa3xFOy4ta02tw-GQ3tJwviorNQB0oWLZA
+(1 row)
+
+                   desafio                   
+---------------------------------------------
+ V7vgkZWihxWXMiqAzlMcdnvtrh--awYaxpaXfltrxvA
+(1 row)
+
+            afirma             
+-------------------------------
+ ok: S-5 A conclui com re-hash
+(1 row)
+
+                  afirma                  
+------------------------------------------
+ ok: S-5 B (re-hash concorrente) obsoleto
+(1 row)
+
+                               afirma                               
+--------------------------------------------------------------------
+ ok: S-5 C (sem pendente) obsoleto: a credencial e conferida sempre
+(1 row)
+
+                              afirma                               
+-------------------------------------------------------------------
+ ok: S-5 so A gerou sessao; B e C invalidados; credencial e a de A
+(1 row)
+
+E S-5: ok
+                   afirma                   
+--------------------------------------------
+ ok: S-6 sessao restrita e codigo apontando
+(1 row)
+
+                   desafio                   
+---------------------------------------------
+ 1GUi_9H8-KgNjqmnC9GUwMXj9pzUCHkWXUN-K8ObdIA
+(1 row)
+
+              afirma              
+----------------------------------
+ ok: S-6 codigo ja usado recusado
+(1 row)
+
+                   desafio                   
+---------------------------------------------
+ tSpdprtpJywoFCZCtvsdIrcf54Cs0dxzCbzyrS4dBDA
+(1 row)
+
+NOTICE:  rejeitado como esperado [23505] duplicate key value violates unique constraint "identity_sessions_session_token_hash_key"
+      espera_erro      
+-----------------------
+ ok: rejeitado [23505]
+(1 row)
+
+          afirma           
+---------------------------
+ ok: S-8 rollback integral
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ 5f525306-bcac-4664-b72f-74569dd0d290
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ 4c1c9bdc-a8af-4a77-a7ab-a0b0c10a51f0
+(1 row)
+
+                   desafio                   
+---------------------------------------------
+ W8tL0q5JzK6og8mUhYd_9OyTlokmwl7a9fdLceGFkeA
+(1 row)
+
+         afirma          
+-------------------------
+ ok: S-9 troca concluida
+(1 row)
+
+          afirma          
+--------------------------
+ ok: S-9 efeitos da troca
+(1 row)
+
+                        afirma                        
+------------------------------------------------------
+ ok: S-9 desafio anterior a troca nao conclui o login
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_auth_challenges
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_mfa_recovery_codes
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_sessions
+E S: ok
+  resultado  
+-------------
+ grupo S: ok
+(1 row)
+

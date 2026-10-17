@@ -1,0 +1,134 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: sessao de superusuario
+(1 row)
+
+SELECT 1
+GRANT
+                           afirma                            
+-------------------------------------------------------------
+ ok: H dono: fixture com confirmado, pendente e desabilitado
+(1 row)
+
+SET
+NOTICE:  rejeitado como esperado [23514] confirmacao do fator de identidade e irreversivel (factor_id=7e617de6-0832-41c9-858e-9f99ee5fd83d)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] confirmacao do fator de identidade e irreversivel (factor_id=7e617de6-0832-41c9-858e-9f99ee5fd83d)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] fator de identidade desabilitado nao volta (factor_id=8ccba993-bcbb-4162-8782-10d64a0aafd2)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23505] duplicate key value violates unique constraint "ux_identity_mfa_factors_confirmado"
+      espera_erro      
+-----------------------
+ ok: rejeitado [23505]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_mfa_factors
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_mfa_factors
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+RESET
+NOTICE:  rejeitado como esperado [23514] campos protegidos do fator de identidade sao imutaveis (factor_id=7e617de6-0832-41c9-858e-9f99ee5fd83d)
+NOTICE:  rejeitado como esperado [23514] campos protegidos do fator de identidade sao imutaveis (factor_id=7e617de6-0832-41c9-858e-9f99ee5fd83d)
+NOTICE:  rejeitado como esperado [23514] campos protegidos do fator de identidade sao imutaveis (factor_id=7e617de6-0832-41c9-858e-9f99ee5fd83d)
+NOTICE:  rejeitado como esperado [23514] campos protegidos do fator de identidade sao imutaveis (factor_id=7e617de6-0832-41c9-858e-9f99ee5fd83d)
+NOTICE:  rejeitado como esperado [23514] campos protegidos do fator de identidade sao imutaveis (factor_id=7e617de6-0832-41c9-858e-9f99ee5fd83d)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+ ok: rejeitado [23514]
+ ok: rejeitado [23514]
+ ok: rejeitado [23514]
+ ok: rejeitado [23514]
+(5 rows)
+
+NOTICE:  rejeitado como esperado [23514] fator de identidade nao e apagado (factor_id=7e617de6-0832-41c9-858e-9f99ee5fd83d)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] fator de identidade so nasce por identity_mfa_enroll_pending
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] confirmacao de fator de identidade so pelas funcoes autorizadas
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] origem do codigo de recuperacao e imutavel (code_id=13e4b6ef-b853-47fb-a8fa-4efd8a334b64)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] codigo de recuperacao usado ou invalidado e imutavel (code_id=f80c0963-95a5-4709-97aa-e07c6110adde)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] codigo de recuperacao de identidade nao e apagado
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+             resultado             
+-----------------------------------
+ grupo H (dono e superusuario): ok
+(1 row)
+

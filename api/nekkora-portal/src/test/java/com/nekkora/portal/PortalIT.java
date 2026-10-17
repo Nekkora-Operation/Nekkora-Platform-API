@@ -176,7 +176,7 @@ class PortalIT {
                     + "starts_at, next_review_at) VALUES ('" + ORG + "', '" + CLIENT + "', '" + cm + "', '" + ws + "', 2, '" + ADMIN_MEMBERSHIP + "', now() - interval '1 day', "
                     + "now() - interval '1 day', now() + interval '30 days')");
         }
-        DB.asSuperuser(sql.toArray(String[]::new));
+        DB.asSuperuserIn(ORG, sql.toArray(String[]::new));
         return token;
     }
 

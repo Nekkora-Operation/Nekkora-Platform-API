@@ -38,6 +38,13 @@ nekkora:
     caixa-dir: ${NEKKORA_MAIL_CAIXA:}
   emergency-notices:
     enabled: ${NEKKORA_AVISOS_EMERGENCIA:false}
+  # cadastro web da identidade (Missao 1, DC-17.7): DESLIGADO por padrao; desligado, as rotas de cadastro respondem 404
+  cadastro:
+    enabled: ${NEKKORA_CADASTRO:false}
+  # entrada geral da identidade (login, MFA): DESLIGADA por padrao; chave SEPARADA da do cadastro. O logout de identidade
+  # nao tem chave (encerrar sessao nunca depende de configuracao)
+  entrada-geral:
+    enabled: ${NEKKORA_ENTRADA_GERAL:false}
   trusted-proxies: ${NEKKORA_PROXIES_CONFIAVEIS:127.0.0.1/32,::1/128}
   database:
     url: ${NEKKORA_DB_URL}
@@ -82,6 +89,13 @@ nekkora:
     r7-capacity: 60
     r7-per-second: 2
     recovery-response-floor: 300ms
+    # R10 (Missao 1, desenho secao 7): troca por sessao de organizacao, por sessao de identidade
+    r10-exchanges: 30
+    r10-window: 1h
+    # R11 (Missao 1, desenho secao 7; contrato P2): criacao de organizacao por identidade. O teto total (10) fica na
+    # funcao identity_create_organization, sob o lock da identidade
+    r11-creations: 3
+    r11-window: 24h
 
 logging:
   level:

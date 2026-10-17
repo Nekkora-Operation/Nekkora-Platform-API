@@ -120,6 +120,28 @@ public final class RealDatabase {
         }
     }
 
+    /**
+     * Executa SQL como superusuario numa transacao com {@code nekkora.organization_id} = {@code organizacao} (contrato da
+     * integracao Java, §3.2). Desde a 017, as escritas que (re)abrem entrada local - INSERT e UPDATE nao terminal em
+     * user_sessions, user_credentials, auth_challenges, user_mfa_factors, user_mfa_recovery_codes, password_reset_tokens
+     * e email_verification_tokens - exigem o contexto da organizacao da conta, INCLUSIVE para o superusuario. Fixture
+     * nenhuma desliga trigger da 017 nem usa session_replication_role para isso.
+     */
+    public void asSuperuserIn(java.util.UUID organizacao, String... sqls) {
+        try (Connection con = connectAsSuperuser()) {
+            con.setAutoCommit(false);
+            try (Statement st = con.createStatement()) {
+                st.execute("SELECT set_config('nekkora.organization_id', '" + organizacao + "', true)");
+                for (String sql : sqls) {
+                    st.execute(sql);
+                }
+            }
+            con.commit();
+        } catch (SQLException e) {
+            throw new IllegalStateException("fixture falhou (sqlstate " + e.getSQLState() + ")", e);
+        }
+    }
+
     /** Linhas do log do servidor (stderr do container) - para as verificacoes de token fora do log. */
     public String serverLog() {
         return pg.getLogs();

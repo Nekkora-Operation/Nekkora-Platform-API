@@ -84,7 +84,8 @@ class EmergencyRecoveryFlowIT {
 
     /** Senha real (Argon2) para a conta sintetica - preparacao declarada. */
     private static void senhaReal(UUID user) {
-        DB.sql("UPDATE user_credentials SET password_hash = '" + HASHER.generate(SENHA.toCharArray()) + "' WHERE user_id = '" + user + "'");
+        UUID org = DB.valor(UUID.class, "SELECT organization_id FROM users WHERE user_id = ?", user);
+        DB.sqlNa(org, "UPDATE user_credentials SET password_hash = '" + HASHER.generate(SENHA.toCharArray()) + "' WHERE user_id = '" + user + "'");
     }
 
     private BrowserClient.Response postarAviso(BrowserClient n, UUID org, String rota, String token) {

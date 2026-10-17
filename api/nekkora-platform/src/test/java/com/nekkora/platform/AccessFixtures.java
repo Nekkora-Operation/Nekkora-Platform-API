@@ -106,7 +106,7 @@ final class AccessFixtures {
 
     /** Fator TOTP de massa (segredo de zeros: nunca usado para autenticar). */
     static void mfaFactor(UUID org, UUID user, boolean confirmed, boolean disabled) {
-        DB.asSuperuser("INSERT INTO user_mfa_factors (organization_id, user_id, factor_type, secret_ciphertext, secret_nonce, key_id, confirmed_at, "
+        DB.asSuperuserIn(org, "INSERT INTO user_mfa_factors (organization_id, user_id, factor_type, secret_ciphertext, secret_nonce, key_id, confirmed_at, "
                 + "disabled_at) VALUES ('" + org + "', '" + user + "', 1, decode(repeat('00', 36), 'hex'), decode(repeat('00', 12), 'hex'), 'k1', "
                 + (confirmed ? "now()" : "NULL") + ", " + (disabled ? "now()" : "NULL") + ")");
     }

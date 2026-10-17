@@ -1,0 +1,166 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+              nova_conta              
+--------------------------------------
+ 84444fa8-78ff-46b0-b67c-a796b4f19ad0
+ cfa26cd9-03cc-4753-b8c4-90f5b1f6dd6b
+ 89dd15a2-a5df-4978-8157-2208bbf61de4
+ 2387e2b8-3229-436b-8194-a8497cfa13a3
+ 15e4679c-46d8-49df-8499-b7654cc3f98c
+ 4c10bdc4-3f4f-4e4d-9ca6-650da6412a39
+ 993cf0ba-939c-4410-a9d2-f7d74a831bb8
+ 0992a050-c21b-46b0-b807-4007db985a7d
+ 3a409c42-34d0-44c3-949f-456098988976
+ 89cdd3bf-dbed-4596-a2c1-090c9580e250
+ 40973f83-066a-4163-91a8-9e4bf9b656bf
+ e93b69dc-4221-42c5-a069-ced995019f9f
+ eb25def0-1ca3-48cc-8717-5e566d3276d6
+ 502d9bfd-e605-47b5-b645-bad4cb313130
+ 5ff51f03-0759-4e1c-8584-ee87e7b4925a
+ 5c823f47-2c29-4f9c-b394-622756f5b2f1
+ 00508a34-656e-43f5-ab5b-6bed5cfd3a64
+ cc3f7ce5-db81-49f7-9374-8468d5676dd3
+ 61f019fc-ede9-4e62-a374-88c30f6aa74d
+ 931ba6f2-09c0-42db-8209-db7255d94b0e
+ 7e3a919b-9b36-4a59-a47d-c787e68e20f3
+(21 rows)
+
+              nova_conta              
+--------------------------------------
+ 545dde9f-c883-47d9-8fcd-571283e40bf7
+ 3d42295e-edcf-4bee-ab49-75876b7e0e6f
+(2 rows)
+
+              nova_conta              
+--------------------------------------
+ 5a4e6090-267c-4df0-ab8b-179f1871ad43
+ f38618f2-3e71-4714-8ffe-3b7e849c0548
+ 3344fcf0-5788-40a1-889d-85273608f4dd
+ f5596513-863b-4082-b2dd-8127a9552cfe
+(4 rows)
+
+CREATE TABLE
+INSERT 0 21
+INSERT 0 3
+           nova_identidade            
+--------------------------------------
+ 50a4a0b7-f0dd-4cda-9045-e7add89c5c3c
+ 5b24cfc4-a4bd-498f-9f27-680621572cdb
+ 232e72bc-3530-4105-a836-68162fa5991d
+ 72ea69ee-29a3-41af-8b2c-daa4b87d7f1b
+ 368dd941-6868-4a0c-a5bb-2eaa3068ca02
+ 57f67cbc-ded7-4cb1-bc43-a543a3952e89
+ 51879d8e-1db6-4012-a9a7-bf234c26bc4d
+ 3eb56d65-3468-4d20-bd51-b698159265ff
+ e14aaa9b-ed71-4cd6-893e-a7a30e65bf26
+ 5ed9ef0b-d561-44f6-a2cd-f4bca19364e0
+ 9058da7b-8c15-49aa-8499-68b231950482
+ a38b2a2d-57eb-4734-8067-21c49a7cf958
+ 548871c1-14ad-41b8-9065-446ae5e5578b
+ 13a81cac-ab77-4036-b238-9746a3116297
+ b3a8bafe-f00f-4c58-b7d2-ac33e9adba30
+ 3469f0e5-02cb-4bcd-910c-f49b98bd096e
+ f1014fa8-bb67-4c30-ba74-2bc3f3ccdbbd
+ 7ddd143f-5fe1-4859-94cf-32af2ee674ae
+ f700b2ee-17cb-4040-8606-12a6d18394c9
+ a7ed1f00-2c83-4de7-8393-9d97f5fab425
+ 7c1c8bd7-11e8-4dbd-b424-eb3605bb819e
+ f96e38b8-70fe-4339-8750-de284caf59e6
+ 4aa02b53-e0d7-43ec-a958-6f0b39897b46
+ 755f3849-294c-468e-add0-5f786c43a78b
+(24 rows)
+
+            nova_sessao_id            
+--------------------------------------
+ 71785df6-7a41-457e-9623-10ffcc1fa204
+ 999510a6-4a3a-47dc-88f3-a66c03408dfe
+ 80c600e2-28f2-400b-a80d-23e0255d14fe
+ 9af70944-e53b-4657-bc6d-95f6f22cda27
+ f185c5fe-7de5-45ab-88ca-01d35bf42e43
+ afc9dce3-48a8-458e-b165-8864506ebb2d
+ 0a802c39-fb20-4ab9-93bd-bed496699ce1
+ 085d3108-6ace-4598-aa4f-165e6f2210c1
+ 2e2adfc7-fc1a-4794-8e6b-5dc9ba5abacb
+ a4a61927-434f-445f-8412-7c7b1da98502
+ 5c5113e5-cd7c-4b8c-a729-6819c357c35d
+ ee752bb6-45e7-4e00-99fd-4beac6ce1c72
+ a1874955-85a8-4401-830c-0f1da7655970
+ f57c14bc-4d49-403a-b8fa-8031d806628f
+ a8ca557d-ba2f-4538-803c-8d82998bb87b
+ 80e0adda-31a1-44fb-a03c-4b3b43395658
+ f42b8804-8d20-408a-abf8-b86a5aa51601
+ 042eecf3-1f1f-4290-9baa-0bc7182928dd
+ 448037fa-7c0b-4b64-8622-e84dfe277964
+ 56df48b6-c193-4e3c-acce-394afb1a4d27
+ aacc323b-e5ab-4a76-881d-096138dfad83
+ b5531069-d6aa-4ae3-a4f3-0d3189fea71d
+ c570acd9-a838-4b91-9634-14aab0e55f8e
+ 6055ef56-43b4-4bfa-83ef-98372558cec3
+(24 rows)
+
+                afirma                 
+---------------------------------------
+ ok: fixture Q: qv1@ex.test vinculada
+ ok: fixture Q: qv2@ex.test vinculada
+ ok: fixture Q: qv3@ex.test vinculada
+ ok: fixture Q: qv4@ex.test vinculada
+ ok: fixture Q: qv5@ex.test vinculada
+ ok: fixture Q: qv6@ex.test vinculada
+ ok: fixture Q: qv7@ex.test vinculada
+ ok: fixture Q: qv8@ex.test vinculada
+ ok: fixture Q: qv9@ex.test vinculada
+ ok: fixture Q: qv10@ex.test vinculada
+ ok: fixture Q: qv11@ex.test vinculada
+ ok: fixture Q: qv12@ex.test vinculada
+ ok: fixture Q: qv13@ex.test vinculada
+ ok: fixture Q: qv14@ex.test vinculada
+ ok: fixture Q: qv15@ex.test vinculada
+ ok: fixture Q: qv16@ex.test vinculada
+ ok: fixture Q: qv17@ex.test vinculada
+ ok: fixture Q: qv18@ex.test vinculada
+ ok: fixture Q: qv19@ex.test vinculada
+ ok: fixture Q: qv20@ex.test vinculada
+ ok: fixture Q: qv21@ex.test vinculada
+ ok: fixture Q: qo1@ex.test vinculada
+ ok: fixture Q: qo2@ex.test vinculada
+ ok: fixture Q: qo3@ex.test vinculada
+(24 rows)
+
+E Q-prep: ok
+        resultado        
+-------------------------
+ grupo Q, preparacao: ok
+(1 row)
+

@@ -1,0 +1,1 @@
+organizacoes=3 usuarios=303 sessoes_ativas=300 concessoes=120 execucoes=900 eventos=450

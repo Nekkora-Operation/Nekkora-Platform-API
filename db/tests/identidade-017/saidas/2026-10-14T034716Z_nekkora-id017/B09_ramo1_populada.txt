@@ -1,0 +1,22 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+BEGIN
+              set_config              
+--------------------------------------
+ aaaaaaaa-0000-4000-8000-000000000001
+(1 row)
+
+INSERT 0 1
+              set_config              
+--------------------------------------
+ f2531d29-802e-4004-958b-3c03d6f157a6
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] sessao nova exige fator de MFA confirmado e ativo
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+ROLLBACK

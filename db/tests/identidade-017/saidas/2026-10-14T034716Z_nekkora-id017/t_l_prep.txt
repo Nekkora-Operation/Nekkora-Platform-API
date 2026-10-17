@@ -1,0 +1,154 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+              nova_conta              
+--------------------------------------
+ 9d3118f4-bc45-4c4e-992c-a2de6dd790ab
+(1 row)
+
+              nova_conta              
+--------------------------------------
+ c88ef9f4-59d2-4ad4-9ec1-21c919a0f2be
+(1 row)
+
+              nova_conta              
+--------------------------------------
+ f26dbddb-6504-4e7c-aab2-3b928fb81379
+(1 row)
+
+           nova_identidade            
+--------------------------------------
+ 8e2f643c-f826-4de8-b9fe-b3c248066b4d
+ 11df94b1-c64e-4895-a1d5-2b73e9e5b8af
+ e73263e0-0a09-4927-9eb0-6e4414bfdfec
+ 3d4a57e9-d160-48c1-8c8f-12565a760e0a
+ 1e28d0a3-03c9-40ec-b810-68ae06501fe4
+(5 rows)
+
+           nova_identidade            
+--------------------------------------
+ bb69128a-6ae7-43e2-824c-c6443d49020f
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ d944ba98-c40f-4065-94ae-9a6d92d0c9ea
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ 591f93ac-11bf-40bc-aa81-7a52f31021c3
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ 8d9710c2-757a-41e0-995e-b31802f9e731
+(1 row)
+
+UPDATE 1
+            nova_sessao_id            
+--------------------------------------
+ 8e591866-77ea-432c-adcf-9e46109fa7af
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ 24917756-4b15-4ba4-af5a-dabc3a914ec9
+(1 row)
+
+UPDATE 1
+            nova_sessao_id            
+--------------------------------------
+ bd4805be-8840-44a4-bda8-6848729303ac
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ 8aadf050-d05c-4c9d-8f78-847423cdf7fe
+(1 row)
+
+         afirma          
+-------------------------
+ ok: L prep: m vinculada
+(1 row)
+
+BEGIN
+ ctx 
+-----
+ 
+(1 row)
+
+UPDATE 1
+COMMIT
+               desafio_vinculo               
+---------------------------------------------
+ h28a5gGfluPjg_1D-ydQgCBI3tUiLBZGXd6z2d25BZA
+(1 row)
+
+               desafio_vinculo               
+---------------------------------------------
+ nJ_ppOuaNF3avUcCK5Z_JxsOsc3fdpEQkAtyz2PDmPA
+(1 row)
+
+               desafio_vinculo               
+---------------------------------------------
+ hF7reuUgZNruBMykr76_JlXbdecRIbk1HtKIIHkwTrA
+(1 row)
+
+UPDATE 1
+               desafio_vinculo               
+---------------------------------------------
+ oPk3nFkVqpyWYIj7jWT3xvwSOz9I7ufCwHzedvLO8mA
+(1 row)
+
+              desafio_cadastro               
+---------------------------------------------
+ vb_zJghj_fcprMaddUc8v9Jl5bUVZI5U5rDCIB-wKfA
+(1 row)
+
+     identity_mfa_enroll_pending      
+--------------------------------------
+ f0fb3687-19c7-4b4a-8a06-61752e63e4b0
+(1 row)
+
+              desafio_cadastro               
+---------------------------------------------
+ 7zEEerZJC-aturBetIGI6q7c7LEEBSIykG_hJ2vIwxA
+(1 row)
+
+                   desafio                   
+---------------------------------------------
+ rfkL7oba3PnU8Hx6v7Y3X3qj86LRmFN9So2SlbHa3iA
+(1 row)
+
+       resultado        
+------------------------
+ grupo L preparacao: ok
+(1 row)
+

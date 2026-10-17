@@ -1,0 +1,174 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+SELECT 1
+ step_up 
+---------
+ 
+(1 row)
+
+BEGIN
+ ctx 
+-----
+ 
+(1 row)
+
+UPDATE 1
+                    afirma                     
+-----------------------------------------------
+ ok: I-1 conta antiga com xmin desta transacao
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_users
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+                afirma                 
+---------------------------------------
+ ok: I-1 vinculacao sem prova recusada
+(1 row)
+
+                afirma                 
+---------------------------------------
+ ok: I-1 criacao cria organizacao NOVA
+(1 row)
+
+                   afirma                    
+---------------------------------------------
+ ok: I-1 conta antiga continua NAO vinculada
+(1 row)
+
+COMMIT
+                       afirma                       
+----------------------------------------------------
+ ok: I-1 a identidade alcanca so a organizacao nova
+(1 row)
+
+E I-1: ok
+BEGIN
+ ctx 
+-----
+ 
+(1 row)
+
+                        afirma                        
+------------------------------------------------------
+ ok: I-2 conta criada e vinculada, ORG_ADMIN, limites
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] conta vinculada a identidade nao autentica nem cadastra fator por credencial local (user_credentials)
+NOTICE:  rejeitado como esperado [23514] conta vinculada a identidade nao autentica nem cadastra fator por credencial local (user_mfa_factors)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] conta vinculada a identidade nao autentica nem cadastra fator por credencial local (auth_challenges)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+COMMIT
+E I-3: ok
+            nova_sessao_id            
+--------------------------------------
+ 31e869d1-bd33-4613-a5fa-cbb8834e530d
+(1 row)
+
+            afirma            
+------------------------------
+ ok: I-4 sem step-up recusado
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+                   afirma                    
+---------------------------------------------
+ ok: I-4 identidade PENDING nao obtem sessao
+(1 row)
+
+       afirma       
+--------------------
+ ok: I-4 sem efeito
+(1 row)
+
+E I-4: ok
+ step_up 
+---------
+ 
+(1 row)
+
+       afirma       
+--------------------
+ ok: I-5 criacao 1
+ ok: I-5 criacao 2
+ ok: I-5 criacao 3
+ ok: I-5 criacao 4
+ ok: I-5 criacao 5
+ ok: I-5 criacao 6
+ ok: I-5 criacao 7
+ ok: I-5 criacao 8
+ ok: I-5 criacao 9
+ ok: I-5 criacao 10
+(10 rows)
+
+            afirma            
+------------------------------
+ ok: I-5 11a criacao recusada
+(1 row)
+
+          afirma          
+--------------------------
+ ok: I-5 dez organizacoes
+(1 row)
+
+E I-5: ok
+                     afirma                      
+-------------------------------------------------
+ ok: I-6 identity_attach_created_account ausente
+(1 row)
+
+  resultado  
+-------------
+ grupo I: ok
+(1 row)
+

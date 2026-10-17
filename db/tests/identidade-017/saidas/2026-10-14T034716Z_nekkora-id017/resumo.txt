@@ -1,0 +1,21 @@
+A: 16 migrations (001-015 + 017); diff de catalogo: removidas (<): 2; acrescentadas (>): 833; fora do previsto: 0
+A: modelo do migrador: 4 janelas SUPERUSER (011, 012, 013, 017) e 1 BYPASSRLS, todas com retirada 0|0|0
+A: invariantes 012/013/014(adaptada)/017 DEPOIS da retirada (0|0|0 dono_do_banco=migrador_nekkora), no inicio e no fim: OK
+A: grupos A, B, C' , D, G, H, I, J, L: OK; grupo L sem efeito (59 tabelas identicas)
+A: concorrencia (grupos C, K, R, V e Q, mais M1r e M8r): 41 verificacoes de estado final, 34 esperas de lock observadas
+A: E-1..E-3 e entrada local viva conferidos em 105 pontos, todos 0|0|0|0
+A: grupo M: 360 privilegios efetivos = matriz esperada
+A: mutacoes: 12 de 12 detectadas (M1 lock, M2 sessao restrita, M3 reconferencia do desafio, M4 validade no consumo, M5 hora da vinculacao R1, M6 credencial vigente, M7 invalidacao na troca de senha, M8 lock da organizacao na emissao R4, M9 elegibilidade na emissao R4, M10 READ COMMITTED na emissao R4b, M11 sessao restrita na consulta de criacao R5, M12 teto na consulta de criacao R5), restauradas, catalogo final = instalacao
+A: R4: grupo Q (elegibilidade da conta, da organizacao e do vinculo na emissao; Q-0..Q-5 sequenciais, Q-C1..Q-C6 com a espera de T2 observada, Q-C7 ramo 1 sem espera, Q-C8 ramo 2 espera; R4b: Q-RR1..Q-RR3 recusa fora de READ COMMITTED, Q-RC1/Q-RC2 em READ COMMITTED, Q-R1 ramo 1 em qualquer isolamento) OK
+A: R3: grupo S (finalidade, credencial vigente, re-hash, atomicidade, troca de senha) e V-5/V-6 (espera nas funcoes novas) OK
+A: R2: grupo V (prova vencida durante espera posterior) e grupo P (RLS por identidade, credenciais sem SELECT, consultas exatas) OK
+A: R1: grupo N (imutabilidade estrita e controles positivos) e grupo R (desafio reconferido apos o lock) OK
+B: organizacoes=3 usuarios=303 sessoes_ativas=300 concessoes=120 execucoes=900 eventos=450
+B: massa_mfa: fatores=60 codigos=180 eventos=82 resets_admin_sem_motivo=10 sessoes_mfa=60
+B: tabelas no instantaneo: 49; diff de dados: vazio; sessoes ativas preservadas: 60
+B: catalogo identico a instalacao limpa; invariantes DEPOIS da retirada (0|0|0 dono_do_banco=migrador_nekkora); ramo 1 na base populada; restauracao logica: OK
+C: 001-017 com a 016: 17 migrations, invariantes 012/013/014/016/017: OK
+C: controles positivos: vinculacao pela fixture e bloco de efeitos do reset da 016 (4 UPDATEs, papel nekkora_ops_mfa_owner) aceitos
+D: base com a 016 (organizacoes=3 usuarios=303 sessoes_ativas=300 concessoes=120 execucoes=900 eventos=450 massa_mfa: fatores=60 codigos=180 eventos=82 resets_admin_sem_motivo=10 sessoes_mfa=60 ); massa da 016 pelos caminhos reais: 22 atos aceitos; estados antes [APROVADA,VERIFICADA]; tabelas no instantaneo (public+ops): 70, diff vazio
+D: depois da 017: 6 atos da 016 aceitos (3 registros de certificado, execucao com os efeitos do reset, consulta, pre-aprovacao); avisos: 1 emitidos pelo fluxo de banco sob nekkora_platform (entrega simulada), titular de volta pela porta antiga; estados [EXECUTADA,PRE_APROVADA]
+D: invariantes 012/013/014/016/017 depois da retirada; catalogo de public e de ops = base limpa 001-017; restauracao logica: OK

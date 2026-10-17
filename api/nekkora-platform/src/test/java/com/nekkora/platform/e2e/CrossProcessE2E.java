@@ -93,11 +93,25 @@ class CrossProcessE2E {
         }
     }
 
+    /** Como {@link #sql}, numa transacao com o contexto da organizacao (017: entrada local exige o contexto, contrato §3.2). */
+    static void sqlIn(UUID organization, String... commands) throws Exception {
+        try (Connection c = DriverManager.getConnection(System.getenv("E2E_PG_URL"), "nekkora", System.getenv("E2E_PG_SUPER_SENHA"))) {
+            c.setAutoCommit(false);
+            try (Statement st = c.createStatement()) {
+                st.execute("SELECT set_config('nekkora.organization_id', '" + organization + "', true)");
+                for (String s : commands) {
+                    st.execute(s);
+                }
+            }
+            c.commit();
+        }
+    }
+
     static void fixture() throws Exception {
         String o = "'" + ORG + "'";
         String hash = new PasswordHasher(new PasswordHasher.Parameters(65536, 3, 1), 1, 1, 5000).generate(PASSWORD.toCharArray());
         UUID cm = UUID.randomUUID();
-        sql("INSERT INTO organizations (organization_id, name, status) VALUES (" + o + ", 'Org E2E', 1)",
+        sqlIn(ORG, "INSERT INTO organizations (organization_id, name, status) VALUES (" + o + ", 'Org E2E', 1)",
                 "INSERT INTO users (user_id, organization_id, account_type, email, email_verified_at, status, display_name) VALUES ('" + ADMIN + "', " + o
                         + ", 1, 'adm-" + ADMIN.toString().substring(0, 6) + "@o.test', now(), 2, 'Adm')",
                 "INSERT INTO organization_memberships (membership_id, organization_id, user_id, account_type, status) VALUES ('" + ADMIN_MEMBERSHIP + "', " + o + ", '" + ADMIN + "', 1, 2)",

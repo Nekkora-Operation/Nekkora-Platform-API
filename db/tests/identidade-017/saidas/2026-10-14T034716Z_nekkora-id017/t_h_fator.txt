@@ -1,0 +1,169 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+           nova_identidade            
+--------------------------------------
+ 417cbca3-7d54-4fd2-82f8-1bdb87e27bb1
+(1 row)
+
+               afirma                
+-------------------------------------
+ ok: H-1 um confirmado, oito codigos
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_mfa_factors
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_mfa_factors
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+           nova_identidade            
+--------------------------------------
+ 549d164f-ff5d-4d91-9648-22964d92f8d7
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_mfa_factors
+                 como                 
+--------------------------------------
+ 417cbca3-7d54-4fd2-82f8-1bdb87e27bb1
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_mfa_factors
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+UPDATE 1
+NOTICE:  rejeitado como esperado [23514] passo TOTP aceito so aumenta (factor_id=7e617de6-0832-41c9-858e-9f99ee5fd83d)
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_mfa_factors
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+                                afirma                                 
+-----------------------------------------------------------------------
+ ok: H-10 desafio de cadastro nao cria pendente para quem ja confirmou
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ 0b233c7a-c547-4dd1-aff3-818c6c71ebdb
+(1 row)
+
+                     afirma                      
+-------------------------------------------------
+ ok: H-10 confirm_first recusa: nao e o primeiro
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ ab326c2c-483a-48e8-8c1d-481a67b419e4
+(1 row)
+
+                      afirma                       
+---------------------------------------------------
+ ok: H-11 confirm_first recusa depois de uma troca
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_mfa_factors
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_mfa_factors
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_mfa_recovery_codes
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+                 como                 
+--------------------------------------
+ 9a661640-c0bb-42e7-8c84-7e8272c1aaf4
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_mfa_recovery_codes
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_mfa_recovery_codes
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_mfa_recovery_codes
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied to set role "nekkora_identity_owner"
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+E H: ok
+        resultado        
+-------------------------
+ grupo H (aplicacao): ok
+(1 row)
+

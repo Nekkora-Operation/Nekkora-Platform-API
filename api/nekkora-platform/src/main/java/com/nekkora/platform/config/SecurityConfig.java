@@ -15,10 +15,12 @@ import org.springframework.security.web.context.RequestAttributeSecurityContextR
 import com.nekkora.core.db.OrgTransactions;
 import com.nekkora.core.web.ApiError;
 import com.nekkora.core.web.ErrorResponses;
+import com.nekkora.platform.identity.IdentitySessionResolver;
 import com.nekkora.platform.limits.Limits;
 import com.nekkora.platform.mfa.MfaRepository;
 import com.nekkora.platform.session.SessionRepository;
 import com.nekkora.platform.web.CsrfFilter;
+import com.nekkora.platform.web.IdentityFilter;
 import com.nekkora.platform.web.PreAuthCsrf;
 import com.nekkora.platform.web.SessionFilter;
 
@@ -35,11 +37,17 @@ public class SecurityConfig {
             "/api/v1/o/*/auth/login", "/api/v1/o/*/auth/mfa/enroll/start", "/api/v1/o/*/auth/mfa/enroll/confirm",
             "/api/v1/o/*/auth/mfa/verify", "/api/v1/o/*/auth/logout", "/api/v1/o/*/auth/password-reset/request",
             "/api/v1/o/*/auth/password-reset/confirm", "/api/v1/o/*/auth/email-verification/confirm",
-            "/api/v1/o/*/auth/mfa-emergencia/aviso/confirmar", "/api/v1/o/*/auth/mfa-emergencia/aviso/contestar"};
+            "/api/v1/o/*/auth/mfa-emergencia/aviso/confirmar", "/api/v1/o/*/auth/mfa-emergencia/aviso/contestar",
+            // cadastro web (Missao 1): sem sessao; CSRF de pre-autenticacao. Desligado: IdentityRoutesGate responde 404 antes daqui
+            "/api/v1/signup", "/api/v1/signup/confirm", "/api/v1/signup/confirmation/resend",
+            // entrada geral (Missao 1): sem sessao de organizacao; desafio e sessao de identidade conferidos pelo servico e
+            // pelo CsrfFilter. Desligado: IdentityRoutesGate responde 404 antes daqui
+            "/api/v1/auth/login", "/api/v1/auth/mfa/enroll/start", "/api/v1/auth/mfa/enroll/confirm", "/api/v1/auth/mfa/verify",
+            "/api/v1/auth/logout"};
 
     @Bean
     SecurityFilterChain apiSecurityFilterChain(HttpSecurity http, OrgTransactions tx, SessionRepository sessions, Limits limits, PreAuthCsrf pre,
-                               MfaRepository mfa, PlatformProperties p) throws Exception {
+                               MfaRepository mfa, PlatformProperties p, IdentitySessionResolver identities) throws Exception {
         http.securityContext(c -> c.securityContextRepository(new RequestAttributeSecurityContextRepository()))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(c -> c.disable())
@@ -56,7 +64,9 @@ public class SecurityConfig {
                         .authenticationEntryPoint((req, res, ex) -> ErrorResponses.writeError(res, ApiError.UNAUTHENTICATED, null))
                         .accessDeniedHandler((req, res, ex) -> ErrorResponses.writeError(res, ApiError.FORBIDDEN, null)))
                 .addFilterBefore(new SessionFilter(tx, sessions, limits), AuthorizationFilter.class)
-                .addFilterAfter(new CsrfFilter(p.publicOrigin(), pre, tx, mfa), AuthorizationFilter.class);
+                // entrada geral: sessao de identidade so nas rotas sem organizacao (desenho §6.7)
+                .addFilterBefore(new IdentityFilter(identities), AuthorizationFilter.class)
+                .addFilterAfter(new CsrfFilter(p.publicOrigin(), pre, tx, mfa, identities), AuthorizationFilter.class);
         return http.build();
     }
 

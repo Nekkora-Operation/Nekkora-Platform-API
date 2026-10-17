@@ -1,0 +1,139 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+SELECT 1
+            nova_sessao_id            
+--------------------------------------
+ 0478986d-e005-40d3-866d-da5fbd80c444
+(1 row)
+
+            nova_sessao_id            
+--------------------------------------
+ 12ac93e1-d41c-4478-90e4-c0be9d88f8a2
+(1 row)
+
+                                  afirma                                   
+---------------------------------------------------------------------------
+ ok: G: fator antigo da identidade confirmado e habilitado (entre T0 e T1)
+(1 row)
+
+NOTICE:  rejeitado como esperado [23514] sessao nova exige fator de MFA confirmado e ativo
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+E G-1: ok
+UPDATE 1
+NOTICE:  rejeitado como esperado [23514] sessao nova exige fator de MFA confirmado e ativo
+      espera_erro      
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+E G-3: ok
+                 afirma                 
+----------------------------------------
+ ok: G-4 listagem vazia para a restrita
+(1 row)
+
+               afirma               
+------------------------------------
+ ok: G-4 alvo vazio para a restrita
+(1 row)
+
+                 afirma                  
+-----------------------------------------
+ ok: G-4 controle: sessao comum lista O1
+(1 row)
+
+E G-4: ok
+      afirma      
+------------------
+ ok: G-5 recusado
+(1 row)
+
+            afirma            
+------------------------------
+ ok: G-5 sem organizacao nova
+(1 row)
+
+E G-5: ok
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_sessions
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_sessions
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_mfa_factors
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+E G-7: ok
+                 como                 
+--------------------------------------
+ d400b626-1bb9-467f-b589-5e418eeabc3d
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_mfa_recovery_codes
+E G-8: ok
+        afirma        
+----------------------
+ ok: G-2 T1 concluido
+(1 row)
+
+                afirma                
+--------------------------------------
+ ok: G-2 sessao de organizacao aceita
+(1 row)
+
+E G-2: ok
+  resultado  
+-------------
+ grupo G: ok
+(1 row)
+

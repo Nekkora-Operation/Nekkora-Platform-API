@@ -1,0 +1,72 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+BEGIN
+ ctx 
+-----
+ 
+(1 row)
+
+                   afirma                   
+--------------------------------------------
+ ok: Q-RR1 T1: snapshot com o vinculo ativo
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [25N01]
+(1 row)
+
+NOTICE:  rejeitado como esperado [25N01] sessao de organizacao vinculada exige transaction_isolation=read committed (atual=repeatable read)
+ pg_sleep 
+----------
+ 
+(1 row)
+
+COMMIT
+  resultado   
+--------------
+ Q-RR1-T1: ok
+(1 row)
+

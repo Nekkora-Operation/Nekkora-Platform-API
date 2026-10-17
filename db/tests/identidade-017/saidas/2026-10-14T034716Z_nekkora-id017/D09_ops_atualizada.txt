@@ -1,0 +1,970 @@
+col|ops_account_link_proofs|code_hash|text|notnull=t|default=
+col|ops_account_link_proofs|consumed_at|timestamp with time zone|notnull=f|default=
+col|ops_account_link_proofs|consumed_by|uuid|notnull=f|default=
+col|ops_account_link_proofs|created_at|timestamp with time zone|notnull=t|default=clock_timestamp()
+col|ops_account_link_proofs|expires_at|timestamp with time zone|notnull=t|default=
+col|ops_account_link_proofs|organization_id|uuid|notnull=t|default=
+col|ops_account_link_proofs|proof_id|uuid|notnull=t|default=gen_random_uuid()
+col|ops_account_link_proofs|user_id|uuid|notnull=t|default=
+col|ops_contact_link_proofs|code_hash|text|notnull=t|default=
+col|ops_contact_link_proofs|consumed_at|timestamp with time zone|notnull=f|default=
+col|ops_contact_link_proofs|consumed_by|uuid|notnull=f|default=
+col|ops_contact_link_proofs|contact_id|uuid|notnull=t|default=
+col|ops_contact_link_proofs|created_at|timestamp with time zone|notnull=t|default=clock_timestamp()
+col|ops_contact_link_proofs|expires_at|timestamp with time zone|notnull=t|default=
+col|ops_contact_link_proofs|issued_by|uuid|notnull=t|default=
+col|ops_contact_link_proofs|organization_id|uuid|notnull=t|default=
+col|ops_contact_link_proofs|proof_id|uuid|notnull=t|default=gen_random_uuid()
+col|ops_intake_entries|channel_type|smallint|notnull=t|default=
+col|ops_intake_entries|created_at|timestamp with time zone|notnull=t|default=
+col|ops_intake_entries|designated_operator_id|uuid|notnull=t|default=
+col|ops_intake_entries|entry_id|uuid|notnull=t|default=gen_random_uuid()
+col|ops_intake_entries|expires_at|timestamp with time zone|notnull=t|default=
+col|ops_intake_entries|mechanism|smallint|notnull=t|default=
+col|ops_intake_entries|origin_pseudonym|text|notnull=f|default=
+col|ops_intake_entries|origin_version|integer|notnull=f|default=
+col|ops_intake_entries|prev_pseudonym|text|notnull=f|default=
+col|ops_intake_entries|prev_version|integer|notnull=f|default=
+col|ops_intake_entries|used_at|timestamp with time zone|notnull=f|default=
+col|ops_intake_entries|used_request_id|uuid|notnull=f|default=
+col|ops_intake_key_state|activated_at|timestamp with time zone|notnull=t|default=
+col|ops_intake_key_state|current_version|integer|notnull=t|default=
+col|ops_intake_key_state|previous_version|integer|notnull=f|default=
+col|ops_intake_key_state|singleton|boolean|notnull=t|default=true
+col|ops_mfa_approval_attempts|accepted_at|timestamp with time zone|notnull=t|default=
+col|ops_mfa_approval_attempts|approved_at|timestamp with time zone|notnull=t|default=
+col|ops_mfa_approval_attempts|notice_id|uuid|notnull=t|default=
+col|ops_mfa_approval_attempts|organization_id|uuid|notnull=t|default=
+col|ops_mfa_approval_attempts|recipient_user_id|uuid|notnull=t|default=
+col|ops_mfa_approval_attempts|request_id|uuid|notnull=t|default=
+col|ops_mfa_approval_attempts|seq|integer|notnull=t|default=
+col|ops_mfa_approval_attempts|state|smallint|notnull=t|default=
+col|ops_mfa_approval_attempts|target_user_id|uuid|notnull=t|default=
+col|ops_mfa_callbacks|callback_id|uuid|notnull=t|default=gen_random_uuid()
+col|ops_mfa_callbacks|channel_set_at|timestamp with time zone|notnull=t|default=
+col|ops_mfa_callbacks|channel_type|smallint|notnull=t|default=
+col|ops_mfa_callbacks|contact_id|uuid|notnull=t|default=
+col|ops_mfa_callbacks|created_at|timestamp with time zone|notnull=t|default=
+col|ops_mfa_callbacks|expires_at|timestamp with time zone|notnull=t|default=
+col|ops_mfa_callbacks|operator_id|uuid|notnull=t|default=
+col|ops_mfa_callbacks|organization_id|uuid|notnull=t|default=
+col|ops_mfa_callbacks|used_at|timestamp with time zone|notnull=f|default=
+col|ops_mfa_callbacks|used_request_id|uuid|notnull=f|default=
+col|ops_mfa_notice_results|category|text|notnull=f|default=
+col|ops_mfa_notice_results|created_at|timestamp with time zone|notnull=t|default=clock_timestamp()
+col|ops_mfa_notice_results|notice_id|uuid|notnull=t|default=
+col|ops_mfa_notice_results|organization_id|uuid|notnull=t|default=
+col|ops_mfa_notice_results|outcome|text|notnull=t|default=
+col|ops_mfa_notice_results|recipient_user_id|uuid|notnull=t|default=
+col|ops_mfa_notice_results|reported_state|smallint|notnull=t|default=
+col|ops_mfa_notice_results|request_id|uuid|notnull=t|default=
+col|ops_mfa_notice_results|result_id|uuid|notnull=t|default=gen_random_uuid()
+col|ops_mfa_notice_results|session_role|text|notnull=t|default=SESSION_USER
+col|ops_mfa_notice_results|target_user_id|uuid|notnull=t|default=
+col|ops_mfa_notice_tokens|invalidated_at|timestamp with time zone|notnull=f|default=
+col|ops_mfa_notice_tokens|issued_at|timestamp with time zone|notnull=t|default=
+col|ops_mfa_notice_tokens|notice_id|uuid|notnull=t|default=
+col|ops_mfa_notice_tokens|organization_id|uuid|notnull=t|default=
+col|ops_mfa_notice_tokens|purpose|smallint|notnull=t|default=
+col|ops_mfa_notice_tokens|recipient_user_id|uuid|notnull=t|default=
+col|ops_mfa_notice_tokens|request_id|uuid|notnull=t|default=
+col|ops_mfa_notice_tokens|target_user_id|uuid|notnull=t|default=
+col|ops_mfa_notice_tokens|token_hash|text|notnull=t|default=
+col|ops_mfa_notice_tokens|token_id|uuid|notnull=t|default=gen_random_uuid()
+col|ops_mfa_notice_tokens|used_at|timestamp with time zone|notnull=f|default=
+col|ops_mfa_notice_tokens|valid_until|timestamp with time zone|notnull=t|default=
+col|ops_mfa_notices|accepted_at|timestamp with time zone|notnull=f|default=
+col|ops_mfa_notices|category|text|notnull=f|default=
+col|ops_mfa_notices|claim_id|uuid|notnull=f|default=
+col|ops_mfa_notices|claimed_at|timestamp with time zone|notnull=f|default=
+col|ops_mfa_notices|created_at|timestamp with time zone|notnull=t|default=clock_timestamp()
+col|ops_mfa_notices|issued_at|timestamp with time zone|notnull=f|default=
+col|ops_mfa_notices|kind|smallint|notnull=t|default=
+col|ops_mfa_notices|notice_id|uuid|notnull=t|default=gen_random_uuid()
+col|ops_mfa_notices|organization_id|uuid|notnull=t|default=
+col|ops_mfa_notices|recipient_user_id|uuid|notnull=t|default=
+col|ops_mfa_notices|request_id|uuid|notnull=t|default=
+col|ops_mfa_notices|seq|integer|notnull=t|default=
+col|ops_mfa_notices|state_at|timestamp with time zone|notnull=t|default=clock_timestamp()
+col|ops_mfa_notices|state|smallint|notnull=t|default=0
+col|ops_mfa_notices|target_user_id|uuid|notnull=t|default=
+col|ops_mfa_recovery_events|act|text|notnull=t|default=
+col|ops_mfa_recovery_events|cert_issuer_dn|text|notnull=f|default=
+col|ops_mfa_recovery_events|cert_serial|numeric(60,0)|notnull=f|default=
+col|ops_mfa_recovery_events|created_at|timestamp with time zone|notnull=t|default=clock_timestamp()
+col|ops_mfa_recovery_events|event_id|uuid|notnull=t|default=gen_random_uuid()
+col|ops_mfa_recovery_events|failed_act|text|notnull=f|default=
+col|ops_mfa_recovery_events|operator_id|uuid|notnull=f|default=
+col|ops_mfa_recovery_events|organization_id|uuid|notnull=f|default=
+col|ops_mfa_recovery_events|origin|smallint|notnull=t|default=1
+col|ops_mfa_recovery_events|purpose|smallint|notnull=f|default=
+col|ops_mfa_recovery_events|reason|text|notnull=f|default=
+col|ops_mfa_recovery_events|recipient_user_id|uuid|notnull=f|default=
+col|ops_mfa_recovery_events|request_id|uuid|notnull=f|default=
+col|ops_mfa_recovery_events|result|text|notnull=t|default=
+col|ops_mfa_recovery_events|session_role|text|notnull=t|default=SESSION_USER
+col|ops_mfa_recovery_events|sqlstate|text|notnull=f|default=
+col|ops_mfa_recovery_events|stage|text|notnull=f|default=
+col|ops_mfa_recovery_events|target_user_id|uuid|notnull=f|default=
+col|ops_mfa_recovery_requests|approved_factor_id|uuid|notnull=f|default=
+col|ops_mfa_recovery_requests|callback_id|uuid|notnull=f|default=
+col|ops_mfa_recovery_requests|callback_ok|boolean|notnull=f|default=
+col|ops_mfa_recovery_requests|close_reason|text|notnull=f|default=
+col|ops_mfa_recovery_requests|closed_at|timestamp with time zone|notnull=f|default=
+col|ops_mfa_recovery_requests|closed_by|uuid|notnull=f|default=
+col|ops_mfa_recovery_requests|executed_at|timestamp with time zone|notnull=f|default=
+col|ops_mfa_recovery_requests|executed_by|uuid|notnull=f|default=
+col|ops_mfa_recovery_requests|final_approved_at|timestamp with time zone|notnull=f|default=
+col|ops_mfa_recovery_requests|final_approved_by|uuid|notnull=f|default=
+col|ops_mfa_recovery_requests|intake_entry_id|uuid|notnull=f|default=
+col|ops_mfa_recovery_requests|notice_confirmed_at|timestamp with time zone|notnull=f|default=
+col|ops_mfa_recovery_requests|notice_seq_at_approval|integer|notnull=f|default=
+col|ops_mfa_recovery_requests|notice_seq|integer|notnull=t|default=0
+col|ops_mfa_recovery_requests|open_mode|smallint|notnull=t|default=
+col|ops_mfa_recovery_requests|opened_at|timestamp with time zone|notnull=t|default=
+col|ops_mfa_recovery_requests|opened_by|uuid|notnull=t|default=
+col|ops_mfa_recovery_requests|organization_id|uuid|notnull=t|default=
+col|ops_mfa_recovery_requests|origin_pseudonym|text|notnull=f|default=
+col|ops_mfa_recovery_requests|origin_version|integer|notnull=f|default=
+col|ops_mfa_recovery_requests|other_admins_captured_at|timestamp with time zone|notnull=f|default=
+col|ops_mfa_recovery_requests|other_admins_count|integer|notnull=f|default=
+col|ops_mfa_recovery_requests|other_admins_declaration|smallint|notnull=f|default=
+col|ops_mfa_recovery_requests|preapproved_at|timestamp with time zone|notnull=f|default=
+col|ops_mfa_recovery_requests|preapproved_by|uuid|notnull=f|default=
+col|ops_mfa_recovery_requests|prev_pseudonym|text|notnull=f|default=
+col|ops_mfa_recovery_requests|prev_version|integer|notnull=f|default=
+col|ops_mfa_recovery_requests|request_id|uuid|notnull=t|default=gen_random_uuid()
+col|ops_mfa_recovery_requests|requester_contact_id|uuid|notnull=t|default=
+col|ops_mfa_recovery_requests|requester_kind|smallint|notnull=t|default=
+col|ops_mfa_recovery_requests|second_contact_id|uuid|notnull=f|default=
+col|ops_mfa_recovery_requests|second_contact_ok|boolean|notnull=f|default=
+col|ops_mfa_recovery_requests|state|smallint|notnull=t|default=1
+col|ops_mfa_recovery_requests|t_total|timestamp with time zone|notnull=t|default=
+col|ops_mfa_recovery_requests|target_user_id|uuid|notnull=t|default=
+col|ops_mfa_recovery_requests|verified_at|timestamp with time zone|notnull=f|default=
+col|ops_mfa_recovery_requests|verified_by|uuid|notnull=f|default=
+col|ops_mfa_request_admins|active_codes|integer|notnull=t|default=
+col|ops_mfa_request_admins|active_factor_id|uuid|notnull=f|default=
+col|ops_mfa_request_admins|active_sessions|integer|notnull=t|default=
+col|ops_mfa_request_admins|captured_at|timestamp with time zone|notnull=t|default=
+col|ops_mfa_request_admins|declared_no_usable_codes|boolean|notnull=t|default=
+col|ops_mfa_request_admins|declared_no_usable_factor|boolean|notnull=t|default=
+col|ops_mfa_request_admins|factor_confirmed_active|boolean|notnull=t|default=
+col|ops_mfa_request_admins|organization_id|uuid|notnull=t|default=
+col|ops_mfa_request_admins|request_id|uuid|notnull=t|default=
+col|ops_mfa_request_admins|target_user_id|uuid|notnull=t|default=
+col|ops_mfa_request_admins|totp_last_step|bigint|notnull=f|default=
+col|ops_mfa_request_admins|used_codes|integer|notnull=t|default=
+col|ops_mfa_request_admins|user_id|uuid|notnull=t|default=
+col|ops_operator_certificates|certificate_id|uuid|notnull=t|default=gen_random_uuid()
+col|ops_operator_certificates|idp_auth_time|timestamp with time zone|notnull=t|default=
+col|ops_operator_certificates|idp_method|text|notnull=t|default=
+col|ops_operator_certificates|issuer_dn|text|notnull=t|default=
+col|ops_operator_certificates|not_after|timestamp with time zone|notnull=t|default=
+col|ops_operator_certificates|not_before|timestamp with time zone|notnull=t|default=
+col|ops_operator_certificates|operator_id|uuid|notnull=t|default=
+col|ops_operator_certificates|registered_at|timestamp with time zone|notnull=t|default=clock_timestamp()
+col|ops_operator_certificates|revoke_reason|text|notnull=f|default=
+col|ops_operator_certificates|revoked_at|timestamp with time zone|notnull=f|default=
+col|ops_operator_certificates|serial|numeric(60,0)|notnull=t|default=
+col|ops_operator_contact_links|contact_id|uuid|notnull=t|default=
+col|ops_operator_contact_links|created_at|timestamp with time zone|notnull=t|default=clock_timestamp()
+col|ops_operator_contact_links|link_id|uuid|notnull=t|default=gen_random_uuid()
+col|ops_operator_contact_links|operator_id|uuid|notnull=t|default=
+col|ops_operator_contact_links|organization_id|uuid|notnull=t|default=
+col|ops_operator_contact_links|proof_id|uuid|notnull=t|default=
+col|ops_operator_contact_links|removed_at|timestamp with time zone|notnull=f|default=
+col|ops_operator_contact_links|removed_by|uuid|notnull=f|default=
+col|ops_operator_permissions|act|smallint|notnull=t|default=
+col|ops_operator_permissions|granted_at|timestamp with time zone|notnull=t|default=clock_timestamp()
+col|ops_operator_permissions|granted_by|uuid|notnull=f|default=
+col|ops_operator_permissions|operator_id|uuid|notnull=t|default=
+col|ops_operator_permissions|permission_id|uuid|notnull=t|default=gen_random_uuid()
+col|ops_operator_permissions|revoked_at|timestamp with time zone|notnull=f|default=
+col|ops_operator_permissions|revoked_by|uuid|notnull=f|default=
+col|ops_operator_platform_accounts|created_at|timestamp with time zone|notnull=t|default=clock_timestamp()
+col|ops_operator_platform_accounts|link_id|uuid|notnull=t|default=gen_random_uuid()
+col|ops_operator_platform_accounts|operator_id|uuid|notnull=t|default=
+col|ops_operator_platform_accounts|organization_id|uuid|notnull=t|default=
+col|ops_operator_platform_accounts|proof_id|uuid|notnull=t|default=
+col|ops_operator_platform_accounts|removed_at|timestamp with time zone|notnull=f|default=
+col|ops_operator_platform_accounts|removed_by|uuid|notnull=f|default=
+col|ops_operator_platform_accounts|user_id|uuid|notnull=t|default=
+col|ops_operators|created_at|timestamp with time zone|notnull=t|default=clock_timestamp()
+col|ops_operators|created_by|uuid|notnull=f|default=
+col|ops_operators|db_role|text|notnull=t|default=
+col|ops_operators|disabled_at|timestamp with time zone|notnull=f|default=
+col|ops_operators|disabled_by|uuid|notnull=f|default=
+col|ops_operators|idp_issuer|text|notnull=t|default=
+col|ops_operators|idp_subject|text|notnull=t|default=
+col|ops_operators|operator_id|uuid|notnull=t|default=gen_random_uuid()
+col|ops_operators|status|smallint|notnull=t|default=1
+col|ops_origin_buckets|bucket_key|text|notnull=t|default=
+col|ops_origin_buckets|created_at|timestamp with time zone|notnull=t|default=clock_timestamp()
+col|ops_registry_events|actor_kind|smallint|notnull=t|default=
+col|ops_registry_events|actor_operator_id|uuid|notnull=f|default=
+col|ops_registry_events|act|smallint|notnull=f|default=
+col|ops_registry_events|cert_issuer_dn|text|notnull=f|default=
+col|ops_registry_events|cert_serial|numeric(60,0)|notnull=f|default=
+col|ops_registry_events|certificate_id|uuid|notnull=f|default=
+col|ops_registry_events|contact_id|uuid|notnull=f|default=
+col|ops_registry_events|created_at|timestamp with time zone|notnull=t|default=clock_timestamp()
+col|ops_registry_events|event_id|uuid|notnull=t|default=gen_random_uuid()
+col|ops_registry_events|kind|text|notnull=t|default=
+col|ops_registry_events|organization_id|uuid|notnull=f|default=
+col|ops_registry_events|reason|text|notnull=f|default=
+col|ops_registry_events|result|text|notnull=t|default=
+col|ops_registry_events|session_role|text|notnull=t|default=SESSION_USER
+col|ops_registry_events|target_operator_id|uuid|notnull=f|default=
+col|org_authorized_contact_events|contact_id|uuid|notnull=t|default=
+col|org_authorized_contact_events|created_at|timestamp with time zone|notnull=t|default=clock_timestamp()
+col|org_authorized_contact_events|event_id|uuid|notnull=t|default=gen_random_uuid()
+col|org_authorized_contact_events|kind|smallint|notnull=t|default=
+col|org_authorized_contact_events|operator_id|uuid|notnull=t|default=
+col|org_authorized_contact_events|organization_id|uuid|notnull=t|default=
+col|org_authorized_contact_events|origin|text|notnull=f|default=
+col|org_authorized_contact_events|other_contact_confirmed|boolean|notnull=f|default=
+col|org_authorized_contact_events|other_contact_id|uuid|notnull=f|default=
+col|org_authorized_contact_events|previous_channel_confirmed|boolean|notnull=f|default=
+col|org_authorized_contact_events|signatory_confirmed|boolean|notnull=f|default=
+col|org_authorized_contacts|channel_set_at|timestamp with time zone|notnull=t|default=
+col|org_authorized_contacts|channel_type|smallint|notnull=t|default=
+col|org_authorized_contacts|channel_value|text|notnull=t|default=
+col|org_authorized_contacts|contact_id|uuid|notnull=t|default=gen_random_uuid()
+col|org_authorized_contacts|created_at|timestamp with time zone|notnull=t|default=clock_timestamp()
+col|org_authorized_contacts|display_name|text|notnull=t|default=
+col|org_authorized_contacts|organization_id|uuid|notnull=t|default=
+col|org_authorized_contacts|removed_at|timestamp with time zone|notnull=f|default=
+col|org_authorized_contacts|status|smallint|notnull=t|default=1
+col|org_authorized_contacts|user_id|uuid|notnull=f|default=
+con|ops_account_link_proofs|ops_account_link_proofs_check1|CHECK (((consumed_at IS NULL) = (consumed_by IS NULL)))
+con|ops_account_link_proofs|ops_account_link_proofs_check|CHECK (((expires_at > created_at) AND (expires_at <= (created_at + '00:10:00'::interval))))
+con|ops_account_link_proofs|ops_account_link_proofs_code_hash_check|CHECK ((code_hash ~ '^[0-9a-f]{64}$'::text))
+con|ops_account_link_proofs|ops_account_link_proofs_code_hash_key|UNIQUE (code_hash)
+con|ops_account_link_proofs|ops_account_link_proofs_consumed_by_fkey|FOREIGN KEY (consumed_by) REFERENCES ops.ops_operators(operator_id)
+con|ops_account_link_proofs|ops_account_link_proofs_organization_id_user_id_fkey|FOREIGN KEY (organization_id, user_id) REFERENCES users(organization_id, user_id) ON DELETE RESTRICT
+con|ops_account_link_proofs|ops_account_link_proofs_pkey|PRIMARY KEY (proof_id)
+con|ops_account_link_proofs|ops_account_link_proofs_proof_id_organization_id_user_id_key|UNIQUE (proof_id, organization_id, user_id)
+con|ops_contact_link_proofs|ops_contact_link_proofs_check1|CHECK (((consumed_at IS NULL) = (consumed_by IS NULL)))
+con|ops_contact_link_proofs|ops_contact_link_proofs_check2|CHECK (((consumed_by IS NULL) OR (consumed_by <> issued_by)))
+con|ops_contact_link_proofs|ops_contact_link_proofs_check|CHECK (((expires_at > created_at) AND (expires_at <= (created_at + '00:30:00'::interval))))
+con|ops_contact_link_proofs|ops_contact_link_proofs_code_hash_check|CHECK ((code_hash ~ '^[0-9a-f]{64}$'::text))
+con|ops_contact_link_proofs|ops_contact_link_proofs_code_hash_key|UNIQUE (code_hash)
+con|ops_contact_link_proofs|ops_contact_link_proofs_consumed_by_fkey|FOREIGN KEY (consumed_by) REFERENCES ops.ops_operators(operator_id)
+con|ops_contact_link_proofs|ops_contact_link_proofs_issued_by_fkey|FOREIGN KEY (issued_by) REFERENCES ops.ops_operators(operator_id)
+con|ops_contact_link_proofs|ops_contact_link_proofs_organization_id_contact_id_fkey|FOREIGN KEY (organization_id, contact_id) REFERENCES ops.org_authorized_contacts(organization_id, contact_id)
+con|ops_contact_link_proofs|ops_contact_link_proofs_pkey|PRIMARY KEY (proof_id)
+con|ops_contact_link_proofs|ops_contact_link_proofs_proof_id_organization_id_contact_id_key|UNIQUE (proof_id, organization_id, contact_id)
+con|ops_intake_entries|ops_intake_entries_channel_type_check|CHECK ((channel_type = ANY (ARRAY[1, 2])))
+con|ops_intake_entries|ops_intake_entries_check1|CHECK (((mechanism = 3) = (origin_pseudonym IS NULL)))
+con|ops_intake_entries|ops_intake_entries_check2|CHECK (((origin_version IS NULL) = (origin_pseudonym IS NULL)))
+con|ops_intake_entries|ops_intake_entries_check3|CHECK (((prev_version IS NULL) = (prev_pseudonym IS NULL)))
+con|ops_intake_entries|ops_intake_entries_check4|CHECK (((prev_version IS NULL) OR ((origin_version IS NOT NULL) AND (prev_version = (origin_version - 1)))))
+con|ops_intake_entries|ops_intake_entries_check5|CHECK (((mechanism <> 1) OR (channel_type = 2)))
+con|ops_intake_entries|ops_intake_entries_check6|CHECK (((mechanism <> 2) OR (channel_type = 1)))
+con|ops_intake_entries|ops_intake_entries_check7|CHECK (((used_at IS NULL) = (used_request_id IS NULL)))
+con|ops_intake_entries|ops_intake_entries_check|CHECK ((expires_at = (created_at + '01:00:00'::interval)))
+con|ops_intake_entries|ops_intake_entries_designated_operator_id_fkey|FOREIGN KEY (designated_operator_id) REFERENCES ops.ops_operators(operator_id)
+con|ops_intake_entries|ops_intake_entries_mechanism_check|CHECK ((mechanism = ANY (ARRAY[1, 2, 3])))
+con|ops_intake_entries|ops_intake_entries_origin_pseudonym_check|CHECK ((origin_pseudonym ~ '^[0-9a-f]{64}$'::text))
+con|ops_intake_entries|ops_intake_entries_pkey|PRIMARY KEY (entry_id)
+con|ops_intake_entries|ops_intake_entries_prev_pseudonym_check|CHECK ((prev_pseudonym ~ '^[0-9a-f]{64}$'::text))
+con|ops_intake_key_state|ops_intake_key_state_check1|CHECK (((previous_version IS NULL) = (current_version = 1)))
+con|ops_intake_key_state|ops_intake_key_state_check|CHECK (((previous_version IS NULL) OR (previous_version = (current_version - 1))))
+con|ops_intake_key_state|ops_intake_key_state_current_version_check|CHECK ((current_version >= 1))
+con|ops_intake_key_state|ops_intake_key_state_pkey|PRIMARY KEY (singleton)
+con|ops_intake_key_state|ops_intake_key_state_singleton_check|CHECK (singleton)
+con|ops_mfa_approval_attempts|ops_mfa_approval_attempts_check|CHECK (((accepted_at + '24:00:00'::interval) <= approved_at))
+con|ops_mfa_approval_attempts|ops_mfa_approval_attempts_notice_id_request_id_organizatio_fkey|FOREIGN KEY (notice_id, request_id, organization_id, target_user_id, recipient_user_id) REFERENCES ops.ops_mfa_notices(notice_id, request_id, organization_id, target_user_id, recipient_user_id)
+con|ops_mfa_approval_attempts|ops_mfa_approval_attempts_pkey|PRIMARY KEY (request_id, notice_id)
+con|ops_mfa_approval_attempts|ops_mfa_approval_attempts_request_id_recipient_user_id_key|UNIQUE (request_id, recipient_user_id)
+con|ops_mfa_approval_attempts|ops_mfa_approval_attempts_state_check|CHECK ((state = 4))
+con|ops_mfa_callbacks|ops_mfa_callbacks_channel_type_check|CHECK ((channel_type = ANY (ARRAY[1, 2])))
+con|ops_mfa_callbacks|ops_mfa_callbacks_check1|CHECK (((used_at IS NULL) = (used_request_id IS NULL)))
+con|ops_mfa_callbacks|ops_mfa_callbacks_check|CHECK ((expires_at = (created_at + '01:00:00'::interval)))
+con|ops_mfa_callbacks|ops_mfa_callbacks_operator_id_fkey|FOREIGN KEY (operator_id) REFERENCES ops.ops_operators(operator_id)
+con|ops_mfa_callbacks|ops_mfa_callbacks_organization_id_contact_id_fkey|FOREIGN KEY (organization_id, contact_id) REFERENCES ops.org_authorized_contacts(organization_id, contact_id)
+con|ops_mfa_callbacks|ops_mfa_callbacks_pkey|PRIMARY KEY (callback_id)
+con|ops_mfa_notice_results|ops_mfa_notice_results_category_check|CHECK ((category ~ '^[A-Z_]{3,40}$'::text))
+con|ops_mfa_notice_results|ops_mfa_notice_results_notice_id_request_id_organization_i_fkey|FOREIGN KEY (notice_id, request_id, organization_id, target_user_id, recipient_user_id) REFERENCES ops.ops_mfa_notices(notice_id, request_id, organization_id, target_user_id, recipient_user_id)
+con|ops_mfa_notice_results|ops_mfa_notice_results_outcome_check|CHECK ((outcome = ANY (ARRAY['APLICADO'::text, 'REPETIDO'::text, 'ATRASADO'::text, 'CONFLITANTE'::text, 'TRANSICAO_INVALIDA'::text, 'RECUPERACAO'::text])))
+con|ops_mfa_notice_results|ops_mfa_notice_results_pkey|PRIMARY KEY (result_id)
+con|ops_mfa_notice_results|ops_mfa_notice_results_reported_state_check|CHECK (((reported_state >= 1) AND (reported_state <= 6)))
+con|ops_mfa_notice_tokens|ops_mfa_notice_tokens_check1|CHECK ((valid_until > issued_at))
+con|ops_mfa_notice_tokens|ops_mfa_notice_tokens_check2|CHECK (((purpose <> 1) OR (valid_until <= (issued_at + '24:00:00'::interval))))
+con|ops_mfa_notice_tokens|ops_mfa_notice_tokens_check3|CHECK (((used_at IS NULL) OR (invalidated_at IS NULL)))
+con|ops_mfa_notice_tokens|ops_mfa_notice_tokens_check|CHECK (((purpose <> 1) OR (recipient_user_id = target_user_id)))
+con|ops_mfa_notice_tokens|ops_mfa_notice_tokens_notice_id_request_id_organization_id_fkey|FOREIGN KEY (notice_id, request_id, organization_id, target_user_id, recipient_user_id) REFERENCES ops.ops_mfa_notices(notice_id, request_id, organization_id, target_user_id, recipient_user_id)
+con|ops_mfa_notice_tokens|ops_mfa_notice_tokens_pkey|PRIMARY KEY (token_id)
+con|ops_mfa_notice_tokens|ops_mfa_notice_tokens_purpose_check|CHECK ((purpose = ANY (ARRAY[1, 2])))
+con|ops_mfa_notice_tokens|ops_mfa_notice_tokens_token_hash_check|CHECK ((token_hash ~ '^[0-9a-f]{64}$'::text))
+con|ops_mfa_notice_tokens|ops_mfa_notice_tokens_token_hash_key|UNIQUE (token_hash)
+con|ops_mfa_notices|ops_mfa_notices_category_check|CHECK ((category ~ '^[A-Z_]{3,40}$'::text))
+con|ops_mfa_notices|ops_mfa_notices_check1|CHECK (((state = 0) = (issued_at IS NULL)))
+con|ops_mfa_notices|ops_mfa_notices_check2|CHECK (((claim_id IS NULL) = (claimed_at IS NULL)))
+con|ops_mfa_notices|ops_mfa_notices_check3|CHECK (((state <> 2) OR (claim_id IS NOT NULL)))
+con|ops_mfa_notices|ops_mfa_notices_check4|CHECK (((state = 4) = (accepted_at IS NOT NULL)))
+con|ops_mfa_notices|ops_mfa_notices_check|CHECK (((kind = ANY (ARRAY[1, 3])) = (recipient_user_id = target_user_id)))
+con|ops_mfa_notices|ops_mfa_notices_kind_check|CHECK ((kind = ANY (ARRAY[1, 2, 3, 4])))
+con|ops_mfa_notices|ops_mfa_notices_notice_id_request_id_organization_id_target_key|UNIQUE (notice_id, request_id, organization_id, target_user_id, recipient_user_id)
+con|ops_mfa_notices|ops_mfa_notices_organization_id_recipient_user_id_fkey|FOREIGN KEY (organization_id, recipient_user_id) REFERENCES users(organization_id, user_id) ON DELETE RESTRICT
+con|ops_mfa_notices|ops_mfa_notices_pkey|PRIMARY KEY (notice_id)
+con|ops_mfa_notices|ops_mfa_notices_request_id_organization_id_target_user_id_fkey|FOREIGN KEY (request_id, organization_id, target_user_id) REFERENCES ops.ops_mfa_recovery_requests(request_id, organization_id, target_user_id)
+con|ops_mfa_notices|ops_mfa_notices_request_id_seq_key|UNIQUE (request_id, seq)
+con|ops_mfa_notices|ops_mfa_notices_seq_check|CHECK ((seq >= 1))
+con|ops_mfa_notices|ops_mfa_notices_state_check|CHECK (((state >= 0) AND (state <= 6)))
+con|ops_mfa_recovery_events|ops_mfa_recovery_events_act_check|CHECK ((act = ANY (ARRAY['ABRIR'::text, 'VERIFICAR'::text, 'PRE_APROVAR'::text, 'APROVAR'::text, 'EXECUTAR'::text, 'CANCELAR'::text, 'CONSULTAR'::text, 'REENVIAR_AVISO'::text, 'AVISO_EMITIDO'::text, 'AVISO_CONFIRMADO'::text, 'AVISO_CONTESTADO'::text, 'AVISO_INVALIDO'::text, 'FALHA'::text, 'RETORNO_REGISTRADO'::text])))
+con|ops_mfa_recovery_events|ops_mfa_recovery_events_check1|CHECK (((target_user_id IS NULL) OR (organization_id IS NOT NULL)))
+con|ops_mfa_recovery_events|ops_mfa_recovery_events_check2|CHECK (((origin = 2) = (act = 'FALHA'::text)))
+con|ops_mfa_recovery_events|ops_mfa_recovery_events_check3|CHECK (((act <> 'FALHA'::text) OR ((result = 'FALHA'::text) AND (failed_act IS NOT NULL) AND (sqlstate IS NOT NULL) AND (stage IS NOT NULL) AND (request_id IS NOT NULL))))
+con|ops_mfa_recovery_events|ops_mfa_recovery_events_check4|CHECK (((act = 'FALHA'::text) OR ((failed_act IS NULL) AND (sqlstate IS NULL) AND (stage IS NULL))))
+con|ops_mfa_recovery_events|ops_mfa_recovery_events_check5|CHECK ((((result = 'OK'::text) = (reason IS NULL)) OR (act = 'FALHA'::text)))
+con|ops_mfa_recovery_events|ops_mfa_recovery_events_check|CHECK (((request_id IS NULL) OR ((organization_id IS NOT NULL) AND (target_user_id IS NOT NULL))))
+con|ops_mfa_recovery_events|ops_mfa_recovery_events_failed_act_check|CHECK ((failed_act = ANY (ARRAY['ABRIR'::text, 'VERIFICAR'::text, 'PRE_APROVAR'::text, 'APROVAR'::text, 'EXECUTAR'::text, 'CANCELAR'::text, 'CONSULTAR'::text, 'REENVIAR_AVISO'::text])))
+con|ops_mfa_recovery_events|ops_mfa_recovery_events_operator_id_fkey|FOREIGN KEY (operator_id) REFERENCES ops.ops_operators(operator_id)
+con|ops_mfa_recovery_events|ops_mfa_recovery_events_organization_id_fkey|FOREIGN KEY (organization_id) REFERENCES organizations(organization_id) ON DELETE RESTRICT
+con|ops_mfa_recovery_events|ops_mfa_recovery_events_organization_id_target_user_id_fkey|FOREIGN KEY (organization_id, target_user_id) REFERENCES users(organization_id, user_id) ON DELETE RESTRICT
+con|ops_mfa_recovery_events|ops_mfa_recovery_events_origin_check|CHECK ((origin = ANY (ARRAY[1, 2])))
+con|ops_mfa_recovery_events|ops_mfa_recovery_events_pkey|PRIMARY KEY (event_id)
+con|ops_mfa_recovery_events|ops_mfa_recovery_events_purpose_check|CHECK ((purpose = ANY (ARRAY[1, 2])))
+con|ops_mfa_recovery_events|ops_mfa_recovery_events_reason_check|CHECK ((reason ~ '^[A-Z_]{2,40}$'::text))
+con|ops_mfa_recovery_events|ops_mfa_recovery_events_request_id_organization_id_target__fkey|FOREIGN KEY (request_id, organization_id, target_user_id) REFERENCES ops.ops_mfa_recovery_requests(request_id, organization_id, target_user_id)
+con|ops_mfa_recovery_events|ops_mfa_recovery_events_result_check|CHECK ((result = ANY (ARRAY['OK'::text, 'RECUSA'::text, 'FALHA'::text])))
+con|ops_mfa_recovery_events|ops_mfa_recovery_events_sqlstate_check|CHECK ((sqlstate ~ '^[0-9A-Z]{5}$'::text))
+con|ops_mfa_recovery_events|ops_mfa_recovery_events_stage_check|CHECK ((stage = ANY (ARRAY['CHAMADA'::text, 'COMMIT'::text])))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_callback_id_fkey|FOREIGN KEY (callback_id) REFERENCES ops.ops_mfa_callbacks(callback_id)
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check10|CHECK (((closed_at IS NULL) = (close_reason IS NULL)))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check11|CHECK (((verified_at IS NULL) OR ((verified_at >= opened_at) AND (verified_at < (opened_at + '24:00:00'::interval)))))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check12|CHECK (((preapproved_at IS NULL) OR ((preapproved_at >= verified_at) AND (preapproved_at < t_total))))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check13|CHECK (((notice_confirmed_at IS NULL) OR ((notice_confirmed_at >= preapproved_at) AND (notice_confirmed_at < t_total))))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check14|CHECK (((final_approved_at IS NULL) OR ((final_approved_at >= (notice_confirmed_at + '24:00:00'::interval)) AND (final_approved_at < t_total))))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check15|CHECK (((executed_at IS NULL) OR (executed_at < LEAST(t_total, (final_approved_at + '01:00:00'::interval)))))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check16|CHECK (((open_mode = 1) = (intake_entry_id IS NOT NULL)))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check17|CHECK (((open_mode = 2) = (callback_id IS NOT NULL)))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check18|CHECK (((open_mode = 1) = (origin_pseudonym IS NOT NULL)))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check19|CHECK (((origin_version IS NULL) = (origin_pseudonym IS NULL)))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check1|CHECK (((second_contact_id IS NULL) OR (second_contact_id <> requester_contact_id)))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check20|CHECK (((prev_version IS NULL) = (prev_pseudonym IS NULL)))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check21|CHECK (((prev_version IS NULL) OR (prev_version = (origin_version - 1))))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check22|CHECK (((state <> ALL (ARRAY[2, 3, 4, 5])) OR (other_admins_declaration IS NOT NULL)))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check23|CHECK (((other_admins_declaration IS NULL) = (other_admins_captured_at IS NULL)))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check24|CHECK (((other_admins_declaration IS NULL) = (other_admins_count IS NULL)))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check25|CHECK (((other_admins_declaration IS NULL) OR ((other_admins_declaration = 1) = (other_admins_count = 0))))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check26|CHECK (((state <> ALL (ARRAY[4, 5])) OR (notice_seq_at_approval IS NOT NULL)))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check27|CHECK (((notice_seq_at_approval IS NULL) OR (notice_seq_at_approval <= notice_seq)))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check2|CHECK (((preapproved_by IS NULL) OR (preapproved_by <> verified_by)))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check3|CHECK (((final_approved_by IS NULL) OR (final_approved_by <> verified_by)))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check4|CHECK (((executed_by IS NULL) OR ((executed_by <> preapproved_by) AND (executed_by <> final_approved_by))))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check5|CHECK (((state <> ALL (ARRAY[2, 3, 4, 5])) OR ((verified_at IS NOT NULL) AND (verified_by IS NOT NULL) AND (callback_ok IS TRUE) AND (second_contact_ok IS TRUE) AND (second_contact_id IS NOT NULL))))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check6|CHECK (((state <> ALL (ARRAY[3, 4, 5])) OR ((preapproved_at IS NOT NULL) AND (approved_factor_id IS NOT NULL))))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check7|CHECK (((state <> ALL (ARRAY[4, 5])) OR ((final_approved_at IS NOT NULL) AND (notice_confirmed_at IS NOT NULL))))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check8|CHECK (((state = 5) = (executed_at IS NOT NULL)))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check9|CHECK (((state = ANY (ARRAY[6, 7, 8])) = (closed_at IS NOT NULL)))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_check|CHECK ((t_total = (opened_at + '72:00:00'::interval)))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_close_reason_check|CHECK ((close_reason ~ '^[A-Z_]{3,40}$'::text))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_closed_by_fkey|FOREIGN KEY (closed_by) REFERENCES ops.ops_operators(operator_id)
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_executed_by_fkey|FOREIGN KEY (executed_by) REFERENCES ops.ops_operators(operator_id)
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_final_approved_by_fkey|FOREIGN KEY (final_approved_by) REFERENCES ops.ops_operators(operator_id)
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_intake_entry_id_fkey|FOREIGN KEY (intake_entry_id) REFERENCES ops.ops_intake_entries(entry_id)
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_notice_seq_check|CHECK ((notice_seq >= 0))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_open_mode_check|CHECK ((open_mode = ANY (ARRAY[1, 2])))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_opened_by_fkey|FOREIGN KEY (opened_by) REFERENCES ops.ops_operators(operator_id)
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_organization_id_requester_contac_fkey|FOREIGN KEY (organization_id, requester_contact_id) REFERENCES ops.org_authorized_contacts(organization_id, contact_id)
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_organization_id_second_contact_i_fkey|FOREIGN KEY (organization_id, second_contact_id) REFERENCES ops.org_authorized_contacts(organization_id, contact_id)
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_organization_id_target_user_id_a_fkey|FOREIGN KEY (organization_id, target_user_id, approved_factor_id) REFERENCES user_mfa_factors(organization_id, user_id, factor_id) ON DELETE RESTRICT
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_organization_id_target_user_id_fkey|FOREIGN KEY (organization_id, target_user_id) REFERENCES users(organization_id, user_id) ON DELETE RESTRICT
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_origin_pseudonym_check|CHECK ((origin_pseudonym ~ '^[0-9a-f]{64}$'::text))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_other_admins_count_check|CHECK ((other_admins_count >= 0))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_other_admins_declaration_check|CHECK ((other_admins_declaration = ANY (ARRAY[1, 2])))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_pkey|PRIMARY KEY (request_id)
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_preapproved_by_fkey|FOREIGN KEY (preapproved_by) REFERENCES ops.ops_operators(operator_id)
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_prev_pseudonym_check|CHECK ((prev_pseudonym ~ '^[0-9a-f]{64}$'::text))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_request_id_organization_id_target_key|UNIQUE (request_id, organization_id, target_user_id)
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_requester_kind_check|CHECK ((requester_kind = ANY (ARRAY[1, 2])))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_state_check|CHECK (((state >= 1) AND (state <= 8)))
+con|ops_mfa_recovery_requests|ops_mfa_recovery_requests_verified_by_fkey|FOREIGN KEY (verified_by) REFERENCES ops.ops_operators(operator_id)
+con|ops_mfa_request_admins|ops_mfa_request_admins_active_codes_check|CHECK ((active_codes >= 0))
+con|ops_mfa_request_admins|ops_mfa_request_admins_active_sessions_check|CHECK ((active_sessions >= 0))
+con|ops_mfa_request_admins|ops_mfa_request_admins_check1|CHECK ((factor_confirmed_active = (active_factor_id IS NOT NULL)))
+con|ops_mfa_request_admins|ops_mfa_request_admins_check|CHECK ((user_id <> target_user_id))
+con|ops_mfa_request_admins|ops_mfa_request_admins_declared_no_usable_codes_check|CHECK (declared_no_usable_codes)
+con|ops_mfa_request_admins|ops_mfa_request_admins_declared_no_usable_factor_check|CHECK (declared_no_usable_factor)
+con|ops_mfa_request_admins|ops_mfa_request_admins_organization_id_user_id_fkey|FOREIGN KEY (organization_id, user_id) REFERENCES users(organization_id, user_id) ON DELETE RESTRICT
+con|ops_mfa_request_admins|ops_mfa_request_admins_pkey|PRIMARY KEY (request_id, user_id)
+con|ops_mfa_request_admins|ops_mfa_request_admins_request_id_organization_id_target_u_fkey|FOREIGN KEY (request_id, organization_id, target_user_id) REFERENCES ops.ops_mfa_recovery_requests(request_id, organization_id, target_user_id)
+con|ops_mfa_request_admins|ops_mfa_request_admins_used_codes_check|CHECK ((used_codes >= 0))
+con|ops_operator_certificates|ops_operator_certificates_check1|CHECK (((registered_at - idp_auth_time) <= '00:05:00'::interval))
+con|ops_operator_certificates|ops_operator_certificates_check2|CHECK (((revoked_at IS NULL) = (revoke_reason IS NULL)))
+con|ops_operator_certificates|ops_operator_certificates_check|CHECK (((not_after > not_before) AND ((not_after - not_before) <= '00:15:00'::interval)))
+con|ops_operator_certificates|ops_operator_certificates_idp_method_check|CHECK ((idp_method = ANY (ARRAY['phr+mfa'::text, 'phrh+mfa'::text])))
+con|ops_operator_certificates|ops_operator_certificates_issuer_dn_check|CHECK (((btrim(issuer_dn) <> ''::text) AND (length(issuer_dn) <= 1024)))
+con|ops_operator_certificates|ops_operator_certificates_issuer_dn_serial_key|UNIQUE (issuer_dn, serial)
+con|ops_operator_certificates|ops_operator_certificates_operator_id_fkey|FOREIGN KEY (operator_id) REFERENCES ops.ops_operators(operator_id)
+con|ops_operator_certificates|ops_operator_certificates_pkey|PRIMARY KEY (certificate_id)
+con|ops_operator_certificates|ops_operator_certificates_revoke_reason_check|CHECK ((revoke_reason = ANY (ARRAY['CA'::text, 'OPERADOR_DESATIVADO'::text, 'HABILITACAO_RETIRADA'::text])))
+con|ops_operator_certificates|ops_operator_certificates_serial_check|CHECK ((serial > (0)::numeric))
+con|ops_operator_contact_links|ops_operator_contact_links_check1|CHECK (((removed_by IS NULL) OR (removed_by <> operator_id)))
+con|ops_operator_contact_links|ops_operator_contact_links_check|CHECK (((removed_at IS NULL) = (removed_by IS NULL)))
+con|ops_operator_contact_links|ops_operator_contact_links_operator_id_fkey|FOREIGN KEY (operator_id) REFERENCES ops.ops_operators(operator_id)
+con|ops_operator_contact_links|ops_operator_contact_links_pkey|PRIMARY KEY (link_id)
+con|ops_operator_contact_links|ops_operator_contact_links_proof_id_key|UNIQUE (proof_id)
+con|ops_operator_contact_links|ops_operator_contact_links_proof_id_organization_id_contac_fkey|FOREIGN KEY (proof_id, organization_id, contact_id) REFERENCES ops.ops_contact_link_proofs(proof_id, organization_id, contact_id)
+con|ops_operator_contact_links|ops_operator_contact_links_removed_by_fkey|FOREIGN KEY (removed_by) REFERENCES ops.ops_operators(operator_id)
+con|ops_operator_permissions|ops_operator_permissions_act_check|CHECK (((act >= 1) AND (act <= 6)))
+con|ops_operator_permissions|ops_operator_permissions_check1|CHECK (((revoked_at IS NULL) = (revoked_by IS NULL)))
+con|ops_operator_permissions|ops_operator_permissions_check2|CHECK (((revoked_at IS NULL) OR (revoked_at >= granted_at)))
+con|ops_operator_permissions|ops_operator_permissions_check|CHECK (((granted_by IS NULL) OR (granted_by <> operator_id)))
+con|ops_operator_permissions|ops_operator_permissions_granted_by_fkey|FOREIGN KEY (granted_by) REFERENCES ops.ops_operators(operator_id)
+con|ops_operator_permissions|ops_operator_permissions_operator_id_fkey|FOREIGN KEY (operator_id) REFERENCES ops.ops_operators(operator_id)
+con|ops_operator_permissions|ops_operator_permissions_pkey|PRIMARY KEY (permission_id)
+con|ops_operator_permissions|ops_operator_permissions_revoked_by_fkey|FOREIGN KEY (revoked_by) REFERENCES ops.ops_operators(operator_id)
+con|ops_operator_platform_accounts|ops_operator_platform_account_proof_id_organization_id_use_fkey|FOREIGN KEY (proof_id, organization_id, user_id) REFERENCES ops.ops_account_link_proofs(proof_id, organization_id, user_id)
+con|ops_operator_platform_accounts|ops_operator_platform_accounts_check1|CHECK (((removed_by IS NULL) OR (removed_by <> operator_id)))
+con|ops_operator_platform_accounts|ops_operator_platform_accounts_check|CHECK (((removed_at IS NULL) = (removed_by IS NULL)))
+con|ops_operator_platform_accounts|ops_operator_platform_accounts_operator_id_fkey|FOREIGN KEY (operator_id) REFERENCES ops.ops_operators(operator_id)
+con|ops_operator_platform_accounts|ops_operator_platform_accounts_pkey|PRIMARY KEY (link_id)
+con|ops_operator_platform_accounts|ops_operator_platform_accounts_proof_id_key|UNIQUE (proof_id)
+con|ops_operator_platform_accounts|ops_operator_platform_accounts_removed_by_fkey|FOREIGN KEY (removed_by) REFERENCES ops.ops_operators(operator_id)
+con|ops_operators|ops_operators_check1|CHECK (((disabled_at IS NULL) = (disabled_by IS NULL)))
+con|ops_operators|ops_operators_check2|CHECK (((created_by IS NULL) OR (created_by <> operator_id)))
+con|ops_operators|ops_operators_check|CHECK (((status = 2) = (disabled_at IS NOT NULL)))
+con|ops_operators|ops_operators_created_by_fkey|FOREIGN KEY (created_by) REFERENCES ops.ops_operators(operator_id)
+con|ops_operators|ops_operators_db_role_check|CHECK ((db_role ~ '^op_[a-z0-9_]{2,40}$'::text))
+con|ops_operators|ops_operators_db_role_key|UNIQUE (db_role)
+con|ops_operators|ops_operators_disabled_by_fkey|FOREIGN KEY (disabled_by) REFERENCES ops.ops_operators(operator_id)
+con|ops_operators|ops_operators_idp_issuer_check|CHECK (((btrim(idp_issuer) <> ''::text) AND (length(idp_issuer) <= 512)))
+con|ops_operators|ops_operators_idp_issuer_idp_subject_key|UNIQUE (idp_issuer, idp_subject)
+con|ops_operators|ops_operators_idp_subject_check|CHECK (((btrim(idp_subject) <> ''::text) AND (length(idp_subject) <= 256)))
+con|ops_operators|ops_operators_pkey|PRIMARY KEY (operator_id)
+con|ops_operators|ops_operators_status_check|CHECK ((status = ANY (ARRAY[1, 2])))
+con|ops_origin_buckets|ops_origin_buckets_bucket_key_check|CHECK ((bucket_key ~ '^[0-9]{1,9}:[0-9a-f]{64}$'::text))
+con|ops_origin_buckets|ops_origin_buckets_pkey|PRIMARY KEY (bucket_key)
+con|ops_registry_events|ops_registry_events_act_check|CHECK (((act >= 1) AND (act <= 6)))
+con|ops_registry_events|ops_registry_events_actor_kind_check|CHECK ((actor_kind = ANY (ARRAY[1, 2, 3, 4, 5])))
+con|ops_registry_events|ops_registry_events_actor_operator_id_fkey|FOREIGN KEY (actor_operator_id) REFERENCES ops.ops_operators(operator_id)
+con|ops_registry_events|ops_registry_events_certificate_id_fkey|FOREIGN KEY (certificate_id) REFERENCES ops.ops_operator_certificates(certificate_id)
+con|ops_registry_events|ops_registry_events_check|CHECK (((result = 'OK'::text) = (reason IS NULL)))
+con|ops_registry_events|ops_registry_events_contact_id_fkey|FOREIGN KEY (contact_id) REFERENCES ops.org_authorized_contacts(contact_id)
+con|ops_registry_events|ops_registry_events_kind_check|CHECK ((kind = ANY (ARRAY['OPERADOR_CRIADO'::text, 'HABILITACAO_CONCEDIDA'::text, 'HABILITACAO_RETIRADA'::text, 'OPERADOR_DESATIVADO'::text, 'CERTIFICADO_REGISTRADO'::text, 'CERTIFICADO_REVOGADO'::text, 'PROVA_CONTA_EMITIDA'::text, 'VINCULO_CONTA'::text, 'PROVA_CONTATO_EMITIDA'::text, 'VINCULO_CONTATO'::text, 'VINCULO_REMOVIDO'::text, 'CONTATO_INCLUIDO'::text, 'CONTATO_CANAL_ALTERADO'::text, 'CONTATO_REMOVIDO'::text, 'ENTRADA_REGISTRADA'::text, 'VERSAO_CHAVE_ATIVADA'::text])))
+con|ops_registry_events|ops_registry_events_pkey|PRIMARY KEY (event_id)
+con|ops_registry_events|ops_registry_events_reason_check|CHECK ((reason ~ '^[A-Z_]{2,40}$'::text))
+con|ops_registry_events|ops_registry_events_result_check|CHECK ((result = ANY (ARRAY['OK'::text, 'RECUSA'::text])))
+con|ops_registry_events|ops_registry_events_target_operator_id_fkey|FOREIGN KEY (target_operator_id) REFERENCES ops.ops_operators(operator_id)
+con|org_authorized_contact_events|org_authorized_contact_events_check1|CHECK (((kind = 1) OR ((origin IS NULL) AND (previous_channel_confirmed IS TRUE) AND (other_contact_confirmed IS TRUE) AND (other_contact_id IS NOT NULL) AND (other_contact_id <> contact_id))))
+con|org_authorized_contact_events|org_authorized_contact_events_check|CHECK (((kind <> 1) OR ((origin IS NOT NULL) AND (signatory_confirmed IS TRUE) AND (other_contact_id IS NULL))))
+con|org_authorized_contact_events|org_authorized_contact_events_kind_check|CHECK ((kind = ANY (ARRAY[1, 2, 3])))
+con|org_authorized_contact_events|org_authorized_contact_events_operator_id_fkey|FOREIGN KEY (operator_id) REFERENCES ops.ops_operators(operator_id)
+con|org_authorized_contact_events|org_authorized_contact_events_organization_id_contact_id_fkey|FOREIGN KEY (organization_id, contact_id) REFERENCES ops.org_authorized_contacts(organization_id, contact_id)
+con|org_authorized_contact_events|org_authorized_contact_events_organization_id_other_contac_fkey|FOREIGN KEY (organization_id, other_contact_id) REFERENCES ops.org_authorized_contacts(organization_id, contact_id)
+con|org_authorized_contact_events|org_authorized_contact_events_origin_check|CHECK ((origin = ANY (ARRAY['CONTRATACAO'::text, 'SIGNATARIO'::text])))
+con|org_authorized_contact_events|org_authorized_contact_events_pkey|PRIMARY KEY (event_id)
+con|org_authorized_contacts|org_authorized_contacts_channel_type_check|CHECK ((channel_type = ANY (ARRAY[1, 2])))
+con|org_authorized_contacts|org_authorized_contacts_channel_value_check|CHECK (((btrim(channel_value) <> ''::text) AND (length(channel_value) <= 320)))
+con|org_authorized_contacts|org_authorized_contacts_check1|CHECK (((status = 2) = (removed_at IS NOT NULL)))
+con|org_authorized_contacts|org_authorized_contacts_check|CHECK ((channel_set_at >= created_at))
+con|org_authorized_contacts|org_authorized_contacts_display_name_check|CHECK (((btrim(display_name) <> ''::text) AND (length(display_name) <= 200)))
+con|org_authorized_contacts|org_authorized_contacts_organization_id_contact_id_key|UNIQUE (organization_id, contact_id)
+con|org_authorized_contacts|org_authorized_contacts_organization_id_fkey|FOREIGN KEY (organization_id) REFERENCES organizations(organization_id) ON DELETE RESTRICT
+con|org_authorized_contacts|org_authorized_contacts_organization_id_user_id_fkey|FOREIGN KEY (organization_id, user_id) REFERENCES users(organization_id, user_id) ON DELETE RESTRICT
+con|org_authorized_contacts|org_authorized_contacts_pkey|PRIMARY KEY (contact_id)
+con|org_authorized_contacts|org_authorized_contacts_status_check|CHECK ((status = ANY (ARRAY[1, 2])))
+fnacl|ops.alvo_inelegivel(uuid,uuid)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.ato_codigo(text)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.autorizar(uuid,smallint,timestamp with time zone)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.condicao_avisos_demais(uuid,timestamp with time zone)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.contas_em_mudanca(uuid,uuid,uuid[])|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.contato_alterar(uuid,boolean,smallint,text,boolean,uuid,boolean)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.contato_inelegivel(uuid,uuid,timestamp with time zone)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.contatos_elegiveis(uuid,timestamp with time zone)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.criar_avisos(uuid,uuid,uuid,smallint,uuid[])|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.declaracao_invalida(uuid,uuid,uuid)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.demais_admins(uuid,uuid)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.encerrar(uuid,smallint,text,uuid,timestamp with time zone)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.estado_nome(smallint)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.exigir_read_committed()|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.fotografar_admins(uuid,uuid,uuid,uuid[],timestamp with time zone)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.limite_executado(uuid,uuid,timestamp with time zone)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.nova_tentativa(uuid,uuid,uuid,uuid,smallint)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.operador_da_sessao()|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.papel_operador_invalido(text)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.participante_invalido(uuid,smallint,uuid,timestamp with time zone)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.prevent_certificate_change()|migrador_nekkora|EXECUTE
+fnacl|ops.prevent_contact_change()|migrador_nekkora|EXECUTE
+fnacl|ops.prevent_entry_change()|migrador_nekkora|EXECUTE
+fnacl|ops.prevent_key_state_change()|migrador_nekkora|EXECUTE
+fnacl|ops.prevent_link_change()|migrador_nekkora|EXECUTE
+fnacl|ops.prevent_notice_change()|migrador_nekkora|EXECUTE
+fnacl|ops.prevent_notice_token_change()|migrador_nekkora|EXECUTE
+fnacl|ops.prevent_operator_change()|migrador_nekkora|EXECUTE
+fnacl|ops.prevent_permission_change()|migrador_nekkora|EXECUTE
+fnacl|ops.prevent_proof_change()|migrador_nekkora|EXECUTE
+fnacl|ops.prevent_request_change()|migrador_nekkora|EXECUTE
+fnacl|ops.registrar(uuid,uuid,uuid,text,text,text,uuid,text,numeric,uuid,smallint)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.registrar_cadastro(text,text,text,smallint,uuid,uuid,smallint,uuid,uuid,uuid,text,numeric)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.ssl_cipher()|migrador_nekkora|EXECUTE
+fnacl|ops.ssl_cipher()|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.ssl_client_cert_present()|migrador_nekkora|EXECUTE
+fnacl|ops.ssl_client_cert_present()|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.ssl_client_dn()|migrador_nekkora|EXECUTE
+fnacl|ops.ssl_client_dn()|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.ssl_client_dn_field(text)|migrador_nekkora|EXECUTE
+fnacl|ops.ssl_client_dn_field(text)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.ssl_client_serial()|migrador_nekkora|EXECUTE
+fnacl|ops.ssl_client_serial()|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.ssl_extension_info()|migrador_nekkora|EXECUTE
+fnacl|ops.ssl_extension_info()|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.ssl_is_used()|migrador_nekkora|EXECUTE
+fnacl|ops.ssl_is_used()|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.ssl_issuer_dn()|migrador_nekkora|EXECUTE
+fnacl|ops.ssl_issuer_dn()|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.ssl_issuer_field(text)|migrador_nekkora|EXECUTE
+fnacl|ops.ssl_issuer_field(text)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.ssl_version()|migrador_nekkora|EXECUTE
+fnacl|ops.ssl_version()|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.tem_vinculo(uuid,uuid)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.tentativa_vigente(uuid,uuid,smallint)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.travar_contas(uuid,uuid,uuid[])|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.travar_operadores(uuid[],uuid[])|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.usar_token(uuid,text,smallint)|nekkora_ops_mfa_owner|EXECUTE
+fnacl|ops.vencida(smallint,timestamp with time zone,timestamp with time zone,timestamp with time zone,timestamp with time zone)|nekkora_ops_mfa_owner|EXECUTE
+fn|ops.alvo_inelegivel(uuid,uuid)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=b552e20d53f5546f8c79f87c5aaf9879
+fn|ops.ato_codigo(text)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=a6aa95b73452c35e4b5c237cbc27574d
+fn|ops.autorizar(uuid,smallint,timestamp with time zone)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=f4b6fc6c4bbc79c35d3ed7ecb4932db5
+fn|ops.condicao_avisos_demais(uuid,timestamp with time zone)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=d0f84bc2580ca2aeac24698789f047bb
+fn|ops.contas_em_mudanca(uuid,uuid,uuid[])|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=e0f1e7cbafa9831592f9d7a12e86f432
+fn|ops.contato_alterar(uuid,boolean,smallint,text,boolean,uuid,boolean)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=ba646a1cc1d78f3189da64bfa48b891b
+fn|ops.contato_inelegivel(uuid,uuid,timestamp with time zone)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=554b54c2bc98cc8eb244af34e27d9103
+fn|ops.contatos_elegiveis(uuid,timestamp with time zone)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=fb58b6ce7293054d21290f2666f23176
+fn|ops.criar_avisos(uuid,uuid,uuid,smallint,uuid[])|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=ba4341451768200126b48054bd0a5466
+fn|ops.declaracao_invalida(uuid,uuid,uuid)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=517338a8c05b898ddf738e15032cf375
+fn|ops.demais_admins(uuid,uuid)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=f3f0c99a4952738591a5083539f15aa6
+fn|ops.encerrar(uuid,smallint,text,uuid,timestamp with time zone)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=2ab6bc54089e8de0b19692e7b7187925
+fn|ops.estado_nome(smallint)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=518e11cfca84bc1c4edda04a2117bde7
+fn|ops.exigir_read_committed()|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=37e14b7d894127f727206e6b022421d7
+fn|ops.fotografar_admins(uuid,uuid,uuid,uuid[],timestamp with time zone)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=5472441c73c0fe9d949ec5f156c8b637
+fn|ops.limite_executado(uuid,uuid,timestamp with time zone)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=3a8313e2bb2ee4663cb69f846c4bf934
+fn|ops.nova_tentativa(uuid,uuid,uuid,uuid,smallint)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=5912ceba407da20c9d1513ee0e473754
+fn|ops.operador_da_sessao()|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=36c77eb91ebd7549ac65711c65cd6202
+fn|ops.papel_operador_invalido(text)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=6fc2996edac0139d905d561b6ac87513
+fn|ops.participante_invalido(uuid,smallint,uuid,timestamp with time zone)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=1e0eea2213ea23c88ba3261caee79ecc
+fn|ops.prevent_certificate_change()|owner=migrador_nekkora|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=c696eccfeeff75c93a7ac8dc6734e89b
+fn|ops.prevent_contact_change()|owner=migrador_nekkora|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=d1b0315f62667a6d620948d98738cbda
+fn|ops.prevent_entry_change()|owner=migrador_nekkora|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=fa79335e69c4b57c3377f1971e09aaa8
+fn|ops.prevent_key_state_change()|owner=migrador_nekkora|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=2ea16a83174bba21dfdebab545de434f
+fn|ops.prevent_link_change()|owner=migrador_nekkora|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=9be64607da122f561381b5533b8b9168
+fn|ops.prevent_notice_change()|owner=migrador_nekkora|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=9e86f85716399d27e642534ce3319202
+fn|ops.prevent_notice_token_change()|owner=migrador_nekkora|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=dcaeed84b52eb350a707413f804604b3
+fn|ops.prevent_operator_change()|owner=migrador_nekkora|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=e8eb01a98a1b06f1c61e775bde4fb9cb
+fn|ops.prevent_permission_change()|owner=migrador_nekkora|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=8c27112deb3f938716d2e5c079f8fa92
+fn|ops.prevent_proof_change()|owner=migrador_nekkora|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=3003ea500ff503ff6ac9751339b35e31
+fn|ops.prevent_request_change()|owner=migrador_nekkora|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=af12f41b88bc4519849e241af8c54bb2
+fn|ops.registrar(uuid,uuid,uuid,text,text,text,uuid,text,numeric,uuid,smallint)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=ca456f9f585c25746bb14335ae1bdebe
+fn|ops.registrar_cadastro(text,text,text,smallint,uuid,uuid,smallint,uuid,uuid,uuid,text,numeric)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=f3664d6977493f936801705d384a6093
+fn|ops.ssl_cipher()|owner=migrador_nekkora|secdef=f|config=|md5=481498b68c84be7864fb1454d1b7fa0d
+fn|ops.ssl_client_cert_present()|owner=migrador_nekkora|secdef=f|config=|md5=f0442dce93cd41e012355f567d01afc7
+fn|ops.ssl_client_dn()|owner=migrador_nekkora|secdef=f|config=|md5=7e1f004df23585f1c403c0ad8f429ec1
+fn|ops.ssl_client_dn_field(text)|owner=migrador_nekkora|secdef=f|config=|md5=c1e7ea583229f01458c84c898f1431c0
+fn|ops.ssl_client_serial()|owner=migrador_nekkora|secdef=f|config=|md5=02f6f684b9d89e5911701f52d945d34f
+fn|ops.ssl_extension_info()|owner=migrador_nekkora|secdef=f|config=|md5=b3376791c030c3b4c128e64785cb5921
+fn|ops.ssl_is_used()|owner=migrador_nekkora|secdef=f|config=|md5=3a54c882932581b2d466bf26e5c521b1
+fn|ops.ssl_issuer_dn()|owner=migrador_nekkora|secdef=f|config=|md5=f2d1ec3bcc35f58b1c2df7c9f2272f53
+fn|ops.ssl_issuer_field(text)|owner=migrador_nekkora|secdef=f|config=|md5=0d531b387d6037daacd88cd9387ab606
+fn|ops.ssl_version()|owner=migrador_nekkora|secdef=f|config=|md5=5359425d96fa8998cfce35534a368e3b
+fn|ops.tem_vinculo(uuid,uuid)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=7a19a781c8a0607df3c81186114bd1a9
+fn|ops.tentativa_vigente(uuid,uuid,smallint)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=2b9bdb11c1dd89e14ea307bc65d4d119
+fn|ops.travar_contas(uuid,uuid,uuid[])|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=0035f49796c202a477db49bf8887006b
+fn|ops.travar_operadores(uuid[],uuid[])|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=40da73d9a84e91ac14e7a535d3de8e39
+fn|ops.usar_token(uuid,text,smallint)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=12909e88b5f2d6a47cdb9eb1c27e816e
+fn|ops.vencida(smallint,timestamp with time zone,timestamp with time zone,timestamp with time zone,timestamp with time zone)|owner=nekkora_ops_mfa_owner|secdef=f|config={"search_path=pg_catalog, pg_temp"}|md5=b3ced40ad7f25e053e1b49ce68acf595
+idx|CREATE INDEX ix_ops_mfa_notice_results_notice ON ops.ops_mfa_notice_results USING btree (notice_id)
+idx|CREATE INDEX ix_ops_mfa_notice_tokens_ativo ON ops.ops_mfa_notice_tokens USING btree (request_id, recipient_user_id, purpose) WHERE ((used_at IS NULL) AND (invalidated_at IS NULL))
+idx|CREATE INDEX ix_ops_mfa_notices_andamento ON ops.ops_mfa_notices USING btree (state_at) WHERE (state = ANY (ARRAY[1, 2, 3]))
+idx|CREATE INDEX ix_ops_mfa_notices_destinatario ON ops.ops_mfa_notices USING btree (request_id, recipient_user_id, kind, seq)
+idx|CREATE INDEX ix_ops_mfa_notices_pendentes ON ops.ops_mfa_notices USING btree (created_at) WHERE (state = 0)
+idx|CREATE INDEX ix_ops_mfa_recovery_events_request ON ops.ops_mfa_recovery_events USING btree (request_id)
+idx|CREATE INDEX ix_ops_mfa_recovery_requests_executadas ON ops.ops_mfa_recovery_requests USING btree (organization_id, executed_at) WHERE (state = 5)
+idx|CREATE INDEX ix_ops_mfa_recovery_requests_origem ON ops.ops_mfa_recovery_requests USING btree (origin_pseudonym, opened_at) WHERE (origin_pseudonym IS NOT NULL)
+idx|CREATE INDEX ix_ops_mfa_recovery_requests_origem_ant ON ops.ops_mfa_recovery_requests USING btree (prev_pseudonym, opened_at) WHERE (prev_pseudonym IS NOT NULL)
+idx|CREATE INDEX ix_ops_operator_certificates_operador ON ops.ops_operator_certificates USING btree (operator_id) WHERE (revoked_at IS NULL)
+idx|CREATE INDEX ix_ops_operator_contact_links_org ON ops.ops_operator_contact_links USING btree (organization_id) WHERE (removed_at IS NULL)
+idx|CREATE INDEX ix_ops_operator_platform_accounts_org ON ops.ops_operator_platform_accounts USING btree (organization_id) WHERE (removed_at IS NULL)
+idx|CREATE UNIQUE INDEX ops_account_link_proofs_code_hash_key ON ops.ops_account_link_proofs USING btree (code_hash)
+idx|CREATE UNIQUE INDEX ops_account_link_proofs_pkey ON ops.ops_account_link_proofs USING btree (proof_id)
+idx|CREATE UNIQUE INDEX ops_account_link_proofs_proof_id_organization_id_user_id_key ON ops.ops_account_link_proofs USING btree (proof_id, organization_id, user_id)
+idx|CREATE UNIQUE INDEX ops_contact_link_proofs_code_hash_key ON ops.ops_contact_link_proofs USING btree (code_hash)
+idx|CREATE UNIQUE INDEX ops_contact_link_proofs_pkey ON ops.ops_contact_link_proofs USING btree (proof_id)
+idx|CREATE UNIQUE INDEX ops_contact_link_proofs_proof_id_organization_id_contact_id_key ON ops.ops_contact_link_proofs USING btree (proof_id, organization_id, contact_id)
+idx|CREATE UNIQUE INDEX ops_intake_entries_pkey ON ops.ops_intake_entries USING btree (entry_id)
+idx|CREATE UNIQUE INDEX ops_intake_key_state_pkey ON ops.ops_intake_key_state USING btree (singleton)
+idx|CREATE UNIQUE INDEX ops_mfa_approval_attempts_pkey ON ops.ops_mfa_approval_attempts USING btree (request_id, notice_id)
+idx|CREATE UNIQUE INDEX ops_mfa_approval_attempts_request_id_recipient_user_id_key ON ops.ops_mfa_approval_attempts USING btree (request_id, recipient_user_id)
+idx|CREATE UNIQUE INDEX ops_mfa_callbacks_pkey ON ops.ops_mfa_callbacks USING btree (callback_id)
+idx|CREATE UNIQUE INDEX ops_mfa_notice_results_pkey ON ops.ops_mfa_notice_results USING btree (result_id)
+idx|CREATE UNIQUE INDEX ops_mfa_notice_tokens_pkey ON ops.ops_mfa_notice_tokens USING btree (token_id)
+idx|CREATE UNIQUE INDEX ops_mfa_notice_tokens_token_hash_key ON ops.ops_mfa_notice_tokens USING btree (token_hash)
+idx|CREATE UNIQUE INDEX ops_mfa_notices_notice_id_request_id_organization_id_target_key ON ops.ops_mfa_notices USING btree (notice_id, request_id, organization_id, target_user_id, recipient_user_id)
+idx|CREATE UNIQUE INDEX ops_mfa_notices_pkey ON ops.ops_mfa_notices USING btree (notice_id)
+idx|CREATE UNIQUE INDEX ops_mfa_notices_request_id_seq_key ON ops.ops_mfa_notices USING btree (request_id, seq)
+idx|CREATE UNIQUE INDEX ops_mfa_recovery_events_pkey ON ops.ops_mfa_recovery_events USING btree (event_id)
+idx|CREATE UNIQUE INDEX ops_mfa_recovery_requests_pkey ON ops.ops_mfa_recovery_requests USING btree (request_id)
+idx|CREATE UNIQUE INDEX ops_mfa_recovery_requests_request_id_organization_id_target_key ON ops.ops_mfa_recovery_requests USING btree (request_id, organization_id, target_user_id)
+idx|CREATE UNIQUE INDEX ops_mfa_request_admins_pkey ON ops.ops_mfa_request_admins USING btree (request_id, user_id)
+idx|CREATE UNIQUE INDEX ops_operator_certificates_issuer_dn_serial_key ON ops.ops_operator_certificates USING btree (issuer_dn, serial)
+idx|CREATE UNIQUE INDEX ops_operator_certificates_pkey ON ops.ops_operator_certificates USING btree (certificate_id)
+idx|CREATE UNIQUE INDEX ops_operator_contact_links_pkey ON ops.ops_operator_contact_links USING btree (link_id)
+idx|CREATE UNIQUE INDEX ops_operator_contact_links_proof_id_key ON ops.ops_operator_contact_links USING btree (proof_id)
+idx|CREATE UNIQUE INDEX ops_operator_permissions_pkey ON ops.ops_operator_permissions USING btree (permission_id)
+idx|CREATE UNIQUE INDEX ops_operator_platform_accounts_pkey ON ops.ops_operator_platform_accounts USING btree (link_id)
+idx|CREATE UNIQUE INDEX ops_operator_platform_accounts_proof_id_key ON ops.ops_operator_platform_accounts USING btree (proof_id)
+idx|CREATE UNIQUE INDEX ops_operators_db_role_key ON ops.ops_operators USING btree (db_role)
+idx|CREATE UNIQUE INDEX ops_operators_idp_issuer_idp_subject_key ON ops.ops_operators USING btree (idp_issuer, idp_subject)
+idx|CREATE UNIQUE INDEX ops_operators_pkey ON ops.ops_operators USING btree (operator_id)
+idx|CREATE UNIQUE INDEX ops_origin_buckets_pkey ON ops.ops_origin_buckets USING btree (bucket_key)
+idx|CREATE UNIQUE INDEX ops_registry_events_pkey ON ops.ops_registry_events USING btree (event_id)
+idx|CREATE UNIQUE INDEX org_authorized_contact_events_pkey ON ops.org_authorized_contact_events USING btree (event_id)
+idx|CREATE UNIQUE INDEX org_authorized_contacts_organization_id_contact_id_key ON ops.org_authorized_contacts USING btree (organization_id, contact_id)
+idx|CREATE UNIQUE INDEX org_authorized_contacts_pkey ON ops.org_authorized_contacts USING btree (contact_id)
+idx|CREATE UNIQUE INDEX ux_ops_mfa_recovery_requests_alvo ON ops.ops_mfa_recovery_requests USING btree (target_user_id) WHERE (state = ANY (ARRAY[2, 3, 4]))
+idx|CREATE UNIQUE INDEX ux_ops_operator_permissions_ativa ON ops.ops_operator_permissions USING btree (operator_id, act) WHERE (revoked_at IS NULL)
+idx|CREATE UNIQUE INDEX ux_ops_operators_bootstrap ON ops.ops_operators USING btree ((true)) WHERE (created_by IS NULL)
+nspacl|ops|migrador_nekkora|CREATE
+nspacl|ops|migrador_nekkora|USAGE
+nspacl|ops|nekkora_ops_mfa_owner|USAGE
+relacl|ops_account_link_proofs|migrador_nekkora|DELETE
+relacl|ops_account_link_proofs|migrador_nekkora|INSERT
+relacl|ops_account_link_proofs|migrador_nekkora|REFERENCES
+relacl|ops_account_link_proofs|migrador_nekkora|SELECT
+relacl|ops_account_link_proofs|migrador_nekkora|TRIGGER
+relacl|ops_account_link_proofs|migrador_nekkora|TRUNCATE
+relacl|ops_account_link_proofs|migrador_nekkora|UPDATE
+relacl|ops_account_link_proofs|nekkora_ops_mfa_owner|INSERT
+relacl|ops_account_link_proofs|nekkora_ops_mfa_owner|SELECT
+relacl|ops_account_link_proofs|nekkora_ops_mfa_owner|UPDATE
+relacl|ops_contact_link_proofs|migrador_nekkora|DELETE
+relacl|ops_contact_link_proofs|migrador_nekkora|INSERT
+relacl|ops_contact_link_proofs|migrador_nekkora|REFERENCES
+relacl|ops_contact_link_proofs|migrador_nekkora|SELECT
+relacl|ops_contact_link_proofs|migrador_nekkora|TRIGGER
+relacl|ops_contact_link_proofs|migrador_nekkora|TRUNCATE
+relacl|ops_contact_link_proofs|migrador_nekkora|UPDATE
+relacl|ops_contact_link_proofs|nekkora_ops_mfa_owner|INSERT
+relacl|ops_contact_link_proofs|nekkora_ops_mfa_owner|SELECT
+relacl|ops_contact_link_proofs|nekkora_ops_mfa_owner|UPDATE
+relacl|ops_intake_entries|migrador_nekkora|DELETE
+relacl|ops_intake_entries|migrador_nekkora|INSERT
+relacl|ops_intake_entries|migrador_nekkora|REFERENCES
+relacl|ops_intake_entries|migrador_nekkora|SELECT
+relacl|ops_intake_entries|migrador_nekkora|TRIGGER
+relacl|ops_intake_entries|migrador_nekkora|TRUNCATE
+relacl|ops_intake_entries|migrador_nekkora|UPDATE
+relacl|ops_intake_entries|nekkora_ops_mfa_owner|INSERT
+relacl|ops_intake_entries|nekkora_ops_mfa_owner|SELECT
+relacl|ops_intake_entries|nekkora_ops_mfa_owner|UPDATE
+relacl|ops_intake_key_state|migrador_nekkora|DELETE
+relacl|ops_intake_key_state|migrador_nekkora|INSERT
+relacl|ops_intake_key_state|migrador_nekkora|REFERENCES
+relacl|ops_intake_key_state|migrador_nekkora|SELECT
+relacl|ops_intake_key_state|migrador_nekkora|TRIGGER
+relacl|ops_intake_key_state|migrador_nekkora|TRUNCATE
+relacl|ops_intake_key_state|migrador_nekkora|UPDATE
+relacl|ops_intake_key_state|nekkora_ops_mfa_owner|SELECT
+relacl|ops_intake_key_state|nekkora_ops_mfa_owner|UPDATE
+relacl|ops_mfa_approval_attempts|migrador_nekkora|DELETE
+relacl|ops_mfa_approval_attempts|migrador_nekkora|INSERT
+relacl|ops_mfa_approval_attempts|migrador_nekkora|REFERENCES
+relacl|ops_mfa_approval_attempts|migrador_nekkora|SELECT
+relacl|ops_mfa_approval_attempts|migrador_nekkora|TRIGGER
+relacl|ops_mfa_approval_attempts|migrador_nekkora|TRUNCATE
+relacl|ops_mfa_approval_attempts|migrador_nekkora|UPDATE
+relacl|ops_mfa_approval_attempts|nekkora_ops_mfa_owner|INSERT
+relacl|ops_mfa_approval_attempts|nekkora_ops_mfa_owner|SELECT
+relacl|ops_mfa_callbacks|migrador_nekkora|DELETE
+relacl|ops_mfa_callbacks|migrador_nekkora|INSERT
+relacl|ops_mfa_callbacks|migrador_nekkora|REFERENCES
+relacl|ops_mfa_callbacks|migrador_nekkora|SELECT
+relacl|ops_mfa_callbacks|migrador_nekkora|TRIGGER
+relacl|ops_mfa_callbacks|migrador_nekkora|TRUNCATE
+relacl|ops_mfa_callbacks|migrador_nekkora|UPDATE
+relacl|ops_mfa_callbacks|nekkora_ops_mfa_owner|INSERT
+relacl|ops_mfa_callbacks|nekkora_ops_mfa_owner|SELECT
+relacl|ops_mfa_callbacks|nekkora_ops_mfa_owner|UPDATE
+relacl|ops_mfa_notice_results|migrador_nekkora|DELETE
+relacl|ops_mfa_notice_results|migrador_nekkora|INSERT
+relacl|ops_mfa_notice_results|migrador_nekkora|REFERENCES
+relacl|ops_mfa_notice_results|migrador_nekkora|SELECT
+relacl|ops_mfa_notice_results|migrador_nekkora|TRIGGER
+relacl|ops_mfa_notice_results|migrador_nekkora|TRUNCATE
+relacl|ops_mfa_notice_results|migrador_nekkora|UPDATE
+relacl|ops_mfa_notice_results|nekkora_ops_mfa_owner|INSERT
+relacl|ops_mfa_notice_results|nekkora_ops_mfa_owner|SELECT
+relacl|ops_mfa_notice_tokens|migrador_nekkora|DELETE
+relacl|ops_mfa_notice_tokens|migrador_nekkora|INSERT
+relacl|ops_mfa_notice_tokens|migrador_nekkora|REFERENCES
+relacl|ops_mfa_notice_tokens|migrador_nekkora|SELECT
+relacl|ops_mfa_notice_tokens|migrador_nekkora|TRIGGER
+relacl|ops_mfa_notice_tokens|migrador_nekkora|TRUNCATE
+relacl|ops_mfa_notice_tokens|migrador_nekkora|UPDATE
+relacl|ops_mfa_notice_tokens|nekkora_ops_mfa_owner|INSERT
+relacl|ops_mfa_notice_tokens|nekkora_ops_mfa_owner|SELECT
+relacl|ops_mfa_notice_tokens|nekkora_ops_mfa_owner|UPDATE
+relacl|ops_mfa_notices|migrador_nekkora|DELETE
+relacl|ops_mfa_notices|migrador_nekkora|INSERT
+relacl|ops_mfa_notices|migrador_nekkora|REFERENCES
+relacl|ops_mfa_notices|migrador_nekkora|SELECT
+relacl|ops_mfa_notices|migrador_nekkora|TRIGGER
+relacl|ops_mfa_notices|migrador_nekkora|TRUNCATE
+relacl|ops_mfa_notices|migrador_nekkora|UPDATE
+relacl|ops_mfa_notices|nekkora_ops_mfa_owner|INSERT
+relacl|ops_mfa_notices|nekkora_ops_mfa_owner|SELECT
+relacl|ops_mfa_notices|nekkora_ops_mfa_owner|UPDATE
+relacl|ops_mfa_recovery_events|migrador_nekkora|DELETE
+relacl|ops_mfa_recovery_events|migrador_nekkora|INSERT
+relacl|ops_mfa_recovery_events|migrador_nekkora|REFERENCES
+relacl|ops_mfa_recovery_events|migrador_nekkora|SELECT
+relacl|ops_mfa_recovery_events|migrador_nekkora|TRIGGER
+relacl|ops_mfa_recovery_events|migrador_nekkora|TRUNCATE
+relacl|ops_mfa_recovery_events|migrador_nekkora|UPDATE
+relacl|ops_mfa_recovery_events|nekkora_ops_mfa_owner|INSERT
+relacl|ops_mfa_recovery_events|nekkora_ops_mfa_owner|SELECT
+relacl|ops_mfa_recovery_requests|migrador_nekkora|DELETE
+relacl|ops_mfa_recovery_requests|migrador_nekkora|INSERT
+relacl|ops_mfa_recovery_requests|migrador_nekkora|REFERENCES
+relacl|ops_mfa_recovery_requests|migrador_nekkora|SELECT
+relacl|ops_mfa_recovery_requests|migrador_nekkora|TRIGGER
+relacl|ops_mfa_recovery_requests|migrador_nekkora|TRUNCATE
+relacl|ops_mfa_recovery_requests|migrador_nekkora|UPDATE
+relacl|ops_mfa_recovery_requests|nekkora_ops_mfa_owner|INSERT
+relacl|ops_mfa_recovery_requests|nekkora_ops_mfa_owner|SELECT
+relacl|ops_mfa_recovery_requests|nekkora_ops_mfa_owner|UPDATE
+relacl|ops_mfa_request_admins|migrador_nekkora|DELETE
+relacl|ops_mfa_request_admins|migrador_nekkora|INSERT
+relacl|ops_mfa_request_admins|migrador_nekkora|REFERENCES
+relacl|ops_mfa_request_admins|migrador_nekkora|SELECT
+relacl|ops_mfa_request_admins|migrador_nekkora|TRIGGER
+relacl|ops_mfa_request_admins|migrador_nekkora|TRUNCATE
+relacl|ops_mfa_request_admins|migrador_nekkora|UPDATE
+relacl|ops_mfa_request_admins|nekkora_ops_mfa_owner|INSERT
+relacl|ops_mfa_request_admins|nekkora_ops_mfa_owner|SELECT
+relacl|ops_operator_certificates|migrador_nekkora|DELETE
+relacl|ops_operator_certificates|migrador_nekkora|INSERT
+relacl|ops_operator_certificates|migrador_nekkora|REFERENCES
+relacl|ops_operator_certificates|migrador_nekkora|SELECT
+relacl|ops_operator_certificates|migrador_nekkora|TRIGGER
+relacl|ops_operator_certificates|migrador_nekkora|TRUNCATE
+relacl|ops_operator_certificates|migrador_nekkora|UPDATE
+relacl|ops_operator_certificates|nekkora_ops_mfa_owner|INSERT
+relacl|ops_operator_certificates|nekkora_ops_mfa_owner|SELECT
+relacl|ops_operator_certificates|nekkora_ops_mfa_owner|UPDATE
+relacl|ops_operator_contact_links|migrador_nekkora|DELETE
+relacl|ops_operator_contact_links|migrador_nekkora|INSERT
+relacl|ops_operator_contact_links|migrador_nekkora|REFERENCES
+relacl|ops_operator_contact_links|migrador_nekkora|SELECT
+relacl|ops_operator_contact_links|migrador_nekkora|TRIGGER
+relacl|ops_operator_contact_links|migrador_nekkora|TRUNCATE
+relacl|ops_operator_contact_links|migrador_nekkora|UPDATE
+relacl|ops_operator_contact_links|nekkora_ops_mfa_owner|INSERT
+relacl|ops_operator_contact_links|nekkora_ops_mfa_owner|SELECT
+relacl|ops_operator_contact_links|nekkora_ops_mfa_owner|UPDATE
+relacl|ops_operator_permissions|migrador_nekkora|DELETE
+relacl|ops_operator_permissions|migrador_nekkora|INSERT
+relacl|ops_operator_permissions|migrador_nekkora|REFERENCES
+relacl|ops_operator_permissions|migrador_nekkora|SELECT
+relacl|ops_operator_permissions|migrador_nekkora|TRIGGER
+relacl|ops_operator_permissions|migrador_nekkora|TRUNCATE
+relacl|ops_operator_permissions|migrador_nekkora|UPDATE
+relacl|ops_operator_permissions|nekkora_ops_mfa_owner|INSERT
+relacl|ops_operator_permissions|nekkora_ops_mfa_owner|SELECT
+relacl|ops_operator_permissions|nekkora_ops_mfa_owner|UPDATE
+relacl|ops_operator_platform_accounts|migrador_nekkora|DELETE
+relacl|ops_operator_platform_accounts|migrador_nekkora|INSERT
+relacl|ops_operator_platform_accounts|migrador_nekkora|REFERENCES
+relacl|ops_operator_platform_accounts|migrador_nekkora|SELECT
+relacl|ops_operator_platform_accounts|migrador_nekkora|TRIGGER
+relacl|ops_operator_platform_accounts|migrador_nekkora|TRUNCATE
+relacl|ops_operator_platform_accounts|migrador_nekkora|UPDATE
+relacl|ops_operator_platform_accounts|nekkora_ops_mfa_owner|INSERT
+relacl|ops_operator_platform_accounts|nekkora_ops_mfa_owner|SELECT
+relacl|ops_operator_platform_accounts|nekkora_ops_mfa_owner|UPDATE
+relacl|ops_operators|migrador_nekkora|DELETE
+relacl|ops_operators|migrador_nekkora|INSERT
+relacl|ops_operators|migrador_nekkora|REFERENCES
+relacl|ops_operators|migrador_nekkora|SELECT
+relacl|ops_operators|migrador_nekkora|TRIGGER
+relacl|ops_operators|migrador_nekkora|TRUNCATE
+relacl|ops_operators|migrador_nekkora|UPDATE
+relacl|ops_operators|nekkora_ops_mfa_owner|INSERT
+relacl|ops_operators|nekkora_ops_mfa_owner|SELECT
+relacl|ops_operators|nekkora_ops_mfa_owner|UPDATE
+relacl|ops_origin_buckets|migrador_nekkora|DELETE
+relacl|ops_origin_buckets|migrador_nekkora|INSERT
+relacl|ops_origin_buckets|migrador_nekkora|REFERENCES
+relacl|ops_origin_buckets|migrador_nekkora|SELECT
+relacl|ops_origin_buckets|migrador_nekkora|TRIGGER
+relacl|ops_origin_buckets|migrador_nekkora|TRUNCATE
+relacl|ops_origin_buckets|migrador_nekkora|UPDATE
+relacl|ops_origin_buckets|nekkora_ops_mfa_owner|INSERT
+relacl|ops_origin_buckets|nekkora_ops_mfa_owner|SELECT
+relacl|ops_origin_buckets|nekkora_ops_mfa_owner|UPDATE
+relacl|ops_registry_events|migrador_nekkora|DELETE
+relacl|ops_registry_events|migrador_nekkora|INSERT
+relacl|ops_registry_events|migrador_nekkora|REFERENCES
+relacl|ops_registry_events|migrador_nekkora|SELECT
+relacl|ops_registry_events|migrador_nekkora|TRIGGER
+relacl|ops_registry_events|migrador_nekkora|TRUNCATE
+relacl|ops_registry_events|migrador_nekkora|UPDATE
+relacl|ops_registry_events|nekkora_ops_mfa_owner|INSERT
+relacl|ops_registry_events|nekkora_ops_mfa_owner|SELECT
+relacl|org_authorized_contact_events|migrador_nekkora|DELETE
+relacl|org_authorized_contact_events|migrador_nekkora|INSERT
+relacl|org_authorized_contact_events|migrador_nekkora|REFERENCES
+relacl|org_authorized_contact_events|migrador_nekkora|SELECT
+relacl|org_authorized_contact_events|migrador_nekkora|TRIGGER
+relacl|org_authorized_contact_events|migrador_nekkora|TRUNCATE
+relacl|org_authorized_contact_events|migrador_nekkora|UPDATE
+relacl|org_authorized_contact_events|nekkora_ops_mfa_owner|INSERT
+relacl|org_authorized_contact_events|nekkora_ops_mfa_owner|SELECT
+relacl|org_authorized_contacts|migrador_nekkora|DELETE
+relacl|org_authorized_contacts|migrador_nekkora|INSERT
+relacl|org_authorized_contacts|migrador_nekkora|REFERENCES
+relacl|org_authorized_contacts|migrador_nekkora|SELECT
+relacl|org_authorized_contacts|migrador_nekkora|TRIGGER
+relacl|org_authorized_contacts|migrador_nekkora|TRUNCATE
+relacl|org_authorized_contacts|migrador_nekkora|UPDATE
+relacl|org_authorized_contacts|nekkora_ops_mfa_owner|INSERT
+relacl|org_authorized_contacts|nekkora_ops_mfa_owner|SELECT
+relacl|org_authorized_contacts|nekkora_ops_mfa_owner|UPDATE
+rel|ix_ops_mfa_notice_results_notice|i|owner=migrador_nekkora|rls=f
+rel|ix_ops_mfa_notice_tokens_ativo|i|owner=migrador_nekkora|rls=f
+rel|ix_ops_mfa_notices_andamento|i|owner=migrador_nekkora|rls=f
+rel|ix_ops_mfa_notices_destinatario|i|owner=migrador_nekkora|rls=f
+rel|ix_ops_mfa_notices_pendentes|i|owner=migrador_nekkora|rls=f
+rel|ix_ops_mfa_recovery_events_request|i|owner=migrador_nekkora|rls=f
+rel|ix_ops_mfa_recovery_requests_executadas|i|owner=migrador_nekkora|rls=f
+rel|ix_ops_mfa_recovery_requests_origem_ant|i|owner=migrador_nekkora|rls=f
+rel|ix_ops_mfa_recovery_requests_origem|i|owner=migrador_nekkora|rls=f
+rel|ix_ops_operator_certificates_operador|i|owner=migrador_nekkora|rls=f
+rel|ix_ops_operator_contact_links_org|i|owner=migrador_nekkora|rls=f
+rel|ix_ops_operator_platform_accounts_org|i|owner=migrador_nekkora|rls=f
+rel|ops_account_link_proofs_code_hash_key|i|owner=migrador_nekkora|rls=f
+rel|ops_account_link_proofs_pkey|i|owner=migrador_nekkora|rls=f
+rel|ops_account_link_proofs_proof_id_organization_id_user_id_key|i|owner=migrador_nekkora|rls=f
+rel|ops_account_link_proofs|r|owner=migrador_nekkora|rls=f
+rel|ops_contact_link_proofs_code_hash_key|i|owner=migrador_nekkora|rls=f
+rel|ops_contact_link_proofs_pkey|i|owner=migrador_nekkora|rls=f
+rel|ops_contact_link_proofs_proof_id_organization_id_contact_id_key|i|owner=migrador_nekkora|rls=f
+rel|ops_contact_link_proofs|r|owner=migrador_nekkora|rls=f
+rel|ops_intake_entries_pkey|i|owner=migrador_nekkora|rls=f
+rel|ops_intake_entries|r|owner=migrador_nekkora|rls=f
+rel|ops_intake_key_state_pkey|i|owner=migrador_nekkora|rls=f
+rel|ops_intake_key_state|r|owner=migrador_nekkora|rls=f
+rel|ops_mfa_approval_attempts_pkey|i|owner=migrador_nekkora|rls=f
+rel|ops_mfa_approval_attempts_request_id_recipient_user_id_key|i|owner=migrador_nekkora|rls=f
+rel|ops_mfa_approval_attempts|r|owner=migrador_nekkora|rls=f
+rel|ops_mfa_callbacks_pkey|i|owner=migrador_nekkora|rls=f
+rel|ops_mfa_callbacks|r|owner=migrador_nekkora|rls=f
+rel|ops_mfa_notice_results_pkey|i|owner=migrador_nekkora|rls=f
+rel|ops_mfa_notice_results|r|owner=migrador_nekkora|rls=f
+rel|ops_mfa_notice_tokens_pkey|i|owner=migrador_nekkora|rls=f
+rel|ops_mfa_notice_tokens_token_hash_key|i|owner=migrador_nekkora|rls=f
+rel|ops_mfa_notice_tokens|r|owner=migrador_nekkora|rls=f
+rel|ops_mfa_notices_notice_id_request_id_organization_id_target_key|i|owner=migrador_nekkora|rls=f
+rel|ops_mfa_notices_pkey|i|owner=migrador_nekkora|rls=f
+rel|ops_mfa_notices_request_id_seq_key|i|owner=migrador_nekkora|rls=f
+rel|ops_mfa_notices|r|owner=migrador_nekkora|rls=f
+rel|ops_mfa_recovery_events_pkey|i|owner=migrador_nekkora|rls=f
+rel|ops_mfa_recovery_events|r|owner=migrador_nekkora|rls=f
+rel|ops_mfa_recovery_requests_pkey|i|owner=migrador_nekkora|rls=f
+rel|ops_mfa_recovery_requests_request_id_organization_id_target_key|i|owner=migrador_nekkora|rls=f
+rel|ops_mfa_recovery_requests|r|owner=migrador_nekkora|rls=f
+rel|ops_mfa_request_admins_pkey|i|owner=migrador_nekkora|rls=f
+rel|ops_mfa_request_admins|r|owner=migrador_nekkora|rls=f
+rel|ops_operator_certificates_issuer_dn_serial_key|i|owner=migrador_nekkora|rls=f
+rel|ops_operator_certificates_pkey|i|owner=migrador_nekkora|rls=f
+rel|ops_operator_certificates|r|owner=migrador_nekkora|rls=f
+rel|ops_operator_contact_links_pkey|i|owner=migrador_nekkora|rls=f
+rel|ops_operator_contact_links_proof_id_key|i|owner=migrador_nekkora|rls=f
+rel|ops_operator_contact_links|r|owner=migrador_nekkora|rls=f
+rel|ops_operator_permissions_pkey|i|owner=migrador_nekkora|rls=f
+rel|ops_operator_permissions|r|owner=migrador_nekkora|rls=f
+rel|ops_operator_platform_accounts_pkey|i|owner=migrador_nekkora|rls=f
+rel|ops_operator_platform_accounts_proof_id_key|i|owner=migrador_nekkora|rls=f
+rel|ops_operator_platform_accounts|r|owner=migrador_nekkora|rls=f
+rel|ops_operators_db_role_key|i|owner=migrador_nekkora|rls=f
+rel|ops_operators_idp_issuer_idp_subject_key|i|owner=migrador_nekkora|rls=f
+rel|ops_operators_pkey|i|owner=migrador_nekkora|rls=f
+rel|ops_operators|r|owner=migrador_nekkora|rls=f
+rel|ops_origin_buckets_pkey|i|owner=migrador_nekkora|rls=f
+rel|ops_origin_buckets|r|owner=migrador_nekkora|rls=f
+rel|ops_registry_events_pkey|i|owner=migrador_nekkora|rls=f
+rel|ops_registry_events|r|owner=migrador_nekkora|rls=f
+rel|org_authorized_contact_events_pkey|i|owner=migrador_nekkora|rls=f
+rel|org_authorized_contact_events|r|owner=migrador_nekkora|rls=f
+rel|org_authorized_contacts_organization_id_contact_id_key|i|owner=migrador_nekkora|rls=f
+rel|org_authorized_contacts_pkey|i|owner=migrador_nekkora|rls=f
+rel|org_authorized_contacts|r|owner=migrador_nekkora|rls=f
+rel|ux_ops_mfa_recovery_requests_alvo|i|owner=migrador_nekkora|rls=f
+rel|ux_ops_operator_permissions_ativa|i|owner=migrador_nekkora|rls=f
+rel|ux_ops_operators_bootstrap|i|owner=migrador_nekkora|rls=f
+trg|ops_account_link_proofs|trg_ops_account_link_proofs_prevent_change|enabled=O
+trg|ops_account_link_proofs|trg_ops_account_link_proofs_prevent_delete|enabled=O
+trg|ops_account_link_proofs|trg_ops_account_link_proofs_prevent_truncate|enabled=O
+trg|ops_contact_link_proofs|trg_ops_contact_link_proofs_prevent_change|enabled=O
+trg|ops_contact_link_proofs|trg_ops_contact_link_proofs_prevent_delete|enabled=O
+trg|ops_contact_link_proofs|trg_ops_contact_link_proofs_prevent_truncate|enabled=O
+trg|ops_intake_entries|trg_ops_intake_entries_prevent_change|enabled=O
+trg|ops_intake_entries|trg_ops_intake_entries_prevent_delete|enabled=O
+trg|ops_intake_entries|trg_ops_intake_entries_prevent_truncate|enabled=O
+trg|ops_intake_key_state|trg_ops_intake_key_state_prevent_change|enabled=O
+trg|ops_intake_key_state|trg_ops_intake_key_state_prevent_delete|enabled=O
+trg|ops_intake_key_state|trg_ops_intake_key_state_prevent_truncate|enabled=O
+trg|ops_mfa_approval_attempts|trg_ops_mfa_approval_attempts_prevent_delete|enabled=O
+trg|ops_mfa_approval_attempts|trg_ops_mfa_approval_attempts_prevent_truncate|enabled=O
+trg|ops_mfa_approval_attempts|trg_ops_mfa_approval_attempts_prevent_update|enabled=O
+trg|ops_mfa_callbacks|trg_ops_mfa_callbacks_prevent_change|enabled=O
+trg|ops_mfa_callbacks|trg_ops_mfa_callbacks_prevent_delete|enabled=O
+trg|ops_mfa_callbacks|trg_ops_mfa_callbacks_prevent_truncate|enabled=O
+trg|ops_mfa_notice_results|trg_ops_mfa_notice_results_prevent_delete|enabled=O
+trg|ops_mfa_notice_results|trg_ops_mfa_notice_results_prevent_truncate|enabled=O
+trg|ops_mfa_notice_results|trg_ops_mfa_notice_results_prevent_update|enabled=O
+trg|ops_mfa_notice_tokens|trg_ops_mfa_notice_tokens_prevent_change|enabled=O
+trg|ops_mfa_notice_tokens|trg_ops_mfa_notice_tokens_prevent_delete|enabled=O
+trg|ops_mfa_notice_tokens|trg_ops_mfa_notice_tokens_prevent_truncate|enabled=O
+trg|ops_mfa_notices|trg_ops_mfa_notices_prevent_change|enabled=O
+trg|ops_mfa_notices|trg_ops_mfa_notices_prevent_delete|enabled=O
+trg|ops_mfa_notices|trg_ops_mfa_notices_prevent_truncate|enabled=O
+trg|ops_mfa_recovery_events|trg_ops_mfa_recovery_events_prevent_delete|enabled=O
+trg|ops_mfa_recovery_events|trg_ops_mfa_recovery_events_prevent_truncate|enabled=O
+trg|ops_mfa_recovery_events|trg_ops_mfa_recovery_events_prevent_update|enabled=O
+trg|ops_mfa_recovery_requests|trg_ops_mfa_recovery_requests_prevent_change|enabled=O
+trg|ops_mfa_recovery_requests|trg_ops_mfa_recovery_requests_prevent_delete|enabled=O
+trg|ops_mfa_recovery_requests|trg_ops_mfa_recovery_requests_prevent_truncate|enabled=O
+trg|ops_mfa_request_admins|trg_ops_mfa_request_admins_prevent_delete|enabled=O
+trg|ops_mfa_request_admins|trg_ops_mfa_request_admins_prevent_truncate|enabled=O
+trg|ops_mfa_request_admins|trg_ops_mfa_request_admins_prevent_update|enabled=O
+trg|ops_operator_certificates|trg_ops_operator_certificates_prevent_change|enabled=O
+trg|ops_operator_certificates|trg_ops_operator_certificates_prevent_delete|enabled=O
+trg|ops_operator_certificates|trg_ops_operator_certificates_prevent_truncate|enabled=O
+trg|ops_operator_contact_links|trg_ops_operator_contact_links_prevent_change|enabled=O
+trg|ops_operator_contact_links|trg_ops_operator_contact_links_prevent_delete|enabled=O
+trg|ops_operator_contact_links|trg_ops_operator_contact_links_prevent_truncate|enabled=O
+trg|ops_operator_permissions|trg_ops_operator_permissions_prevent_change|enabled=O
+trg|ops_operator_permissions|trg_ops_operator_permissions_prevent_delete|enabled=O
+trg|ops_operator_permissions|trg_ops_operator_permissions_prevent_truncate|enabled=O
+trg|ops_operator_platform_accounts|trg_ops_operator_platform_accounts_prevent_change|enabled=O
+trg|ops_operator_platform_accounts|trg_ops_operator_platform_accounts_prevent_delete|enabled=O
+trg|ops_operator_platform_accounts|trg_ops_operator_platform_accounts_prevent_truncate|enabled=O
+trg|ops_operators|trg_ops_operators_prevent_change|enabled=O
+trg|ops_operators|trg_ops_operators_prevent_delete|enabled=O
+trg|ops_operators|trg_ops_operators_prevent_truncate|enabled=O
+trg|ops_origin_buckets|trg_ops_origin_buckets_prevent_delete|enabled=O
+trg|ops_origin_buckets|trg_ops_origin_buckets_prevent_truncate|enabled=O
+trg|ops_origin_buckets|trg_ops_origin_buckets_prevent_update|enabled=O
+trg|ops_registry_events|trg_ops_registry_events_prevent_delete|enabled=O
+trg|ops_registry_events|trg_ops_registry_events_prevent_truncate|enabled=O
+trg|ops_registry_events|trg_ops_registry_events_prevent_update|enabled=O
+trg|org_authorized_contact_events|trg_org_authorized_contact_events_prevent_delete|enabled=O
+trg|org_authorized_contact_events|trg_org_authorized_contact_events_prevent_truncate|enabled=O
+trg|org_authorized_contact_events|trg_org_authorized_contact_events_prevent_update|enabled=O
+trg|org_authorized_contacts|trg_org_authorized_contacts_prevent_change|enabled=O
+trg|org_authorized_contacts|trg_org_authorized_contacts_prevent_delete|enabled=O
+trg|org_authorized_contacts|trg_org_authorized_contacts_prevent_truncate|enabled=O

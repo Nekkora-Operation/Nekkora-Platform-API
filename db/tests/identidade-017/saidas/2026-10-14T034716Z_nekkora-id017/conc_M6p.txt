@@ -1,0 +1,71 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+BEGIN
+           nova_identidade            
+--------------------------------------
+ 5ecac7a4-8103-4a66-9e6b-7c7cda51fd22
+(1 row)
+
+                   desafio                   
+---------------------------------------------
+ 5ysTPZ5HQRzRMBKw1Pbe66VvGUyEd7TqN9zty88ByPA
+(1 row)
+
+                   desafio                   
+---------------------------------------------
+ jBo81pP0VWNxrSfkAfnJWrzWXFaIze0rawI4fE70UUA
+(1 row)
+
+            afirma            
+------------------------------
+ ok: M6 A conclui com re-hash
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+COMMIT
+ resultado 
+-----------
+ M6p: ok
+(1 row)
+

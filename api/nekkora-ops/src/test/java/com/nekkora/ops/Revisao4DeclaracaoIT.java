@@ -43,8 +43,12 @@ class Revisao4DeclaracaoIT {
 
     private enum Sinal { PASSO_TOTP, CODIGO_USADO, SESSAO_NOVA, FATOR_TROCADO }
 
-    /** Escrita do sinal, na forma da autenticacao: conta FOR UPDATE -> sinal. */
+    /**
+     * Escrita do sinal, na forma da autenticacao: conta FOR UPDATE -> sinal. Desde a 017 a escrita leva o contexto da
+     * organizacao da conta (contrato da integracao Java, §3.2), como a Platform; o set_config nao trava nada.
+     */
     private static String[] sinal(Cena c, Sinal s) {
+        String contexto = "SELECT set_config('nekkora.organization_id', '" + c.al().org().id() + "', true)";
         String conta = "SELECT 1 FROM users WHERE user_id = '" + c.outro() + "' FOR UPDATE";
         String escrita = switch (s) {
             case PASSO_TOTP -> "UPDATE user_mfa_factors SET last_used_step = coalesce(last_used_step, 0) + 100 WHERE factor_id = '" + c.fatorOutro() + "'";
@@ -57,7 +61,7 @@ class Revisao4DeclaracaoIT {
                     + "INSERT INTO user_mfa_factors (organization_id, user_id, factor_type, secret_ciphertext, secret_nonce, key_id, created_at, confirmed_at) "
                     + "VALUES ('" + c.al().org().id() + "', '" + c.outro() + "', 1, '\\x" + OpsBanco.hex(36) + "', '\\x" + OpsBanco.hex(12) + "', 'k1', now(), now())";
         };
-        return new String[] {conta, escrita};
+        return new String[] {contexto, conta, escrita};
     }
 
     private static void executar(Connection c, String sql) {
@@ -116,7 +120,7 @@ class Revisao4DeclaracaoIT {
     @Test
     void fotografiaCompletaDosConsiderados() {
         Cena c = cena();
-        DB.sql("UPDATE user_mfa_factors SET last_used_step = 4242 WHERE factor_id = '" + c.fatorOutro() + "'");
+        DB.sqlNa(c.al().org().id(), "UPDATE user_mfa_factors SET last_used_step = 4242 WHERE factor_id = '" + c.fatorOutro() + "'");
         UUID s = C.verificada(c.eq(), c.al());
         List<List<Object>> linhas = DB.linhas("SELECT user_id, active_factor_id, factor_confirmed_active, totp_last_step, used_codes, active_codes, "
                 + "active_sessions, captured_at = (SELECT other_admins_captured_at FROM ops.ops_mfa_recovery_requests WHERE request_id = ?) "

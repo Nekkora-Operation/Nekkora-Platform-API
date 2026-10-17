@@ -71,7 +71,7 @@ class AuthenticationFlowIT extends PlatformTestBase {
         TestUser unverified = internalUser(org, false, 2);
         TestUser suspended = internalUser(org, true, 3);
         UUID noMembership = UUID.randomUUID();
-        DB.asSuperuser("INSERT INTO users (user_id, organization_id, account_type, email, email_verified_at, status, display_name) VALUES ('"
+        DB.asSuperuserIn(org.id(), "INSERT INTO users (user_id, organization_id, account_type, email, email_verified_at, status, display_name) VALUES ('"
                 + noMembership + "', '" + org.id() + "', 1, 'sem-vinculo-" + noMembership.toString().substring(0, 6) + "@o.test', now(), 2, 'x')",
                 "INSERT INTO user_credentials (user_id, password_hash) VALUES ('" + noMembership + "', '" + HASHER.generate(PASSWORD.toCharArray()) + "')");
         List<BrowserClient.Response> rs = new ArrayList<>();
@@ -201,7 +201,7 @@ class AuthenticationFlowIT extends PlatformTestBase {
         firstLogin(browser(), org.id(), u);
         BrowserClient n = browser();
         passwordLogin(n, org.id(), u);
-        DB.asSuperuser("UPDATE user_credentials SET password_hash = '" + HASHER.generate("outra-senha-longa-9".toCharArray()) + "' WHERE user_id = '" + u.id() + "'");
+        DB.asSuperuserIn(org.id(), "UPDATE user_credentials SET password_hash = '" + HASHER.generate("outra-senha-longa-9".toCharArray()) + "' WHERE user_id = '" + u.id() + "'");
         BrowserClient.Response r = n.post("/api/v1/o/" + org.id() + "/auth/mfa/verify", "{\"code\":\"" + code(u.id()) + "\"}");
         assertThat(r.status()).isEqualTo(401);
         assertThat(count("SELECT count(*) FROM auth_challenges WHERE user_id = '" + u.id() + "' AND invalidated_at IS NOT NULL")).isGreaterThanOrEqualTo(1);
@@ -218,7 +218,7 @@ class AuthenticationFlowIT extends PlatformTestBase {
                 new com.nekkora.platform.auth.crypto.PasswordHasher.Parameters(19456, 2, 1), 2, 2, 5000);
         com.nekkora.platform.auth.crypto.PasswordHasher above = new com.nekkora.platform.auth.crypto.PasswordHasher(
                 new com.nekkora.platform.auth.crypto.PasswordHasher.Parameters(131072, 3, 1), 2, 2, 5000);
-        DB.asSuperuser("UPDATE user_credentials SET password_hash = '" + floor.generate(PASSWORD.toCharArray()) + "' WHERE user_id = '" + weak.id() + "'",
+        DB.asSuperuserIn(org.id(), "UPDATE user_credentials SET password_hash = '" + floor.generate(PASSWORD.toCharArray()) + "' WHERE user_id = '" + weak.id() + "'",
                 "UPDATE user_credentials SET password_hash = '" + above.generate(PASSWORD.toCharArray()) + "' WHERE user_id = '" + strong.id() + "'");
         BrowserClient n = browser();
         passwordLogin(n, org.id(), weak);

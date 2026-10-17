@@ -20,7 +20,11 @@ public interface MailSender {
         /** Recuperacao emergencial pre-aprovada: aos demais ORG_ADMIN (so CONTESTAR). */
         NOTICE_MFA_EMERGENCY_ADMIN,
         /** Recuperacao emergencial executada (informativo, sem token). */
-        NOTICE_MFA_EMERGENCY_EXECUTED
+        NOTICE_MFA_EMERGENCY_EXECUTED,
+        /** Cadastro web (Missao 1): confirmacao do e-mail da identidade, com o token de uso unico (sem organizacao). */
+        IDENTITY_SIGNUP_CONFIRMATION,
+        /** Cadastro web: aviso "ja existe uma conta com este e-mail" (sem token e sem link de cadastro). */
+        IDENTITY_SIGNUP_ALREADY_REGISTERED
     }
 
     void send(Kind kind, UUID organization, String recipient, String tokenOrNull);

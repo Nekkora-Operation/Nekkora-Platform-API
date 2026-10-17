@@ -1,0 +1,6 @@
+aplicar_como_migrador: inicio db=nekkora intervalo=016-016 elevar=[011 012 013 016 017] bypassrls=[014] dono_do_banco=migrador_nekkora estado=0|0|0
+aplicar_como_migrador: inicio versao=016 SUPERUSER concedido (f37d984128e8241474319a39c00fa54baed90519169663757c7f799e61b63732)
+aplicar_como_migrador: fim    versao=016 SUPERUSER revogado, estado 0|0|0
+aplicar_como_migrador: aplicada versao=016 elevada=SUPERUSER arquivo=016_recuperacao_emergencial_mfa.sql
+aplicar_como_migrador: invariantes_016_pos_retirada=OK estado=0|0|0 super=f
+aplicar_como_migrador: fim db=nekkora aplicadas=1 estado=0|0|0

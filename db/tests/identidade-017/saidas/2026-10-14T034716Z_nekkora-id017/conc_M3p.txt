@@ -1,0 +1,67 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+BEGIN
+           nova_identidade            
+--------------------------------------
+ 8f625986-46db-492d-a496-5f6ccc69cc37
+(1 row)
+
+                 como                 
+--------------------------------------
+ 8f625986-46db-492d-a496-5f6ccc69cc37
+(1 row)
+
+INSERT 0 1
+     identity_mfa_enroll_pending      
+--------------------------------------
+ df56e36b-1761-4ca5-a820-a3a8f8d40a4b
+(1 row)
+
+ pg_sleep 
+----------
+ 
+(1 row)
+
+COMMIT
+ resultado 
+-----------
+ M3p: ok
+(1 row)
+

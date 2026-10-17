@@ -16,6 +16,10 @@ public final class Cookies {
     public static final String SESSION = "__Host-nekkora_session";
     public static final String CHALLENGE = "__Host-nekkora_mfa";
     public static final String PRE = "__Host-nekkora_pre";
+    /** Entrada geral (Missao 1, DC-17.4): sessao de identidade, so nas rotas sem organizacao. */
+    public static final String IDENTITY_SESSION = "__Host-nekkora_id";
+    /** Entrada geral: desafio de identidade (cadastro ou verificacao de MFA). */
+    public static final String IDENTITY_CHALLENGE = "__Host-nekkora_id_mfa";
 
     private Cookies() {
     }
@@ -45,6 +49,16 @@ public final class Cookies {
 
     public static void challenge(HttpServletResponse res, String token, Duration validity) {
         writeCookie(res, CHALLENGE, token, "Strict", validity.toSeconds());
+    }
+
+    /** Sessao de identidade: SameSite=Lax, Max-Age ate o prazo absoluto, como a sessao de organizacao. */
+    public static void identitySession(HttpServletResponse res, String token, OffsetDateTime expiresAt) {
+        long remaining = Math.max(0, Duration.between(OffsetDateTime.now(), expiresAt).toSeconds());
+        writeCookie(res, IDENTITY_SESSION, token, "Lax", remaining);
+    }
+
+    public static void identityChallenge(HttpServletResponse res, String token, Duration validity) {
+        writeCookie(res, IDENTITY_CHALLENGE, token, "Strict", validity.toSeconds());
     }
 
     public static void pre(HttpServletResponse res, String id, Duration validity) {

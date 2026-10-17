@@ -33,10 +33,19 @@ public final class IdentityHmac {
     }
 
     public String fromTime(UUID org, String email) {
+        return mac(org + "|" + normalize(email));
+    }
+
+    /** Variante GLOBAL (entrada geral e cadastro, sem organizacao; desenho da Missao 1, secao 7): "global|" + e-mail normalizado. */
+    public String global(String email) {
+        return mac("global|" + normalize(email));
+    }
+
+    private String mac(String value) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(key, "HmacSHA256"));
-            byte[] h = mac.doFinal((org + "|" + normalize(email)).getBytes(StandardCharsets.UTF_8));
+            byte[] h = mac.doFinal(value.getBytes(StandardCharsets.UTF_8));
             return keyId + "." + HexFormat.of().formatHex(h, 0, 16);
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException(e);

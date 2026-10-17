@@ -1,0 +1,360 @@
+col|nekkora_identity_owner|auth_challenges|consumed_at|SELECT
+col|nekkora_identity_owner|auth_challenges|credential_hash|UPDATE
+col|nekkora_identity_owner|auth_challenges|invalidated_at|SELECT
+col|nekkora_identity_owner|auth_challenges|invalidated_at|UPDATE
+col|nekkora_identity_owner|auth_challenges|organization_id|SELECT
+col|nekkora_identity_owner|auth_challenges|pending_password_hash|UPDATE
+col|nekkora_identity_owner|auth_challenges|user_id|SELECT
+col|nekkora_identity_owner|email_verification_tokens|consumed_at|SELECT
+col|nekkora_identity_owner|email_verification_tokens|created_at|SELECT
+col|nekkora_identity_owner|email_verification_tokens|revoked_at|SELECT
+col|nekkora_identity_owner|email_verification_tokens|revoked_at|UPDATE
+col|nekkora_identity_owner|email_verification_tokens|user_id|SELECT
+col|nekkora_identity_owner|identities|display_name|SELECT
+col|nekkora_identity_owner|identities|email_normalized|SELECT
+col|nekkora_identity_owner|identities|email_verified_at|SELECT
+col|nekkora_identity_owner|identities|email|SELECT
+col|nekkora_identity_owner|identities|identity_id|SELECT
+col|nekkora_identity_owner|identities|status|SELECT
+col|nekkora_identity_owner|identities|updated_at|UPDATE
+col|nekkora_identity_owner|identity_auth_challenges|challenge_id|SELECT
+col|nekkora_identity_owner|identity_auth_challenges|consumed_at|SELECT
+col|nekkora_identity_owner|identity_auth_challenges|consumed_at|UPDATE
+col|nekkora_identity_owner|identity_auth_challenges|credential_hash|SELECT
+col|nekkora_identity_owner|identity_auth_challenges|credential_hash|UPDATE
+col|nekkora_identity_owner|identity_auth_challenges|expires_at|SELECT
+col|nekkora_identity_owner|identity_auth_challenges|identity_id|SELECT
+col|nekkora_identity_owner|identity_auth_challenges|invalidated_at|SELECT
+col|nekkora_identity_owner|identity_auth_challenges|invalidated_at|UPDATE
+col|nekkora_identity_owner|identity_auth_challenges|pending_password_hash|SELECT
+col|nekkora_identity_owner|identity_auth_challenges|pending_password_hash|UPDATE
+col|nekkora_identity_owner|identity_auth_challenges|purpose|SELECT
+col|nekkora_identity_owner|identity_auth_challenges|token_hash|SELECT
+col|nekkora_identity_owner|identity_credentials|identity_id|SELECT
+col|nekkora_identity_owner|identity_credentials|password_changed_at|UPDATE
+col|nekkora_identity_owner|identity_credentials|password_hash|SELECT
+col|nekkora_identity_owner|identity_credentials|password_hash|UPDATE
+col|nekkora_identity_owner|identity_email_tokens|consumed_at|SELECT
+col|nekkora_identity_owner|identity_email_tokens|expires_at|SELECT
+col|nekkora_identity_owner|identity_email_tokens|identity_id|SELECT
+col|nekkora_identity_owner|identity_email_tokens|revoked_at|SELECT
+col|nekkora_identity_owner|identity_email_tokens|token_hash|SELECT
+col|nekkora_identity_owner|identity_email_tokens|token_id|SELECT
+col|nekkora_identity_owner|identity_link_challenges|account_credential_hash|UPDATE
+col|nekkora_identity_owner|identity_link_challenges|consumed_at|UPDATE
+col|nekkora_identity_owner|identity_mfa_factors|confirmed_at|UPDATE
+col|nekkora_identity_owner|identity_mfa_factors|disabled_at|UPDATE
+col|nekkora_identity_owner|identity_mfa_factors|last_used_step|UPDATE
+col|nekkora_identity_owner|identity_mfa_recovery_codes|invalidated_at|UPDATE
+col|nekkora_identity_owner|identity_mfa_recovery_codes|used_at|UPDATE
+col|nekkora_identity_owner|identity_mfa_recovery_codes|used_in_identity_session_id|UPDATE
+col|nekkora_identity_owner|identity_sessions|csrf_token|INSERT
+col|nekkora_identity_owner|identity_sessions|expires_at|INSERT
+col|nekkora_identity_owner|identity_sessions|identity_id|INSERT
+col|nekkora_identity_owner|identity_sessions|mfa_verified_at|INSERT
+col|nekkora_identity_owner|identity_sessions|recovery_cleared_at|UPDATE
+col|nekkora_identity_owner|identity_sessions|recovery_used_at|INSERT
+col|nekkora_identity_owner|identity_sessions|revoked_at|UPDATE
+col|nekkora_identity_owner|identity_sessions|session_token_hash|INSERT
+col|nekkora_identity_owner|organization_memberships|account_type|INSERT
+col|nekkora_identity_owner|organization_memberships|membership_id|SELECT
+col|nekkora_identity_owner|organization_memberships|organization_id|INSERT
+col|nekkora_identity_owner|organization_memberships|organization_id|SELECT
+col|nekkora_identity_owner|organization_memberships|status|INSERT
+col|nekkora_identity_owner|organization_memberships|status|SELECT
+col|nekkora_identity_owner|organization_memberships|user_id|INSERT
+col|nekkora_identity_owner|organization_memberships|user_id|SELECT
+col|nekkora_identity_owner|organization_role_assignments|membership_id|SELECT
+col|nekkora_identity_owner|organization_role_assignments|organization_id|SELECT
+col|nekkora_identity_owner|organization_role_assignments|role_id|SELECT
+col|nekkora_identity_owner|organization_role_assignments|status|SELECT
+col|nekkora_identity_owner|organizations|legal_name|INSERT
+col|nekkora_identity_owner|organizations|name|INSERT
+col|nekkora_identity_owner|organizations|name|SELECT
+col|nekkora_identity_owner|organizations|organization_id|INSERT
+col|nekkora_identity_owner|organizations|organization_id|SELECT
+col|nekkora_identity_owner|organizations|status|INSERT
+col|nekkora_identity_owner|organizations|status|SELECT
+col|nekkora_identity_owner|organizations|updated_at|UPDATE
+col|nekkora_identity_owner|password_reset_tokens|consumed_at|SELECT
+col|nekkora_identity_owner|password_reset_tokens|created_at|SELECT
+col|nekkora_identity_owner|password_reset_tokens|revoked_at|SELECT
+col|nekkora_identity_owner|password_reset_tokens|revoked_at|UPDATE
+col|nekkora_identity_owner|password_reset_tokens|user_id|SELECT
+col|nekkora_identity_owner|roles|code|SELECT
+col|nekkora_identity_owner|roles|role_id|SELECT
+col|nekkora_identity_owner|user_credentials|password_hash|SELECT
+col|nekkora_identity_owner|user_credentials|user_id|SELECT
+col|nekkora_identity_owner|user_mfa_factors|confirmed_at|SELECT
+col|nekkora_identity_owner|user_mfa_factors|created_at|SELECT
+col|nekkora_identity_owner|user_mfa_factors|disabled_at|SELECT
+col|nekkora_identity_owner|user_mfa_factors|disabled_at|UPDATE
+col|nekkora_identity_owner|user_mfa_factors|organization_id|SELECT
+col|nekkora_identity_owner|user_mfa_factors|user_id|SELECT
+col|nekkora_identity_owner|user_mfa_recovery_codes|created_at|SELECT
+col|nekkora_identity_owner|user_mfa_recovery_codes|invalidated_at|SELECT
+col|nekkora_identity_owner|user_mfa_recovery_codes|invalidated_at|UPDATE
+col|nekkora_identity_owner|user_mfa_recovery_codes|organization_id|SELECT
+col|nekkora_identity_owner|user_mfa_recovery_codes|used_at|SELECT
+col|nekkora_identity_owner|user_mfa_recovery_codes|user_id|SELECT
+col|nekkora_identity_owner|user_sessions|created_at|SELECT
+col|nekkora_identity_owner|user_sessions|identity_session_id|SELECT
+col|nekkora_identity_owner|user_sessions|organization_id|SELECT
+col|nekkora_identity_owner|user_sessions|revoked_at|SELECT
+col|nekkora_identity_owner|user_sessions|revoked_at|UPDATE
+col|nekkora_identity_owner|user_sessions|session_id|SELECT
+col|nekkora_identity_owner|user_sessions|user_id|SELECT
+col|nekkora_identity_owner|users|account_type|INSERT
+col|nekkora_identity_owner|users|account_type|SELECT
+col|nekkora_identity_owner|users|display_name|INSERT
+col|nekkora_identity_owner|users|email_normalized|SELECT
+col|nekkora_identity_owner|users|email_verified_at|INSERT
+col|nekkora_identity_owner|users|email_verified_at|SELECT
+col|nekkora_identity_owner|users|email|INSERT
+col|nekkora_identity_owner|users|email|SELECT
+col|nekkora_identity_owner|users|organization_id|INSERT
+col|nekkora_identity_owner|users|organization_id|SELECT
+col|nekkora_identity_owner|users|status|INSERT
+col|nekkora_identity_owner|users|status|SELECT
+col|nekkora_identity_owner|users|updated_at|UPDATE
+col|nekkora_identity_owner|users|user_id|SELECT
+col|nekkora_platform|identities|display_name|INSERT
+col|nekkora_platform|identities|display_name|UPDATE
+col|nekkora_platform|identities|email_verified_at|UPDATE
+col|nekkora_platform|identities|email|INSERT
+col|nekkora_platform|identities|identity_id|INSERT
+col|nekkora_platform|identities|status|INSERT
+col|nekkora_platform|identities|status|UPDATE
+col|nekkora_platform|identity_auth_challenges|attempts|UPDATE
+col|nekkora_platform|identity_auth_challenges|credential_hash|INSERT
+col|nekkora_platform|identity_auth_challenges|credential_hash|UPDATE
+col|nekkora_platform|identity_auth_challenges|csrf_token|INSERT
+col|nekkora_platform|identity_auth_challenges|expires_at|INSERT
+col|nekkora_platform|identity_auth_challenges|identity_id|INSERT
+col|nekkora_platform|identity_auth_challenges|invalidated_at|UPDATE
+col|nekkora_platform|identity_auth_challenges|pending_password_hash|INSERT
+col|nekkora_platform|identity_auth_challenges|pending_password_hash|UPDATE
+col|nekkora_platform|identity_auth_challenges|purpose|INSERT
+col|nekkora_platform|identity_auth_challenges|token_hash|INSERT
+col|nekkora_platform|identity_credentials|identity_id|INSERT
+col|nekkora_platform|identity_credentials|password_hash|INSERT
+col|nekkora_platform|identity_email_tokens|consumed_at|UPDATE
+col|nekkora_platform|identity_email_tokens|expires_at|INSERT
+col|nekkora_platform|identity_email_tokens|identity_id|INSERT
+col|nekkora_platform|identity_email_tokens|purpose|INSERT
+col|nekkora_platform|identity_email_tokens|revoked_at|UPDATE
+col|nekkora_platform|identity_email_tokens|target_email|INSERT
+col|nekkora_platform|identity_email_tokens|token_hash|INSERT
+col|nekkora_platform|identity_events|correlation_id|INSERT
+col|nekkora_platform|identity_events|event_type|INSERT
+col|nekkora_platform|identity_events|identity_id|INSERT
+col|nekkora_platform|identity_events|target_organization_id|INSERT
+col|nekkora_platform|identity_link_challenges|account_credential_hash|INSERT
+col|nekkora_platform|identity_link_challenges|account_credential_hash|UPDATE
+col|nekkora_platform|identity_link_challenges|attempts|UPDATE
+col|nekkora_platform|identity_link_challenges|expires_at|INSERT
+col|nekkora_platform|identity_link_challenges|identity_id|INSERT
+col|nekkora_platform|identity_link_challenges|revoked_at|UPDATE
+col|nekkora_platform|identity_link_challenges|token_hash|INSERT
+col|nekkora_platform|identity_link_challenges|user_id|INSERT
+col|nekkora_platform|identity_mfa_factors|last_used_step|UPDATE
+col|nekkora_platform|identity_sessions|last_seen_at|UPDATE
+col|nekkora_platform|identity_sessions|mfa_step_up_at|UPDATE
+col|nekkora_platform|identity_sessions|revoked_at|UPDATE
+col|nekkora_portal_owner|organizations|organization_id|SELECT
+col|nekkora_portal_owner|organizations|status|SELECT
+col|nekkora_portal_owner|user_sessions|created_at|SELECT
+col|nekkora_portal_owner|user_sessions|expires_at|SELECT
+col|nekkora_portal_owner|user_sessions|last_seen_at|SELECT
+col|nekkora_portal_owner|user_sessions|last_seen_at|UPDATE
+col|nekkora_portal_owner|user_sessions|organization_id|SELECT
+col|nekkora_portal_owner|user_sessions|revoked_at|SELECT
+col|nekkora_portal_owner|user_sessions|session_id|SELECT
+col|nekkora_portal_owner|user_sessions|session_token_hash|SELECT
+col|nekkora_portal_owner|user_sessions|user_id|SELECT
+col|nekkora_portal_owner|users|account_type|SELECT
+col|nekkora_portal_owner|users|email_verified_at|SELECT
+col|nekkora_portal_owner|users|organization_id|SELECT
+col|nekkora_portal_owner|users|status|SELECT
+col|nekkora_portal_owner|users|user_id|SELECT
+fn|nekkora_identity_owner|check_identity_link_closure()
+fn|nekkora_identity_owner|identity_account_is_linked(uuid,uuid)
+fn|nekkora_identity_owner|identity_challenge_lookup(text)
+fn|nekkora_identity_owner|identity_challenge_resolve(text)
+fn|nekkora_identity_owner|identity_check_context(uuid,uuid)
+fn|nekkora_identity_owner|identity_create_organization(text,text,text)
+fn|nekkora_identity_owner|identity_create_organization_impl(text,text,text)
+fn|nekkora_identity_owner|identity_email_token_lookup(text)
+fn|nekkora_identity_owner|identity_link_account(text,text,uuid)
+fn|nekkora_identity_owner|identity_link_account_impl(text,text,uuid)
+fn|nekkora_identity_owner|identity_login_complete(text,text,bigint,text,text,text,timestamp with time zone)
+fn|nekkora_identity_owner|identity_mfa_confirm_first(text,uuid,text[],bigint,text,text,timestamp with time zone)
+fn|nekkora_identity_owner|identity_mfa_enroll_pending(text,text,bytea,bytea,text)
+fn|nekkora_identity_owner|identity_mfa_replace(text,uuid,text[])
+fn|nekkora_identity_owner|identity_org_creation_allowed(text)
+fn|nekkora_identity_owner|identity_org_session_allowed(uuid,uuid,uuid)
+fn|nekkora_identity_owner|identity_org_session_target(text,uuid)
+fn|nekkora_identity_owner|identity_organizations(text)
+fn|nekkora_identity_owner|identity_password_change(text,text,text)
+fn|nekkora_identity_owner|identity_require_read_committed()
+fn|nekkora_identity_owner|identity_resolve_login(text)
+fn|nekkora_identity_owner|identity_session_can_replace_factor(timestamp with time zone,timestamp with time zone,boolean,timestamp with time zone)
+fn|nekkora_identity_owner|identity_session_lookup(text)
+fn|nekkora_identity_owner|identity_session_proof(uuid,timestamp with time zone,text)
+fn|nekkora_identity_owner|identity_session_resolve(text)
+fn|nekkora_identity_owner|identity_signup_state(text)
+fn|nekkora_identity_owner|identity_token_hash(text)
+fn|nekkora_identity_owner|identity_valid_code_hashes(text[])
+fn|nekkora_identity_owner|identity_valid_session_params(text,text,timestamp with time zone)
+fn|nekkora_identity_owner|provision_first_org_admin(uuid,uuid,uuid,text,uuid)
+fn|nekkora_identity_owner|provision_resource_limit(uuid,integer,smallint,bigint,uuid)
+fn|nekkora_platform|identity_account_is_linked(uuid,uuid)
+fn|nekkora_platform|identity_challenge_lookup(text)
+fn|nekkora_platform|identity_create_organization(text,text,text)
+fn|nekkora_platform|identity_email_token_lookup(text)
+fn|nekkora_platform|identity_link_account(text,text,uuid)
+fn|nekkora_platform|identity_login_complete(text,text,bigint,text,text,text,timestamp with time zone)
+fn|nekkora_platform|identity_mfa_confirm_first(text,uuid,text[],bigint,text,text,timestamp with time zone)
+fn|nekkora_platform|identity_mfa_enroll_pending(text,text,bytea,bytea,text)
+fn|nekkora_platform|identity_mfa_replace(text,uuid,text[])
+fn|nekkora_platform|identity_org_creation_allowed(text)
+fn|nekkora_platform|identity_org_session_allowed(uuid,uuid,uuid)
+fn|nekkora_platform|identity_org_session_target(text,uuid)
+fn|nekkora_platform|identity_organizations(text)
+fn|nekkora_platform|identity_password_change(text,text,text)
+fn|nekkora_platform|identity_resolve_login(text)
+fn|nekkora_platform|identity_session_lookup(text)
+fn|nekkora_platform|identity_signup_state(text)
+fn|nekkora_provisioning_owner|provision_first_org_admin(uuid,uuid,uuid,text,uuid)
+fn|nekkora_provisioning_owner|provision_resource_limit(uuid,integer,smallint,bigint,uuid)
+fn|nekkora_provisioning|provision_first_org_admin(uuid,uuid,uuid,text,uuid)
+fn|nekkora_provisioning|provision_resource_limit(uuid,integer,smallint,bigint,uuid)
+pol|auth_challenges|identity_function_context|ALL|{nekkora_identity_owner}|(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) / (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+pol|auth_challenges|tenant_request_context|ALL|{nekkora_platform}|(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) / (organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+pol|email_verification_tokens|identity_function_context|ALL|{nekkora_identity_owner}|(EXISTS ( SELECT 1 FROM users u WHERE ((u.user_id = email_verification_tokens.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)))) / (EXISTS ( SELECT 1 FROM users u WHERE ((u.user_id = email_verification_tokens.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid))))
+pol|email_verification_tokens|tenant_request_context|ALL|{nekkora_platform}|(EXISTS ( SELECT 1 FROM users u WHERE ((u.user_id = email_verification_tokens.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)))) / (EXISTS ( SELECT 1 FROM users u WHERE ((u.user_id = email_verification_tokens.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid))))
+pol|identities|identity_function_scope|ALL|{nekkora_identity_owner}|true / true
+pol|identities|identity_request_context|ALL|{nekkora_platform}|(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid) / (identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+pol|identity_auth_challenges|identity_function_scope|ALL|{nekkora_identity_owner}|true / true
+pol|identity_auth_challenges|identity_request_context|ALL|{nekkora_platform}|(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid) / (identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+pol|identity_credentials|identity_function_scope|ALL|{nekkora_identity_owner}|true / true
+pol|identity_credentials|identity_request_context|ALL|{nekkora_platform}|(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid) / (identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+pol|identity_email_tokens|identity_function_scope|ALL|{nekkora_identity_owner}|true / true
+pol|identity_email_tokens|identity_request_context|ALL|{nekkora_platform}|(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid) / (identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+pol|identity_events|identity_function_scope|ALL|{nekkora_identity_owner}|true / true
+pol|identity_events|identity_request_context|ALL|{nekkora_platform}|(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid) / (identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+pol|identity_link_challenges|identity_function_scope|ALL|{nekkora_identity_owner}|true / true
+pol|identity_link_challenges|identity_request_context|ALL|{nekkora_platform}|(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid) / (identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+pol|identity_mfa_factors|identity_function_scope|ALL|{nekkora_identity_owner}|true / true
+pol|identity_mfa_factors|identity_request_context|ALL|{nekkora_platform}|(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid) / (identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+pol|identity_mfa_recovery_codes|identity_function_scope|ALL|{nekkora_identity_owner}|true / true
+pol|identity_mfa_recovery_codes|identity_request_context|ALL|{nekkora_platform}|(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid) / (identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+pol|identity_sessions|identity_function_scope|ALL|{nekkora_identity_owner}|true / true
+pol|identity_sessions|identity_request_context|ALL|{nekkora_platform}|(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid) / (identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+pol|identity_users|identity_function_scope|ALL|{nekkora_identity_owner}|true / true
+pol|organization_memberships|identity_function_context|ALL|{nekkora_identity_owner}|((organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) OR (EXISTS ( SELECT 1 FROM identity_users iu WHERE ((iu.user_id = organization_memberships.user_id) AND (iu.identity_id = (NULLIF(current_setting('nekkora.fn_identity_id'::text, true), ''::text))::uuid))))) / (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+pol|organization_memberships|tenant_function_context|ALL|{nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner}|(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) / (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+pol|organization_memberships|tenant_request_context|ALL|{nekkora_ingestion,nekkora_platform}|(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) / (organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+pol|organization_role_assignments|identity_function_context|ALL|{nekkora_identity_owner}|((organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) OR (EXISTS ( SELECT 1 FROM (identity_users iu JOIN organization_memberships m ON ((m.user_id = iu.user_id))) WHERE ((m.organization_id = organization_role_assignments.organization_id) AND (m.membership_id = organization_role_assignments.membership_id) AND (iu.identity_id = (NULLIF(current_setting('nekkora.fn_identity_id'::text, true), ''::text))::uuid))))) / (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+pol|organization_role_assignments|tenant_function_context|ALL|{nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner}|(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) / (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+pol|organization_role_assignments|tenant_request_context|ALL|{nekkora_ingestion,nekkora_platform}|(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) / (organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+pol|organizations|identity_function_context|ALL|{nekkora_identity_owner}|((organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) OR (EXISTS ( SELECT 1 FROM (identity_users iu JOIN users u ON ((u.user_id = iu.user_id))) WHERE ((u.organization_id = organizations.organization_id) AND (iu.identity_id = (NULLIF(current_setting('nekkora.fn_identity_id'::text, true), ''::text))::uuid))))) / (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+pol|organizations|portal_function_context|SELECT|{nekkora_portal_owner}|(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) / 
+pol|organizations|tenant_function_context|ALL|{nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner}|(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) / (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+pol|organizations|tenant_request_context|ALL|{nekkora_ingestion,nekkora_platform}|(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) / (organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+pol|password_reset_tokens|identity_function_context|ALL|{nekkora_identity_owner}|(EXISTS ( SELECT 1 FROM users u WHERE ((u.user_id = password_reset_tokens.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)))) / (EXISTS ( SELECT 1 FROM users u WHERE ((u.user_id = password_reset_tokens.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid))))
+pol|password_reset_tokens|tenant_request_context|ALL|{nekkora_platform}|(EXISTS ( SELECT 1 FROM users u WHERE ((u.user_id = password_reset_tokens.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)))) / (EXISTS ( SELECT 1 FROM users u WHERE ((u.user_id = password_reset_tokens.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid))))
+pol|user_credentials|identity_function_context|ALL|{nekkora_identity_owner}|(EXISTS ( SELECT 1 FROM users u WHERE ((u.user_id = user_credentials.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)))) / (EXISTS ( SELECT 1 FROM users u WHERE ((u.user_id = user_credentials.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid))))
+pol|user_credentials|tenant_request_context|ALL|{nekkora_platform}|(EXISTS ( SELECT 1 FROM users u WHERE ((u.user_id = user_credentials.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)))) / (EXISTS ( SELECT 1 FROM users u WHERE ((u.user_id = user_credentials.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid))))
+pol|user_mfa_factors|identity_function_context|ALL|{nekkora_identity_owner}|(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) / (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+pol|user_mfa_factors|tenant_request_context|ALL|{nekkora_platform}|(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) / (organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+pol|user_mfa_recovery_codes|identity_function_context|ALL|{nekkora_identity_owner}|(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) / (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+pol|user_mfa_recovery_codes|tenant_request_context|ALL|{nekkora_platform}|(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) / (organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+pol|user_sessions|identity_function_context|ALL|{nekkora_identity_owner}|(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) / (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+pol|user_sessions|portal_function_context_update|UPDATE|{nekkora_portal_owner}|(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) / (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+pol|user_sessions|portal_function_context|SELECT|{nekkora_portal_owner}|(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) / 
+pol|user_sessions|tenant_function_context|ALL|{nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner}|(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) / (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+pol|user_sessions|tenant_request_context|ALL|{nekkora_ingestion,nekkora_platform}|(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) / (organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+pol|users|identity_function_context|ALL|{nekkora_identity_owner}|((organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) OR (EXISTS ( SELECT 1 FROM identity_users iu WHERE ((iu.user_id = users.user_id) AND (iu.identity_id = (NULLIF(current_setting('nekkora.fn_identity_id'::text, true), ''::text))::uuid))))) / (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+pol|users|portal_function_context|SELECT|{nekkora_portal_owner}|(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) / 
+pol|users|tenant_function_context|ALL|{nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner}|(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) / (organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+pol|users|tenant_request_context|ALL|{nekkora_ingestion,nekkora_platform}|(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) / (organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+rls|auth_challenges|enable=t|force=t
+rls|email_verification_tokens|enable=t|force=t
+rls|identities|enable=t|force=t
+rls|identity_auth_challenges|enable=t|force=t
+rls|identity_credentials|enable=t|force=t
+rls|identity_email_tokens|enable=t|force=t
+rls|identity_events|enable=t|force=t
+rls|identity_link_challenges|enable=t|force=t
+rls|identity_mfa_factors|enable=t|force=t
+rls|identity_mfa_recovery_codes|enable=t|force=t
+rls|identity_sessions|enable=t|force=t
+rls|identity_users|enable=t|force=t
+rls|organization_memberships|enable=t|force=t
+rls|organization_role_assignments|enable=t|force=t
+rls|organizations|enable=t|force=t
+rls|password_reset_tokens|enable=t|force=t
+rls|roles|enable=f|force=f
+rls|user_credentials|enable=t|force=t
+rls|user_mfa_factors|enable=t|force=t
+rls|user_mfa_recovery_codes|enable=t|force=t
+rls|user_sessions|enable=t|force=t
+rls|users|enable=t|force=t
+tab|nekkora_identity_owner|identity_events|INSERT
+tab|nekkora_identity_owner|identity_link_challenges|SELECT
+tab|nekkora_identity_owner|identity_mfa_factors|INSERT
+tab|nekkora_identity_owner|identity_mfa_factors|SELECT
+tab|nekkora_identity_owner|identity_mfa_recovery_codes|INSERT
+tab|nekkora_identity_owner|identity_mfa_recovery_codes|SELECT
+tab|nekkora_identity_owner|identity_sessions|SELECT
+tab|nekkora_identity_owner|identity_users|INSERT
+tab|nekkora_identity_owner|identity_users|SELECT
+tab|nekkora_platform|auth_challenges|INSERT
+tab|nekkora_platform|auth_challenges|SELECT
+tab|nekkora_platform|auth_challenges|UPDATE
+tab|nekkora_platform|email_verification_tokens|INSERT
+tab|nekkora_platform|email_verification_tokens|SELECT
+tab|nekkora_platform|email_verification_tokens|UPDATE
+tab|nekkora_platform|identities|SELECT
+tab|nekkora_platform|identity_auth_challenges|SELECT
+tab|nekkora_platform|identity_email_tokens|SELECT
+tab|nekkora_platform|identity_link_challenges|SELECT
+tab|nekkora_platform|identity_mfa_factors|SELECT
+tab|nekkora_platform|identity_mfa_recovery_codes|SELECT
+tab|nekkora_platform|identity_sessions|SELECT
+tab|nekkora_platform|organization_memberships|INSERT
+tab|nekkora_platform|organization_memberships|SELECT
+tab|nekkora_platform|organization_memberships|UPDATE
+tab|nekkora_platform|organization_role_assignments|INSERT
+tab|nekkora_platform|organization_role_assignments|SELECT
+tab|nekkora_platform|organization_role_assignments|UPDATE
+tab|nekkora_platform|organizations|SELECT
+tab|nekkora_platform|organizations|UPDATE
+tab|nekkora_platform|password_reset_tokens|INSERT
+tab|nekkora_platform|password_reset_tokens|SELECT
+tab|nekkora_platform|password_reset_tokens|UPDATE
+tab|nekkora_platform|roles|SELECT
+tab|nekkora_platform|user_credentials|INSERT
+tab|nekkora_platform|user_credentials|SELECT
+tab|nekkora_platform|user_credentials|UPDATE
+tab|nekkora_platform|user_mfa_factors|INSERT
+tab|nekkora_platform|user_mfa_factors|SELECT
+tab|nekkora_platform|user_mfa_factors|UPDATE
+tab|nekkora_platform|user_mfa_recovery_codes|INSERT
+tab|nekkora_platform|user_mfa_recovery_codes|SELECT
+tab|nekkora_platform|user_mfa_recovery_codes|UPDATE
+tab|nekkora_platform|user_sessions|INSERT
+tab|nekkora_platform|user_sessions|SELECT
+tab|nekkora_platform|user_sessions|UPDATE
+tab|nekkora_platform|users|INSERT
+tab|nekkora_platform|users|SELECT
+tab|nekkora_platform|users|UPDATE
+tab|nekkora_provisioning_owner|organization_role_assignments|INSERT
+tab|nekkora_provisioning_owner|organization_role_assignments|SELECT
+tab|nekkora_provisioning_owner|organizations|INSERT
+tab|nekkora_provisioning_owner|organizations|SELECT
+tab|nekkora_provisioning_owner|organizations|UPDATE
+tab|nekkora_provisioning_owner|roles|SELECT
+tab|nekkora_scheduler_owner|organizations|SELECT
+tab|nekkora_scheduler_owner|organizations|UPDATE

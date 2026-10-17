@@ -1,0 +1,141 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_users
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_users
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_users
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_users
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_users
+NOTICE:  rejeitado como esperado [42501] must be owner of table auth_challenges
+NOTICE:  rejeitado como esperado [42501] must be owner of table user_mfa_factors
+NOTICE:  rejeitado como esperado [42501] must be owner of table user_mfa_recovery_codes
+NOTICE:  rejeitado como esperado [42501] must be owner of table password_reset_tokens
+NOTICE:  rejeitado como esperado [42501] must be owner of table email_verification_tokens
+NOTICE:  rejeitado como esperado [42501] must be owner of table user_credentials
+NOTICE:  rejeitado como esperado [42501] must be owner of table user_sessions
+NOTICE:  rejeitado como esperado [42501] must be owner of table identity_users
+NOTICE:  rejeitado como esperado [42501] must be owner of table identity_mfa_factors
+NOTICE:  rejeitado como esperado [42501] must be owner of table identity_mfa_recovery_codes
+NOTICE:  rejeitado como esperado [42501] must be owner of table identity_sessions
+NOTICE:  rejeitado como esperado [42501] must be owner of table identity_link_challenges
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+ ok: rejeitado [42501]
+ ok: rejeitado [42501]
+ ok: rejeitado [42501]
+ ok: rejeitado [42501]
+ ok: rejeitado [42501]
+ ok: rejeitado [42501]
+ ok: rejeitado [42501]
+ ok: rejeitado [42501]
+ ok: rejeitado [42501]
+ ok: rejeitado [42501]
+ ok: rejeitado [42501]
+(12 rows)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied to set parameter "session_replication_role"
+NOTICE:  rejeitado como esperado [P0001] fator de MFA desabilitado e imutavel (factor_id=1e71abb0-2e61-4a13-91d0-0b1310c8587a)
+      espera_erro      
+-----------------------
+ ok: rejeitado [P0001]
+(1 row)
+
+             afirma              
+---------------------------------
+ ok: C'-5 auxiliares sem escrita
+(1 row)
+
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+ ok: rejeitado [42501]
+ ok: rejeitado [42501]
+ ok: rejeitado [42501]
+ ok: rejeitado [42501]
+(5 rows)
+
+NOTICE:  rejeitado como esperado [42501] permission denied for function identity_link_account_impl
+NOTICE:  rejeitado como esperado [42501] permission denied for function identity_create_organization_impl
+NOTICE:  rejeitado como esperado [42501] permission denied for function identity_session_resolve
+NOTICE:  rejeitado como esperado [42501] permission denied for function identity_check_context
+NOTICE:  rejeitado como esperado [42501] permission denied for function identity_require_read_committed
+NOTICE:  rejeitado como esperado [42501] permission denied for table identity_link_challenges
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+NOTICE:  rejeitado como esperado [42501] permission denied to set role "nekkora_identity_owner"
+      espera_erro      
+-----------------------
+ ok: rejeitado [42501]
+(1 row)
+
+  resultado   
+--------------
+ grupo C': ok
+(1 row)
+
+E C2: ok

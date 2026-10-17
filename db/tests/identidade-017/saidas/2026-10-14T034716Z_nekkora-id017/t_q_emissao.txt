@@ -1,0 +1,244 @@
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+Pager usage is off.
+           afirma           
+----------------------------
+ ok: papel nekkora_platform
+(1 row)
+
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+                  afirma                   
+-------------------------------------------
+ ok: Q-0 resolucao inicial encontra o alvo
+(1 row)
+
+         afirma         
+------------------------
+ ok: Q-0 emissao aceita
+(1 row)
+
+E Q-0: ok
+                  afirma                   
+-------------------------------------------
+ ok: Q-1 resolucao inicial encontra o alvo
+(1 row)
+
+BEGIN
+ q_trava_org 
+-------------
+ 
+(1 row)
+
+UPDATE 1
+COMMIT
+NOTICE:  rejeitado como esperado [23514] sessao nova exige fator de MFA confirmado e ativo
+       q_recusa        
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+BEGIN
+ q_trava_org 
+-------------
+ 
+(1 row)
+
+UPDATE 1
+COMMIT
+                   afirma                    
+---------------------------------------------
+ ok: Q-1 controle: reativada, emissao aceita
+(1 row)
+
+E Q-1: ok
+                  afirma                   
+-------------------------------------------
+ ok: Q-2 resolucao inicial encontra o alvo
+(1 row)
+
+BEGIN
+ q_trava_org 
+-------------
+ 
+(1 row)
+
+UPDATE 1
+COMMIT
+NOTICE:  rejeitado como esperado [23514] sessao nova exige fator de MFA confirmado e ativo
+       q_recusa        
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+BEGIN
+ q_trava_org 
+-------------
+ 
+(1 row)
+
+UPDATE 1
+COMMIT
+                    afirma                    
+----------------------------------------------
+ ok: Q-2 controle: verificada, emissao aceita
+(1 row)
+
+E Q-2: ok
+                  afirma                   
+-------------------------------------------
+ ok: Q-3 resolucao inicial encontra o alvo
+(1 row)
+
+BEGIN
+ q_trava_org 
+-------------
+ 
+(1 row)
+
+UPDATE 1
+COMMIT
+NOTICE:  rejeitado como esperado [23514] sessao nova exige fator de MFA confirmado e ativo
+       q_recusa        
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+BEGIN
+ q_trava_org 
+-------------
+ 
+(1 row)
+
+UPDATE 1
+COMMIT
+                       afirma                        
+-----------------------------------------------------
+ ok: Q-3 controle: vinculo reativado, emissao aceita
+(1 row)
+
+E Q-3: ok
+                  afirma                   
+-------------------------------------------
+ ok: Q-4 resolucao inicial encontra o alvo
+(1 row)
+
+BEGIN
+ ctx 
+-----
+ 
+(1 row)
+
+UPDATE 1
+COMMIT
+NOTICE:  rejeitado como esperado [23514] sessao nova exige fator de MFA confirmado e ativo
+       q_recusa        
+-----------------------
+ ok: rejeitado [23514]
+(1 row)
+
+BEGIN
+ ctx 
+-----
+ 
+(1 row)
+
+UPDATE 1
+COMMIT
+                         afirma                          
+---------------------------------------------------------
+ ok: Q-4 controle: organizacao reativada, emissao aceita
+(1 row)
+
+E Q-4: ok
+BEGIN
+ q_trava_org 
+-------------
+ 
+(1 row)
+
+UPDATE 1
+COMMIT
+                          afirma                          
+----------------------------------------------------------
+ ok: Q-5 ramo 1: conta suspensa, INSERT aceito como antes
+(1 row)
+
+BEGIN
+ q_trava_org 
+-------------
+ 
+(1 row)
+
+UPDATE 1
+UPDATE 1
+COMMIT
+                          afirma                           
+-----------------------------------------------------------
+ ok: Q-5 ramo 1: vinculo inativo, INSERT aceito como antes
+(1 row)
+
+BEGIN
+ q_trava_org 
+-------------
+ 
+(1 row)
+
+UPDATE 1
+COMMIT
+BEGIN
+ ctx 
+-----
+ 
+(1 row)
+
+UPDATE 1
+COMMIT
+                            afirma                             
+---------------------------------------------------------------
+ ok: Q-5 ramo 1: organizacao inativa, INSERT aceito como antes
+(1 row)
+
+BEGIN
+ ctx 
+-----
+ 
+(1 row)
+
+UPDATE 1
+COMMIT
+E Q-5: ok
+        resultado        
+-------------------------
+ grupo Q, sequencial: ok
+(1 row)
+
