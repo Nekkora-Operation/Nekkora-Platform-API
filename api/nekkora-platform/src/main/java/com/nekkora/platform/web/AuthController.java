@@ -21,6 +21,7 @@ import com.nekkora.core.web.ApiException;
 import com.nekkora.core.web.RequestContextFilter;
 import com.nekkora.platform.auth.AuthService;
 import com.nekkora.platform.config.PlatformProperties;
+import com.nekkora.platform.identity.LinkedOrgStepUpService;
 import com.nekkora.platform.session.ValidSession;
 
 /** Rotas de autenticacao da Platform (contrato 8.7, §5.3). Corpos de resposta allowlisted; tokens so em cookie. */
@@ -46,11 +47,13 @@ public class AuthController {
     }
 
     private final AuthService auth;
+    private final LinkedOrgStepUpService linkedStepUps;
     private final PreAuthCsrf csrfPre;
     private final PlatformProperties.Session cfg;
 
-    public AuthController(AuthService auth, PreAuthCsrf csrfPre, PlatformProperties.Session cfg) {
+    public AuthController(AuthService auth, LinkedOrgStepUpService linkedStepUps, PreAuthCsrf csrfPre, PlatformProperties.Session cfg) {
         this.auth = auth;
+        this.linkedStepUps = linkedStepUps;
         this.csrfPre = csrfPre;
         this.cfg = cfg;
     }
@@ -106,12 +109,23 @@ public class AuthController {
         return Map.of("csrfToken", s.csrfToken());
     }
 
+    /**
+     * Step-up da sessao de organizacao. Sessao do login por organizacao: fator local, caminho de sempre. Sessao vinculada
+     * (nascida da troca, contrato P4): fator da identidade de origem, com o cookie {@code __Host-nekkora_id} exigido em
+     * ADICAO ao CSRF desta sessao (unica rota em que os dois cookies valem juntos).
+     */
     @PostMapping("/api/v1/o/{org}/auth/mfa/step-up")
     public ResponseEntity<Void> stepUp(@PathVariable UUID org, @RequestBody CodeRequest body, HttpServletRequest req) {
         if (body.code() == null) {
             throw ApiException.invalid("codigo");
         }
-        auth.stepUp(org, SessionFilter.principal(req), SessionFilter.token(req), body.code(), RequestContextFilter.ip(req));
+        ValidSession s = SessionFilter.principal(req);
+        if (s.isLinked()) {
+            linkedStepUps.stepUp(new LinkedOrgStepUpService.OrgSession(org, s.sessionId(), s.userId(), s.identitySessionId(), SessionFilter.token(req)),
+                    Cookies.read(req, Cookies.IDENTITY_SESSION), body.code(), RequestContextFilter.ip(req));
+        } else {
+            auth.stepUp(org, s, SessionFilter.token(req), body.code(), RequestContextFilter.ip(req));
+        }
         return ResponseEntity.noContent().build();
     }
 

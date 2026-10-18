@@ -45,6 +45,10 @@ nekkora:
   # nao tem chave (encerrar sessao nunca depende de configuracao)
   entrada-geral:
     enabled: ${NEKKORA_ENTRADA_GERAL:false}
+  # vinculacao de conta antiga (contrato P3): DESLIGADA por padrao; so abre com a entrada geral tambem ligada. Os
+  # bloqueios da entrada local de conta vinculada nao dependem dela
+  vinculacao:
+    enabled: ${NEKKORA_VINCULACAO:false}
   trusted-proxies: ${NEKKORA_PROXIES_CONFIAVEIS:127.0.0.1/32,::1/128}
   database:
     url: ${NEKKORA_DB_URL}
@@ -96,6 +100,10 @@ nekkora:
     # funcao identity_create_organization, sob o lock da identidade
     r11-creations: 3
     r11-window: 24h
+    # R13 (contrato P3): vinculacao de conta antiga, falhas por identidade global e por conta alvo (HMAC organizacao +
+    # e-mail), falhando fechado
+    r13-failures: 5
+    r13-window: 15m
 
 logging:
   level:

@@ -43,6 +43,7 @@ public record PlatformProperties(
             int r7Capacity, double r7PerSecond,
             Duration recoveryResponseFloor,
             int r10Exchanges, Duration r10Window,
-            int r11Creations, Duration r11Window) {
+            int r11Creations, Duration r11Window,
+            int r13Failures, Duration r13Window) {
     }
 }

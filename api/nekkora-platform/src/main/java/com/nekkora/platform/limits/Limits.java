@@ -167,6 +167,31 @@ public final class Limits {
         return "nk:rl:r11:" + identity;
     }
 
+    /**
+     * R13 (contrato P3): antes da prova da conta antiga, as falhas de vinculacao por identidade GLOBAL e por conta alvo
+     * (HMAC da organizacao + e-mail, o mesmo de R1) tem de estar abaixo de {@code r13-failures} em {@code r13-window}.
+     * Esgotado -> 429; Redis fora -> 503 (falha fechada).
+     */
+    public void linkBeforeProof(String globalIdentity, String targetAccount) {
+        failClosed(() -> {
+            if (redis.count("nk:rl:r13i:" + globalIdentity, cfg.r13Window()) >= cfg.r13Failures()
+                    || redis.count("nk:rl:r13c:" + targetAccount, cfg.r13Window()) >= cfg.r13Failures()) {
+                LOG.info("evento=identidade.rate_limited regra=R13 identidade={}", globalIdentity);
+                throw rateLimited(cfg.r13Window().toMillis());
+            }
+            return null;
+        });
+    }
+
+    /** R13: falha da prova da conta antiga (qualquer causa: a resposta e uma so), por identidade e por conta alvo. */
+    public void linkFailure(String globalIdentity, String targetAccount) {
+        failClosed(() -> {
+            redis.recordFailure("nk:rl:r13i:" + globalIdentity, cfg.r13Window());
+            redis.recordFailure("nk:rl:r13c:" + targetAccount, cfg.r13Window());
+            return null;
+        });
+    }
+
     // ------------------------------------------------------------------ entrada geral (Missao 1, desenho secao 7)
     // Chaves pela identidade GLOBAL (IdentityHmac.global, nunca o e-mail): R8 com os valores de R1/R2 e R8m com os de R4.
 

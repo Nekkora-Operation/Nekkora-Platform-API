@@ -50,7 +50,9 @@ public final class Routes {
             case "/api/v1/auth/logout" -> Context.IDENTITY_LOGOUT;
             // troca por sessao de organizacao (Missao 1, desenho 6.5): CSRF da sessao de identidade
             // step-up da sessao de identidade (P1) e criacao de organizacao (P2)
-            case "/api/v1/sessions/organization", "/api/v1/auth/step-up", "/api/v1/organizations" -> Context.IDENTITY_SESSION;
+            // vinculacao de conta antiga (P3): as duas etapas com a sessao de identidade
+            case "/api/v1/sessions/organization", "/api/v1/auth/step-up", "/api/v1/organizations",
+                 "/api/v1/links/start", "/api/v1/links/confirm" -> Context.IDENTITY_SESSION;
             case "/auth/mfa/enroll/start", "/auth/mfa/enroll/confirm", "/auth/mfa/verify" -> Context.CHALLENGE;
             case "/auth/logout" -> Context.LOGOUT;
             default -> Context.SESSION;

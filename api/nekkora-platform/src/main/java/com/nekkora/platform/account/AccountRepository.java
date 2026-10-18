@@ -9,9 +9,11 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 public final class AccountRepository {
 
     /**
-     * Situacao da conta para autenticacao. {@code elegivel}: ACTIVE, e-mail verificado, organizacao ativa e vinculo
-     * ativo (interno: organization_memberships; externo: client_memberships + cliente ativo). {@code hashSenha}
-     * pode ser nulo (conta sem credencial).
+     * Situacao da conta para autenticacao. {@code elegivel}: ACTIVE, e-mail verificado, organizacao ativa, vinculo
+     * ativo (interno: organization_memberships; externo: client_memberships + cliente ativo) e conta NAO vinculada a uma
+     * identidade (desenho §4.5, camada 1; DC-17.9): a conta vinculada so entra pela entrada geral, e o login, a
+     * recuperacao e a reconferencia sob o lock a tratam como inelegivel, sem resposta propria. {@code hashSenha} pode ser
+     * nulo (conta sem credencial).
      */
     public record Account(UUID userId, short accountType, String email, boolean eligible, String passwordHash, boolean hasConfirmedFactor) {
     }
@@ -26,7 +28,9 @@ public final class AccountRepository {
                         EXISTS (SELECT 1 FROM public.client_memberships cm
                                   JOIN public.clients c ON c.client_id = cm.client_id AND c.organization_id = cm.organization_id
                                  WHERE cm.user_id = u.user_id AND cm.organization_id = u.organization_id AND cm.status = 2 AND c.status = 1)
-                    END) AS elegivel,
+                    END
+                    -- auxiliar da 017, com a conferencia do contexto da organizacao (o mesmo que a RLS ja exige aqui)
+                    AND NOT public.identity_account_is_linked(u.organization_id, u.user_id)) AS elegivel,
                    EXISTS (SELECT 1 FROM public.user_mfa_factors f
                             WHERE f.user_id = u.user_id AND f.organization_id = u.organization_id
                               AND f.confirmed_at IS NOT NULL AND f.disabled_at IS NULL) AS tem_fator

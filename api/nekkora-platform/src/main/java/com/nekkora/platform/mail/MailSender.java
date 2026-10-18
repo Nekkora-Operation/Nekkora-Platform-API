@@ -24,7 +24,9 @@ public interface MailSender {
         /** Cadastro web (Missao 1): confirmacao do e-mail da identidade, com o token de uso unico (sem organizacao). */
         IDENTITY_SIGNUP_CONFIRMATION,
         /** Cadastro web: aviso "ja existe uma conta com este e-mail" (sem token e sem link de cadastro). */
-        IDENTITY_SIGNUP_ALREADY_REGISTERED
+        IDENTITY_SIGNUP_ALREADY_REGISTERED,
+        /** Vinculacao (contrato P3): aviso de que a conta da organizacao passou a entrar pela identidade (sem token). */
+        NOTICE_IDENTITY_LINKED
     }
 
     void send(Kind kind, UUID organization, String recipient, String tokenOrNull);

@@ -46,7 +46,7 @@ public final class SessionRepository {
             return Optional.empty();
         }
         Optional<Evaluation> a = j.sql("""
-                SELECT s.session_id, s.user_id, s.csrf_token, s.mfa_step_up_at, s.expires_at, u.account_type, t.agora,
+                SELECT s.session_id, s.user_id, s.csrf_token, s.mfa_step_up_at, s.expires_at, s.identity_session_id, u.account_type, t.agora,
                        (s.revoked_at IS NULL AND s.mfa_verified_at IS NOT NULL AND s.csrf_token IS NOT NULL
                         AND s.expires_at > t.agora
                         AND s.last_seen_at > t.agora - CASE WHEN u.account_type = 1 THEN ?::interval ELSE ?::interval END
@@ -74,7 +74,8 @@ public final class SessionRepository {
                 .query((rs, n) -> new Evaluation(rs.getBoolean("valida") && rs.getObject("vinculo_id") != null
                         ? new ValidSession(rs.getObject("session_id", UUID.class), org, rs.getObject("user_id", UUID.class),
                                 rs.getShort("account_type"), rs.getObject("vinculo_id", UUID.class), rs.getString("csrf_token"),
-                                rs.getObject("mfa_step_up_at", OffsetDateTime.class), rs.getObject("expires_at", OffsetDateTime.class))
+                                rs.getObject("mfa_step_up_at", OffsetDateTime.class), rs.getObject("expires_at", OffsetDateTime.class),
+                                rs.getObject("identity_session_id", UUID.class))
                         : null, rs.getObject("agora", OffsetDateTime.class)))
                 .optional();
         if (a.isEmpty() || a.get().session() == null) {
@@ -138,9 +139,16 @@ public final class SessionRepository {
                 .param(user).param(keep).update();
     }
 
-    public void recordStepUp(JdbcClient j, UUID session) {
-        j.sql("UPDATE public.user_sessions SET mfa_step_up_at = clock_timestamp() WHERE session_id = ? AND revoked_at IS NULL")
+    /** Step-up na sessao, pelo relogio do banco; devolve as linhas alteradas (0 = sessao revogada). */
+    public int recordStepUp(JdbcClient j, UUID session) {
+        return j.sql("UPDATE public.user_sessions SET mfa_step_up_at = clock_timestamp() WHERE session_id = ? AND revoked_at IS NULL")
                 .param(session).update();
+    }
+
+    /** Sessao ja travada nesta transacao ainda nao revogada e no prazo, pelo relogio do banco AGORA (antes do commit). */
+    public boolean stillValid(JdbcClient j, UUID session) {
+        return j.sql("SELECT EXISTS (SELECT 1 FROM public.user_sessions WHERE session_id = ? AND revoked_at IS NULL AND expires_at > clock_timestamp())")
+                .param(session).query(Boolean.class).single();
     }
 
     /** Limite por conta: revoga as ativas mais antigas para que, com a nova, sejam no maximo {@code maximoPorConta}. */
