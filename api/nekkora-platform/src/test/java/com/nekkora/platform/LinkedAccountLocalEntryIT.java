@@ -7,6 +7,7 @@ import java.sql.PreparedStatement;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -22,6 +23,9 @@ import com.nekkora.platform.mail.MailSender;
  * credencial local mantida inerte pela DC-17.12). A vinculacao aqui e feita pela funcao da 017, direto no banco: a rota
  * tem testes proprios.
  */
+// contexto proprio (propriedades da classe): fechado ao fim dela, para nao manter um pool a mais aberto contra o limite
+// de conexoes do PostgreSQL de teste, compartilhado pela suite inteira
+@DirtiesContext
 class LinkedAccountLocalEntryIT extends IdentityTestBase {
 
     private static final String RECUPERACAO = "/auth/password-reset/request";

@@ -11,6 +11,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -27,6 +28,9 @@ import com.nekkora.platform.auth.crypto.Totp;
  * <p>A conta vinculada aqui e a criada pelo cadastro ({@code identity_create_organization}, canal cadastro_web): a pessoa
  * que criou a organizacao e o ORG_ADMIN dela e nao tem fator local, entao so o P4 lhe da as acoes protegidas por step-up.
  */
+// contexto proprio (propriedades da classe): fechado ao fim dela, para nao manter um pool a mais aberto contra o limite
+// de conexoes do PostgreSQL de teste, compartilhado pela suite inteira
+@DirtiesContext
 class LinkedOrgStepUpIT extends IdentityTestBase {
 
     private static final String TROCA = "/api/v1/sessions/organization";

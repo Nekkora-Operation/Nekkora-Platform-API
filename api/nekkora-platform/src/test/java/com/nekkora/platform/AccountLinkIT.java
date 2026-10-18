@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -30,6 +31,9 @@ import com.nekkora.platform.mail.MailSender;
  * <p>Cenario de cada teste: conta antiga interna com fator local (login por organizacao completo) e identidade com o
  * MESMO e-mail, com sessao e fator proprios pela entrada geral.
  */
+// contexto proprio (propriedades da classe): fechado ao fim dela, para nao manter um pool a mais aberto contra o limite
+// de conexoes do PostgreSQL de teste, compartilhado pela suite inteira
+@DirtiesContext
 @ExtendWith(OutputCaptureExtension.class)
 class AccountLinkIT extends IdentityTestBase {
 
