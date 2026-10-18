@@ -121,12 +121,14 @@ export E2E_CERT="$(cygpath -w "$SAIDA/tls/cert.pem" 2>/dev/null || echo "$SAIDA/
 export E2E_PG_URL="jdbc:postgresql://127.0.0.1:$E2E_PG_PORTA/nekkora"
 export E2E_COMPOSE="$(cygpath -w "$AQUI/compose.e2e.yml" 2>/dev/null || echo "$AQUI/compose.e2e.yml")"
 set +e
-(cd "$API" && sh ./mvnw -q -pl nekkora-platform -am test -Dtest=CrossProcessE2E -Dsurefire.failIfNoSpecifiedTests=false) > "$SAIDA/cliente_e2e.txt" 2>&1
+# CrossProcessE2E primeiro (ordem alfabetica): LinkedAccountsE2E (contas vinculadas, P3/P4) depois da rajada da borda
+(cd "$API" && sh ./mvnw -q -pl nekkora-platform -am test -Dtest='CrossProcessE2E,LinkedAccountsE2E' -Dsurefire.runOrder=alphabetical \
+    -Dsurefire.failIfNoSpecifiedTests=false) > "$SAIDA/cliente_e2e.txt" 2>&1
 rc=$?
 set -e
-cp "$API"/nekkora-platform/target/surefire-reports/*CrossProcessE2E.txt "$SAIDA/" 2>/dev/null || true
+cp "$API"/nekkora-platform/target/surefire-reports/*CrossProcessE2E.txt "$API"/nekkora-platform/target/surefire-reports/*LinkedAccountsE2E.txt "$SAIDA/" 2>/dev/null || true
 compose logs --no-color > "$SAIDA/logs_stack.txt"
-grep -E "Tests run" "$SAIDA"/*CrossProcessE2E.txt || true
+grep -E "Tests run" "$SAIDA"/*CrossProcessE2E.txt "$SAIDA"/*LinkedAccountsE2E.txt || true
 echo "saidas: $SAIDA"
 echo "remocao: docker compose -f \"$AQUI/compose.e2e.yml\" down   (com as mesmas variaveis E2E_*; ou: docker compose -p $E2E_PROJETO down)"
 [ "$rc" -eq 0 ] || falha "cliente E2E falhou (rc=$rc) - veja $SAIDA/cliente_e2e.txt"
