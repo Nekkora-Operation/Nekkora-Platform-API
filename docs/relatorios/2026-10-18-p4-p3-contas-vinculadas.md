@@ -182,7 +182,23 @@ Cada linha remove **uma** defesa central e roda só o teste que a prova (o mesmo
 
 ### 8.5 Regressão completa e E2E sobre o commit candidato
 
-Ver o PR: commit validado, ambiente, contagens por módulo e as saídas do E2E.
+Clone limpo do commit `6c85880` (o último com código). Java 21.0.5, Maven 3.9.16 (wrapper), Docker 27.4.0, macOS arm64 com 8 GB. `FixtureRunnerIT` com Bash 5.3.20 (`-Dnekkora.bash`). Contagens lidas do log, não do `BUILD SUCCESS`.
+
+| Módulo | Testes | Falhas | Erros | Pulados |
+|---|---|---|---|---|
+| nekkora-core | 18 | 0 | 0 | 0 |
+| nekkora-ops | 155 | 0 | 0 | 0 |
+| nekkora-platform | 293 (260 + 33 novos) | 0 | 0 | 0 |
+| nekkora-portal | 12 | 0 | 0 | 0 |
+| **total (77 classes)** | **478** | **0** | **0** | **0** |
+
+Memória livre do sistema durante a rodada: mínimo de 26%, com swap perto de 12 GB (amostra a cada 30 s).
+
+**E2E entre processos** (`api/e2e/run.sh`, projeto descartável `nekkora-e2e-pr001`, removido depois só ele): `CrossProcessE2E` 6/6 e `LinkedAccountsE2E` 6/6.
+
+**Primeira rodada, preservada e investigada (commit `0aa7a36`):** 1 falha e 42 erros no `nekkora-platform`. Causa: as três classes novas com contexto próprio (`@DynamicPropertySource`) ficavam em cache com o pool aberto e esgotavam as conexões do PostgreSQL de teste (`FATAL: remaining connection slots are reserved for roles with the SUPERUSER attribute`). As classes seguintes não subiam o contexto. Correção em `6c85880`: `@DirtiesContext`, como as demais classes com contexto próprio. Na mesma rodada, `MfaConcurrencyIT` teve 1 falha anterior às classes novas (`login passo 1: 503`, `limitador.indisponivel`: timeout de 500 ms do Redis). É a mesma assinatura das falhas sob pressão de memória registradas no P1 R1, com mais contextos abertos naquela rodada. Não se repetiu depois da correção (5/5). Fica classificada como **intermitente sob pressão de recursos, não reproduzida**, sem relação demonstrada com o código novo.
+
+**`FixtureRunnerIT` e o Bash:** no mesmo commit da `main` (`4a528b3`), com o Bash 3.2 do macOS: 4 falhas e 1 erro (as cinco ocorrências conhecidas); com o Bash 5.3: 5/5.
 
 ## 9. Como reproduzir
 
