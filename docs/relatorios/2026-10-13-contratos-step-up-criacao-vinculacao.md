@@ -77,6 +77,8 @@
 
 ## P3 — Vinculação de conta antiga
 
+**Situação em 2026-10-18:** implementado e entregue para revisão no PR da missão PLATFORM-PR-001 (relatório `2026-10-18-p4-p3-contas-vinculadas.md`), conforme as tabelas abaixo, sem mudança de contrato. Precisões de implementação: chave própria `nekkora.vinculacao.enabled`, desligada por padrão e só aberta com a entrada geral (os bloqueios da entrada local valem com ela desligada); a recusa da trigger (23514) no login, na recuperação e na troca de senha locais é respondida como o contrato manda (antes, `500`); o reset administrativo de conta vinculada **não** é recusado pela trigger, porque as escritas dele são terminais, e só revoga as sessões da conta na organização (registrado no relatório, decisão pendente); não há rota de reenvio de verificação local na Platform.
+
 ### Etapa 1 — prova da conta antiga
 
 | Item | Contrato |
@@ -121,6 +123,8 @@
 ---
 
 ## P4 — Step-up por organização em sessão vinculada
+
+**Situação em 2026-10-18:** implementado e entregue para revisão no mesmo PR (relatório `2026-10-18-p4-p3-contas-vinculadas.md`), conforme a tabela abaixo, sem mudança de contrato e sem chave nova (a rota é a existente; a sessão vinculada só nasce pela troca). A igualdade entre o cookie de identidade e a sessão de origem é conferida antes da transação e de novo dentro dela, sob o lock.
 
 **Alcance, conforme o parecer:** a confirmação pedida na organização eleva **só aquela sessão de organização**. A sessão de identidade **não** recebe `mfa_step_up_at`, e nenhuma outra sessão de organização é elevada.
 
