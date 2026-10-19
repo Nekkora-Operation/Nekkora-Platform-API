@@ -206,6 +206,28 @@ Memória livre do sistema durante a rodada: mínimo de 26%, com swap perto de 12
 
 **`FixtureRunnerIT` e o Bash:** no mesmo commit da `main` (`4a528b3`), com o Bash 3.2 do macOS: 4 falhas e 1 erro (as cinco ocorrências conhecidas); com o Bash 5.3: 5/5.
 
+### 8.6 Revisão 1: provas dirigidas e regressão sobre `9f98f71`
+
+**Dirigidas:** `AccountLinkIT#resetAdministrativoDeContaVinculadaERecusadoSemEfeito`, `#resetQueEsperaAVinculacaoERecusado` e `#vinculacaoQueEsperaOResetConcluiDepoisDele`: 3/3. Contraprovas M14 e M15 (§8.3): as duas reprovaram. A M15 confirma que o vínculo precisa ser lido **depois** dos locks.
+
+**Regressão completa** em clone limpo de `9f98f71` (código de `6ac25d8` mais o merge da consolidação; mesmo ambiente da §8.5; `./mvnw` executado direto, já com o bit de execução):
+
+| Módulo | Testes | Falhas | Erros | Pulados |
+|---|---|---|---|---|
+| nekkora-core | 18 | 0 | 0 | 0 |
+| nekkora-ops | 155 | 0 | 0 | 0 |
+| nekkora-platform | 296 | **1** | 0 | 0 |
+| nekkora-portal | 12 | 0 | 0 | 0 |
+
+**E2E** (projeto descartável `nekkora-e2e-pr001b`, removido depois): `CrossProcessE2E` 6/6 e `LinkedAccountsE2E` 6/6.
+
+**A falha, preservada e investigada:** `MfaConcurrencyIT#mfaCompletionVersusAdminResetNeverLeavesAnActiveSessionOrFactor`, rodada 3 de 10. O reset administrativo, em corrida com a conclusão do MFA da mesma conta **não vinculada**, respondeu `500` com SQLSTATE 23514. Esse teste passou nas regressões completas de `4a528b3` e de `6c85880`. Investigação:
+- repetição isolada do teste: **0 falhas em 80 rodadas** no candidato e **0 em 80** na `main`;
+- análise: a conclusão do MFA e o reset serializam no lock da conta. A única mudança no caminho do reset é uma leitura (`identity_account_is_linked`) depois dos locks, e essa função recusa com 42501, não 23514;
+- a mensagem do banco se perdeu com o container compartilhado: a aplicação registra só o SQLSTATE, por desenho.
+
+**Classificação:** intermitente, **causa não identificada**, relação com a mudança da revisão 1 **não demonstrada nem descartada**. Não foi tratada como resolvida por repetição. Para a próxima ocorrência, `MfaConcurrencyIT` passa a imprimir as linhas de erro do log do PostgreSQL de teste quando o ato administrativo não conclui (só saída de teste; o log do PostgreSQL já é conferido sem segredos em `LimitsAndLogsIT`). É a principal pendência de verificação deste PR. O check de CI do PR é uma execução independente.
+
 ## 9. Como reproduzir
 
 ```
