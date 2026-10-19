@@ -1,6 +1,8 @@
 # Testes da API v1 (unitarios e integracao com PostgreSQL 16 e Redis descartaveis, por Testcontainers) a cada PR e a cada
-# push na main. Sem credenciais: cada teste gera as proprias senhas e chaves. Sem -Dmaven.test.failure.ignore: qualquer
-# falha, erro ou teste que nao rode reprova o check. Bash do runner (Ubuntu) e 5.x, compativel com o FixtureRunnerIT.
+# push na main. Sem credenciais: cada teste gera as proprias senhas e chaves. Sem -Dmaven.test.failure.ignore: falha de
+# compilacao, teste com falha ou com erro reprova o check. O check NAO detecta sozinho teste pulado ou que deixou de rodar
+# (@Disabled, suposicao nao atendida, classe fora do padrao do surefire): as contagens de "Skipped" e de testes ficam no
+# log e nos relatorios publicados abaixo, para leitura. Bash do runner (Ubuntu) e 5.x, compativel com o FixtureRunnerIT.
 # Fora daqui (manuais, descritos nos READMEs e nos PRs): suites de banco em db/tests e o E2E entre processos (api/e2e).
 name: api-testes
 
