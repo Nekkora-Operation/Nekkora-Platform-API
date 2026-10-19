@@ -73,6 +73,14 @@ public final class AccountRepository {
                 .query(String.class).list();
     }
 
+    /**
+     * Conta vinculada a uma identidade ({@code identity_account_is_linked}, auxiliar da 017, que confere o contexto da
+     * organizacao). Chamada depois do lock da conta, ve o vinculo confirmado mais recente (READ COMMITTED).
+     */
+    public boolean isLinked(JdbcClient j, UUID org, UUID user) {
+        return Boolean.TRUE.equals(j.sql("SELECT public.identity_account_is_linked(?, ?)").param(org).param(user).query(Boolean.class).single());
+    }
+
     /** Lock da conta: primeiro lock de todo caminho que cria sessao ou muda credencial/fator/desafios/sessoes (§3.2). */
     public boolean lock(JdbcClient j, UUID org, UUID user) {
         return j.sql("SELECT 1 FROM public.users WHERE organization_id = ? AND user_id = ? FOR UPDATE").param(org).param(user)

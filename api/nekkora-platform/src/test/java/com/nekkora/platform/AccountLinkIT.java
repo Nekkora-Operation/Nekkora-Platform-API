@@ -415,6 +415,106 @@ class AccountLinkIT extends IdentityTestBase {
         assertThat(vivos(c.conta().id())).isEqualTo("0|0|0|0|0");
     }
 
+    // ------------------------------------------------------------------ reset administrativo de conta vinculada
+
+    /**
+     * Reset administrativo do MFA de conta VINCULADA: 403 generico, sem efeito - a sessao de organizacao da pessoa continua,
+     * nenhum evento de reset, nenhum aviso, fator da identidade intacto. Controle: conta nao vinculada da mesma organizacao,
+     * mesmo administrador e mesmo step-up: 204, com evento e aviso.
+     */
+    @Test
+    void resetAdministrativoDeContaVinculadaERecusadoSemEfeito() throws Exception {
+        Cenario c = cenario();
+        BrowserClient admin = administradorComStepUp(c.o());
+        assertThat(start(c.id(), c.org(), PASSWORD, code(c.conta().id()), null).status()).isEqualTo(204);
+        assertThat(stepUpIdentidade(c)).isEqualTo(204);
+        assertThat(confirm(c.id(), c.org()).status()).isEqualTo(204);
+        BrowserClient org = trocar(c, c.org());
+        long avisos = mails(c.conta().email()).size();
+
+        BrowserClient.Response r = admin.post("/api/v1/o/" + c.org() + "/users/" + c.conta().id() + "/mfa/reset", SessionsAndAdministrationIT.RESET_BODY);
+        assertThat(r.status()).as("conta vinculada").isEqualTo(403);
+        assertThat(r.body()).isEqualTo(FORBIDDEN);
+        assertThat(org.get("/api/v1/o/" + c.org() + "/me").status()).as("a sessao da pessoa nao foi revogada").isEqualTo(200);
+        assertThat(count("SELECT count(*) FROM user_sessions WHERE user_id = '" + c.conta().id() + "' AND revoked_at IS NULL")).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM mfa_events WHERE user_id = '" + c.conta().id() + "' AND event_type = 3")).as("sem evento de reset").isZero();
+        assertThat(mails(c.conta().email())).as("sem aviso de reset").hasSize((int) avisos);
+        assertThat(count("SELECT count(*) FROM identity_mfa_factors WHERE identity_id = '" + c.identity() + "' AND disabled_at IS NULL")).isEqualTo(1);
+
+        TestUser comum = internalUser(c.o(), true, 2);
+        firstLogin(browser(), c.org(), comum);
+        assertThat(admin.post("/api/v1/o/" + c.org() + "/users/" + comum.id() + "/mfa/reset", SessionsAndAdministrationIT.RESET_BODY).status())
+                .as("controle: conta nao vinculada").isEqualTo(204);
+        assertThat(count("SELECT count(*) FROM mfa_events WHERE user_id = '" + comum.id() + "' AND event_type = 3")).isEqualTo(1);
+        assertThat(mails(comum.email()).stream().filter(m -> m.kind() == MailSender.Kind.NOTICE_MFA_RESET).count()).isEqualTo(1);
+    }
+
+    /**
+     * Reset e vinculacao concorrentes, a vinculacao primeiro: com a conta travada, a vinculacao espera a conta segurando a
+     * organizacao, e o reset espera a organizacao. Liberada a conta, a vinculacao conclui e o reset, ao obter os locks, ve
+     * a conta vinculada: 403, sem evento de reset.
+     */
+    @Test
+    void resetQueEsperaAVinculacaoERecusado() throws Exception {
+        Cenario c = cenario();
+        BrowserClient admin = administradorComStepUp(c.o());
+        assertThat(start(c.id(), c.org(), PASSWORD, code(c.conta().id()), null).status()).isEqualTo(204);
+        assertThat(stepUpIdentidade(c)).isEqualTo(204);
+        BrowserClient.Response[] r = concorrentes(c, () -> Barreiras.postLongo(port, c.id(), CONFIRM, "{\"organizationId\":\"" + c.org() + "\"}"),
+                () -> Barreiras.postLongo(port, admin, "/api/v1/o/" + c.org() + "/users/" + c.conta().id() + "/mfa/reset", SessionsAndAdministrationIT.RESET_BODY));
+        assertThat(r[0].status()).as("vinculacao").isEqualTo(204);
+        assertThat(r[1].status()).as("reset depois do vinculo").isEqualTo(403);
+        assertThat(count("SELECT count(*) FROM mfa_events WHERE user_id = '" + c.conta().id() + "' AND event_type = 3")).isZero();
+        assertThat(count("SELECT count(*) FROM identity_users WHERE user_id = '" + c.conta().id() + "'")).isEqualTo(1);
+    }
+
+    /**
+     * O inverso: o reset chega primeiro e conclui sobre a conta ainda nao vinculada (204, evento); a vinculacao espera e,
+     * depois dele, vincula (a credencial nao mudou). Nenhum estado intermediario: um reset, um vinculo, entrada local fechada.
+     */
+    @Test
+    void vinculacaoQueEsperaOResetConcluiDepoisDele() throws Exception {
+        Cenario c = cenario();
+        BrowserClient admin = administradorComStepUp(c.o());
+        assertThat(start(c.id(), c.org(), PASSWORD, code(c.conta().id()), null).status()).isEqualTo(204);
+        assertThat(stepUpIdentidade(c)).isEqualTo(204);
+        BrowserClient.Response[] r = concorrentes(c,
+                () -> Barreiras.postLongo(port, admin, "/api/v1/o/" + c.org() + "/users/" + c.conta().id() + "/mfa/reset", SessionsAndAdministrationIT.RESET_BODY),
+                () -> Barreiras.postLongo(port, c.id(), CONFIRM, "{\"organizationId\":\"" + c.org() + "\"}"));
+        assertThat(r[0].status()).as("reset antes do vinculo").isEqualTo(204);
+        assertThat(r[1].status()).as("vinculacao depois").isEqualTo(204);
+        assertThat(count("SELECT count(*) FROM mfa_events WHERE user_id = '" + c.conta().id() + "' AND event_type = 3")).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM identity_users WHERE user_id = '" + c.conta().id() + "'")).isEqualTo(1);
+        assertThat(vivos(c.conta().id())).isEqualTo("0|0|0|0|0");
+    }
+
+    /** ORG_ADMIN da organizacao do cenario, com fator local e step-up na sessao. */
+    private BrowserClient administradorComStepUp(Org o) {
+        TestUser adm = new TestUser(o.adminId(), o.adminEmail(), PASSWORD.toCharArray());
+        BrowserClient b = browser();
+        firstLogin(b, o.id(), adm);
+        assertThat(b.post("/api/v1/o/" + o.id() + "/auth/mfa/step-up", "{\"code\":\"" + code(adm.id()) + "\"}").status()).isEqualTo(204);
+        return b;
+    }
+
+    /** Conta travada; {@code primeiro} dispara e espera; {@code segundo} dispara e espera atras; liberada a conta, os dois concluem. */
+    private BrowserClient.Response[] concorrentes(Cenario c, java.util.concurrent.Callable<BrowserClient.Response> primeiro,
+                                                  java.util.concurrent.Callable<BrowserClient.Response> segundo) throws Exception {
+        ExecutorService ex = Executors.newFixedThreadPool(2);
+        try (Connection l = DB.connectAsSuperuser()) {
+            l.setAutoCommit(false);
+            Barreiras.sql(l, "SELECT 1 FROM users WHERE user_id = '" + c.conta().id() + "' FOR UPDATE");
+            Future<BrowserClient.Response> a = ex.submit(primeiro);
+            assertThat(platformWaitingOnLock(1)).as("o primeiro espera a conta").isTrue();
+            Future<BrowserClient.Response> b = ex.submit(segundo);
+            assertThat(platformWaitingOnLock(2)).as("o segundo espera atras dele").isTrue();
+            l.commit();
+            return new BrowserClient.Response[] {a.get(), b.get()};
+        } finally {
+            ex.shutdownNow();
+        }
+    }
+
     // ------------------------------------------------------------------ vazamento
 
     /** Nenhum log (processo e PostgreSQL) contem senha, codigo, token, segredo de fator, URI otpauth ou e-mail das jornadas. */

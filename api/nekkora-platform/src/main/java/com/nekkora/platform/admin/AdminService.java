@@ -46,7 +46,7 @@ public final class AdminService {
         this.stepUpWindow = stepUpWindow;
     }
 
-    private enum Failure { SESSION, PERMISSION, OWN_ACCOUNT, TARGET_NOT_FOUND, STEP_UP }
+    private enum Failure { SESSION, PERMISSION, OWN_ACCOUNT, TARGET_NOT_FOUND, STEP_UP, LINKED_ACCOUNT }
 
     /** Suspende a conta (permissao org.manage): organizacao -> conta; revoga sessoes e invalida desafios (§11.4). */
     public void suspend(UUID org, ValidSession actor, String actorToken, UUID target) {
@@ -133,6 +133,13 @@ public final class AdminService {
      * min NA MESMA sessao (lido do banco, nao do principal do filtro); alvo diferente do ator; na mesma transacao,
      * conta do alvo -> desafios -> fator/codigos -> sessoes; auditoria COM MOTIVO codificado (016, D5); aviso ao
      * titular e, se o alvo for ORG_ADMIN, aos demais ORG_ADMIN, depois do commit.
+     *
+     * <p>Conta VINCULADA a uma identidade (contrato P3, parecer de 2026-10-19): 403 generico, conferido SOB o lock da conta
+     * e antes de qualquer efeito - sem revogar sessoes, sem evento e sem aviso. O fator dessa pessoa e o da identidade, que
+     * nenhuma autoridade de organizacao redefine (DC-17.9). A recusa e garantida AQUI, pelo servico: as triggers da 017
+     * permitem de proposito as transicoes terminais (desabilitar, invalidar, revogar), necessarias ao fechamento da
+     * DC-17.12 e a operacao da 016, e por isso nao recusam o reset. A vinculacao concorrente serializa com o reset na
+     * organizacao ({@code identity_link_account} tambem a trava {@code FOR UPDATE} antes da conta).
      */
     public void resetMfa(UUID org, ValidSession actor, String actorToken, UUID target, ResetReason reason) {
         java.util.Objects.requireNonNull(reason);
@@ -158,6 +165,10 @@ public final class AdminService {
             }
             if (!targetFound) {
                 return Failure.TARGET_NOT_FOUND;
+            }
+            // conta vinculada: lida com o lock da conta ja tomado (o comando ve a vinculacao confirmada antes do lock)
+            if (accounts.isLinked(j, org, target)) {
+                return Failure.LINKED_ACCOUNT;
             }
             f = authorize(j, org, actor, actorToken, "identity.mfa.reset", target);
             if (f != null) {
