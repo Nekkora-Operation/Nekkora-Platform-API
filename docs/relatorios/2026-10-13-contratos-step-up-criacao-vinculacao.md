@@ -77,7 +77,7 @@
 
 ## P3 — Vinculação de conta antiga
 
-**Situação em 2026-10-18:** implementado e entregue para revisão no PR da missão PLATFORM-PR-001 (relatório `2026-10-18-p4-p3-contas-vinculadas.md`), conforme as tabelas abaixo, sem mudança de contrato. Precisões de implementação: chave própria `nekkora.vinculacao.enabled`, desligada por padrão e só aberta com a entrada geral (os bloqueios da entrada local valem com ela desligada); a recusa da trigger (23514) no login, na recuperação e na troca de senha locais é respondida como o contrato manda (antes, `500`); o reset administrativo de conta vinculada **não** é recusado pela trigger, porque as escritas dele são terminais, e só revoga as sessões da conta na organização (registrado no relatório, decisão pendente); não há rota de reenvio de verificação local na Platform.
+**Situação em 2026-10-18:** implementado e entregue para revisão no PR da missão PLATFORM-PR-001 (relatório `2026-10-18-p4-p3-contas-vinculadas.md`), conforme as tabelas abaixo, sem mudança de contrato. Precisões de implementação: chave própria `nekkora.vinculacao.enabled`, desligada por padrão e só aberta com a entrada geral (os bloqueios da entrada local valem com ela desligada); a recusa da trigger (23514) no login, na recuperação e na troca de senha locais é respondida como o contrato manda (antes, `500`); o reset administrativo de conta vinculada é recusado com `403` genérico pelo **serviço**, sob o lock da conta e antes de qualquer efeito (parecer de 2026-10-19). A trigger não o recusa, porque as escritas do reset são terminais, e as exceções terminais da 017 continuam como estão; não há rota de reenvio de verificação local na Platform.
 
 ### Etapa 1 — prova da conta antiga
 

@@ -599,6 +599,10 @@ paths:
       tags: [Administracao]
       operationId: resetUserMfa
       summary: 'Reset administrativo de MFA (identity.mfa.reset + step-up recente na mesma sessao + motivo codificado)'
+      description: >
+        Conta alvo VINCULADA a uma identidade (contrato P3, parecer de 2026-10-19): 403 generico, conferido sob o lock da
+        conta e antes de qualquer efeito (nenhuma sessao revogada, nenhum evento, nenhum aviso). O fator dessa pessoa e o
+        da identidade, que nenhuma autoridade de organizacao redefine.
       security: [ { sessionCookie: [], csrfHeader: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' }, { name: user, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/MfaResetRequest' } } } }

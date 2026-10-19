@@ -1,5 +1,7 @@
 # P4 e P3: contas vinculadas administráveis
 
+**Revisão 1 (parecer de 2026-10-19):** a chave da vinculação foi aprovada. O reset administrativo de MFA de conta vinculada passa a ser recusado (§3, §5), e a orientação para resultado desconhecido da etapa 2 foi corrigida (§7). A pressão de memória fica como hipótese para o timeout isolado do Redis (§8.5). Os testes e as contraprovas dirigidos aos ajustes estão em §8.2, §8.3 e §8.6.
+
 **Data:** 2026-10-18. **Missão:** PLATFORM-PR-001, entrega B. **Base:** `main` em `4a528b3` (017 R5, P1 R1, P2 R1). **Contrato:** `2026-10-13-contratos-step-up-criacao-vinculacao.md`, seções P3 e P4, com o parecer de 2026-10-14. **Migration:** 017 R5 **sem alteração** (sha256 `90b8ddbc…`); nenhuma migration nova.
 
 ## 1. Problema e resultado observável
@@ -32,7 +34,7 @@
 | Recusa 23514 tratada no login (`401` genérico), na recuperação (`202` idêntico, mesmo piso) e na troca de senha (`403`) | a elegibilidade lida antes do lock não basta: o vínculo pode acontecer entre a leitura e o lock. O banco recusa, e a aplicação responde como o contrato manda (§8.4, intercalamento 1) |
 
 **Constatações registradas, sem mudança:**
-- **Reset administrativo de MFA de conta vinculada:** o contrato previa recusa da trigger (`403`). Na prática a trigger não recusa: as escritas do reset são transições terminais (desabilitar e invalidar), que a 017 permite de propósito. O efeito é só revogar as sessões da conta naquela organização. Não cria credencial, não toca o fator da identidade e não reabre a entrada local. Sem mudança; fica para decisão se o reset deve ser recusado também nesse caso.
+- **Reset administrativo de MFA de conta vinculada (revisão 1, decisão da responsável):** recusado com `403` genérico pelo **serviço** (`AdminService.resetMfa`). O vínculo é conferido sob o lock da conta (organização `FOR UPDATE` → contas), antes de qualquer efeito: a recusa não revoga sessões, não grava evento e não manda aviso. As triggers da 017 **não** garantem essa recusa e não foram alteradas. As escritas do reset são transições terminais (desabilitar, invalidar, revogar), que a 017 permite de propósito porque o fechamento da DC-17.12 e a operação da 016 precisam delas. Contas não vinculadas seguem no caminho de sempre. Reset e vinculação concorrentes serializam na organização, que as duas travam `FOR UPDATE` antes da conta.
 - **Reenvio de verificação de e-mail local:** não há rota na Platform que emita `email_verification_tokens`. A trigger da 017 cobre uma futura.
 
 ## 4. P4: step-up por organização em sessão vinculada
@@ -83,6 +85,7 @@
 | Recuperação de senha por organização | `202` idêntico, mesmo piso, sem token e sem e-mail |
 | Reconferência sob o lock (MFA do login) | o desafio de uma conta vinculada no meio do caminho é invalidado |
 | Troca de senha local | `403` (sessão vinculada); se o vínculo acontecer no meio, a trigger recusa e a resposta é `403` |
+| Reset administrativo de MFA | `403` genérico, conferido pelo serviço sob o lock da conta, sem efeito (sessões, evento, aviso). Se a vinculação concorrente confirmar primeiro, o reset vê o vínculo depois dos locks e recusa; se o reset confirmar primeiro, a vinculação vem depois dele |
 | A rota `/o/{org}/login` da web | preservada como entrada com destino (DC-17.9 e DC-17.10). O que fecha é o endpoint de credencial local da conta vinculada |
 
 ## 6. Contrato publicado
@@ -118,7 +121,7 @@ As telas não fazem parte desta missão. Os estados abaixo saem das respostas re
 | 2 | `204` | conta vinculada. Ela aparece em `GET /api/v1/me/organizations` e se entra pela troca. A sessão antiga daquela organização foi encerrada | — |
 | 2 | `403` | não confirmada (sem step-up recente, desafio vencido ou substituído, senha da conta trocada no intervalo). Recomeçar pela etapa 1. O frontend deve fazer o step-up **imediatamente antes** da etapa 2 | não |
 | 2 | `401` | sessão expirada: autenticar de novo e recomeçar | não |
-| 2 | erro de rede, tempo esgotado, `500` | **resultado desconhecido**. **Não repetir.** Consultar `GET /api/v1/me/organizations`: se a organização aparece, a vinculação aconteceu; se não, recomeçar pela etapa 1 | **nunca** |
+| 2 | erro de rede, tempo esgotado, `500` | **resultado desconhecido**. **Não repetir automaticamente.** A API não tem consulta conclusiva do vínculo, e esta missão não cria uma. `GET /api/v1/me/organizations` **não** decide: a organização aparecer indica o vínculo, mas a ausência não prova rollback, porque a listagem omite vínculos com conta, vínculo interno ou organização inelegível ou suspensa. A tela mostra o resultado como desconhecido e deixa a pessoa decidir se recomeça pela etapa 1. Se o vínculo tiver acontecido, a etapa 1 nova responde o `401` único (conta já vinculada) e nada muda | **nunca** |
 
 **Dependências que a interface não deve simular:** o aviso por e-mail do vínculo e do uso de código local **não é entregue** (transporte real fora desta missão), então a tela não deve afirmar "enviamos um e-mail". A recuperação completa do MFA da identidade não existe. O formulário de senha por organização em `/o/{org}/login` continua para contas ainda não vinculadas; para a vinculada, ele dá a mesma recusa de qualquer credencial inválida, e a tela oferece as duas portas sem sondar nada (DC-17.10).
 
@@ -134,6 +137,7 @@ As telas não fazem parte desta missão. Os estados abaixo saem das respostas re
 | Suspensão/revogação concorrente | `#organizacaoSuspensaDuranteAEsperaERecusadaComAIdentidadeJaTravada` (espera real em `pg_stat_activity`; identidade e sessão já travadas, `NOWAIT` falha), `#stepUpsConcorrentesDaMesmaPessoaSerializamNaIdentidade` |
 | Replay | P4: `#codigoAceitoNaoServeDeNovoEmNenhumLugar` (outra sessão de organização, a mesma, step-up global, login; e o inverso). P3: `#codigoLocalUsadoNumLadoNaoServeNoOutro`, `#jornadaComCodigoDeRecuperacaoConsomeOCodigoNaEtapa1`, `#desafioDeUsoUnicoSoOMaisRecenteESoParaAPropriaIdentidade` |
 | Troca de fator/senha | `#senhaTrocadaDuranteAEsperaDaEtapa1InvalidaAProva`, `#fatorLocalDesabilitadoDuranteAEsperaDaEtapa1InvalidaAProva`, `#senhaLocalTrocadaEntreAsEtapasInvalidaAProva` |
+| Reset administrativo de conta vinculada | `#resetAdministrativoDeContaVinculadaERecusadoSemEfeito` (403, sessão da pessoa intacta, sem evento nem aviso; controle não vinculado 204), `#resetQueEsperaAVinculacaoERecusado` e `#vinculacaoQueEsperaOResetConcluiDepoisDele` (as duas ordens, com espera real) |
 | Vinculação concorrente | `#confirmacoesConcorrentesVinculamUmaVez` (204 + 403, um vínculo, um evento); outra identidade com o desafio alheio: `#desafioDeUsoUnico…`; outra identidade com a senha e o TOTP certos da conta alheia: `#falhasDaProvaRespondemOMesmo401SemEfeito` |
 | Porta antiga sobrevive | `#jornadaCompletaComTotpFechaAPortaLocalEAbreAEntradaGeral` (sessão, desafio, token, fator e códigos locais vivos antes; nenhum depois; login local, desafio pendente e troca de senha recusados), `#loginLocalQueEsperaAVinculacaoERecusadoComO401Generico` (intercalamento 1 da §4.5), `LinkedAccountLocalEntryIT` |
 | Auditoria parcial | `LinkedOrgStepUpIT#falhaEmQualquerEventoDesfazOStepUp` (falha injetada em `mfa_events` e em `identity_events`: `500`, nada gravado, depois controle `204`). No P3, os eventos são da função da 017 (já provada na suíte de banco) e o `mfa_events` 2 é escrito na mesma transação do consumo |
@@ -146,7 +150,7 @@ As telas não fazem parte desta missão. Os estados abaixo saem das respostas re
 | Classe | Testes | O que cobre |
 |---|---|---|
 | `LinkedOrgStepUpIT` | 12 | P4 |
-| `AccountLinkIT` | 15 | P3, as duas etapas, concorrência e vazamento |
+| `AccountLinkIT` | 18 | P3, as duas etapas, concorrência, reset administrativo (revisão 1) e vazamento |
 | `LinkedAccountLocalEntryIT` | 3 | bloqueios da entrada local; chave desligada |
 | `LinkedAccountsRedisDownIT` | 1 | P3 e P4 com Redis fora |
 | `IdentityRoutesGateTest` | +1 | chave da vinculação |
@@ -175,6 +179,8 @@ Cada linha remove **uma** defesa central e roda só o teste que a prova (o mesmo
 | M12b elegibilidade sem o vínculo **e** recuperação sem tratar a trigger | `LinkedAccountLocalEntryIT` | reprovou (2 de 3) |
 | M13 sem o bloqueio da troca de senha em sessão vinculada | `jornadaCompleta…` | **passou: defesa sobreposta** (a trigger recusa a troca do hash e a resposta é `403`; o bloqueio só evita o Argon2) |
 | M13b sem o bloqueio **e** sem tratar a trigger na troca de senha | `jornadaCompleta…` | reprovou (`500`) |
+| M14 (revisão 1) reset sem recusar conta vinculada | `resetAdministrativo…`, `resetQueEspera…` | reprovou (2 de 2) |
+| M15 (revisão 1) vínculo conferido antes dos locks | `resetQueEsperaAVinculacao…` | reprovou: lido antes da espera, o vínculo ainda não existia e o reset passou |
 
 ### 8.4 Reprodução do defeito na `main`
 
@@ -196,7 +202,7 @@ Memória livre do sistema durante a rodada: mínimo de 26%, com swap perto de 12
 
 **E2E entre processos** (`api/e2e/run.sh`, projeto descartável `nekkora-e2e-pr001`, removido depois só ele): `CrossProcessE2E` 6/6 e `LinkedAccountsE2E` 6/6.
 
-**Primeira rodada, preservada e investigada (commit `0aa7a36`):** 1 falha e 42 erros no `nekkora-platform`. Causa: as três classes novas com contexto próprio (`@DynamicPropertySource`) ficavam em cache com o pool aberto e esgotavam as conexões do PostgreSQL de teste (`FATAL: remaining connection slots are reserved for roles with the SUPERUSER attribute`). As classes seguintes não subiam o contexto. Correção em `6c85880`: `@DirtiesContext`, como as demais classes com contexto próprio. Na mesma rodada, `MfaConcurrencyIT` teve 1 falha anterior às classes novas (`login passo 1: 503`, `limitador.indisponivel`: timeout de 500 ms do Redis). É a mesma assinatura das falhas sob pressão de memória registradas no P1 R1, com mais contextos abertos naquela rodada. Não se repetiu depois da correção (5/5). Fica classificada como **intermitente sob pressão de recursos, não reproduzida**, sem relação demonstrada com o código novo.
+**Primeira rodada, preservada e investigada (commit `0aa7a36`):** 1 falha e 42 erros no `nekkora-platform`. Causa: as três classes novas com contexto próprio (`@DynamicPropertySource`) ficavam em cache com o pool aberto e esgotavam as conexões do PostgreSQL de teste (`FATAL: remaining connection slots are reserved for roles with the SUPERUSER attribute`). As classes seguintes não subiam o contexto. Correção em `6c85880`: `@DirtiesContext`, como as demais classes com contexto próprio. Na mesma rodada, `MfaConcurrencyIT` teve 1 falha anterior às classes novas (`login passo 1: 503`, `limitador.indisponivel`: timeout de 500 ms do Redis). É a mesma assinatura das falhas sob pressão de memória registradas no P1 R1, com mais contextos abertos naquela rodada. Não se repetiu depois da correção (5/5). Classificação: **intermitente, não reproduzida**. A pressão de memória é **hipótese**, não causa demonstrada: a assinatura e as amostras de memória são compatíveis com ela, mas nenhum teste a isolou. Também não há relação demonstrada com o código novo.
 
 **`FixtureRunnerIT` e o Bash:** no mesmo commit da `main` (`4a528b3`), com o Bash 3.2 do macOS: 4 falhas e 1 erro (as cinco ocorrências conhecidas); com o Bash 5.3: 5/5.
 
@@ -214,5 +220,4 @@ e2e/run.sh                                       # stack isolada; roda CrossProc
 - **Compatibilidade:** contas não vinculadas seguem como antes. A conta vinculada passa a receber `401`/`202`/`403` onde antes recebia `500`. Nenhuma migration, nenhuma mudança de privilégio no banco.
 - **Para ligar a vinculação:** `NEKKORA_ENTRADA_GERAL=true` e `NEKKORA_VINCULACAO=true`. Antes disso em produção: o transporte real de e-mail (aviso de vínculo) e a recuperação de MFA da identidade (quem perde o fator da identidade perde o acesso às organizações vinculadas, porque a porta local está fechada).
 - **Sem desvinculação:** o vínculo é definitivo nesta missão (DC-17.12). Desfazer exige decisão própria.
-- **Reset administrativo de conta vinculada:** §3, decisão pendente.
 - **Mensagem única do 401 da etapa 1:** pela regra de não sondar contas, a interface não sabe dizer à pessoa qual prova falhou.
