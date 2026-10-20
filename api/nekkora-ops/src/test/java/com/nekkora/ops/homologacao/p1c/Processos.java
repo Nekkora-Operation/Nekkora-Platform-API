@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import com.nekkora.ops.testsupport.OpsBanco;
@@ -25,6 +27,17 @@ final class Processos {
     record Resultado(int codigo, String saida, String erro) {
     }
 
+    /**
+     * Leitura da saida em threads proprias, nunca no pool comum: com 4 CPUs o pool comum tem 3 threads, e um processo
+     * rodado dentro de um CompletableFuture do teste (FixtureRunnerIT) ocupava as tres, deixando na fila a tarefa que
+     * o teste precisava executar em paralelo (o LOCK TABLE).
+     */
+    private static final ExecutorService LEITORES = Executors.newCachedThreadPool(r -> {
+        Thread t = new Thread(r, "processos-leitor");
+        t.setDaemon(true);
+        return t;
+    });
+
     static final Path REPO = OpsBanco.raizDoRepositorio();
     static final Path HOMOLOGACAO = REPO.resolve("ops/homologacao");
 
@@ -38,8 +51,8 @@ final class Processos {
                 pb.directory(dir.toFile());
             }
             Process p = pb.start();
-            CompletableFuture<byte[]> out = CompletableFuture.supplyAsync(() -> ler(p.getInputStream()));
-            CompletableFuture<byte[]> err = CompletableFuture.supplyAsync(() -> ler(p.getErrorStream()));
+            CompletableFuture<byte[]> out = CompletableFuture.supplyAsync(() -> ler(p.getInputStream()), LEITORES);
+            CompletableFuture<byte[]> err = CompletableFuture.supplyAsync(() -> ler(p.getErrorStream()), LEITORES);
             if (entrada != null) {
                 p.getOutputStream().write(entrada.getBytes(StandardCharsets.UTF_8));
             }
