@@ -163,6 +163,7 @@ class MfaConcurrencyIT extends PlatformTestBase {
             int[] s = race(i, 150, verifyCode(pending, "{\"code\":\"" + code + "\"}"),
                     () -> a.post(base() + "/users/" + u.id() + "/suspend", null).status());
             outcomes.merge("verify=" + s[0] + " suspensao=" + s[1], 1, Integer::sum);
+            diagnostico(i, s);
             assertThat(s[1]).as("rodada %d: a suspensao sempre conclui", i).isEqualTo(204);
             assertThat(s[0]).isIn(200, 401);
             assertThat(activeSessions(u.id())).as("rodada %d: conta suspensa sem sessao ativa", i).isZero();
@@ -188,6 +189,7 @@ class MfaConcurrencyIT extends PlatformTestBase {
             int[] s = race(i, 150, () -> pending.post("/api/v1/o/" + orgAdmin.id() + "/auth/mfa/verify", "{\"code\":\"" + code + "\"}").status(),
                     () -> a.post("/api/v1/o/" + orgAdmin.id() + "/users/" + u.id() + "/mfa/reset", SessionsAndAdministrationIT.RESET_BODY).status());
             outcomes.merge("verify=" + s[0] + " reset=" + s[1], 1, Integer::sum);
+            diagnostico(i, s);
             assertThat(s[1]).as("rodada %d: o reset sempre conclui", i).isEqualTo(204);
             assertThat(s[0]).isIn(200, 401);
             assertThat(activeSessions(u.id())).as("rodada %d: alvo sem sessao ativa", i).isZero();
@@ -197,5 +199,22 @@ class MfaConcurrencyIT extends PlatformTestBase {
             assertThat(pending.get("/api/v1/o/" + orgAdmin.id() + "/me").status()).isEqualTo(401);
         }
         System.out.println("corrida MFA x reset administrativo: " + outcomes);
+    }
+
+    /**
+     * Diagnostico de falha intermitente (revisao 1 de P3/P4): o servidor responde so o SQLSTATE, e a mensagem do banco se perde
+     * com o container compartilhado ao fim da suite. Se o ato administrativo nao concluiu, as linhas de erro do log do
+     * PostgreSQL de teste vao para a saida do teste (o log do PostgreSQL ja e conferido sem segredos em LimitsAndLogsIT).
+     */
+    private static void diagnostico(int rodada, int[] s) {
+        if (s[1] == 204) {
+            return;
+        }
+        System.out.println("diagnostico rodada " + rodada + ": status=" + s[0] + "/" + s[1]);
+        for (String l : DB.serverLog().split("\n")) {
+            if (l.matches(".*(ERRO|ERROR|CONTEXT|STATEMENT|COMANDO|Onde|DETAIL|DETALHE).*")) {
+                System.out.println("diagnostico pg: " + l);
+            }
+        }
     }
 }

@@ -25,6 +25,8 @@ public final class IdentityAuthRepository {
     /** identity_events.event_type (017). */
     public static final short EV_LOGOUT = 10;
     public static final short EV_STEP_UP = 13;
+    /** Step-up por organizacao em sessao vinculada (P4), com a organizacao alvo. */
+    public static final short EV_ORG_STEP_UP = 14;
     /** CHECK da 017: tentativas entre 0 e 5. */
     public static final int MAX_ATTEMPTS = 5;
 
@@ -228,8 +230,13 @@ public final class IdentityAuthRepository {
     }
 
     public void event(JdbcClient j, UUID identity, short type, UUID correlation) {
-        j.sql("INSERT INTO public.identity_events (identity_id, event_type, correlation_id) VALUES (?, ?, ?)")
-                .param(identity).param(type).param(correlation).update();
+        event(j, identity, type, null, correlation);
+    }
+
+    /** Evento com organizacao alvo (nula nos eventos sem organizacao). A FK da organizacao pede FOR KEY SHARE nela. */
+    public void event(JdbcClient j, UUID identity, short type, UUID targetOrganization, UUID correlation) {
+        j.sql("INSERT INTO public.identity_events (identity_id, event_type, target_organization_id, correlation_id) VALUES (?, ?, ?, ?)")
+                .param(identity).param(type).param(targetOrganization).param(correlation).update();
     }
 
     private static String pgArray(List<String> hexes) {
