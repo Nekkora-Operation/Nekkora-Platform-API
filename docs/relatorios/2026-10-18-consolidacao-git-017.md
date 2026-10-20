@@ -70,6 +70,7 @@ Comando: `sh ./mvnw -B test -Dmaven.test.failure.ignore=true -Dnekkora.bash=/opt
 | `api/mvnw` versionado sem bit de execução (`100644`) | em checkout limpo, o `./mvnw test` do `api/README.md` falha com `permission denied`. Os scripts internos já usam `sh ./mvnw` por isso | bit de execução no `api/mvnw` e nos `run.sh` que os READMEs mandam executar diretamente (`api/e2e`, `api/bench-argon2`, `db/tests/{seguranca-012,portal-013,mfa-014,restauracao-015,atualizacao-populada,mfa-emergencia-016}`). Conteúdo inalterado. Os demais scripts continuam como estão, chamados por `bash`/`sh` |
 | `.DS_Store` aparecendo como não versionado | ruído no `git status` e risco de `git add` acidental | `.DS_Store` no `.gitignore` |
 | Nenhum check automático nos PRs | a revisão dependia só de evidência local | workflow proposto (§6) |
+| Primeira execução do check (PR #5 e #6, 2026-10-20): `FixtureRunnerIT.falhaDepoisDoCommitNuncaEDescritaComoRollback` com erro (`tempo esgotado esperando: ACCESS EXCLUSIVE na fila`); `nekkora-platform` e `nekkora-portal` ficaram sem executar | no runner do GitHub (4 vCPUs), o pool comum do Java tem 3 threads. O runner rodado no `CompletableFuture` do teste e as duas leituras de saída do `Processos` ocupavam as três, e o `LOCK TABLE` do teste ficava na fila sem ser enviado. Na máquina local (8 CPUs, 7 threads) não acontecia. Reproduzido localmente com `-XX:ActiveProcessorCount=4` | só código de teste: `Processos` lê a saída em threads próprias. `FixtureRunnerIT` 5/5 com 4 e com 2 CPUs |
 
 ## 6. Pendências reais
 
