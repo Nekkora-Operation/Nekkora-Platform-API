@@ -42,21 +42,30 @@
 BEGIN;
 
 -- === 1. Pre-condicao: 017 aplicada e corpos ainda os da 016/017 (nenhuma substituicao fora do controle de versao) ===
+-- Comparacao INTEGRAL: SHA-256 do corpo inteiro (prosrc) de cada funcao, fixado aqui. Os valores sao os do texto entre os
+-- delimitadores $$ em 016_recuperacao_emergencial_mfa.sql e 017_identidade_cadastro.sql (cada funcao definida uma unica
+-- vez) e foram medidos tambem numa instalacao 001-017. Qualquer diferenca - autorizacao, locks, auditoria, recusas,
+-- comentario ou espaco - recusa a 018 antes de qualquer escrita. Atributos (SECURITY DEFINER, configuracao, volatilidade)
+-- sao redefinidos pelo CREATE OR REPLACE e conferidos contra os anteriores na secao 4; dono e ACL sao preservados e
+-- conferidos na secao 4 e nos invariantes da 016/017.
 DO $$
+DECLARE
+    v_diverge TEXT;
 BEGIN
     IF to_regprocedure('public.ops_mfa_execute(uuid)') IS NULL OR to_regprocedure('public.identity_mfa_replace(text, uuid, text[])') IS NULL
        OR to_regprocedure('public.ops_operator_revoke(uuid, text)') IS NULL OR to_regprocedure('public.ops_operator_disable(uuid)') IS NULL THEN
         RAISE EXCEPTION '018 exige a 016 e a 017 aplicadas';
     END IF;
-    IF (SELECT prosrc FROM pg_proc WHERE oid = 'public.ops_mfa_execute(uuid)'::regprocedure)
-           !~ 'UPDATE public\.user_mfa_factors SET disabled_at = v_agora\s'
-       OR (SELECT prosrc FROM pg_proc WHERE oid = 'public.identity_mfa_replace(text, uuid, text[])'::regprocedure)
-           !~ 'UPDATE public\.identity_mfa_factors SET disabled_at = v_t WHERE factor_id = v_old;'
-       OR (SELECT prosrc FROM pg_proc WHERE oid = 'public.ops_operator_revoke(uuid, text)'::regprocedure)
-           !~ 'UPDATE ops\.ops_operator_permissions SET revoked_at = v_agora, revoked_by = v_op'
-       OR (SELECT prosrc FROM pg_proc WHERE oid = 'public.ops_operator_disable(uuid)'::regprocedure)
-           !~ 'UPDATE ops\.ops_operator_permissions SET revoked_at = v_agora, revoked_by = v_op' THEN
-        RAISE EXCEPTION '018: corpo de ops_mfa_execute, identity_mfa_replace, ops_operator_revoke ou ops_operator_disable diferente do da 016/017';
+    SELECT string_agg(e.assinatura, ', ' ORDER BY e.assinatura) INTO v_diverge
+    FROM (VALUES ('public.ops_mfa_execute(uuid)', 'b9380080b550a9b8242bcd25a40138844bd2eef873e14dd697d46b2e3cd06e52'),
+                 ('public.ops_operator_revoke(uuid, text)', '6bce978fe948c6517897c3cd339d65515e372aea49a0b762616f009acd8cd5f7'),
+                 ('public.ops_operator_disable(uuid)', '89b6c1c718cfce05f01ad7a5516ca49cb428a53ca899e87b2a12a3a3bbfcedf1'),
+                 ('public.identity_mfa_replace(text, uuid, text[])', 'e48d60ee4c0ddcd40d73e6c7337793ef850650755a5cacecb697f2ba43f82d9f'))
+         AS e(assinatura, sha256)
+    JOIN pg_proc p ON p.oid = e.assinatura::regprocedure
+    WHERE encode(sha256(convert_to(p.prosrc, 'UTF8')), 'hex') IS DISTINCT FROM e.sha256;
+    IF v_diverge IS NOT NULL THEN
+        RAISE EXCEPTION '018: corpo diferente do da 016/017 em %', v_diverge;
     END IF;
 END;
 $$;

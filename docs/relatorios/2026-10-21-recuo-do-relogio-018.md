@@ -107,7 +107,9 @@ O que fica preservado:
 - O papel é NOLOGIN e dono das funções. Nenhuma escrita nova, e nenhum papel de LOGIN muda.
 - A matriz da 016 (`2026-09-27-mfa-emergencia-matriz-016.md`) não foi reescrita; esta seção registra o acréscimo.
 
-**Pré-condição:** a 018 só aplica se os quatro corpos ainda forem os da 016/017. Uma reaplicação é recusada.
+**Pré-condição:** a 018 só aplica se os quatro corpos ainda forem, por inteiro, os da 016/017. A comparação é pelo SHA-256 do corpo completo (`prosrc`), fixado na migration; os valores são os do texto das próprias 016 e 017 e foram medidos também numa instalação 001–017. Qualquer diferença (autorização, locks, auditoria, recusas, comentário ou espaço) recusa a 018 antes de qualquer escrita, nomeando a função divergente. Uma reaplicação é recusada pelo mesmo motivo.
+
+Na primeira versão do PR, a pré-condição procurava só um trecho de cada função. Uma alteração em autorização, lock ou auditoria que mantivesse o trecho passaria pela conferência e seria sobrescrita pelo `CREATE OR REPLACE`. Achado da revisão; corrigido e coberto pelo caso B4 da suíte.
 
 **Elevação:**
 - As funções pertencem a `nekkora_ops_mfa_owner` e `nekkora_identity_owner`, papéis sem membership de ninguém. Por isso a 018 precisa da janela de SUPERUSER do migrador.
@@ -133,14 +135,14 @@ As marcas que **abrem** janela (`mfa_verified_at`, `recovery_used_at`, `mfa_step
 | reprodução antes da correção | 13 cenários positivos falham como na tabela do §3; 5 controles negativos verdes |
 | depois da correção, dirigidos | `RecuoDoRelogio*` 18/18; `DbErrorsIT` 3/3; `FluxoOperacionalIT`, `MfaResetRaceIT`, `LinkedAccountLocalEntryIT`, `AccountLinkIT`, `IdentityOrgSessionIT`, `IdentityOrgSessionLimitsIT`, `IdentityLoginIT`, `SignupIT`, `ClientGrantRevokeRouteIT`: verdes |
 | módulo nekkora-ops completo | todos os `*IT` verdes (inclui inventário de locks, isolamento, mutações e separação de funções) |
-| suíte de banco `db/tests/relogio-018` | A: 001–018 limpa, seis janelas com retirada `0\|0\|0`, invariantes 012/013/014/016/017/018 depois da retirada, marcador `versao=018`. B1: sem SUPERUSER, recusada, nada muda. B2: base populada 017 → 018 (80 tabelas de `public` e `ops`), diff de dados vazio, catálogo com exatamente 10 linhas previstas (4 corpos, 2 SELECT), igual à instalação limpa, vivos inalterados. B3: reaplicação recusada |
+| suíte de banco `db/tests/relogio-018` | A: 001–018 limpa, seis janelas com retirada `0\|0\|0`, invariantes 012/013/014/016/017/018 depois da retirada, marcador `versao=018`. B1: sem SUPERUSER, recusada, nada muda. B2: base populada 017 → 018 (80 tabelas de `public` e `ops`), diff de dados vazio, catálogo com exatamente 10 linhas previstas (4 corpos, 2 SELECT), igual à instalação limpa, vivos inalterados. B3: reaplicação recusada pela comparação integral. B4: cada uma das quatro funções alterada fora das expressões da 018 (autorização em `ops_mfa_execute`, step-up em `identity_mfa_replace`, lock em `ops_operator_revoke`, auditoria em `ops_operator_disable`), aceita pela pré-condição anterior: 018 recusada nomeando a função; dados, funções, privilégios, marcador e migrador inalterados |
 | regressão completa local (`./mvnw -B -ntp test`, o comando do CI) | core 21, ops 164, platform 311, portal 12 = **508/0/0/0** (487 da base + 21 novos) |
 | E2E (`api/e2e/run.sh`, agora 001–018) | 018 aplicada pelo migrador com janela retirada `0\|0\|0`, marcador `versao=018`; CrossProcessE2E 6/6, LinkedAccountsE2E 6/6 |
 | CI | registrado no PR |
 
 ## 6. Limitações e pendências
 
-**Escritas de conclusão** (primeiro fator, uso de código, consumo de token) continuam sem ajuste. Com o relógio recuado, a CHECK recusa o ato sem efeito parcial: falha fechada, sem perda de segurança, e o ato pode ser repetido quando o relógio alcança o `created_at`. A falha agora é observável, não mascarada (§3). Ajustá-las é possível pelo mesmo padrão, se a responsável preferir disponibilidade a falha fechada.
+**Escritas de conclusão** (primeiro fator, uso de código, consumo de token) continuam sem ajuste. Com o relógio recuado, a CHECK recusa o ato sem efeito parcial: falha fechada, sem perda de segurança, e o ato pode ser repetido quando o relógio alcança o `created_at`. A falha agora é observável, não mascarada (§3). Ficam fora deste PR por decisão da revisão. Ajustá-las **não** é uma escolha genérica entre segurança e disponibilidade: o efeito depende de onde o timestamp participa da autorização em cada caminho (por exemplo, se alguma janela de autenticação ou prazo é calculado a partir dele). Cada caminho exige avaliação própria antes de qualquer mudança; não há ajuste indiscriminado de timestamps.
 
 **Prazos de política da 016** não são ajustados: o ajuste dispensaria a espera exigida.
 

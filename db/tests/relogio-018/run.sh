@@ -13,7 +13,10 @@
 #     B1 - 018 SEM a janela de SUPERUSER: recusada por privilegio (42501), nada muda (dados, catalogo, migrador 0|0|0).
 #     B2 - 018 com a janela: dados identicos; diff de catalogo EXATAMENTE as duas funcoes (corpo) e os dois SELECT
 #          (created_at) do dono operacional; catalogo = instalacao limpa A; invariantes depois da retirada; marcador 018.
-#     B3 - reaplicar a 018 (superusuario, transacao propria) e recusado pela pre-condicao; nada muda.
+#     B3 - reaplicar a 018 (superusuario, transacao propria) e recusado pela pre-condicao (os quatro corpos); nada muda.
+#     B4 - (antes de B1) cada uma das quatro funcoes com um trecho alterado FORA das expressoes da 018 (autorizacao,
+#          step-up, lock, auditoria), aceito pela pre-condicao anterior: 018 com a janela recusada pela comparacao
+#          integral (SHA-256 fixado); dados, funcoes, privilegios, marcador e migrador inalterados; corpo restaurado.
 # O comportamento (recuo do relogio, controles negativos) e coberto pelos testes Java nas bases 001-018:
 # RecuoDoRelogioIT (nekkora-ops) e RecuoDoRelogioIdentidadeIT/RecuoDoRelogioOrgIT (nekkora-platform).
 #
@@ -144,6 +147,60 @@ VIVOS="$(consulta "$POP" nekkora "SELECT (SELECT count(*) FROM user_sessions WHE
 echo "$VIVOS" > "$SAIDA/B05_vivos_sessoes_fatores_codigos.txt"
 [ "$(echo "$VIVOS" | cut -d'|' -f1)" -gt 0 ] && [ "$(echo "$VIVOS" | cut -d'|' -f2)" -gt 0 ] || falha "massa sem sessao ou fator ativo"
 
+echo "   B4: corpo da 016/017 alterado FORA das expressoes da 018 (autorizacao, lock, auditoria)"
+# Cada caso: substitui UMA funcao (superusuario, CREATE OR REPLACE: dono e ACL preservados) mudando um trecho que nao e
+# o encerramento ajustado pela 018; confere que a pre-condicao anterior (trecho unico por funcao) ainda o aceitaria; aplica
+# a 018 COM a janela e exige a recusa da pre-condicao integral; dados, funcoes, privilegios, marcador e migrador
+# inalterados; restaura o corpo original e exige o catalogo da 017 de volta.
+adultera() {   # $1 caso, $2 assinatura, $3 padrao da pre-condicao anterior, $4 trecho original, $5 substituto
+    local def="$SAIDA/B4_$1_original.sql" adul="$SAIDA/B4_$1_adulterada.sql"
+    consulta "$POP" nekkora "SELECT pg_get_functiondef('$2'::regprocedure)" > "$def"
+    "$PY" - "$def" "$adul" "$4" "$5" <<'PY'
+import sys
+s = open(sys.argv[1], encoding='utf-8').read()
+assert s.count(sys.argv[3]) == 1, 'trecho a adulterar nao encontrado exatamente uma vez'
+open(sys.argv[2], 'w', encoding='utf-8').write(s.replace(sys.argv[3], sys.argv[4]) + ';\n')
+PY
+    psqlc "$POP" nekkora < "$adul" > /dev/null || falha "B4 $1: adulteracao nao aplicada"
+    [ "$(consulta "$POP" nekkora "SELECT prosrc ~ '$3' FROM pg_proc WHERE oid = '$2'::regprocedure")" = t ] \
+        || falha "B4 $1: a pre-condicao anterior ja recusaria (caso nao discrimina)"
+    psqlc "$POP" nekkora < "$SAIDA/B05_instantaneo.sql" > "$SAIDA/B4_$1_dados_antes.txt"
+    lista "$POP" nekkora > "$SAIDA/B4_$1_catalogo_antes.txt"
+    local marca; marca="$(marcador "$POP")"
+    { diff "$SAIDA/B05_catalogo_017.txt" "$SAIDA/B4_$1_catalogo_antes.txt" || true; } | grep -c '^[<>] fn|' | grep -qx 2 || falha "B4 $1: adulteracao mudou mais que um corpo"
+    if modelo "$POP" 018 018 "$SAIDA/B4_$1_018.txt"; then falha "B4 $1: 018 aplicada sobre corpo adulterado"; fi
+    grep -qF "ERROR:  018: corpo diferente do da 016/017 em $2" "$SAIDA/B4_$1_018.txt" \
+        || { cat "$SAIDA/B4_$1_018.txt"; falha "B4 $1: recusa diferente da pre-condicao integral"; }
+    grep -q "fim    versao=018 SUPERUSER revogado, estado 0|0|0" "$SAIDA/B4_$1_018.txt" || falha "B4 $1: janela sem retirada 0|0|0"
+    [ "$(estado_migrador "$POP")" = "0|0|0 dono_do_banco=migrador_nekkora" ] || falha "B4 $1: migrador fora de 0|0|0"
+    [ "$(marcador "$POP")" = "$marca" ] || falha "B4 $1: marcador mudou"
+    psqlc "$POP" nekkora < "$SAIDA/B05_instantaneo.sql" > "$SAIDA/B4_$1_dados_depois.txt"
+    diff "$SAIDA/B05_dados_017.txt" "$SAIDA/B4_$1_dados_depois.txt" > /dev/null || falha "B4 $1: dados alterados"
+    lista "$POP" nekkora > "$SAIDA/B4_$1_catalogo_depois.txt"
+    diff "$SAIDA/B4_$1_catalogo_antes.txt" "$SAIDA/B4_$1_catalogo_depois.txt" > /dev/null \
+        || falha "B4 $1: funcoes ou privilegios alterados pela 018 recusada"
+    { echo "BEGIN;"; cat "$def"; echo ";"; echo "COMMIT;"; } | psqlc "$POP" nekkora > /dev/null || falha "B4 $1: restauracao"
+    lista "$POP" nekkora > "$SAIDA/B4_$1_catalogo_restaurado.txt"
+    diff "$SAIDA/B05_catalogo_017.txt" "$SAIDA/B4_$1_catalogo_restaurado.txt" > /dev/null || falha "B4 $1: restauracao incompleta"
+    echo "$1 $2: recusada ($(grep -m1 'ERROR:' "$SAIDA/B4_$1_018.txt" | sed 's/^ERROR: *//')); dados, funcoes, privilegios, marcador e migrador inalterados" \
+        >> "$SAIDA/B4_resumo.txt"
+}
+: > "$SAIDA/B4_resumo.txt"
+adultera execucao_autorizacao 'public.ops_mfa_execute(uuid)' 'UPDATE public\.user_mfa_factors SET disabled_at = v_agora\s' \
+    "    IF v_motivo IS NULL AND ops.tem_vinculo(v_op, v_org) THEN v_motivo := 'VINCULO_IMPEDITIVO'; END IF;
+" ""
+adultera troca_stepup 'public.identity_mfa_replace(text, uuid, text[])' 'UPDATE public\.identity_mfa_factors SET disabled_at = v_t WHERE factor_id = v_old;' \
+    "    IF NOT public.identity_session_proof(s.o_session_id, v_t, 'troca') THEN
+        RETURN false;
+    END IF;
+" ""
+adultera retirada_lock 'public.ops_operator_revoke(uuid, text)' 'UPDATE ops\.ops_operator_permissions SET revoked_at = v_agora, revoked_by = v_op' \
+    "    PERFORM ops.travar_operadores(ARRAY[v_op], ARRAY[p_operator]);
+" ""
+adultera desativacao_auditoria 'public.ops_operator_disable(uuid)' 'UPDATE ops\.ops_operator_permissions SET revoked_at = v_agora, revoked_by = v_op' \
+    "        PERFORM ops.registrar_cadastro('CERTIFICADO_REVOGADO', 'OK', NULL, 1::smallint, v_op, p_operator, NULL, v_cert);" "        NULL;"
+[ "$(wc -l < "$SAIDA/B4_resumo.txt" | tr -d ' ')" = 4 ] || falha "B4: casos incompletos"
+
 echo "   B1: 018 sem a janela de SUPERUSER"
 if modelo "$POP" 018 018 "$SAIDA/B10_018_sem_elevacao.txt" "011 012 013 016 017"; then falha "018 aplicada sem elevacao"; fi
 # 42501: a primeira recusa medida e a do parametro de configuracao da funcao (nekkora.fn_organization_id); sem ela, a
@@ -188,7 +245,7 @@ VIVOS2="$(consulta "$POP" nekkora "SELECT (SELECT count(*) FROM user_sessions WH
 
 echo "   B3: reaplicacao da 018"
 if psqlc "$POP" nekkora < "$M018" > "$SAIDA/B30_reaplica.txt" 2>&1; then falha "B3: 018 reaplicada"; fi
-grep -q "018: corpo de ops_mfa_execute, identity_mfa_replace, ops_operator_revoke ou ops_operator_disable diferente" "$SAIDA/B30_reaplica.txt" || { cat "$SAIDA/B30_reaplica.txt"; falha "B3: recusa diferente da pre-condicao"; }
+grep -qF "018: corpo diferente do da 016/017 em public.identity_mfa_replace(text, uuid, text[]), public.ops_mfa_execute(uuid), public.ops_operator_disable(uuid), public.ops_operator_revoke(uuid, text)" "$SAIDA/B30_reaplica.txt" || { cat "$SAIDA/B30_reaplica.txt"; falha "B3: recusa diferente da pre-condicao"; }
 psqlc "$POP" nekkora < "$SAIDA/B05_instantaneo.sql" > "$SAIDA/B31_dados.txt"
 diff "$SAIDA/B21_dados_018.txt" "$SAIDA/B31_dados.txt" > /dev/null || falha "B3: dados alterados"
 lista "$POP" nekkora > "$SAIDA/B31_catalogo.txt"
@@ -199,9 +256,10 @@ diff "$SAIDA/B22_catalogo_018.txt" "$SAIDA/B31_catalogo.txt" > /dev/null || falh
     echo "B: $(cat "$SAIDA/B01_massa_001_012.txt")"
     echo "B: $(cat "$SAIDA/B03_massa_mfa.txt")"
     echo "B: tabelas no instantaneo (public e ops): $(wc -l < "$SAIDA/B05_dados_017.txt" | tr -d ' '); vivos sessoes|fatores|codigos: $VIVOS"
+    sed 's/^/B4: /' "$SAIDA/B4_resumo.txt"
     echo "B1: 018 sem SUPERUSER recusada: $(grep -m1 "ERROR:" "$SAIDA/B10_018_sem_elevacao.txt" | sed "s/^ERROR: *//"); dados e catalogo identicos; migrador 0|0|0"
     echo "B2: 018 com a janela: diff de dados vazio; catalogo 017->018 = exatamente $(wc -l < "$SAIDA/B22_diff_resumo.txt" | tr -d ' ') linhas previstas (4 corpos, 2 SELECT created_at); = instalacao limpa; invariantes DEPOIS da retirada ($(cat "$SAIDA/B24_estado_migrador.txt")): OK; vivos inalterados; marcador versao=018"
-    echo "B3: reaplicacao recusada pela pre-condicao; nada muda"
+    echo "B3: reaplicacao recusada pela pre-condicao integral (os quatro corpos); nada muda"
 } | tee "$SAIDA/resumo.txt"
 rm -f "$SAIDA/_a.txt" "$SAIDA/_b.txt"
 docker rm -f -v "$LIMPA" "$POP" > /dev/null

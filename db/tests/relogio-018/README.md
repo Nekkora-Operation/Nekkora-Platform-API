@@ -33,7 +33,8 @@ Massa: `atualizacao-populada/p01` em 001–012 e `mfa-emergencia-016/p02` em 015
 |---|---|
 | B1 | 018 **sem** a janela de SUPERUSER: recusada por privilégio (42501); dados, catálogo e estado do migrador inalterados |
 | B2 | 018 com a janela: dados idênticos; diff de catálogo 017 → 018 **exatamente** os corpos de `ops_mfa_execute`, `ops_operator_revoke`, `ops_operator_disable` e `identity_mfa_replace` (dono, `SECURITY DEFINER`, volatilidade e configuração iguais) e `SELECT (created_at)` de `nekkora_ops_mfa_owner` em `user_mfa_factors` e `user_mfa_recovery_codes`; catálogo igual ao da instalação limpa; invariantes depois da retirada; sessões, fatores e códigos vivos inalterados; marcador `versao=018` |
-| B3 | reaplicar a 018 é recusado pela pré-condição (corpos diferentes dos da 016/017); nada muda |
+| B3 | reaplicar a 018 é recusado pela pré-condição integral (SHA-256 dos quatro corpos diferente do da 016/017); nada muda |
+| B4 | executado **antes** de B1. Cada uma das quatro funções é alterada fora das expressões da 018 (autorização, step-up, lock, auditoria), num trecho que a pré-condição anterior aceitaria (conferido). A 018 com a janela é recusada nomeando a função; dados, catálogo (funções e privilégios), marcador e migrador `0\|0\|0` inalterados; o corpo original é restaurado e o catálogo volta ao da 017 |
 
 ## Comportamento
 
