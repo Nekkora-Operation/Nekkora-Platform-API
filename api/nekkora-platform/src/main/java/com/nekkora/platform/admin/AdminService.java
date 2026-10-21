@@ -95,8 +95,9 @@ public final class AdminService {
                 return Failure.TARGET_NOT_FOUND;
             }
             if (status != 4) {
+                // revoked_at ajustado ao created_at se o relogio do banco recuou (CHECK da 003), como nas sessoes
                 j.sql("""
-                        UPDATE public.client_workspace_grants SET status = 4, revoked_at = clock_timestamp(), revoked_by_membership_id = ?
+                        UPDATE public.client_workspace_grants SET status = 4, revoked_at = greatest(clock_timestamp(), created_at), revoked_by_membership_id = ?
                          WHERE organization_id = ? AND grant_id = ?
                         """).param(actor.membershipId()).param(org).param(grant).update();
             }

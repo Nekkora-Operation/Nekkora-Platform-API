@@ -151,11 +151,15 @@ public final class MfaRepository {
                 """).param(user).param(factor).param(hash).update();
     }
 
-    /** Reset: desabilita o fator e invalida os codigos nao usados. */
+    /**
+     * Reset: desabilita o fator e invalida os codigos nao usados. Instante terminal = greatest(instante, created_at), como na
+     * revogacao de sessoes (SessionRepository): com o relogio do banco recuado, o valor gravado e o created_at, ajustado
+     * para a CHECK da 014 - a desabilitacao vale, mas o instante nao e o exato do ato.
+     */
     public int disableFactor(JdbcClient j, UUID user) {
-        j.sql("UPDATE public.user_mfa_recovery_codes SET invalidated_at = clock_timestamp() WHERE user_id = ? AND used_at IS NULL AND invalidated_at IS NULL")
+        j.sql("UPDATE public.user_mfa_recovery_codes SET invalidated_at = greatest(clock_timestamp(), created_at) WHERE user_id = ? AND used_at IS NULL AND invalidated_at IS NULL")
                 .param(user).update();
-        return j.sql("UPDATE public.user_mfa_factors SET disabled_at = clock_timestamp() WHERE user_id = ? AND disabled_at IS NULL")
+        return j.sql("UPDATE public.user_mfa_factors SET disabled_at = greatest(clock_timestamp(), created_at) WHERE user_id = ? AND disabled_at IS NULL")
                 .param(user).update();
     }
 

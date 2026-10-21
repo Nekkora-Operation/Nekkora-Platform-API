@@ -1,12 +1,13 @@
 package com.nekkora.platform.session;
 
-import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
+
+import com.nekkora.core.db.DbErrors;
 
 /**
  * Lado da ORGANIZACAO da porta de emissao (levantamento de modularidade, §4.3; desenho §6.5 e §13.5): o unico codigo
@@ -58,20 +59,12 @@ public final class LinkedSessionIssuer {
             j.sql("RELEASE SAVEPOINT " + SAVEPOINT).update();
             return Optional.of(expires);
         } catch (DataAccessException e) {
-            if (!"23514".equals(sqlState(e))) {
+            // recusa da trigger da 017 (23514 sem restricao); CHECK violada propaga
+            if (!DbErrors.raisedRefusal(e)) {
                 throw e;
             }
             j.sql("ROLLBACK TO SAVEPOINT " + SAVEPOINT).update();
             return Optional.empty();
         }
-    }
-
-    private static String sqlState(DataAccessException e) {
-        for (Throwable t = e; t != null; t = t.getCause()) {
-            if (t instanceof SQLException s && s.getSQLState() != null) {
-                return s.getSQLState();
-            }
-        }
-        return null;
     }
 }
