@@ -54,10 +54,13 @@ public final class IdentityRepository {
         j.sql("INSERT INTO public.identity_credentials (identity_id, password_hash) VALUES (?, ?)").param(identity).param(passwordHash).update();
     }
 
-    /** Revoga os tokens de confirmacao ainda vivos da identidade (no maximo um valido por identidade, desenho §6.2). */
+    /**
+     * Revoga os tokens de confirmacao ainda vivos da identidade (no maximo um valido por identidade, desenho §6.2). revoked_at
+     * ajustado ao created_at se o relogio do banco recuou (CHECK da 017), como nas sessoes.
+     */
     public int revokeLiveTokens(JdbcClient j, UUID identity) {
         return j.sql("""
-                UPDATE public.identity_email_tokens SET revoked_at = clock_timestamp()
+                UPDATE public.identity_email_tokens SET revoked_at = greatest(clock_timestamp(), created_at)
                  WHERE identity_id = ? AND purpose = ? AND consumed_at IS NULL AND revoked_at IS NULL
                 """).param(identity).param(PURPOSE_SIGNUP).update();
     }

@@ -396,7 +396,8 @@ public final class AuthService {
             try {
                 tx.inOrganization(org, Mode.READ_WRITE, j -> {
                     accounts.lock(j, org, account.get().userId());
-                    j.sql("UPDATE public.password_reset_tokens SET revoked_at = clock_timestamp() WHERE user_id = ? AND consumed_at IS NULL AND revoked_at IS NULL")
+                    // revoked_at ajustado ao created_at se o relogio do banco recuou (CHECK da 002), como nas sessoes
+                    j.sql("UPDATE public.password_reset_tokens SET revoked_at = greatest(clock_timestamp(), created_at) WHERE user_id = ? AND consumed_at IS NULL AND revoked_at IS NULL")
                             .param(account.get().userId()).update();
                     return j.sql("""
                             INSERT INTO public.password_reset_tokens (user_id, token_hash, created_at, expires_at)
@@ -608,8 +609,9 @@ public final class AuthService {
     }
 
     /** Recusa das triggers de fechamento da entrada local de conta vinculada (017, §4.5, camada 2): SQLSTATE 23514. */
+    /** Recusa da trigger da 017 (23514 sem restricao); CHECK violada nao e recusa de conta vinculada e propaga. */
     private static boolean linkedAccountRefusal(DataAccessException e) {
-        return "23514".equals(DbErrors.sqlState(e));
+        return DbErrors.raisedRefusal(e);
     }
 
     private static int bytesUtf8(char[] c) {

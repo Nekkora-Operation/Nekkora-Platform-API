@@ -155,8 +155,9 @@ public final class AccountLinkService {
         } catch (ProofRollback e) {
             r = Outcome.refused(e.rule);
         } catch (DataAccessException e) {
-            // a trigger da 017 recusou o desafio (conta vinculada ou e-mail divergente no intervalo): 23514, nada gravado
-            if (!"23514".equals(DbErrors.sqlState(e))) {
+            // a trigger da 017 recusou o desafio (conta vinculada ou e-mail divergente no intervalo): 23514, nada gravado.
+            // CHECK violada (23514 com restricao) nao e essa recusa: propaga
+            if (!DbErrors.raisedRefusal(e)) {
                 throw e;
             }
             r = Outcome.refused("conta");

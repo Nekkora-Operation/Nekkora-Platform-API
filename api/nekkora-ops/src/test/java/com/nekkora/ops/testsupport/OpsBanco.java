@@ -592,6 +592,11 @@ public final class OpsBanco {
         }
     }
 
+    /** Comandos do superusuario com as triggers desligadas na conexao (CHECKs valendo): linhas a frente do relogio. */
+    public void semTriggers(String... comandos) {
+        replica(comandos);
+    }
+
     /** Simula a passagem de {@code d} para a solicitacao: desloca para tras todos os seus instantes e os dos avisos. */
     public void recuarSolicitacao(UUID solicitacao, Duration d) {
         String i = "interval '" + d.toSeconds() + " seconds'";

@@ -17,9 +17,9 @@
 #   * servidor no ar: docker exec <c> env NEKKORA_DB=... NEKKORA_DESDE=... sh /nekkora/aplicar_como_migrador.sh
 # Variaveis: NEKKORA_MIGRACOES (padrao /nekkora/migracoes), NEKKORA_DB (padrao $POSTGRES_DB ou nekkora),
 #   NEKKORA_ADMIN (padrao $POSTGRES_USER ou nekkora), NEKKORA_DESDE/NEKKORA_ATE (versoes, inclusive; padrao todas),
-#   NEKKORA_ELEVAR (SUPERUSER; padrao "011 012 013 016 017": as tres de ops/homologacao/implantacao/elevacao.txt, a 016
-#   e a 017 (candidatas), cujos cabecalhos exigem superusuario. A 017 ainda NAO esta em elevacao.txt de homologacao:
-#   acrescentar la e decisao da etapa de ambiente), NEKKORA_BYPASS (BYPASSRLS; padrao "014": a 014 so precisa atravessar a RLS
+#   NEKKORA_ELEVAR (SUPERUSER; padrao "011 012 013 016 017 018": as tres de ops/homologacao/implantacao/elevacao.txt, a 016,
+#   a 017 e a 018 (candidatas), cujos cabecalhos exigem superusuario - a 018 substitui funcoes dos donos da 016 e da 017.
+#   A 017 e a 018 ainda NAO estao em elevacao.txt de homologacao: acrescentar la e decisao da etapa de ambiente), NEKKORA_BYPASS (BYPASSRLS; padrao "014": a 014 so precisa atravessar a RLS
 #   forcada de user_sessions), NEKKORA_REGISTRO (padrao /tmp/nekkora_janelas.txt). Uma versao nao pode estar nas duas.
 # MARCADOR de inicializacao completa (P4-R2a-C, C4): no inicio o comentario do banco e APAGADO; so no fim do sucesso, se
 # esta execucao aplicou ate a ULTIMA migration disponivel no diretorio, grava "nekkora-inicializacao-completa versao=NNN".
@@ -36,7 +36,7 @@ N_DB="${NEKKORA_DB:-${POSTGRES_DB:-nekkora}}"
 N_ADMIN="${NEKKORA_ADMIN:-${POSTGRES_USER:-nekkora}}"
 N_DESDE="${NEKKORA_DESDE:-000}"
 N_ATE="${NEKKORA_ATE:-999}"
-N_ELEVAR="${NEKKORA_ELEVAR:-011 012 013 016 017}"
+N_ELEVAR="${NEKKORA_ELEVAR:-011 012 013 016 017 018}"
 N_BYPASS="${NEKKORA_BYPASS-014}"   # sem ":": NEKKORA_BYPASS="" (definida e vazia) = nenhuma janela BYPASSRLS
 N_REG="${NEKKORA_REGISTRO:-/tmp/nekkora_janelas.txt}"
 
