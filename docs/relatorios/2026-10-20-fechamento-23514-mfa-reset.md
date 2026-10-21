@@ -1,5 +1,7 @@
 # Fechamento do 23514 na corrida conclusão do MFA × reset administrativo
 
+**Situação (parecer de 2026-10-20):** defeito de revogação corrigido; atribuição da ocorrência original **inconclusiva** (causa não confirmada).
+
 **Data:** 2026-10-20. **Missão:** API-FECHAMENTO-001. **Base:** branch `feat/identidade-p4-p3-contas-vinculadas` em `697f946` (P4/P3 com a revisão 1 e as correções de CI). **Migrations:** nenhuma alteração; 017 continua na R5 (sha256 `90b8ddbc…`).
 
 ## 1. Problema e impacto
@@ -19,13 +21,13 @@ As revogações da identidade (017: `identity_link_account`, funções de sessã
 2. O reset, que esperava a conta, obtém o lock e revoga as sessões da conta com `clock_timestamp() = t2`.
 3. Sem recuo, `t2 > t1` (a revogação acontece depois do commit da criação). Com recuo do relógio maior que `t2 - t1` (alguns milissegundos nessa ordem), `t2 < t1`: `23514`, rollback do reset, `500`.
 
-**O ambiente que dispara:** o servidor de banco dos testes roda na VM Linux do Docker Desktop no macOS. O relógio dessa VM não é disciplinado por NTP (`adjtimex`: `status 64 (UNSYNC)`, `freq.adjust 0`). Ele é ressincronizado com o host aos saltos. Um recuo dessa VM já foi medido neste mesmo projeto: em 2026-09-28, `clock_timestamp()` voltou cerca de 1,8 ms entre dois comandos consecutivos e violou `executions_check10` (`2026-09-27-mfa-emergencia-implementacao.md`, execução `2026-09-28T025340Z`). O check do CI roda em Linux nativo, sem VM, e não teve a falha.
+**O ambiente que dispara:** o servidor de banco dos testes roda na VM Linux do Docker Desktop no macOS. Dentro da VM, `adjtimex` mostra o relógio sem disciplina de NTP (`status 64 (UNSYNC)`, `freq.adjust 0`). Isso não prova, sozinho, como o relógio é ajustado: o mecanismo de ressincronização com o host não foi observado nesta missão. Um recuo dessa VM já foi medido neste mesmo projeto: em 2026-09-28, `clock_timestamp()` voltou cerca de 1,8 ms entre dois comandos consecutivos e violou `executions_check10` (`2026-09-27-mfa-emergencia-implementacao.md`, execução `2026-09-28T025340Z`). O check do CI (Linux nativo, sem essa VM) não teve a falha nas execuções observadas. Isso não prova que o CI esteja livre do mecanismo: qualquer servidor cujo relógio recue pode produzi-lo.
 
 **Classificação:** defeito do produto (revogação sem a proteção que a identidade já tinha), disparado pelo ambiente (recuo do relógio da VM local). Não é defeito do teste: o teste afirmava o comportamento certo (o reset sempre conclui).
 
 ## 3. Atribuição da ocorrência original: limite declarado
 
-A ocorrência de `9f98f71` **não pode ser atribuída com certeza**: dela restam o status (`500`), o SQLSTATE (`23514`) e a rodada. O nome da restrição se perdeu. A atribuição a este mecanismo é a única explicação que sobrevive à eliminação abaixo, mas é **inferida**:
+A ocorrência de `9f98f71` **não pode ser atribuída com certeza**: dela restam o status (`500`), o SQLSTATE (`23514`) e a rodada. O nome da restrição se perdeu. Entre as fontes examinadas abaixo, este mecanismo é a **hipótese mais consistente**, não a única possível. A atribuição é **inferida** e a causa da ocorrência original continua **não confirmada**:
 
 | Fonte de 23514 alcançável pelo reset de conta não vinculada | Por que não explica a ocorrência |
 |---|---|
@@ -35,8 +37,8 @@ A ocorrência de `9f98f71` **não pode ser atribuída com certeza**: dela restam
 | Imutabilidade de fator, desafio e códigos (014) | Levantam P0001, não 23514 (e o reset mapeia P0001 para 403) |
 | CHECKs de `mfa_events` (tipo, ator ≠ alvo, motivo do tipo 3) | Determinísticas: mesmo ator, alvo e motivo em todas as rodadas |
 | CHECKs de exclusividade e hash de `auth_challenges` | Garantidas pelo `WHERE` (`consumed_at IS NULL AND invalidated_at IS NULL`) e pela serialização na conta |
-| `disabled_at >= created_at` (fator) e `invalidated_at >= created_at` (códigos) | Dependem do relógio, mas fator e códigos nascem no primeiro login, segundos antes. Exigiriam um recuo de segundos |
-| **`revoked_at >= created_at` (sessão, `user_sessions_check2`)** | **Depende do relógio e a linha nasce milissegundos antes, na ordem "conclusão primeiro". Única fonte compatível com uma falha rara, só nessa corrida e só no ambiente com VM** |
+| `disabled_at >= created_at` (fator) e `invalidated_at >= created_at` (códigos) | Também dependem do relógio. Fator e códigos nascem no primeiro login, segundos antes, então exigiriam um recuo de segundos: menos plausível, mas **não eliminado** sem a medição da ocorrência original. Exposição conhecida ao mesmo mecanismo (§8) |
+| **`revoked_at >= created_at` (sessão, `user_sessions_check2`)** | **Depende do relógio e a linha nasce milissegundos antes, na ordem "conclusão primeiro": basta um recuo de milissegundos, como o já medido. Hipótese mais consistente entre as examinadas** |
 
 A leitura do vínculo acrescentada ao reset na revisão 1 (`identity_account_is_linked`) não escreve e só levanta 42501. O mecanismo existe sem ela: no código da `main` (`493e4f9`, sem a revisão 1), o reset e a suspensão com a sessão à frente do relógio respondem `500` com `user_sessions_check2` (§5). A revisão 1 pode ter mudado o tempo dos intercalamentos, mas não é necessária para a falha.
 
@@ -52,7 +54,9 @@ A leitura do vínculo acrescentada ao reset na revisão 1 (`identity_account_is_
 | `revokeByToken` (logout) | `revoked_at = clock_timestamp()` | `revoked_at = greatest(clock_timestamp(), created_at)` |
 | `revokeExcess` (limite de sessões na criação) | `revoked_at = ?` | `revoked_at = greatest(?, created_at)` |
 
-É a forma que as revogações da identidade já usam. Com o relógio correto, `greatest` devolve o próprio instante e nada muda. Com recuo, a sessão é revogada assim mesmo, com `revoked_at = created_at`. Nenhuma consulta usa o valor de `revoked_at` além de "nulo ou não" (conferido).
+É a forma que as revogações da identidade já usam. Com o relógio correto, `greatest` devolve o próprio instante e nada muda. Com recuo, a sessão é revogada assim mesmo, com `revoked_at = created_at`.
+
+**Significado do valor gravado:** a revogação é efetiva (a sessão deixa de valer na hora, e é isso que as consultas conferem). Mas, quando o relógio recua, `revoked_at = created_at` é um valor **ajustado** para manter a consistência com a CHECK, não a medição exata do instante real da revogação. Com relógio correto, o valor é o instante medido. Nenhuma consulta usa o valor de `revoked_at` além de "nulo ou não" (conferido).
 
 **Garantias preservadas:** a CHECK da 002 continua valendo e não foi contornada; nenhum 23514 é convertido em sucesso ou em recusa genérica; a ordem global de locks, a recusa da conta vinculada (403 sob os locks, antes dos efeitos), o anti-replay, o consumo único, a atomicidade entre efeitos e evento e as exceções terminais da 017 não mudaram.
 
@@ -112,7 +116,7 @@ Regressão completa, E2E e check do PR no candidato final: §7.
 
 - **Atribuição da ocorrência de `9f98f71`:** inferida por eliminação (§3), não provada. Se ela se repetir, o diagnóstico da §6 registra a restrição.
 - **Mesma classe de defeito fora desta correção:**
-  - `016`, função de reset operacional (`UPDATE public.user_sessions SET revoked_at = v_agora`, `v_agora = clock_timestamp()`). Está numa migration aplicada; a correção exige migration nova (`018`: `CREATE OR REPLACE` da função com `greatest(v_agora, created_at)`, sem tocar a 016) e passa pela suíte de banco da 016. **Não aplicada; fica para decisão.**
-  - `disabled_at >= created_at` (fator) e `invalidated_at >= created_at` (códigos) no reset: exigem recuo de segundos (fator e códigos nascem no primeiro login). Mesma proteção possível em `MfaRepository.disableFactor`; não aplicada por não haver causa demonstrada.
+  - `016`, função de reset operacional (`UPDATE public.user_sessions SET revoked_at = v_agora`, `v_agora = clock_timestamp()`). **Encaminhamento (parecer de 2026-10-20):** correção própria, por migration nova (`018`: `CREATE OR REPLACE` da função com `greatest(v_agora, created_at)`), sem editar a 016 aplicada, validada pela suíte de banco da 016. **Deve ser tratada antes de liberar esse caminho operacional.** Fora deste PR.
+  - **Exposição conhecida ao mesmo mecanismo:** `disabled_at >= created_at` (fator) e `invalidated_at >= created_at` (códigos) no reset administrativo (único chamador de `MfaRepository.disableFactor` na aplicação) e na função de reset operacional da 016, que grava `v_agora` nas mesmas colunas. Exigem recuo maior que o intervalo desde a criação (no fluxo normal, segundos; numa corrida com o cadastro do fator, menos). **Encaminhamento:** reprodução dirigida, no padrão de `MfaResetRaceIT`, para determinar o alcance, e então a correção (`greatest` em `MfaRepository.disableFactor`). Não aplicada aqui.
   - Os prazos da 016 e demais CHECKs entre instantes: já analisados em `2026-09-27-mfa-emergencia-implementacao.md`.
 - **Requisito de implantação já registrado (gate da 016):** relógio do servidor de banco sincronizado com correção gradual (*slew*), sem saltos para trás, e monitorado. Esta correção não substitui o gate: tira das revogações de sessão a dependência dele.
