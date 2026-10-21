@@ -135,7 +135,8 @@ As marcas que **abrem** janela (`mfa_verified_at`, `recovery_used_at`, `mfa_step
 | módulo nekkora-ops completo | todos os `*IT` verdes (inclui inventário de locks, isolamento, mutações e separação de funções) |
 | suíte de banco `db/tests/relogio-018` | A: 001–018 limpa, seis janelas com retirada `0\|0\|0`, invariantes 012/013/014/016/017/018 depois da retirada, marcador `versao=018`. B1: sem SUPERUSER, recusada, nada muda. B2: base populada 017 → 018 (80 tabelas de `public` e `ops`), diff de dados vazio, catálogo com exatamente 10 linhas previstas (4 corpos, 2 SELECT), igual à instalação limpa, vivos inalterados. B3: reaplicação recusada |
 | regressão completa local (`./mvnw -B -ntp test`, o comando do CI) | core 21, ops 164, platform 311, portal 12 = **508/0/0/0** (487 da base + 21 novos) |
-| CI e E2E | registrados no PR |
+| E2E (`api/e2e/run.sh`, agora 001–018) | 018 aplicada pelo migrador com janela retirada `0\|0\|0`, marcador `versao=018`; CrossProcessE2E 6/6, LinkedAccountsE2E 6/6 |
+| CI | registrado no PR |
 
 ## 6. Limitações e pendências
 
