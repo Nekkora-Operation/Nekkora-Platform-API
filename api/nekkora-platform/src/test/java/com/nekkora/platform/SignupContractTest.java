@@ -112,6 +112,41 @@ class SignupContractTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void rotasDaVinculacaoSaoAsPublicadasComOsCodigosExercitados() throws IOException {
+        java.util.Set<String> mapeadas = new java.util.TreeSet<>();
+        for (Method m : com.nekkora.platform.web.AccountLinkController.class.getDeclaredMethods()) {
+            PostMapping p = m.getAnnotation(PostMapping.class);
+            if (p != null) {
+                mapeadas.addAll(Arrays.asList(p.value()));
+            }
+            assertThat(m.getAnnotation(GetMapping.class)).as(m.getName() + ": so POST").isNull();
+        }
+        assertThat(mapeadas).containsExactlyInAnyOrder(com.nekkora.platform.web.AccountLinkController.START, com.nekkora.platform.web.AccountLinkController.CONFIRM);
+        Map<String, Object> spec;
+        try (Reader r = Files.newBufferedReader(Path.of("../openapi/nekkora-api-v1.yaml"))) {
+            spec = new Yaml().load(r);
+        }
+        Map<String, Object> paths = (Map<String, Object>) spec.get("paths");
+        Map<String, List<String>> exercitados = Map.of(
+                com.nekkora.platform.web.AccountLinkController.START, List.of("204", "400", "401", "403", "404", "429", "503", "identitySessionCookie", "csrfHeader"),
+                com.nekkora.platform.web.AccountLinkController.CONFIRM, List.of("204", "400", "401", "403", "404", "503", "identitySessionCookie", "linkChallengeCookie", "csrfHeader"));
+        for (Map.Entry<String, List<String>> e : exercitados.entrySet()) {
+            Map<String, Object> item = (Map<String, Object>) paths.get(e.getKey());
+            assertThat(item).as(e.getKey() + " publicada").isNotNull();
+            assertThat(item.keySet()).as(e.getKey() + ": metodo").containsExactly("post");
+            Map<String, Object> op = (Map<String, Object>) item.get("post");
+            for (String x : e.getValue()) {
+                if (x.matches("\\d{3}")) {
+                    assertThat((Map<String, Object>) op.get("responses")).as(e.getKey() + " documenta " + x).containsKey(x);
+                } else {
+                    assertThat(op.get("security").toString()).as(e.getKey() + " declara " + x).contains(x);
+                }
+            }
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void rotasDasOrganizacoesDaIdentidadeSaoAsPublicadasComOsCodigosExercitados() throws IOException {
         Map<String, String> mapeadas = new java.util.TreeMap<>();
         for (Method m : IdentityOrganizationsController.class.getDeclaredMethods()) {

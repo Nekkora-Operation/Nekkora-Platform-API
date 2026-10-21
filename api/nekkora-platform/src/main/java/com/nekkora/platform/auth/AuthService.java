@@ -12,8 +12,10 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
+import com.nekkora.core.db.DbErrors;
 import com.nekkora.core.db.OrgTransactions;
 import com.nekkora.core.db.OrgTransactions.Mode;
 import com.nekkora.core.token.Tokens;
@@ -144,10 +146,19 @@ public final class AuthService {
         String token = Tokens.newToken();
         String csrf = Tokens.newToken();
         short purpose = c.hasConfirmedFactor() ? MfaRepository.PURPOSE_VERIFY : MfaRepository.PURPOSE_ENROLL;
-        tx.inOrganization(org, Mode.READ_WRITE, j -> {
-            accounts.lock(j, org, c.userId());
-            return mfa.createChallenge(j, org, c.userId(), Tokens.sha256Hex(token), purpose, c.passwordHash(), candidate, csrf, cfg.challenge());
-        });
+        try {
+            tx.inOrganization(org, Mode.READ_WRITE, j -> {
+                accounts.lock(j, org, c.userId());
+                return mfa.createChallenge(j, org, c.userId(), Tokens.sha256Hex(token), purpose, c.passwordHash(), candidate, csrf, cfg.challenge());
+            });
+        } catch (DataAccessException e) {
+            // conta vinculada entre a leitura e o lock (desenho §4.5, camada 2): a trigger da 017 recusa o desafio (23514).
+            // Mesma resposta de credencial invalida, sem contar como senha errada: a senha conferiu
+            if (!linkedAccountRefusal(e)) {
+                throw e;
+            }
+            throw denied("senha_ou_conta", org, identity, ip);
+        }
         LOG.info("evento=auth.challenge_issued org={} identidade={} ip={}", org, identity, ClientIpResolver.truncated(ip));
         return new LoginResult(purpose == MfaRepository.PURPOSE_VERIFY ? "mfa_required" : "mfa_enrollment_required", token, csrf);
     }
@@ -329,6 +340,12 @@ public final class AuthService {
     // ------------------------------------------------------------------ senha
 
     public void changePassword(UUID org, ValidSession s, String sessionToken, char[] current, char[] newPassword, String ip) {
+        // conta vinculada (sessao nascida da troca): a senha local nao autentica nem muda (DC-17.12, desenho §4.5). 403
+        // generico, sem Argon2 e sem contar falha; a senha da pessoa e a da identidade
+        if (s.isLinked()) {
+            LOG.info("evento=auth.troca_senha_negada org={} regra=conta_vinculada", org);
+            throw ApiException.forbidden("conta_vinculada");
+        }
         PasswordPolicy.enforce(newPassword);
         String identity = userIdentity(org, s.userId());
         limits.beforeAuthentication(org, identity, ip, false);
@@ -338,16 +355,25 @@ public final class AuthService {
             throw denied("senha_atual", org, identity, ip);
         }
         String newHash = hasher.generate(newPassword);
-        String email = tx.inOrganization(org, Mode.READ_WRITE, j -> {
-            accounts.lock(j, org, s.userId());
-            if (sessions.validate(j, org, Tokens.sha256Hex(sessionToken), false).isEmpty()
-                    || !accounts.replaceHashIfUnchanged(j, s.userId(), hash, newHash, true)) {
-                return null;
+        String email;
+        try {
+            email = tx.inOrganization(org, Mode.READ_WRITE, j -> {
+                accounts.lock(j, org, s.userId());
+                if (sessions.validate(j, org, Tokens.sha256Hex(sessionToken), false).isEmpty()
+                        || !accounts.replaceHashIfUnchanged(j, s.userId(), hash, newHash, true)) {
+                    return null;
+                }
+                mfa.invalidateForAccount(j, s.userId(), null);
+                sessions.revokeForAccount(j, s.userId(), s.sessionId());
+                return accounts.byId(j, org, s.userId()).map(Account::email).orElse(null);
+            });
+        } catch (DataAccessException e) {
+            // vinculada no intervalo: a trigger da 017 recusa a troca do hash (23514); nada foi alterado
+            if (!linkedAccountRefusal(e)) {
+                throw e;
             }
-            mfa.invalidateForAccount(j, s.userId(), null);
-            sessions.revokeForAccount(j, s.userId(), s.sessionId());
-            return accounts.byId(j, org, s.userId()).map(Account::email).orElse(null);
-        });
+            throw ApiException.forbidden("conta_vinculada");
+        }
         if (email == null) {
             throw ApiException.unauthenticated("sessao_ou_credencial_alterada");
         }
@@ -367,16 +393,25 @@ public final class AuthService {
                 return;
             }
             String token = Tokens.newToken();
-            tx.inOrganization(org, Mode.READ_WRITE, j -> {
-                accounts.lock(j, org, account.get().userId());
-                j.sql("UPDATE public.password_reset_tokens SET revoked_at = clock_timestamp() WHERE user_id = ? AND consumed_at IS NULL AND revoked_at IS NULL")
-                        .param(account.get().userId()).update();
-                return j.sql("""
-                        INSERT INTO public.password_reset_tokens (user_id, token_hash, created_at, expires_at)
-                        SELECT ?, ?, t.agora, t.agora + ?::interval FROM (SELECT clock_timestamp() AS agora) t
-                        """).param(account.get().userId()).param(Tokens.sha256Hex(token))
-                        .param(SessionRepository.interval(cfg.passwordRecovery())).update();
-            });
+            try {
+                tx.inOrganization(org, Mode.READ_WRITE, j -> {
+                    accounts.lock(j, org, account.get().userId());
+                    j.sql("UPDATE public.password_reset_tokens SET revoked_at = clock_timestamp() WHERE user_id = ? AND consumed_at IS NULL AND revoked_at IS NULL")
+                            .param(account.get().userId()).update();
+                    return j.sql("""
+                            INSERT INTO public.password_reset_tokens (user_id, token_hash, created_at, expires_at)
+                            SELECT ?, ?, t.agora, t.agora + ?::interval FROM (SELECT clock_timestamp() AS agora) t
+                            """).param(account.get().userId()).param(Tokens.sha256Hex(token))
+                            .param(SessionRepository.interval(cfg.passwordRecovery())).update();
+                });
+            } catch (DataAccessException e) {
+                // vinculada entre a leitura e o lock: a trigger da 017 recusa o token (23514). "Nao enviar": a resposta
+                // continua 202 identica, com o mesmo piso (DC-17.12)
+                if (!linkedAccountRefusal(e)) {
+                    throw e;
+                }
+                return;
+            }
             mail.send(MailSender.Kind.PASSWORD_RECOVERY, org, account.get().email(), token);
         } finally {
             floor(requestStartNanos);
@@ -570,6 +605,11 @@ public final class AuthService {
                 Thread.currentThread().interrupt();
             }
         }
+    }
+
+    /** Recusa das triggers de fechamento da entrada local de conta vinculada (017, §4.5, camada 2): SQLSTATE 23514. */
+    private static boolean linkedAccountRefusal(DataAccessException e) {
+        return "23514".equals(DbErrors.sqlState(e));
     }
 
     private static int bytesUtf8(char[] c) {

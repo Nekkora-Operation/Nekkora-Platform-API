@@ -22,6 +22,9 @@ import com.nekkora.core.web.ErrorResponses;
  * identidade, troca por sessao de organizacao e step-up da sessao de identidade;</li>
  * <li>{@code nekkora.criacao-organizacao.enabled} (contrato P2): criacao de organizacao. Abre so com ela E a entrada
  * geral ligadas (sem entrada geral nao ha sessao de identidade);</li>
+ * <li>{@code nekkora.vinculacao.enabled} (contrato P3): as duas etapas da vinculacao de conta antiga. Como a criacao, so
+ * abre com a entrada geral tambem ligada. Os bloqueios da entrada local de conta vinculada NAO dependem desta chave: valem
+ * para toda conta vinculada, inclusive as do cadastro;</li>
  * <li>o LOGOUT de identidade nao tem chave: encerrar sessao nunca depende de configuracao.</li>
  * </ul>
  * Desligada, a rota responde 404 {@code not_found} em qualquer metodo, ANTES da cadeia de seguranca: sem CSRF, sem
@@ -35,15 +38,18 @@ public final class IdentityRoutesGate extends OncePerRequestFilter {
             IdentityAuthController.ENROLL_CONFIRM, IdentityAuthController.VERIFY, IdentityAuthController.STEP_UP,
             IdentityOrganizationsController.MY_ORGANIZATIONS, IdentityOrganizationsController.ORG_SESSION);
     static final Set<String> CREATION_ROUTES = Set.of(IdentityOrganizationsController.ORGANIZATIONS);
+    static final Set<String> LINK_ROUTES = Set.of(AccountLinkController.START, AccountLinkController.CONFIRM);
 
     private final boolean signupEnabled;
     private final boolean entryEnabled;
     private final boolean creationEnabled;
+    private final boolean linkEnabled;
 
-    public IdentityRoutesGate(boolean signupEnabled, boolean entryEnabled, boolean creationEnabled) {
+    public IdentityRoutesGate(boolean signupEnabled, boolean entryEnabled, boolean creationEnabled, boolean linkEnabled) {
         this.signupEnabled = signupEnabled;
         this.entryEnabled = entryEnabled;
         this.creationEnabled = creationEnabled;
+        this.linkEnabled = linkEnabled;
     }
 
     @Override
@@ -54,7 +60,8 @@ public final class IdentityRoutesGate extends OncePerRequestFilter {
 
     private boolean closed(String path) {
         return (!signupEnabled && SIGNUP_ROUTES.contains(path)) || (!entryEnabled && ENTRY_ROUTES.contains(path))
-                || (!(entryEnabled && creationEnabled) && CREATION_ROUTES.contains(path));
+                || (!(entryEnabled && creationEnabled) && CREATION_ROUTES.contains(path))
+                || (!(entryEnabled && linkEnabled) && LINK_ROUTES.contains(path));
     }
 
     @Override

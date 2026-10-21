@@ -46,7 +46,7 @@ public final class SessionRepository {
             return Optional.empty();
         }
         Optional<Evaluation> a = j.sql("""
-                SELECT s.session_id, s.user_id, s.csrf_token, s.mfa_step_up_at, s.expires_at, u.account_type, t.agora,
+                SELECT s.session_id, s.user_id, s.csrf_token, s.mfa_step_up_at, s.expires_at, s.identity_session_id, u.account_type, t.agora,
                        (s.revoked_at IS NULL AND s.mfa_verified_at IS NOT NULL AND s.csrf_token IS NOT NULL
                         AND s.expires_at > t.agora
                         AND s.last_seen_at > t.agora - CASE WHEN u.account_type = 1 THEN ?::interval ELSE ?::interval END
@@ -74,7 +74,8 @@ public final class SessionRepository {
                 .query((rs, n) -> new Evaluation(rs.getBoolean("valida") && rs.getObject("vinculo_id") != null
                         ? new ValidSession(rs.getObject("session_id", UUID.class), org, rs.getObject("user_id", UUID.class),
                                 rs.getShort("account_type"), rs.getObject("vinculo_id", UUID.class), rs.getString("csrf_token"),
-                                rs.getObject("mfa_step_up_at", OffsetDateTime.class), rs.getObject("expires_at", OffsetDateTime.class))
+                                rs.getObject("mfa_step_up_at", OffsetDateTime.class), rs.getObject("expires_at", OffsetDateTime.class),
+                                rs.getObject("identity_session_id", UUID.class))
                         : null, rs.getObject("agora", OffsetDateTime.class)))
                 .optional();
         if (a.isEmpty() || a.get().session() == null) {
@@ -127,26 +128,39 @@ public final class SessionRepository {
                 .query(OffsetDateTime.class).single();
     }
 
+    /*
+     * Revogacao: revoked_at = greatest(instante, created_at), como as revogacoes da identidade (017 e IdentityAuthRepository).
+     * clock_timestamp() e o relogio de parede do servidor e pode recuar entre duas transacoes (sincronizacao de hora; ja
+     * medido na VM do Docker Desktop). Sem o greatest, uma sessao criada logo antes do recuo violava a CHECK da 002
+     * (revoked_at >= created_at) e a acao inteira - reset de MFA, suspensao, troca de senha, logout - falhava com 23514.
+     */
     public int revokeByToken(JdbcClient j, UUID org, String tokenHash) {
-        return j.sql("UPDATE public.user_sessions SET revoked_at = clock_timestamp() WHERE organization_id = ? AND session_token_hash = ? AND revoked_at IS NULL")
+        return j.sql("UPDATE public.user_sessions SET revoked_at = greatest(clock_timestamp(), created_at) WHERE organization_id = ? AND session_token_hash = ? AND revoked_at IS NULL")
                 .param(org).param(tokenHash).update();
     }
 
     /** Revoga todas as sessoes ativas da conta, exceto {@code manter} (pode ser null). */
     public int revokeForAccount(JdbcClient j, UUID user, UUID keep) {
-        return j.sql("UPDATE public.user_sessions SET revoked_at = clock_timestamp() WHERE user_id = ? AND revoked_at IS NULL AND session_id IS DISTINCT FROM ?")
+        return j.sql("UPDATE public.user_sessions SET revoked_at = greatest(clock_timestamp(), created_at) WHERE user_id = ? AND revoked_at IS NULL AND session_id IS DISTINCT FROM ?")
                 .param(user).param(keep).update();
     }
 
-    public void recordStepUp(JdbcClient j, UUID session) {
-        j.sql("UPDATE public.user_sessions SET mfa_step_up_at = clock_timestamp() WHERE session_id = ? AND revoked_at IS NULL")
+    /** Step-up na sessao, pelo relogio do banco; devolve as linhas alteradas (0 = sessao revogada). */
+    public int recordStepUp(JdbcClient j, UUID session) {
+        return j.sql("UPDATE public.user_sessions SET mfa_step_up_at = clock_timestamp() WHERE session_id = ? AND revoked_at IS NULL")
                 .param(session).update();
+    }
+
+    /** Sessao ja travada nesta transacao ainda nao revogada e no prazo, pelo relogio do banco AGORA (antes do commit). */
+    public boolean stillValid(JdbcClient j, UUID session) {
+        return j.sql("SELECT EXISTS (SELECT 1 FROM public.user_sessions WHERE session_id = ? AND revoked_at IS NULL AND expires_at > clock_timestamp())")
+                .param(session).query(Boolean.class).single();
     }
 
     /** Limite por conta: revoga as ativas mais antigas para que, com a nova, sejam no maximo {@code maximoPorConta}. */
     private void revokeExcess(JdbcClient j, UUID org, UUID user, OffsetDateTime currentTime, Duration inactivity) {
         j.sql("""
-                UPDATE public.user_sessions SET revoked_at = ?
+                UPDATE public.user_sessions SET revoked_at = greatest(?, created_at)
                  WHERE session_id IN (
                      SELECT session_id FROM public.user_sessions
                       WHERE user_id = ? AND organization_id = ? AND revoked_at IS NULL AND expires_at > ?

@@ -54,6 +54,11 @@ services:
       NEKKORA_MFA_CHAVES: ${E2E_MFA_CHAVES:?}
       NEKKORA_HMAC_ID: h1
       NEKKORA_HMAC_CHAVE: ${E2E_HMAC_CHAVE:?}
+      # contas vinculadas (LinkedAccountsE2E): entrada geral, criacao de organizacao e vinculacao ligadas SO nesta stack
+      # descartavel; o cadastro continua desligado (a identidade da jornada nasce na fixture: o e-mail real esta fora)
+      NEKKORA_ENTRADA_GERAL: "true"
+      NEKKORA_CRIACAO_ORGANIZACAO_ENABLED: "true"
+      NEKKORA_VINCULACAO: "true"
     networks:
       e2e:
         ipv4_address: 10.251.47.30

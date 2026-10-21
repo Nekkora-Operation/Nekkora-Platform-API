@@ -57,6 +57,10 @@ paths:
       tags: [Identidade e sessao]
       operationId: login
       summary: 'Senha (passo 1): abre o desafio de MFA; resposta unica para credencial invalida (sem enumeracao)'
+      description: >
+        Conta VINCULADA a uma identidade (cadastro ou vinculacao, contrato P3; DC-17.9) nao entra por aqui: o mesmo 401
+        generico de credencial invalida, sem desafio e sem revelar o vinculo, tambem quando o vinculo acontece enquanto o
+        login espera o lock da conta (a trigger da 017 recusa o desafio). A pessoa entra pela entrada geral e pela troca.
       security: [ { preAuthCookie: [], csrfHeader: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/LoginRequest' } } } }
@@ -120,8 +124,19 @@ paths:
       operationId: mfaStepUp
       summary: 'Step-up com TOTP na sessao (exigido pelo reset administrativo de MFA)'
       description: >
-        Codigo TOTP errado -> 403 forbidden (step_up); so codigo TOTP (recoveryCode nao aceito).
-      security: [ { sessionCookie: [], csrfHeader: [] } ]
+        Codigo TOTP errado -> 403 forbidden (step_up); so codigo TOTP (recoveryCode nao aceito). Sessao do login por
+        organizacao: TOTP do fator local, R1/R4, caminho inalterado. Sessao VINCULADA (nascida da troca, contrato P4): TOTP do
+        fator da IDENTIDADE de origem. O CSRF desta sessao de organizacao continua exigido (o CSRF da sessao de identidade
+        nao o substitui) e o cookie __Host-nekkora_id e exigido EM ADICAO, resolvendo exatamente a sessao de identidade que
+        originou esta sessao (unica rota em que os dois cookies valem juntos). Cookie ausente, de outra identidade ou de outra
+        sessao da mesma identidade: 403 sem conferir o codigo. Numa so transacao, na ordem global da 017 (identidade ->
+        sessao de identidade -> organizacao -> conta -> sessao de organizacao), com a revalidacao da sessao de organizacao
+        sob o lock, anti-replay no fator da identidade (um codigo aceito aqui nao serve para outro step-up, global ou de outra
+        organizacao, nem para o login), step-up SO nesta sessao de organizacao (nem na de identidade, nem em outra sessao),
+        eventos mfa_events 6 e identity_events 14 (ORG_STEP_UP) no mesmo commit, e as duas sessoes e a janela do passo
+        reconferidas antes do commit. Codigo errado ou replay: 403, contado em R8m (identidade global). Sessao que caiu
+        durante as esperas: 401, sem efeito.
+      security: [ { sessionCookie: [], csrfHeader: [] }, { sessionCookie: [], csrfHeader: [], identitySessionCookie: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TotpCodeRequest' } } } }
       responses:
@@ -160,6 +175,9 @@ paths:
       tags: [Identidade e sessao]
       operationId: changePassword
       summary: 'Troca a propria senha (senha atual errada -> 401)'
+      description: >
+        Sessao VINCULADA (conta que entra pela identidade, contrato P3): 403 generico, sem conferir a senha; a senha local
+        nao autentica nem muda depois do vinculo (DC-17.12). A senha da pessoa e a da identidade.
       security: [ { sessionCookie: [], csrfHeader: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PasswordChange' } } } }
@@ -167,7 +185,7 @@ paths:
         '204': { $ref: '#/components/responses/NoContent' }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/CsrfForbidden' }
+        '403': { description: 'Origin/CSRF invalido, ou sessao de conta vinculada', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
@@ -176,6 +194,10 @@ paths:
       tags: [Identidade e sessao]
       operationId: requestPasswordReset
       summary: 'Pede a recuperacao de senha: 202 SEMPRE (sem enumeracao)'
+      description: >
+        Conta vinculada a uma identidade (contrato P3, DC-17.12): nenhum token e nenhum e-mail, e a mesma resposta 202 com o
+        mesmo piso de tempo, inclusive quando o vinculo acontece entre a leitura e o lock da conta. A recuperacao da pessoa
+        e a da identidade.
       security: [ { preAuthCookie: [], csrfHeader: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RecoveryRequest' } } } }
@@ -444,6 +466,63 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /api/v1/links/start:
+    post:
+      tags: [Entrada geral (identidade)]
+      operationId: identityLinkStart
+      summary: 'Vinculacao, etapa 1: prova da conta antiga (senha + TOTP ou codigo de recuperacao da conta); 204 + cookie do desafio'
+      description: >
+        P3 (contrato de 2026-10-13). Sessao de identidade nao restrita (cookie __Host-nekkora_id) e CSRF dela. A conta e
+        procurada pelo e-mail da propria identidade na organizacao pedida: a pessoa nunca informa outro e-mail, outra conta
+        ou outra pessoa, e nenhum administrador vincula em nome de alguem. Corpo: organizationId, password e EXATAMENTE um
+        de code (TOTP da conta) e recoveryCode (codigo de recuperacao da conta); nenhum ou os dois, password ausente ou
+        organizationId malformado: 400. Argon2 fora da transacao (hash ficticio quando nao ha conta, mesmo custo); depois,
+        numa transacao, na ordem global da 017: identidade e sessao travadas e reconferidas, organizacao FOR SHARE, conta FOR
+        UPDATE (credencial IGUAL a conferida pelo Argon2, conta interna elegivel e nao vinculada, mesmo e-mail), fator local
+        com anti-replay (passo so avanca) ou codigo local consumido (evento mfa_events 2 e aviso, como no login), revogacao do
+        desafio anterior da identidade e o desafio novo, amarrado ao par exato identidade/conta, valido por 5 min; a sessao e
+        a janela do passo sao reconferidas antes do commit. Sucesso: 204 e o cookie __Host-nekkora_link (SameSite=Strict,
+        Max-Age=300); a etapa 1 NAO vincula. QUALQUER falha da prova: o mesmo 401, sem distinguir conta inexistente, senha
+        errada, codigo errado, conta inelegivel, organizacao inativa ou conta ja vinculada. R13 (5 falhas em 15 min por
+        identidade e por conta alvo; falha fechada) e R12. Sessao restrita a recuperacao: 403. Chave propria
+        (nekkora.vinculacao.enabled) e a da entrada geral: qualquer uma desligada, 404.
+      security: [ { identitySessionCookie: [], csrfHeader: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/LinkStartRequest' } } } }
+      responses:
+        '204': { description: 'Desafio de vinculacao emitido (cookie __Host-nekkora_link); nada vinculado ainda' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { description: 'Sem sessao de identidade valida, ou prova da conta antiga recusada (resposta unica para qualquer causa)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: unauthenticated } } } }
+        '403': { description: 'Origin/CSRF da sessao de identidade invalido, ou sessao restrita a recuperacao (DC-17.13)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
+        '404': { $ref: '#/components/responses/SignupDisabled' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/links/confirm:
+    post:
+      tags: [Entrada geral (identidade)]
+      operationId: identityLinkConfirm
+      summary: 'Vinculacao, etapa 2: prova da identidade (step-up de ate 5 min) e consumo do desafio; fecha a entrada local da conta'
+      description: >
+        P3. Sessao de identidade nao restrita COM step-up de ate 5 min (/api/v1/auth/step-up), o cookie __Host-nekkora_link
+        da etapa 1 e o CSRF da sessao de identidade. Uma transacao que chama so identity_link_account (017): sob os seus
+        locks, a funcao reconfere step-up, conta, e-mail e ausencia de vinculo e consome o desafio so se ele for da identidade
+        da sessao, estiver no prazo e a credencial da conta ainda for a da etapa 1; no mesmo commit, revoga as sessoes da
+        organizacao da conta, invalida desafios, tokens e codigos locais, desabilita o fator local, grava o vinculo
+        (link_channel vinculacao) e o evento 9 (IDENTITY_LINKED). Depois do commit, aviso ao endereco. Sucesso: 204; recusa
+        da funcao (sem step-up, desafio ausente, vencido, de outra identidade, substituido ou ja usado, credencial trocada,
+        conta inelegivel ou ja vinculada): 403 generico, sem efeito. Nos dois casos o cookie do desafio expira. Em seguida, a
+        pessoa entra na organizacao pela troca (/api/v1/sessions/organization). R12. Chaves: as mesmas da etapa 1.
+      security: [ { identitySessionCookie: [], linkChallengeCookie: [], csrfHeader: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/LinkConfirmRequest' } } } }
+      responses:
+        '204': { description: 'Conta vinculada; a entrada local da conta foi fechada no mesmo ato' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { description: 'Origin/CSRF invalido, sessao restrita, ou recusa da vinculacao (generica)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
+        '404': { $ref: '#/components/responses/SignupDisabled' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /api/v1/sessions/organization:
     post:
       tags: [Entrada geral (identidade)]
@@ -520,6 +599,10 @@ paths:
       tags: [Administracao]
       operationId: resetUserMfa
       summary: 'Reset administrativo de MFA (identity.mfa.reset + step-up recente na mesma sessao + motivo codificado)'
+      description: >
+        Conta alvo VINCULADA a uma identidade (contrato P3, parecer de 2026-10-19): 403 generico, conferido sob o lock da
+        conta e antes de qualquer efeito (nenhuma sessao revogada, nenhum evento, nenhum aviso). O fator dessa pessoa e o
+        da identidade, que nenhuma autoridade de organizacao redefine.
       security: [ { sessionCookie: [], csrfHeader: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' }, { name: user, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/MfaResetRequest' } } } }
@@ -956,7 +1039,12 @@ components:
       type: apiKey
       in: cookie
       name: __Host-nekkora_id
-      description: Sessao de identidade (entrada geral; SameSite=Lax; prazo absoluto de 12 h). So nas rotas sem organizacao. Autentica apenas /api/v1/me/organizations e /api/v1/sessions/organization (e o logout de identidade).
+      description: Sessao de identidade (entrada geral; SameSite=Lax; prazo absoluto de 12 h). Nas rotas sem organizacao, autentica /api/v1/me/organizations, /api/v1/sessions/organization, /api/v1/auth/step-up, /api/v1/organizations e /api/v1/links/* (e o logout de identidade). Excecao unica (P4) - em /api/v1/o/{org}/auth/mfa/step-up, quando a sessao de organizacao e vinculada, e exigida EM ADICAO ao cookie e ao CSRF da sessao de organizacao e tem de ser a sessao de identidade de origem dela.
+    linkChallengeCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-nekkora_link
+      description: Desafio de vinculacao emitido pela etapa 1 (/api/v1/links/start); SameSite=Strict; 5 min; uso unico, amarrado a identidade e a conta. Expira na resposta da etapa 2.
     csrfHeader:
       type: apiKey
       in: header
@@ -986,7 +1074,7 @@ components:
     NoContent: { description: Sucesso sem corpo }
     ListLimitExceeded: { description: 'Lista acima do limite do portal, sem truncar (log evento=portal.list_limit_exceeded)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: internal_error } } } }
     Accepted: { description: Pedido aceito (sem enumeracao de contas) }
-    SignupDisabled: { description: 'Rota de identidade desligada pela sua chave (cadastro: nekkora.cadastro.enabled; login, MFA, organizacoes da identidade e troca: nekkora.entrada-geral.enabled; ambas desligadas por padrao): a rota nao existe', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: not_found } } } }
+    SignupDisabled: { description: 'Rota de identidade desligada pela sua chave (cadastro: nekkora.cadastro.enabled; login, MFA, organizacoes da identidade e troca: nekkora.entrada-geral.enabled; criacao de organizacao: nekkora.criacao-organizacao.enabled; vinculacao: nekkora.vinculacao.enabled - estas duas so abrem com a entrada geral ligada; todas desligadas por padrao): a rota nao existe', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: not_found } } } }
     RestrictedIdentitySession: { description: 'Sessao de identidade restrita a recuperacao (DC-17.13): so cadastrar e confirmar o fator novo, e logout', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
     CsrfForbidden: { description: 'Origin diferente da origem publica ou X-CSRF-Token do contexto ausente/invalido', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
     ServiceUnavailable:
@@ -1254,6 +1342,16 @@ components:
         name: { type: string, minLength: 1, description: '1 a 120 pontos de codigo, sem espaco nas pontas, sem caractere de controle' }
         legalName: { type: string, minLength: 1, description: 'opcional; mesma regra de name' }
     OrganizationCreated: { type: object, required: [organizationId], properties: { organizationId: { type: string, format: uuid } } }
+    LinkStartRequest:
+      type: object
+      description: 'Etapa 1 da vinculacao: EXATAMENTE um entre code (TOTP da conta antiga) e recoveryCode (codigo de recuperacao da conta antiga); nenhum ou os dois -> 400.'
+      required: [organizationId, password]
+      properties:
+        organizationId: { type: string, format: uuid, description: 'UUID canonico; malformado -> 400' }
+        password: { type: string, format: password, description: 'senha da conta antiga (nao a da identidade)' }
+        code: { type: string, minLength: 1 }
+        recoveryCode: { type: string, minLength: 1 }
+    LinkConfirmRequest: { type: object, required: [organizationId], properties: { organizationId: { type: string, format: uuid, description: 'UUID canonico; malformado ou ausente -> 400' } } }
     OrganizationSessionRequest: { type: object, required: [organizationId], properties: { organizationId: { type: string, format: uuid, description: 'UUID canonico; malformado -> 400' } } }
     OrganizationSessionResult:
       type: object
