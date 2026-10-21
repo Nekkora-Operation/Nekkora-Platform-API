@@ -204,17 +204,13 @@ class MfaConcurrencyIT extends PlatformTestBase {
     /**
      * Diagnostico de falha intermitente (revisao 1 de P3/P4): o servidor responde so o SQLSTATE, e a mensagem do banco se perde
      * com o container compartilhado ao fim da suite. Se o ato administrativo nao concluiu, as linhas de erro do log do
-     * PostgreSQL de teste vao para a saida do teste (o log do PostgreSQL ja e conferido sem segredos em LimitsAndLogsIT).
+     * PostgreSQL de teste vao para a saida do teste, sanitizadas ({@link DiagnosticoPg}: sem os valores da linha recusada).
      */
     private static void diagnostico(int rodada, int[] s) {
         if (s[1] == 204) {
             return;
         }
         System.out.println("diagnostico rodada " + rodada + ": status=" + s[0] + "/" + s[1]);
-        for (String l : DB.serverLog().split("\n")) {
-            if (l.matches(".*(ERRO|ERROR|CONTEXT|STATEMENT|COMANDO|Onde|DETAIL|DETALHE).*")) {
-                System.out.println("diagnostico pg: " + l);
-            }
-        }
+        DiagnosticoPg.imprimir(DB, "rodada " + rodada);
     }
 }

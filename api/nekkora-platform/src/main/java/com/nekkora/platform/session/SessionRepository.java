@@ -128,14 +128,20 @@ public final class SessionRepository {
                 .query(OffsetDateTime.class).single();
     }
 
+    /*
+     * Revogacao: revoked_at = greatest(instante, created_at), como as revogacoes da identidade (017 e IdentityAuthRepository).
+     * clock_timestamp() e o relogio de parede do servidor e pode recuar entre duas transacoes (sincronizacao de hora; ja
+     * medido na VM do Docker Desktop). Sem o greatest, uma sessao criada logo antes do recuo violava a CHECK da 002
+     * (revoked_at >= created_at) e a acao inteira - reset de MFA, suspensao, troca de senha, logout - falhava com 23514.
+     */
     public int revokeByToken(JdbcClient j, UUID org, String tokenHash) {
-        return j.sql("UPDATE public.user_sessions SET revoked_at = clock_timestamp() WHERE organization_id = ? AND session_token_hash = ? AND revoked_at IS NULL")
+        return j.sql("UPDATE public.user_sessions SET revoked_at = greatest(clock_timestamp(), created_at) WHERE organization_id = ? AND session_token_hash = ? AND revoked_at IS NULL")
                 .param(org).param(tokenHash).update();
     }
 
     /** Revoga todas as sessoes ativas da conta, exceto {@code manter} (pode ser null). */
     public int revokeForAccount(JdbcClient j, UUID user, UUID keep) {
-        return j.sql("UPDATE public.user_sessions SET revoked_at = clock_timestamp() WHERE user_id = ? AND revoked_at IS NULL AND session_id IS DISTINCT FROM ?")
+        return j.sql("UPDATE public.user_sessions SET revoked_at = greatest(clock_timestamp(), created_at) WHERE user_id = ? AND revoked_at IS NULL AND session_id IS DISTINCT FROM ?")
                 .param(user).param(keep).update();
     }
 
@@ -154,7 +160,7 @@ public final class SessionRepository {
     /** Limite por conta: revoga as ativas mais antigas para que, com a nova, sejam no maximo {@code maximoPorConta}. */
     private void revokeExcess(JdbcClient j, UUID org, UUID user, OffsetDateTime currentTime, Duration inactivity) {
         j.sql("""
-                UPDATE public.user_sessions SET revoked_at = ?
+                UPDATE public.user_sessions SET revoked_at = greatest(?, created_at)
                  WHERE session_id IN (
                      SELECT session_id FROM public.user_sessions
                       WHERE user_id = ? AND organization_id = ? AND revoked_at IS NULL AND expires_at > ?
