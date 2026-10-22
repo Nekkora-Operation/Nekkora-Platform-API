@@ -230,7 +230,16 @@ public final class IdentityLoginService {
                 factorId = f.get().id();
             }
             OffsetDateTime e = auth.sessionExpiry(j, sessionAbsolute);
+            if (codeHashFinal != null) {
+                // aviso do uso do codigo NA transacao (chave = o desafio, de uso unico), ANTES da funcao: as decisoes dela,
+                // medidas depois dos locks, ficam sendo as ultimas antes do commit; se ela nao criar a sessao, a intencao e
+                // desfeita junto (IntentRollback)
+                mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_RECOVERY_CODE_USED, null, o.email(), null, "desafio:" + o.challengeId()));
+            }
             IdentityAuthRepository.Completion c = auth.loginComplete(j, challengeToken, step, codeHashFinal, Tokens.sha256Hex(token), csrf, e);
+            if (codeHashFinal != null && !c.created()) {
+                throw new IntentRollback(Completed.of(c, e));
+            }
             if (c.created() && step != null) {
                 // a funcao ainda espera desafio, credencial e fator DEPOIS desta validacao: o passo e reconferido ao fim
                 if (!stillAccepted(step)) {
@@ -239,10 +248,6 @@ public final class IdentityLoginService {
                 if (!auth.stepRecordedOn(j, factorId, step)) {
                     throw new CompletionRollback("fator_divergente");
                 }
-            }
-            if (c.created() && codeHashFinal != null) {
-                // aviso NA transacao do uso do codigo (T0); chave = a sessao restrita que ele criou
-                mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_RECOVERY_CODE_USED, null, o.email(), null, "sessao:" + c.sessionId()));
             }
             return Completed.of(c, e);
         });
@@ -323,6 +328,16 @@ public final class IdentityLoginService {
         }
     }
 
+    /** A funcao nao concluiu depois de a intencao de e-mail ser gravada: desfaz a transacao; o desfecho segue o mesmo. */
+    private static final class IntentRollback extends RuntimeException {
+        final transient Completed completed;
+
+        IntentRollback(Completed completed) {
+            super(null, null, false, false);
+            this.completed = completed;
+        }
+    }
+
     /**
      * Janela do TOTP no instante medido AGORA (depois de todas as esperas ja ocorridas na transacao): o passo aceito tem
      * de estar entre agora-1 e agora+1, a mesma tolerancia de {@code Totp.verify}.
@@ -347,6 +362,8 @@ public final class IdentityLoginService {
             }).orElse(Completed.denied("desafio"));
         } catch (CompletionRollback e) {
             return Completed.denied(e.rule);
+        } catch (IntentRollback e) {
+            return e.completed;
         }
     }
 

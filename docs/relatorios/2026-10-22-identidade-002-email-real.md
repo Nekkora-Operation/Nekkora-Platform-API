@@ -122,11 +122,32 @@ A única mensagem sem ato a acompanhar, o aviso de "conta já existente" do cada
 | troca de senha | hash novo |
 | troca de fator | fator novo |
 | regeneração de códigos | hash do conjunto |
-| uso de código | sessão criada |
+| uso de código | desafio de entrada consumido (identidade e organização) ou desafio de vinculação |
 | vinculação | desafio consumido |
 | reset administrativo | correlação do evento, gerada pelo servidor e gravada no evento |
 
-`ON CONFLICT DO NOTHING`: o mesmo evento nunca vira dois trabalhos. Isso não promete entrega exatamente uma vez. Substitui a janela no Redis do desenho §6.3, com a justificativa pedida: a posse exclusiva protege um trabalho, e a chave do evento impede dois trabalhos para o mesmo evento.
+`ON CONFLICT DO NOTHING`: enquanto a linha existir, o mesmo evento não vira dois trabalhos. **A garantia não é permanente:** depois da limpeza da retenção, 30 dias após o encerramento, o UNIQUE deixa de impedir a reinserção daquela chave. Isso não promete entrega exatamente uma vez. Substitui a janela no Redis do desenho §6.3, com a justificativa pedida: a posse exclusiva protege um trabalho, e a chave do evento impede dois trabalhos para o mesmo evento.
+
+### Decisões finais depois da gravação (revisão 2)
+
+Achado da revisão 2: a gravação da intenção é um INSERT real e pode esperar locks. Nos caminhos em que ela ficava **depois** de uma reconferência temporal, a sessão, o passo TOTP ou o step-up podiam vencer durante a espera, e a transação confirmava assim mesmo.
+
+**Regra aplicada a todos os caminhos alterados:** a intenção é gravada **antes** da última decisão temporal da transação. Qualquer recusa posterior a ela desfaz a transação inteira, inclusive a intenção.
+
+| Caminho | Antes | Agora |
+|---|---|---|
+| Troca de fator (identidade) | intenção depois da reconferência de sessão e passo | intenção antes da reconferência, que fica por último |
+| Troca de senha e regeneração de códigos (identidade) | intenção depois da função | intenção antes da função, cuja prova (step-up, medida depois dos locks) é a decisão final; recusa desfaz a intenção |
+| Uso de código de recuperação na entrada (identidade) | intenção depois da função | intenção antes da função (chave = desafio); se a sessão não nasce, a intenção é desfeita e o desfecho segue o mesmo |
+| Vinculação, etapa 1 | intenção depois da reconferência de sessão e passo | antes da reconferência |
+| Vinculação, etapa 2 | intenção depois da função | antes da função; recusa desfaz |
+| Confirmação da recuperação de senha (identidade) | intenção depois da função | antes da função; recusa desfaz |
+| Uso de código na entrada por organização | intenção depois do consumo do desafio | antes do consumo do desafio, que confere o prazo (chave = desafio) |
+| Troca de senha por organização | intenção depois da reconferência da sessão | antes da reconferência e da troca do hash; recusa desfaz |
+| Reset administrativo | intenções depois da reconferência de sessão, permissão e step-up | antes delas; recusa desfaz |
+| Cadastro, reemissão, pedidos de recuperação | — | sem reconferência temporal depois da gravação (a identidade ou a conta fica travada até o commit; o prazo do token começa na própria transação) |
+
+**Reconferência da posse no despacho.** Na revisão 1, a validade e a renovação estavam num único UPDATE com `clock_timestamp()`. Se o comando esperasse o lock da linha, a condição podia ter sido avaliada antes da espera. Agora são dois comandos na mesma transação: primeiro só o lock da linha, depois, num comando novo com o relógio lido após a espera, a conferência de estado, tentativa, posse e prazo, e a renovação.
 
 ### Fila persistente (021) e despacho (`MailDispatcher`)
 
@@ -178,7 +199,7 @@ A única mensagem sem ato a acompanhar, o aviso de "conta já existente" do cada
 **Duplicidade.** Não há entrega "exatamente uma vez".
 - O que **pode ter saído** (INCERTO) nunca é reenviado automaticamente.
 - O que **com certeza não saiu** (RETENTÁVEL, ou posse perdida antes do envio) é repetido.
-- O mesmo evento nunca gera dois trabalhos.
+- Enquanto a linha existir (até 30 dias depois de encerrada), o mesmo evento não gera dois trabalhos.
 
 **Observabilidade.** Os eventos de log registram o job, o tipo, a tentativa, o desfecho, o status HTTP e a correlação:
 - `mail.enfileirado`;
@@ -245,6 +266,9 @@ Códigos de saída: 0 aceito, 2 recusado, 3 retentável, 4 incerto, 64 uso incor
 | Prazo vencido: EXPIRADO, sem envio | `prazoVencidoExpiraSemEnviar` |
 | Ritmo por minuto | `ritmoPorMinutoLimitaOsEnvios` |
 | Banco: origem e terminal imutáveis; DELETE fora da retenção recusado | `bancoProtegeOrigemTerminalEApagamento` |
+| **Reconferência depois da espera pelo lock** (revisão 2). Outra transação trava a linha entre a reivindicação e a reconferência e vence durante a espera: (a) a posse; (b) o prazo da mensagem. Nenhum dos dois chama o transporte. (c) Controle: lock liberado antes do vencimento, e envia. **Contraprova:** com o UPDATE único da revisão 1, (a) envia depois de vencida | `MailOutboxIT.reconferenciaDepoisDaEsperaPeloLockNaoEnviaVencidos` |
+| **Troca de fator com a gravação da intenção bloqueada** (revisão 2). A sessão restrita vence durante a espera: 401 e rollback integral (fatores, códigos, marca de recuperação, demais sessões, evento 11, intenção). **Contraprova:** com a intenção depois da reconferência, a troca confirma (200) | `IdentityIntentFinalChecksIT.trocaDeFatorComSessaoVencidaDuranteAGravacaoDaIntencaoDesfazTudo` |
+| **Troca de senha com a gravação bloqueada** (revisão 2). O step-up vence durante a espera e a função recusa: 403; senha, evento 12 e intenção inalterados. **Contraprova:** com a intenção depois da função, troca (204) | `IdentityIntentFinalChecksIT.trocaDeSenhaComStepUpVencidoDuranteAGravacaoDaIntencaoNaoTroca` |
 | **Retenção:** terminal recente fica; terminal com mais de 30 dias sai pela limpeza; pendente fica; a Platform não apaga fora da regra | `retencaoApagaSoTerminaisAntigos` |
 | Modelos: todo tipo, link na origem com token no fragmento, avisos sem link | `MailTemplatesTest` |
 

@@ -144,17 +144,18 @@ public final class AccountLinkService {
                 }
                 links.revokeLive(j, id.identityId());
                 links.create(j, id.identityId(), c.userId(), Tokens.sha256Hex(token), c.passwordHash());
-                // sessao e passo conferidos antes das esperas: reconferidos agora, antes do commit
+                if (p.usedRecoveryCode()) {
+                    // aviso NA transacao do consumo do codigo local (chave = o desafio de vinculacao emitido), ANTES da
+                    // reconferencia final: a gravacao pode esperar locks
+                    mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_RECOVERY_CODE_USED, organizationId, email.get(), null,
+                            "vinculacao:" + Tokens.sha256Hex(token)));
+                }
+                // sessao e passo conferidos antes das esperas: reconferidos agora, por ultimo, antes do commit
                 if (!auth.sessionStillValid(j, who.sessionId())) {
                     throw new ProofRollback("sessao_vencida");
                 }
                 if (p.totpStep() != null && !stillAccepted(p.totpStep())) {
                     throw new ProofRollback("passo_vencido");
-                }
-                if (p.usedRecoveryCode()) {
-                    // aviso NA transacao do consumo do codigo local; chave = o desafio de vinculacao emitido
-                    mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_RECOVERY_CODE_USED, organizationId, email.get(), null,
-                            "vinculacao:" + Tokens.sha256Hex(token)));
                 }
                 return new Outcome(null, p.usedRecoveryCode());
             }).orElse(Outcome.refused("sessao"));
@@ -194,16 +195,22 @@ public final class AccountLinkService {
             throw ApiException.unauthenticated("sessao_identidade");
         }
         String identity = hmac.global(email.get());
-        boolean linked = Tokens.isValidFormat(linkToken)
-                && tx.preAuthentication(Mode.READ_WRITE, j -> {
-                    if (!links.link(j, sessionToken, linkToken, organizationId)) {
-                        return false;
-                    }
-                    // aviso NA transacao da vinculacao; chave = o desafio de vinculacao consumido (uso unico)
-                    mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_IDENTITY_LINKED, organizationId, email.get(), null,
-                            "vinculada:" + Tokens.sha256Hex(linkToken)));
-                    return true;
-                });
+        boolean linked;
+        try {
+            linked = Tokens.isValidFormat(linkToken)
+                    && tx.preAuthentication(Mode.READ_WRITE, j -> {
+                        // aviso NA transacao (chave = o desafio de vinculacao, de uso unico), ANTES da funcao: as decisoes dela
+                        // (step-up, desafio, credencial), medidas depois dos locks, ficam sendo as ultimas; recusa desfaz a intencao
+                        mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_IDENTITY_LINKED, organizationId, email.get(), null,
+                                "vinculada:" + Tokens.sha256Hex(linkToken)));
+                        if (!links.link(j, sessionToken, linkToken, organizationId)) {
+                            throw new ProofRollback("vinculacao_recusada");
+                        }
+                        return true;
+                    });
+        } catch (ProofRollback e) {
+            linked = false;
+        }
         if (!linked) {
             LOG.info("evento=identidade.vinculacao_negada identidade={} ip={}", identity, ClientIpResolver.truncated(ip));
             throw ApiException.forbidden("vinculacao");

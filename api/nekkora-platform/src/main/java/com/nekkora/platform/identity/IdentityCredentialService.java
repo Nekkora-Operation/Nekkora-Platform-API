@@ -94,7 +94,7 @@ public final class IdentityCredentialService {
         static final Outcome DONE = new Outcome(null, false);
     }
 
-    /** Reconferencia final reprovada depois das escritas: desfaz a transacao inteira. */
+    /** Recusa ou reconferencia final reprovada depois de escritas (inclusive a intencao de e-mail): desfaz a transacao inteira. */
     private static final class ReplaceRollback extends RuntimeException {
         final transient Outcome outcome;
 
@@ -176,16 +176,16 @@ public final class IdentityCredentialService {
                 if (auth.consumeStep(j, pending.get().id(), step.getAsLong()) != 1) {
                     throw new IllegalStateException("fator novo confirmado sem o passo da confirmacao");
                 }
-                // a funcao espera locks da sessao, dos fatores, dos codigos e das demais sessoes DEPOIS do TOTP: sessao e
-                // passo sao reconferidos agora, antes do commit
+                // aviso NA transacao da troca (chave = o fator novo), ANTES da reconferencia final: a gravacao pode esperar
+                // locks, e a reconferencia tem de ser a ultima coisa antes do commit
+                mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_MFA_REPLACED, null, o.email(), null, "fator:" + pending.get().id()));
+                // a funcao e a gravacao esperam locks DEPOIS do TOTP: sessao e passo sao reconferidos agora, antes do commit
                 if (!auth.sessionStillValid(j, who.sessionId())) {
                     throw new ReplaceRollback(new Outcome("sessao_vencida", false));
                 }
                 if (!stillAccepted(step.getAsLong())) {
                     throw new ReplaceRollback(new Outcome("passo_vencido", false));
                 }
-                // aviso NA transacao da troca; chave = o fator novo
-                mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_MFA_REPLACED, null, o.email(), null, "fator:" + pending.get().id()));
                 return Outcome.DONE;
             }).orElse(new Outcome("sessao", false));
         } catch (ReplaceRollback e) {
@@ -228,18 +228,24 @@ public final class IdentityCredentialService {
             throw refused(new Outcome("senha_atual", false), o, ip, "troca_senha");
         }
         String newHash = hasher.generate(newPassword);
-        Outcome r = tx.inIdentity(new TokenSessao(sessionToken), Mode.READ_WRITE, (id, j) -> {
-            if (!id.identityId().equals(o.identityId()) || !id.referencia().filter(who.sessionId()::equals).isPresent()) {
-                return new Outcome("sessao", false);
-            }
-            if (auth.changePassword(j, sessionToken, hash, newHash)) {
-                // aviso NA transacao da troca; chave = o hash novo
+        Outcome r;
+        try {
+            r = tx.inIdentity(new TokenSessao(sessionToken), Mode.READ_WRITE, (id, j) -> {
+                if (!id.identityId().equals(o.identityId()) || !id.referencia().filter(who.sessionId()::equals).isPresent()) {
+                    return new Outcome("sessao", false);
+                }
+                // aviso NA transacao (chave = o hash novo), ANTES da funcao: a prova da funcao, medida depois dos locks dela,
+                // fica sendo a ultima decisao antes do commit; recusa da funcao desfaz tambem a intencao
                 mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_PASSWORD_CHANGED, null, o.email(), null, "senha:" + Tokens.sha256Hex(newHash)));
-                return Outcome.DONE;
-            }
-            // recusa sem efeito: sessao caiu (401); sem step-up, restrita no intervalo ou senha trocada no intervalo (403)
-            return new Outcome(auth.sessionStillValid(j, who.sessionId()) ? "sem_prova_ou_senha_alterada" : "sessao", false);
-        }).orElse(new Outcome("sessao", false));
+                if (auth.changePassword(j, sessionToken, hash, newHash)) {
+                    return Outcome.DONE;
+                }
+                // recusa sem efeito: sessao caiu (401); sem step-up, restrita no intervalo ou senha trocada no intervalo (403)
+                throw new ReplaceRollback(new Outcome(auth.sessionStillValid(j, who.sessionId()) ? "sem_prova_ou_senha_alterada" : "sessao", false));
+            }).orElse(new Outcome("sessao", false));
+        } catch (ReplaceRollback e) {
+            r = e.outcome;
+        }
         if (r.rule() != null) {
             throw refused(r, o, ip, "troca_senha");
         }
@@ -257,18 +263,23 @@ public final class IdentityCredentialService {
         }
         List<String> codes = RecoveryCodes.generate();
         List<String> hashes = codes.stream().map(RecoveryCodes::normalize).map(RecoveryCodes::hash).toList();
-        Outcome r = tx.inIdentity(new TokenSessao(sessionToken), Mode.READ_WRITE, (id, j) -> {
-            if (!id.identityId().equals(o.identityId()) || !id.referencia().filter(who.sessionId()::equals).isPresent()) {
-                return new Outcome("sessao", false);
-            }
-            if (auth.regenerateRecoveryCodes(j, sessionToken, hashes)) {
-                // aviso NA transacao da regeneracao; chave = o conjunto novo (hash dos hashes)
+        Outcome r;
+        try {
+            r = tx.inIdentity(new TokenSessao(sessionToken), Mode.READ_WRITE, (id, j) -> {
+                if (!id.identityId().equals(o.identityId()) || !id.referencia().filter(who.sessionId()::equals).isPresent()) {
+                    return new Outcome("sessao", false);
+                }
+                // aviso NA transacao (chave = o conjunto novo), ANTES da funcao, cuja prova fica sendo a decisao final
                 mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_RECOVERY_CODES_REGENERATED, null, o.email(), null,
                         "codigos:" + Tokens.sha256Hex(String.join(",", hashes))));
-                return Outcome.DONE;
-            }
-            return new Outcome(auth.sessionStillValid(j, who.sessionId()) ? "sem_prova" : "sessao", false);
-        }).orElse(new Outcome("sessao", false));
+                if (auth.regenerateRecoveryCodes(j, sessionToken, hashes)) {
+                    return Outcome.DONE;
+                }
+                throw new ReplaceRollback(new Outcome(auth.sessionStillValid(j, who.sessionId()) ? "sem_prova" : "sessao", false));
+            }).orElse(new Outcome("sessao", false));
+        } catch (ReplaceRollback e) {
+            r = e.outcome;
+        }
         if (r.rule() != null) {
             throw refused(r, o, ip, "regeneracao_codigos");
         }

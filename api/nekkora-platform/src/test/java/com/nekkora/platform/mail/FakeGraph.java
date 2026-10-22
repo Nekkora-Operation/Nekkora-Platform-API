@@ -20,7 +20,7 @@ import com.sun.net.httpserver.HttpServer;
  * Microsoft Entra (endpoint de token v2) e Microsoft Graph ({@code sendMail}) FALSOS, locais, para os testes do transporte:
  * registram cada pedido (corpo e cabecalhos) e respondem pelo roteiro programado. Nada sai da maquina.
  */
-final class FakeGraph implements AutoCloseable {
+public final class FakeGraph implements AutoCloseable {
 
     /** Resposta programada do sendMail: status, Retry-After (ou nulo) e atraso antes de responder. */
     record Reply(int status, String retryAfter, long delayMs) {
@@ -39,14 +39,14 @@ final class FakeGraph implements AutoCloseable {
     volatile int tokenStatus = 200;
     private final HttpServer server;
 
-    FakeGraph() throws IOException {
+    public FakeGraph() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.setExecutor(Executors.newCachedThreadPool());
         server.createContext("/", this::handle);
         server.start();
     }
 
-    String base() {
+    public String base() {
         return "http://127.0.0.1:" + server.getAddress().getPort();
     }
 
@@ -109,7 +109,7 @@ final class FakeGraph implements AutoCloseable {
     }
 
     /** Certificado de TESTE autoassinado (RSA 2048, 2 dias) num PKCS#12 temporario, gerado pelo keytool do JDK. */
-    static Path testCertificate(Path dir, String password) throws Exception {
+    public static Path testCertificate(Path dir, String password) throws Exception {
         Path p12 = dir.resolve("teste-m365.p12");
         Files.deleteIfExists(p12);
         Process k = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "keytool").toString(), "-genkeypair", "-alias", "nekkora-teste",

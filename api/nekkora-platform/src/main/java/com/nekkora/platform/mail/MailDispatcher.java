@@ -157,12 +157,33 @@ public final class MailDispatcher {
                 .optional());
     }
 
-    /** Ainda ENVIANDO, mesma tentativa, posse e prazo validos AGORA; renova a posse no mesmo comando. */
+    /**
+     * Ainda ENVIANDO, mesma tentativa, posse e prazo validos DEPOIS de qualquer espera; renova a posse. Dois comandos na mesma
+     * transacao: primeiro so o lock da linha (pode esperar outra transacao que a segura); depois, num comando NOVO - com o
+     * relogio lido depois da espera -, a conferencia e a renovacao. Num comando unico, a condicao com clock_timestamp() pode
+     * ter sido avaliada antes da espera pelo lock (a mesma classe de problema do P1).
+     */
     private boolean stillMine(Claimed c) {
-        return tx.withoutContext(j -> j.sql("""
-                UPDATE public.mail_outbox SET lease_until = clock_timestamp() + ?::interval
-                 WHERE job_id = ? AND state = 2 AND attempts = ? AND lease_until > clock_timestamp() AND deadline_at > clock_timestamp()
-                """).param(millis(lease)).param(c.job()).param(c.attempts()).update()) == 1;
+        return tx.withoutContext(j -> {
+            if (j.sql("SELECT 1 FROM public.mail_outbox WHERE job_id = ? FOR UPDATE").param(c.job()).query(Integer.class).optional().isEmpty()) {
+                return false;
+            }
+            beforeConfirm.run();
+            return j.sql("""
+                    UPDATE public.mail_outbox SET lease_until = clock_timestamp() + ?::interval
+                     WHERE job_id = ? AND state = 2 AND attempts = ? AND lease_until > clock_timestamp() AND deadline_at > clock_timestamp()
+                    """).param(millis(lease)).param(c.job()).param(c.attempts()).update() == 1;
+        });
+    }
+
+    /** Ponto de teste: depois do lock da linha e antes da conferencia (nada em producao). */
+    private volatile Runnable beforeConfirm = () -> { };
+    /** Ponto de teste: entre a reivindicacao e a reconferencia (nada em producao). */
+    private volatile Runnable afterClaim = () -> { };
+
+    void testHooks(Runnable afterClaim, Runnable beforeConfirm) {
+        this.afterClaim = afterClaim;
+        this.beforeConfirm = beforeConfirm;
     }
 
     /** Desfecho da vez: enviado ao transporte, nao enviado, ou posse perdida antes do envio. */
@@ -187,6 +208,7 @@ public final class MailDispatcher {
                 Arrays.fill(plain, (byte) 0);
             }
         }
+        afterClaim.run();
         if (!stillMine(c)) {
             // posse vencida ou prazo vencido entre a reivindicacao e o envio: NAO envia. Se ninguem levou o trabalho a outro
             // estado, ele volta a PENDENTE (sabidamente nao enviado); o prazo vencido e tratado pela varredura seguinte

@@ -58,6 +58,13 @@ public final class AuthService {
     public record LoginResult(String status, String challengeToken, String csrfToken) {
     }
 
+    /** Troca de senha recusada depois de a intencao de e-mail ser gravada: desfaz a transacao inteira. */
+    private static final class ChangeRefused extends RuntimeException {
+        ChangeRefused() {
+            super(null, null, false, false);
+        }
+    }
+
     public record NewSession(String token, String csrfToken, OffsetDateTime expiresAt, List<String> recoveryCodes) {
     }
 
@@ -263,8 +270,15 @@ public final class AuthService {
                     return wrongAttempt(j, org, d.get());
                 }
             }
+            if (recovery) {
+                // aviso NA transacao do uso do codigo (chave = o desafio, de uso unico), ANTES do consumo do desafio: a
+                // gravacao pode esperar locks, e o consumo (que confere o prazo) tem de ser a decisao final
+                mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_RECOVERY_CODE_USED, org, c.get().email(), null,
+                        "desafio:" + d.get().id()));
+            }
             // o segundo fator ja foi consumido acima: se o desafio nao puder mais ser consumido (expirou entre o lock e
-            // aqui, por exemplo), desfaz a transacao inteira - o codigo/passo volta a valer e nenhuma sessao nasce
+            // aqui, por exemplo), desfaz a transacao inteira - o codigo/passo volta a valer, nenhuma sessao nasce e a
+            // intencao de e-mail sai junto
             if (mfa.consumeChallenge(j, d.get().id()) != 1) {
                 throw new ConsumptionFailed();
             }
@@ -274,14 +288,7 @@ public final class AuthService {
                 mfa.invalidateForAccount(j, d.get().userId(), null);
                 mfa.recordEvent(j, org, d.get().userId(), null, MfaRepository.EV_RECOVERY_CODE, correlation());
             }
-            // a sessao nasce DEPOIS da revogacao das demais (ordem original)
-            NewSession created = createSession(j, org, c.get(), null);
-            if (recovery) {
-                // aviso NA transacao do uso do codigo; chave = a sessao que ele criou
-                mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_RECOVERY_CODE_USED, org, c.get().email(), null,
-                        "sessao:" + Tokens.sha256Hex(created.token())));
-            }
-            return new Ok(created, c.get().email(), recovery, null);
+            return new Ok(createSession(j, org, c.get(), null), c.get().email(), recovery, null);
         }));
         return complete(r, org, identity, ip);
     }
@@ -363,19 +370,23 @@ public final class AuthService {
         try {
             email = tx.inOrganization(org, Mode.READ_WRITE, j -> {
                 accounts.lock(j, org, s.userId());
+                String to = accounts.byId(j, org, s.userId()).map(Account::email).orElse(null);
+                if (to == null) {
+                    return null;
+                }
+                // aviso NA transacao (chave = o hash novo), ANTES da reconferencia da sessao e da troca do hash: a gravacao
+                // pode esperar locks, e essas tem de ser as decisoes finais; recusa delas desfaz tambem a intencao
+                mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_PASSWORD_CHANGED, org, to, null, "senha:" + Tokens.sha256Hex(newHash)));
                 if (sessions.validate(j, org, Tokens.sha256Hex(sessionToken), false).isEmpty()
                         || !accounts.replaceHashIfUnchanged(j, s.userId(), hash, newHash, true)) {
-                    return null;
+                    throw new ChangeRefused();
                 }
                 mfa.invalidateForAccount(j, s.userId(), null);
                 sessions.revokeForAccount(j, s.userId(), s.sessionId());
-                String to = accounts.byId(j, org, s.userId()).map(Account::email).orElse(null);
-                if (to != null) {
-                    // aviso NA transacao da troca; chave = o hash novo (o fato unico desta troca)
-                    mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_PASSWORD_CHANGED, org, to, null, "senha:" + Tokens.sha256Hex(newHash)));
-                }
                 return to;
             });
+        } catch (ChangeRefused e) {
+            email = null;
         } catch (DataAccessException e) {
             // vinculada no intervalo: a trigger da 017 recusa a troca do hash (23514); nada foi alterado
             if (!linkedAccountRefusal(e)) {

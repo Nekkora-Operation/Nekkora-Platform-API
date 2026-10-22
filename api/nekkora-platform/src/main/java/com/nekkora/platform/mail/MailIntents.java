@@ -15,7 +15,9 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * sem persistencia; falha do transporte so vai ao log.</li>
  * </ul>
  * {@link Intent#eventKey()} e a chave ESTAVEL do evento (tipo + fato de negocio unico: hash do token, fator novo, sessao
- * criada...): o mesmo evento nunca vira dois trabalhos (UNIQUE no banco). Nao promete entrega exatamente uma vez.
+ * criada...): enquanto a linha existir, o mesmo evento nao vira dois trabalhos (UNIQUE no banco). A garantia nao e
+ * permanente: depois da limpeza da retencao (30 dias apos o encerramento) a chave pode voltar. Nao promete entrega exatamente
+ * uma vez.
  */
 public interface MailIntents {
 

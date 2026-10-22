@@ -256,6 +256,75 @@ class MailOutboxIT {
         }
     }
 
+    /**
+     * Reconferencia com ESPERA pelo lock da linha (outra transacao a trava sem modifica-la, entre a reivindicacao e a
+     * reconferencia), vencendo durante a espera: (a) a posse; (b) o prazo da mensagem. Nenhum dos dois chama o transporte.
+     * (c) Controle: o lock e liberado antes do vencimento e o envio acontece.
+     */
+    @Test
+    void reconferenciaDepoisDaEsperaPeloLockNaoEnviaVencidos() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger chamadas = new java.util.concurrent.atomic.AtomicInteger();
+        MailTransport contando = m -> {
+            chamadas.incrementAndGet();
+            return new MailTransport.Delivery(MailTransport.Result.ACEITO, 202, null);
+        };
+        // (a) posse de 1,5 s; lock segurado 2,5 s
+        UUID a = enqueue();
+        MailDispatcher da = new MailDispatcher(tx, cipher, contando, templates, 1000, Duration.ofMillis(1500), (n, o) -> { });
+        da.testHooks(() -> travarLinha(a, 2500), () -> { });
+        da.dispatchPending();
+        assertThat(chamadas.get()).as("(a) posse vencida na espera: nenhum envio").isZero();
+        assertThat(state(a)).as("(a) de volta a fila, nao enviado").startsWith("1|1|");
+        // (b) prazo da mensagem a 1,5 s; posse longa; lock segurado 2,5 s
+        UUID b = enqueue();
+        DB.asSuperuser("SET session_replication_role = replica; UPDATE mail_outbox SET deadline_at = clock_timestamp() + interval '1500 milliseconds'"
+                + " WHERE job_id = '" + b + "'; SET session_replication_role = origin");
+        MailDispatcher db = new MailDispatcher(tx, cipher, contando, templates, 1000, Duration.ofMinutes(2), (n, o) -> { });
+        db.testHooks(() -> travarLinha(b, 2500), () -> { });
+        db.dispatchPending();
+        assertThat(chamadas.get()).as("(b) prazo vencido na espera: nenhum envio").isZero();
+        db.testHooks(() -> { }, () -> { });
+        db.dispatchPending();
+        assertThat(state(b)).as("(b) expira sem envio").startsWith("6|");
+        // (c) controle: lock liberado antes do vencimento da posse
+        UUID c = enqueue();
+        MailDispatcher dc = new MailDispatcher(tx, cipher, contando, templates, 1000, Duration.ofMillis(1500), (n, o) -> { });
+        dc.testHooks(() -> travarLinha(c, 300), () -> { });
+        DB.asSuperuser("UPDATE mail_outbox SET next_attempt_at = clock_timestamp() + interval '1 hour' WHERE state = 1 AND job_id <> '" + c + "'");
+        dc.dispatchPending();
+        assertThat(chamadas.get()).as("(c) controle: envia").isEqualTo(1);
+        assertThat(state(c)).startsWith("3|1|202");
+    }
+
+    /**
+     * Segura o lock da linha (FOR UPDATE, sem modificar) numa transacao do superusuario por {@code ms}, em outra thread;
+     * so retorna depois que o lock esta tomado.
+     */
+    private static void travarLinha(UUID job, long ms) {
+        java.util.concurrent.CountDownLatch travado = new java.util.concurrent.CountDownLatch(1);
+        Thread t = new Thread(() -> {
+            try (Connection c = DB.connectAsSuperuser()) {
+                c.setAutoCommit(false);
+                try (PreparedStatement ps = c.prepareStatement("SELECT 1 FROM mail_outbox WHERE job_id = ? FOR UPDATE")) {
+                    ps.setObject(1, job);
+                    ps.executeQuery().close();
+                }
+                travado.countDown();
+                Thread.sleep(ms);
+                c.commit();
+            } catch (Exception e) {
+                travado.countDown();
+            }
+        });
+        t.setDaemon(true);
+        t.start();
+        try {
+            travado.await(10, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     // ------------------------------------------------------------------ tentativas e desfechos
 
     @Test

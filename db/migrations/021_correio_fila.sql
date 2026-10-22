@@ -19,7 +19,9 @@
 --   * INTENCAO DURAVEL: o trabalho e gravado NA MESMA TRANSACAO do ato de negocio (cadastro, troca de senha, reset...):
 --     ou os dois confirmam, ou nenhum. O envio continua fora de transacao (despacho);
 --   * DEDUPLICACAO PERSISTENTE: event_key e a chave estavel do evento (tipo + fato de negocio unico: hash do token, fator
---     novo, sessao criada...), UNIQUE: o mesmo evento nunca vira dois trabalhos. Nao promete entrega exatamente uma vez;
+--     novo, sessao criada...), UNIQUE: enquanto a linha existir, o mesmo evento nao vira dois trabalhos. A garantia NAO e
+--     permanente: depois da limpeza da retencao (30 dias apos encerrado) a chave pode ser inserida de novo. Nao promete
+--     entrega exatamente uma vez;
 --   * notice_ref: tentativa do aviso da recuperacao emergencial (016), para devolver o desfecho assincrono a ela;
 --   * RETENCAO: trabalho terminal pode ser apagado SO 30 dias depois de encerrado (limpeza controlada, em lotes, pelo
 --     despacho); antes disso, ou fora de estado terminal, DELETE e recusado.

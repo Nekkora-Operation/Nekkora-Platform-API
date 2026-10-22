@@ -122,23 +122,36 @@ public final class IdentityPasswordRecoveryService {
         passwordRule.enforce(newPassword);
         String newHash = hasher.generate(newPassword);
         // a chave resolve a identidade do token (qualquer proposito); a funcao confere o proposito 2 e tudo o mais sob os locks
-        Optional<String> email = tx.inIdentity(new TokenEmail(token), Mode.READ_WRITE,
-                (id, j) -> {
-                    if (!identities.passwordReset(j, token, newHash)) {
-                        return null;
-                    }
-                    String to = auth.email(j, id.identityId()).orElse(null);
-                    if (to != null) {
-                        // aviso NA transacao da troca; chave = o token consumido (uso unico)
-                        mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_PASSWORD_CHANGED, null, to, null, "redefinicao:" + Tokens.sha256Hex(token)));
-                    }
-                    return to;
-                });
+        Optional<String> email;
+        try {
+            email = tx.inIdentity(new TokenEmail(token), Mode.READ_WRITE, (id, j) -> {
+                String to = auth.email(j, id.identityId()).orElse(null);
+                if (to == null) {
+                    return null;
+                }
+                // aviso NA transacao (chave = o token, de uso unico), ANTES da funcao: as decisoes dela (prazo do token,
+                // estado da identidade), medidas depois dos locks, ficam sendo as ultimas; recusa desfaz tambem a intencao
+                mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_PASSWORD_CHANGED, null, to, null, "redefinicao:" + Tokens.sha256Hex(token)));
+                if (!identities.passwordReset(j, token, newHash)) {
+                    throw new ResetRefused();
+                }
+                return to;
+            });
+        } catch (ResetRefused e) {
+            email = Optional.empty();
+        }
         if (email.isEmpty()) {
             LOG.info("evento=identidade.recuperacao_negada ip={}", ClientIpResolver.truncated(ip));
             throw ApiException.invalid("token");
         }
         LOG.info("evento=identidade.senha_redefinida identidade={} ip={}", hmac.global(email.get()), ClientIpResolver.truncated(ip));
+    }
+
+    /** Recusa da funcao depois de a intencao de e-mail ser gravada: desfaz a transacao inteira. */
+    private static final class ResetRefused extends RuntimeException {
+        ResetRefused() {
+            super(null, null, false, false);
+        }
     }
 
     private void floor(long startNanos) {

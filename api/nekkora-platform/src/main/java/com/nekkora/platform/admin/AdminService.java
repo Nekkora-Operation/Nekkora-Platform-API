@@ -172,25 +172,14 @@ public final class AdminService {
             if (accounts.isLinked(j, org, target)) {
                 return Failure.LINKED_ACCOUNT;
             }
-            f = authorize(j, org, actor, actorToken, "identity.mfa.reset", target);
-            if (f != null) {
-                return f;
-            }
-            Boolean recent = j.sql("SELECT mfa_step_up_at IS NOT NULL AND mfa_step_up_at > clock_timestamp() - ?::interval FROM public.user_sessions WHERE session_id = ?")
-                    .param(SessionRepository.interval(stepUpWindow)).param(actor.sessionId()).query(Boolean.class).single();
-            if (!recent) {
-                return Failure.STEP_UP;
-            }
-            mfa.invalidateForAccount(j, target, null);
-            mfa.disableFactor(j, target);
-            sessions.revokeForAccount(j, target, null);
+            // intencoes NA transacao do reset (chave = evento do reset, + destinatario), ANTES das reconferencias de sessao,
+            // permissao e step-up: a gravacao pode esperar locks, e essas reconferencias tem de ser as ultimas decisoes antes
+            // dos efeitos e do commit. Recusa depois daqui desfaz tambem as intencoes (FailureRollback)
             UUID ev = correlation();
-            mfa.recordEvent(j, org, target, actor.userId(), MfaRepository.EV_RESET_ADMIN, ev, reason.code());
             email[0] = accounts.byId(j, org, target).map(AccountRepository.Account::email).orElse(null);
             if (accounts.isEffectiveOrgAdmin(j, org, target)) {
                 otherAdmins.addAll(accounts.effectiveOrgAdminEmails(j, org, target));
             }
-            // intencoes NA transacao do reset (fila duravel no transporte real): chave = evento do reset (+ destinatario)
             if (email[0] != null) {
                 mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_MFA_RESET, org, email[0], null, "reset:" + target + ":" + ev));
             }
@@ -198,6 +187,19 @@ public final class AdminService {
                 mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_MFA_RESET_ADMIN_TARGET, org, other, null,
                         "reset:" + target + ":" + ev + ":" + com.nekkora.core.token.Tokens.sha256Hex(other)));
             }
+            f = authorize(j, org, actor, actorToken, "identity.mfa.reset", target);
+            if (f != null) {
+                throw new FailureRollback(f);
+            }
+            Boolean recent = j.sql("SELECT mfa_step_up_at IS NOT NULL AND mfa_step_up_at > clock_timestamp() - ?::interval FROM public.user_sessions WHERE session_id = ?")
+                    .param(SessionRepository.interval(stepUpWindow)).param(actor.sessionId()).query(Boolean.class).single();
+            if (!recent) {
+                throw new FailureRollback(Failure.STEP_UP);
+            }
+            mfa.invalidateForAccount(j, target, null);
+            mfa.disableFactor(j, target);
+            sessions.revokeForAccount(j, target, null);
+            mfa.recordEvent(j, org, target, actor.userId(), MfaRepository.EV_RESET_ADMIN, ev, reason.code());
             return null;
         });
     }
@@ -220,6 +222,8 @@ public final class AdminService {
         Failure f;
         try {
             f = tx.inOrganization(org, Mode.READ_WRITE, action);
+        } catch (FailureRollback e) {
+            f = e.failure;
         } catch (RuntimeException e) {
             // ex.: trigger da 003 que impede deixar a organizacao sem ORG_ADMIN efetivo (P0001) - so SQLSTATE no log
             if ("P0001".equals(DbErrors.sqlState(e))) {
@@ -235,6 +239,16 @@ public final class AdminService {
                 case TARGET_NOT_FOUND -> new ApiException(ApiError.NOT_FOUND, "alvo");
                 default -> ApiException.forbidden(f.name());
             };
+        }
+    }
+
+    /** Recusa depois de escritas (as intencoes de e-mail): desfaz a transacao e responde como a recusa. */
+    private static final class FailureRollback extends RuntimeException {
+        final transient Failure failure;
+
+        FailureRollback(Failure failure) {
+            super(null, null, false, false);
+            this.failure = failure;
         }
     }
 
