@@ -482,6 +482,51 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /api/v1/auth/password-reset/request:
+    post:
+      tags: [Entrada geral (identidade)]
+      operationId: identityRequestPasswordReset
+      summary: 'Pede a recuperacao de senha da identidade por e-mail: resposta uniforme, sem enumeracao'
+      description: >
+        Missao 002 (migration 020). Pre-autenticacao (cookie __Host-nekkora_pre e CSRF dele). Sempre 202 sem corpo, com
+        piso de tempo (recovery-response-floor), para e-mail desconhecido, identidade nao ACTIVE ou nao verificada, limite
+        R14 excedido (identidade global e IP, valores de R5) ou token emitido. So a identidade ACTIVE com e-mail verificado
+        recebe token: sob o lock dela, os tokens de recuperacao vivos sao revogados, o novo e gravado (so o hash; uso unico;
+        prazo de 30 min) e o evento 16 e registrado; o e-mail sai fora do caminho da resposta. E-mail malformado: 400. R12:
+        429; Redis fora: 503. Chave propria nekkora.recuperacao-senha.enabled, so com a entrada geral ligada: desligada, 404.
+      security: [ { preAuthCookie: [], csrfHeader: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RecoveryRequest' } } } }
+      responses:
+        '202': { description: 'Pedido recebido (resposta identica em qualquer desfecho)' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '403': { $ref: '#/components/responses/CsrfForbidden' }
+        '404': { $ref: '#/components/responses/SignupDisabled' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/auth/password-reset/confirm:
+    post:
+      tags: [Entrada geral (identidade)]
+      operationId: identityConfirmPasswordReset
+      summary: 'Conclui a recuperacao: consome o token e troca a senha na mesma transacao; nenhuma sessao criada; MFA preservado'
+      description: >
+        Missao 002 (migration 020). Pre-autenticacao. Politica da senha nova e Argon2 antes da transacao; na transacao,
+        identity_password_reset trava identidade, token, credencial, demais tokens de recuperacao, desafios e sessoes, mede
+        a hora depois dos locks e reconfere o prazo; consome o token, troca a senha, revoga TODAS as sessoes de identidade,
+        invalida os desafios pendentes e os demais tokens de recuperacao e grava o evento 17. Nenhuma sessao e criada. O MFA
+        nao muda: a proxima entrada exige o fator ou um codigo de recuperacao. Token malformado, desconhecido, de outro
+        proposito, consumido, revogado ou vencido (inclusive durante a espera), identidade fora de ACTIVE, ou senha fora da
+        politica: 400, sem efeito. Aviso NOTICE_PASSWORD_CHANGED depois do commit. Mesma chave do pedido.
+      security: [ { preAuthCookie: [], csrfHeader: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RecoveryConfirmation' } } } }
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '403': { $ref: '#/components/responses/CsrfForbidden' }
+        '404': { $ref: '#/components/responses/SignupDisabled' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /api/v1/me/session:
     get:
       tags: [Entrada geral (identidade)]

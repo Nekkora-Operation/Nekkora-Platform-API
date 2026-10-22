@@ -1,0 +1,11 @@
+< con|identity_email_tokens|identity_email_tokens_purpose_check|CHECK ((purpose = 1))
+< con|identity_events|identity_events_event_type_check|CHECK (((event_type >= 1) AND (event_type <= 15)))
+> colacl|identity_email_tokens|consumed_at|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_email_tokens|created_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_email_tokens|purpose|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_email_tokens|revoked_at|nekkora_identity_owner|UPDATE|grant=f
+> con|identity_email_tokens|identity_email_tokens_purpose_check|CHECK ((purpose = ANY (ARRAY[1, 2])))
+> con|identity_events|identity_events_event_type_check|CHECK (((event_type >= 1) AND (event_type <= 17)))
+> fn|identity_password_reset(text,text)|owner=nekkora_identity_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=boolean|md5=...
+> fnacl|identity_password_reset(text,text)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_password_reset(text,text)|nekkora_platform|EXECUTE|grant=f

@@ -59,6 +59,8 @@ services:
       NEKKORA_ENTRADA_GERAL: "true"
       NEKKORA_CRIACAO_ORGANIZACAO_ENABLED: "true"
       NEKKORA_VINCULACAO: "true"
+      # recuperacao de senha da identidade (IdentityCredentialsE2E, missao 002): so nesta stack descartavel
+      NEKKORA_RECUPERACAO_SENHA: "true"
     networks:
       e2e:
         ipv4_address: 10.251.47.30

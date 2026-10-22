@@ -21,8 +21,11 @@ public final class IdentityRepository {
     public static final short SIGNUP_REQUESTED = 1;
     public static final short SIGNUP_CONFIRMED = 2;
 
-    /** identity_email_tokens.purpose (017): 1=CONFIRMACAO_CADASTRO. */
+    /** identity_email_tokens.purpose (017): 1=CONFIRMACAO_CADASTRO; (020) 2=RECUPERACAO_SENHA. */
     private static final short PURPOSE_SIGNUP = 1;
+    private static final short PURPOSE_PASSWORD_RECOVERY = 2;
+    /** identity_events.event_type (020). */
+    public static final short EV_PASSWORD_RECOVERY_REQUESTED = 16;
 
     public record State(short status, String email) {
     }
@@ -74,6 +77,34 @@ public final class IdentityRepository {
                 INSERT INTO public.identity_email_tokens (purpose, identity_id, target_email, token_hash, expires_at)
                 VALUES (?, ?, ?, ?, now() + ?::interval)
                 """).param(PURPOSE_SIGNUP).param(identity).param(targetEmail).param(tokenHash).param(validity.toSeconds() + " seconds").update();
+    }
+
+    /**
+     * Recuperacao de senha (020): revoga os tokens de recuperacao ainda vivos da identidade (um valido por vez), com o
+     * mesmo ajuste ao created_at se o relogio recuou. Depois do lock da identidade.
+     */
+    public int revokeLiveRecoveryTokens(JdbcClient j, UUID identity) {
+        return j.sql("""
+                UPDATE public.identity_email_tokens SET revoked_at = greatest(clock_timestamp(), created_at)
+                 WHERE identity_id = ? AND purpose = ? AND consumed_at IS NULL AND revoked_at IS NULL
+                """).param(identity).param(PURPOSE_PASSWORD_RECOVERY).update();
+    }
+
+    /** Token de recuperacao novo (020): so o hash; created_at e expires_at do mesmo instante (limite de 24 h da 017). */
+    public void insertRecoveryToken(JdbcClient j, UUID identity, String targetEmail, String tokenHash, Duration validity) {
+        j.sql("""
+                INSERT INTO public.identity_email_tokens (purpose, identity_id, target_email, token_hash, expires_at)
+                VALUES (?, ?, ?, ?, now() + ?::interval)
+                """).param(PURPOSE_PASSWORD_RECOVERY).param(identity).param(targetEmail).param(tokenHash).param(validity.toSeconds() + " seconds").update();
+    }
+
+    /**
+     * {@code identity_password_reset} (020): consumo do token de recuperacao e troca da senha num so comando; TODAS as
+     * sessoes revogadas, desafios invalidados, demais tokens de recuperacao revogados, evento 17; MFA intocado.
+     * {@code false} = recusa sem efeito.
+     */
+    public boolean passwordReset(JdbcClient j, String token, String newHash) {
+        return Boolean.TRUE.equals(j.sql("SELECT public.identity_password_reset(?, ?)").param(token).param(newHash).query(Boolean.class).single());
     }
 
     /**

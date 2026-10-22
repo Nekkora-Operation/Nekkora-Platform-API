@@ -123,6 +123,18 @@ public final class Limits {
     }
 
     /**
+     * R14 (missao 002): pedido de recuperacao de senha da IDENTIDADE, por identidade GLOBAL e por IP, com os valores de
+     * R5. false = nao emitir nem enviar (a resposta continua 202 identica). Redis fora: falha fechada (503).
+     */
+    public boolean identityRecoveryAllowed(String globalIdentity, String ip) {
+        return failClosed(() -> {
+            long byIdentity = redis.recordFailure("nk:rl:r14i:" + globalIdentity, cfg.r5Window());
+            long byIp = redis.recordFailure("nk:rl:r14p:" + ip, cfg.r5Window());
+            return byIdentity <= cfg.r5PerIdentity() && byIp <= cfg.r5PerIp();
+        });
+    }
+
+    /**
      * R10: troca por sessao de organizacao, por sessao de IDENTIDADE (chave: hash do token, nunca o token), 30 por hora
      * (desenho da Missao 1, secao 7). Esgotado -> 429; Redis fora -> 503 (falha fechada).
      */

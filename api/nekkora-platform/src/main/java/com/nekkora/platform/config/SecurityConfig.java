@@ -43,7 +43,9 @@ public class SecurityConfig {
             // entrada geral (Missao 1): sem sessao de organizacao; desafio e sessao de identidade conferidos pelo servico e
             // pelo CsrfFilter. Desligado: IdentityRoutesGate responde 404 antes daqui
             "/api/v1/auth/login", "/api/v1/auth/mfa/enroll/start", "/api/v1/auth/mfa/enroll/confirm", "/api/v1/auth/mfa/verify",
-            "/api/v1/auth/logout"};
+            "/api/v1/auth/logout",
+            // recuperacao de senha da identidade (missao 002): sem sessao; CSRF de pre-autenticacao. Desligada: 404 antes daqui
+            "/api/v1/auth/password-reset/request", "/api/v1/auth/password-reset/confirm"};
 
     @Bean
     SecurityFilterChain apiSecurityFilterChain(HttpSecurity http, OrgTransactions tx, SessionRepository sessions, Limits limits, PreAuthCsrf pre,

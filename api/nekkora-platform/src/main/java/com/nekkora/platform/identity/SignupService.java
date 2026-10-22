@@ -49,7 +49,7 @@ public final class SignupService {
 
     private static final Logger LOG = LoggerFactory.getLogger(SignupService.class);
 
-    static final int EMAIL_MAX = 254;
+    static final int EMAIL_MAX = EmailFormat.MAX;
     static final int DISPLAY_NAME_MAX = 120;
 
     private final IdentityTransactions tx;
@@ -197,17 +197,7 @@ public final class SignupService {
     }
 
     static boolean validEmail(String email) {
-        if (email == null || email.isEmpty() || email.length() > EMAIL_MAX || !email.equals(email.strip())) {
-            return false;
-        }
-        for (int i = 0; i < email.length(); i++) {
-            char c = email.charAt(i);
-            if (Character.isWhitespace(c) || Character.isISOControl(c)) {
-                return false;
-            }
-        }
-        int at = email.indexOf('@');
-        return at > 0 && at == email.lastIndexOf('@') && at < email.length() - 1;
+        return EmailFormat.valid(email);
     }
 
     static boolean validDisplayName(String name) {
