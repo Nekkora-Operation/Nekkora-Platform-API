@@ -18,6 +18,7 @@ import com.nekkora.platform.auth.crypto.PasswordHasher;
 import com.nekkora.platform.auth.crypto.SecretCipher;
 import com.nekkora.platform.identity.AccountLinkService;
 import com.nekkora.platform.identity.IdentityAuthRepository;
+import com.nekkora.platform.identity.IdentityCredentialService;
 import com.nekkora.platform.identity.IdentityLinkRepository;
 import com.nekkora.platform.identity.IdentityLoginService;
 import com.nekkora.platform.identity.IdentityOrgRepository;
@@ -78,6 +79,13 @@ public class IdentityConfig {
     IdentityStepUpService identityStepUpService(IdentityTransactions tx, IdentityAuthRepository auth, SecretCipher cipher, IdentityHmac hmac,
                                                 Limits limits) {
         return new IdentityStepUpService(tx, auth, cipher, hmac, limits);
+    }
+
+    /** Credenciais pela sessao de identidade: substituicao do fator (DC-17.13), aviso ao titular depois do commit. */
+    @Bean
+    IdentityCredentialService identityCredentialService(IdentityTransactions tx, IdentityAuthRepository auth, SecretCipher cipher, IdentityHmac hmac,
+                                                        Limits limits, MailSender mail) {
+        return new IdentityCredentialService(tx, auth, cipher, hmac, limits, mail);
     }
 
     /**

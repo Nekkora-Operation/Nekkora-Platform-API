@@ -181,8 +181,29 @@ public final class IdentityAuthRepository {
 
     /** {@code identity_mfa_enroll_pending} pelo desafio de cadastro: o id do fator pendente novo, ou vazio se recusado. */
     public Optional<UUID> enrollPending(JdbcClient j, String challengeToken, SecretCipher.Encrypted secret) {
-        return Optional.ofNullable(j.sql("SELECT public.identity_mfa_enroll_pending(?, NULL, ?, ?, ?)")
-                .param(challengeToken).param(secret.ciphertext()).param(secret.nonce()).param(secret.keyId()).query(UUID.class).single());
+        return nullableUuid(j.sql("SELECT public.identity_mfa_enroll_pending(?, NULL, ?, ?, ?)")
+                .param(challengeToken).param(secret.ciphertext()).param(secret.nonce()).param(secret.keyId()));
+    }
+
+    /**
+     * {@code identity_mfa_enroll_pending} pela SESSAO de identidade (substituicao, DC-17.13): a funcao exige a prova
+     * {@code troca} (step-up de ate 5 min, ou sessao restrita com recuperacao de ate 15 min) medida depois dos locks dela.
+     * O id do fator pendente novo, ou vazio se recusado (zero efeito).
+     */
+    public Optional<UUID> enrollPendingForSession(JdbcClient j, String sessionToken, SecretCipher.Encrypted secret) {
+        return nullableUuid(j.sql("SELECT public.identity_mfa_enroll_pending(NULL, ?, ?, ?, ?)")
+                .param(sessionToken).param(secret.ciphertext()).param(secret.nonce()).param(secret.keyId()));
+    }
+
+    /**
+     * {@code identity_mfa_replace} (T1 da DC-17.13): desabilita o fator antigo, confirma o pendente {@code newFactorId},
+     * invalida os codigos vivos e grava os novos, levanta a restricao da sessao (se restrita), revoga as DEMAIS sessoes e
+     * grava o evento 11, num so comando. A funcao NAO confere TOTP: quem chama confere o passo no segredo deste mesmo fator.
+     * {@code false} = recusa sem efeito.
+     */
+    public boolean replaceFactor(JdbcClient j, String sessionToken, UUID newFactorId, List<String> codeHashes) {
+        return Boolean.TRUE.equals(j.sql("SELECT public.identity_mfa_replace(?, ?, ?::text[])")
+                .param(sessionToken).param(newFactorId).param(pgArray(codeHashes)).query(Boolean.class).single());
     }
 
     /** Prazo de uma sessao nova pelo relogio do BANCO e da transacao ({@code now()}), para caber no CHECK de 12 h da 017. */
@@ -237,6 +258,14 @@ public final class IdentityAuthRepository {
     public void event(JdbcClient j, UUID identity, short type, UUID targetOrganization, UUID correlation) {
         j.sql("INSERT INTO public.identity_events (identity_id, event_type, target_organization_id, correlation_id) VALUES (?, ?, ?, ?)")
                 .param(identity).param(type).param(targetOrganization).param(correlation).update();
+    }
+
+    /**
+     * Resultado de funcao que devolve NULL na recusa: {@code query(UUID.class).single()} trata o NULL como erro de tipo
+     * (500, sem efeito); aqui o NULL e a recusa. (O extrator de ResultSet do JdbcClient tambem recusa resultado nulo.)
+     */
+    private static Optional<UUID> nullableUuid(JdbcClient.StatementSpec spec) {
+        return spec.query((rs, n) -> Optional.ofNullable(rs.getObject(1, UUID.class))).single();
     }
 
     private static String pgArray(List<String> hexes) {

@@ -90,8 +90,9 @@ class SignupContractTest {
         assertThat(mapeadas).as("rotas do controller = rotas publicadas").isEqualTo(publicadas);
         Map<String, List<String>> exercitados = Map.of(
                 IdentityAuthController.LOGIN, List.of("200", "401", "403", "404", "429", "preAuthCookie"),
-                IdentityAuthController.ENROLL_START, List.of("200", "401", "403", "404", "identityChallengeCookie"),
-                IdentityAuthController.ENROLL_CONFIRM, List.of("200", "401", "404", "identityChallengeCookie"),
+                // dois modos (missao 002): desafio de login ou sessao de identidade; os dois cookies, 400
+                IdentityAuthController.ENROLL_START, List.of("200", "400", "401", "403", "404", "identityChallengeCookie", "identitySessionCookie", "csrfHeader"),
+                IdentityAuthController.ENROLL_CONFIRM, List.of("200", "400", "401", "403", "404", "identityChallengeCookie", "identitySessionCookie", "csrfHeader"),
                 IdentityAuthController.VERIFY, List.of("200", "400", "401", "403", "404", "identityChallengeCookie"),
                 IdentityAuthController.LOGOUT, List.of("204", "403", "identitySessionCookie"),
                 IdentityAuthController.STEP_UP, List.of("204", "400", "401", "403", "404", "429", "503", "identitySessionCookie", "csrfHeader"));
@@ -106,6 +107,19 @@ class SignupContractTest {
                 }
             }
         }
+        Set<String> gets = new TreeSet<>();
+        for (Method m : IdentityAuthController.class.getDeclaredMethods()) {
+            GetMapping g = m.getAnnotation(GetMapping.class);
+            if (g != null) {
+                gets.addAll(Arrays.asList(g.value()));
+            }
+        }
+        assertThat(gets).as("unico GET do controller: estado da sessao").containsExactly(IdentityAuthController.ME_SESSION);
+        Map<String, Object> estado = (Map<String, Object>) paths.get(IdentityAuthController.ME_SESSION);
+        assertThat(estado.keySet()).as("me/session: so GET").containsExactly("get");
+        Map<String, Object> get = (Map<String, Object>) estado.get("get");
+        assertThat((Map<String, Object>) get.get("responses")).containsKeys("200", "401", "404");
+        assertThat(get.get("security").toString()).contains("identitySessionCookie");
         Map<String, Object> logout = (Map<String, Object>) ((Map<String, Object>) paths.get(IdentityAuthController.LOGOUT)).get("post");
         assertThat((Map<String, Object>) logout.get("responses")).as("logout de identidade nao tem chave: sem 404").doesNotContainKey("404");
     }
