@@ -67,6 +67,12 @@ public final class CsrfFilter extends OncePerRequestFilter {
         }
         String token = req.getHeader(HEADER);
         Routes.Context ctx = Routes.csrfContext(req);
+        if (ctx == Routes.Context.IDENTITY_AMBIGUOUS) {
+            // credenciais dos dois modos do cadastro de fator: nenhum CSRF e escolhido; recusa sem tocar o banco
+            LOG.info("evento=csrf.negado motivo=modo_ambiguo correlacao={}", RequestContext.correlation());
+            ErrorResponses.writeError(res, ApiError.INVALID_REQUEST, null);
+            return;
+        }
         Object principal = req.getAttribute(SessionFilter.ATTRIBUTE);
         boolean ok;
         try {
@@ -80,12 +86,15 @@ public final class CsrfFilter extends OncePerRequestFilter {
                         .map(expected -> Tokens.constantTimeEquals(expected, token)).orElse(false);
                 case IDENTITY_SESSION -> {
                     IdentityPrincipal p = IdentityFilter.principalOrNull(req);
-                    yield p != null && Tokens.constantTimeEquals(p.csrfToken(), token);
+                    // cadastro de fator no modo sessao (rota publica): cookie de sessao que nao resolve nao tem o que proteger;
+                    // segue para o servico, que responde 401 sem efeito (como o logout sem sessao valida)
+                    yield p == null ? Routes.isIdentityEnroll(req) : Tokens.constantTimeEquals(p.csrfToken(), token);
                 }
                 case IDENTITY_LOGOUT -> {
                     IdentityPrincipal p = IdentityFilter.principalOrNull(req);
                     yield p == null || Tokens.constantTimeEquals(p.csrfToken(), token);
                 }
+                case IDENTITY_AMBIGUOUS -> false;
             };
         } catch (LimiterUnavailable e) {
             LOG.warn("evento=csrf.indisponivel contexto={} correlacao={}", ctx, RequestContext.correlation());

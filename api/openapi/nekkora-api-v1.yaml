@@ -325,15 +325,21 @@ paths:
     post:
       tags: [Entrada geral (identidade)]
       operationId: identityStartMfaEnrollment
-      summary: 'Primeiro fator da identidade: cria o TOTP pendente (identity_mfa_enroll_pending) e devolve a URI otpauth'
+      summary: 'Cria o TOTP pendente da identidade (identity_mfa_enroll_pending) e devolve a URI otpauth: primeiro fator ou substituicao'
       description: >
-        So no desafio de cadastro (identidade que nunca confirmou fator). Segredo cifrado com AAD da identidade (sem
-        organizacao). Desafio ausente, vencido, de outro proposito ou recusado pela funcao: 401. Entrada geral desligada: 404.
-      security: [ { identityChallengeCookie: [], csrfHeader: [] } ]
+        DOIS modos explicitos, pela credencial apresentada. (1) Desafio de login (cookie __Host-nekkora_id_mfa, CSRF do
+        desafio): primeiro fator, so para identidade que nunca confirmou fator; desafio ausente, vencido, de outro proposito
+        ou recusado pela funcao: 401. (2) Sessao de identidade (cookie __Host-nekkora_id, CSRF da sessao): substituicao
+        autorizada pela DC-17.13, com step-up de ate 5 min (sessao comum) ou dentro de 15 min da marca de recuperacao (sessao
+        restrita); descarta o pendente anterior. Sem essa prova: 403, sem efeito; sessao invalida: 401. Os dois cookies na
+        mesma requisicao: 400 (modo ambiguo), antes de qualquer acesso ao banco. Segredo cifrado com AAD da identidade (sem
+        organizacao). Nenhum papel de organizacao tem autoridade aqui. Entrada geral desligada: 404.
+      security: [ { identityChallengeCookie: [], csrfHeader: [] }, { identitySessionCookie: [], csrfHeader: [] } ]
       responses:
-        '200': { description: 'URI otpauth', content: { application/json: { schema: { $ref: '#/components/schemas/OtpauthUri' } } } }
+        '200': { description: 'URI otpauth do fator pendente', content: { application/json: { schema: { $ref: '#/components/schemas/OtpauthUri' } } } }
+        '400': { description: 'Credenciais dos dois modos na mesma requisicao (cookies de desafio e de sessao de identidade)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: invalid_request } } } }
         '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/CsrfForbidden' }
+        '403': { description: 'Origin/CSRF do modo invalido; no modo sessao, tambem sem a prova de troca (DC-17.13)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
         '404': { $ref: '#/components/responses/SignupDisabled' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
@@ -342,18 +348,30 @@ paths:
     post:
       tags: [Entrada geral (identidade)]
       operationId: identityConfirmMfaEnrollment
-      summary: 'Confirma o primeiro fator; emite a sessao de identidade e os codigos de recuperacao'
+      summary: 'Confirma o fator pendente: primeiro fator (emite a sessao) ou substituicao (T1 da DC-17.13); devolve os codigos de recuperacao novos'
       description: >
-        Na MESMA transacao, com a identidade travada: o fator pendente e lido, o TOTP e conferido com o relogio lido depois
-        de qualquer espera, e identity_mfa_confirm_first conclui com o id exato desse fator (consumo do desafio, credencial
-        vigente, confirmacao, codigos e sessao). Codigo errado: tentativa registrada (5 invalidam o desafio) e 401. Sessao de
-        12 h no cookie __Host-nekkora_id (SameSite=Lax). Entrada geral desligada: 404.
-      security: [ { identityChallengeCookie: [], csrfHeader: [] } ]
+        DOIS modos, como em enroll/start. (1) Desafio de login: na MESMA transacao, com a identidade travada, o fator
+        pendente e lido, o TOTP e conferido com o relogio lido depois de qualquer espera, e identity_mfa_confirm_first conclui
+        com o id exato desse fator (consumo do desafio, credencial vigente, confirmacao, codigos e sessao). Codigo errado:
+        tentativa registrada (5 invalidam o desafio) e 401. Sessao de 12 h no cookie __Host-nekkora_id (SameSite=Lax);
+        restricted=false. (2) Sessao de identidade (substituicao): so o TOTP do fator NOVO (recoveryCode presente: 400). Numa
+        so transacao: identidade travada, fator pendente lido sob o lock, TOTP conferido no segredo DESTE fator,
+        identity_mfa_replace com o id exato dele (prova de troca reconferida depois dos locks; fator antigo desabilitado,
+        novo confirmado, codigos antigos invalidados e novos gravados, restricao da sessao levantada, DEMAIS sessoes
+        revogadas, evento 11), passo gravado no fator novo (anti-replay) e, no fim, sessao e janela do passo reconferidas;
+        fora delas, rollback integral. A sessao da requisicao continua, ja sem restricao (restricted=false). Codigos novos
+        mostrados uma unica vez. Aviso NOTICE_MFA_REPLACED ao titular depois do commit; falha do aviso nao desfaz a troca.
+        Sem prova, sem fator pendente, codigo errado, replay ou passo vencido: 403 generico, sem efeito (codigo errado conta
+        em R8m). Sessao que caiu, inclusive durante as esperas: 401. Os dois cookies: 400. Entrada geral desligada: 404.
+      security: [ { identityChallengeCookie: [], csrfHeader: [] }, { identitySessionCookie: [], csrfHeader: [] } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TotpCodeRequest' } } } }
       responses:
-        '200': { description: 'Sessao de identidade emitida (cookie __Host-nekkora_id)', content: { application/json: { schema: { $ref: '#/components/schemas/EnrollmentConfirmation' } } } }
+        '200':
+          description: 'Desafio: sessao de identidade emitida (cookie __Host-nekkora_id). Sessao: fator substituido, a mesma sessao continua sem restricao'
+          content: { application/json: { schema: { oneOf: [ { $ref: '#/components/schemas/IdentityEnrollmentConfirmation' }, { $ref: '#/components/schemas/IdentityFactorReplacement' } ] } } }
+        '400': { description: 'Modo ambiguo (os dois cookies) ou, no modo sessao, code ausente ou recoveryCode presente', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: invalid_request } } } }
         '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/CsrfForbidden' }
+        '403': { description: 'Origin/CSRF do modo invalido; no modo sessao, tambem sem prova de troca, sem fator pendente, codigo errado, ja usado ou vencido', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
         '404': { $ref: '#/components/responses/SignupDisabled' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
@@ -373,7 +391,7 @@ paths:
       security: [ { identityChallengeCookie: [], csrfHeader: [] } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/MfaVerifyRequest' } } } }
       responses:
-        '200': { description: 'Sessao de identidade emitida (cookie __Host-nekkora_id)', content: { application/json: { schema: { $ref: '#/components/schemas/CsrfToken' } } } }
+        '200': { description: 'Sessao de identidade emitida (cookie __Host-nekkora_id); restricted=true quando nasceu de codigo de recuperacao', content: { application/json: { schema: { $ref: '#/components/schemas/IdentitySessionIssued' } } } }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/CsrfForbidden' }
@@ -418,6 +436,21 @@ paths:
         '404': { $ref: '#/components/responses/SignupDisabled' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/me/session:
+    get:
+      tags: [Entrada geral (identidade)]
+      operationId: identitySessionState
+      summary: 'Estado da sessao de identidade do cookie: restricted e o CSRF dela'
+      description: >
+        Para a interface retomar a jornada depois de recarregar a pagina. restricted=true: sessao nascida de codigo de
+        recuperacao, antes de concluir a troca do fator (DC-17.13); so cadastrar e confirmar o fator novo e logout. Lido do
+        banco a cada requisicao. Sem sessao valida: 401. Mesma chave da entrada geral: desligada, 404.
+      security: [ { identitySessionCookie: [] } ]
+      responses:
+        '200': { description: 'Sessao de identidade valida', content: { application/json: { schema: { $ref: '#/components/schemas/IdentitySessionState' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/SignupDisabled' }
 
   /api/v1/me/organizations:
     get:
@@ -1302,6 +1335,10 @@ components:
       oneOf:
         - { required: [code], not: { required: [recoveryCode] } }
         - { required: [recoveryCode], not: { required: [code] } }
+    IdentityEnrollmentConfirmation: { type: object, required: [recoveryCodes, csrfToken, restricted], properties: { recoveryCodes: { type: array, items: { type: string } }, csrfToken: { type: string }, restricted: { type: boolean, enum: [false] } } }
+    IdentityFactorReplacement: { type: object, required: [recoveryCodes, restricted], properties: { recoveryCodes: { type: array, items: { type: string }, description: 'Conjunto novo; o anterior foi invalidado. Mostrado uma unica vez' }, restricted: { type: boolean, enum: [false] } } }
+    IdentitySessionIssued: { type: object, required: [csrfToken, restricted], properties: { csrfToken: { type: string }, restricted: { type: boolean, description: 'true: sessao nascida de codigo de recuperacao (DC-17.13), restrita ate concluir a troca do fator' } } }
+    IdentitySessionState: { type: object, required: [restricted, csrfToken], properties: { restricted: { type: boolean }, csrfToken: { type: string } } }
     EnrollmentConfirmation: { type: object, required: [recoveryCodes, csrfToken], properties: { recoveryCodes: { type: array, items: { type: string } }, csrfToken: { type: string } } }
     PasswordChange: { type: object, required: [currentPassword, newPassword], properties: { currentPassword: { type: string, format: password }, newPassword: { type: string, format: password, description: '12 a 128 pontos de codigo' } } }
     RecoveryRequest: { type: object, required: [email], properties: { email: { type: string } } }
