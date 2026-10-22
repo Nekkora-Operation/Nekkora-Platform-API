@@ -1,0 +1,87 @@
+> col|mail_outbox|attempts|smallint|notnull=t|default=0|gen=
+> col|mail_outbox|correlation_id|uuid|notnull=t|default=|gen=
+> col|mail_outbox|created_at|timestamp with time zone|notnull=t|default=now()|gen=
+> col|mail_outbox|deadline_at|timestamp with time zone|notnull=t|default=|gen=
+> col|mail_outbox|finished_at|timestamp with time zone|notnull=f|default=|gen=
+> col|mail_outbox|job_id|uuid|notnull=t|default=|gen=
+> col|mail_outbox|key_id|text|notnull=f|default=|gen=
+> col|mail_outbox|kind|text|notnull=t|default=|gen=
+> col|mail_outbox|last_status|integer|notnull=f|default=|gen=
+> col|mail_outbox|lease_until|timestamp with time zone|notnull=f|default=|gen=
+> col|mail_outbox|next_attempt_at|timestamp with time zone|notnull=t|default=|gen=
+> col|mail_outbox|payload_ciphertext|bytea|notnull=f|default=|gen=
+> col|mail_outbox|payload_nonce|bytea|notnull=f|default=|gen=
+> col|mail_outbox|recipient_hmac|text|notnull=t|default=|gen=
+> col|mail_outbox|state|smallint|notnull=t|default=|gen=
+> col|mail_outbox|target_organization_id|uuid|notnull=f|default=|gen=
+> colacl|mail_outbox|attempts|nekkora_platform|UPDATE|grant=f
+> colacl|mail_outbox|correlation_id|nekkora_platform|INSERT|grant=f
+> colacl|mail_outbox|deadline_at|nekkora_platform|INSERT|grant=f
+> colacl|mail_outbox|finished_at|nekkora_platform|UPDATE|grant=f
+> colacl|mail_outbox|job_id|nekkora_platform|INSERT|grant=f
+> colacl|mail_outbox|key_id|nekkora_platform|INSERT|grant=f
+> colacl|mail_outbox|key_id|nekkora_platform|UPDATE|grant=f
+> colacl|mail_outbox|kind|nekkora_platform|INSERT|grant=f
+> colacl|mail_outbox|last_status|nekkora_platform|UPDATE|grant=f
+> colacl|mail_outbox|lease_until|nekkora_platform|UPDATE|grant=f
+> colacl|mail_outbox|next_attempt_at|nekkora_platform|INSERT|grant=f
+> colacl|mail_outbox|next_attempt_at|nekkora_platform|UPDATE|grant=f
+> colacl|mail_outbox|payload_ciphertext|nekkora_platform|INSERT|grant=f
+> colacl|mail_outbox|payload_ciphertext|nekkora_platform|UPDATE|grant=f
+> colacl|mail_outbox|payload_nonce|nekkora_platform|INSERT|grant=f
+> colacl|mail_outbox|payload_nonce|nekkora_platform|UPDATE|grant=f
+> colacl|mail_outbox|recipient_hmac|nekkora_platform|INSERT|grant=f
+> colacl|mail_outbox|state|nekkora_platform|INSERT|grant=f
+> colacl|mail_outbox|state|nekkora_platform|UPDATE|grant=f
+> colacl|mail_outbox|target_organization_id|nekkora_platform|INSERT|grant=f
+> con|mail_outbox|mail_outbox_attempts_check|CHECK (((attempts >= 0) AND (attempts <= 5)))
+> con|mail_outbox|mail_outbox_check|CHECK (((state = ANY (ARRAY[1, 2])) = ((payload_ciphertext IS NOT NULL) AND (payload_nonce IS NOT NULL) AND (key_id IS NOT NULL))))
+> con|mail_outbox|mail_outbox_check1|CHECK (((payload_ciphertext IS NOT NULL) OR ((payload_nonce IS NULL) AND (key_id IS NULL))))
+> con|mail_outbox|mail_outbox_check2|CHECK (((state = ANY (ARRAY[1, 2])) = (finished_at IS NULL)))
+> con|mail_outbox|mail_outbox_check3|CHECK (((state = 2) = (lease_until IS NOT NULL)))
+> con|mail_outbox|mail_outbox_check4|CHECK (((deadline_at > created_at) AND (deadline_at <= (created_at + '7 days'::interval))))
+> con|mail_outbox|mail_outbox_kind_check|CHECK ((kind ~ '^[A-Z][A-Z_]{2,63}$'::text))
+> con|mail_outbox|mail_outbox_last_status_check|CHECK (((last_status IS NULL) OR ((last_status >= 100) AND (last_status <= 599))))
+> con|mail_outbox|mail_outbox_pkey|PRIMARY KEY (job_id)
+> con|mail_outbox|mail_outbox_recipient_hmac_check|CHECK ((recipient_hmac ~ '^[A-Za-z0-9_-]{1,32}[.][0-9a-f]{32}$'::text))
+> con|mail_outbox|mail_outbox_state_check|CHECK (((state >= 1) AND (state <= 6)))
+> fn|protect_mail_outbox()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=...
+> fnacl|protect_mail_outbox()|migrador_nekkora|EXECUTE|grant=f
+> idx|CREATE INDEX ix_mail_outbox_enviando ON public.mail_outbox USING btree (lease_until) WHERE (state = 2)
+> idx|CREATE INDEX ix_mail_outbox_pendentes ON public.mail_outbox USING btree (next_attempt_at) WHERE (state = 1)
+> idx|CREATE UNIQUE INDEX mail_outbox_pkey ON public.mail_outbox USING btree (job_id)
+> rel|ix_mail_outbox_enviando|i|owner=migrador_nekkora|rls=f|force=f
+> rel|ix_mail_outbox_pendentes|i|owner=migrador_nekkora|rls=f|force=f
+> rel|mail_outbox_pkey|i|owner=migrador_nekkora|rls=f|force=f
+> rel|mail_outbox|r|owner=migrador_nekkora|rls=f|force=f
+> relacl|ix_mail_outbox_enviando|migrador_nekkora|DELETE|grant=f
+> relacl|ix_mail_outbox_enviando|migrador_nekkora|INSERT|grant=f
+> relacl|ix_mail_outbox_enviando|migrador_nekkora|REFERENCES|grant=f
+> relacl|ix_mail_outbox_enviando|migrador_nekkora|SELECT|grant=f
+> relacl|ix_mail_outbox_enviando|migrador_nekkora|TRIGGER|grant=f
+> relacl|ix_mail_outbox_enviando|migrador_nekkora|TRUNCATE|grant=f
+> relacl|ix_mail_outbox_enviando|migrador_nekkora|UPDATE|grant=f
+> relacl|ix_mail_outbox_pendentes|migrador_nekkora|DELETE|grant=f
+> relacl|ix_mail_outbox_pendentes|migrador_nekkora|INSERT|grant=f
+> relacl|ix_mail_outbox_pendentes|migrador_nekkora|REFERENCES|grant=f
+> relacl|ix_mail_outbox_pendentes|migrador_nekkora|SELECT|grant=f
+> relacl|ix_mail_outbox_pendentes|migrador_nekkora|TRIGGER|grant=f
+> relacl|ix_mail_outbox_pendentes|migrador_nekkora|TRUNCATE|grant=f
+> relacl|ix_mail_outbox_pendentes|migrador_nekkora|UPDATE|grant=f
+> relacl|mail_outbox_pkey|migrador_nekkora|DELETE|grant=f
+> relacl|mail_outbox_pkey|migrador_nekkora|INSERT|grant=f
+> relacl|mail_outbox_pkey|migrador_nekkora|REFERENCES|grant=f
+> relacl|mail_outbox_pkey|migrador_nekkora|SELECT|grant=f
+> relacl|mail_outbox_pkey|migrador_nekkora|TRIGGER|grant=f
+> relacl|mail_outbox_pkey|migrador_nekkora|TRUNCATE|grant=f
+> relacl|mail_outbox_pkey|migrador_nekkora|UPDATE|grant=f
+> relacl|mail_outbox|migrador_nekkora|DELETE|grant=f
+> relacl|mail_outbox|migrador_nekkora|INSERT|grant=f
+> relacl|mail_outbox|migrador_nekkora|REFERENCES|grant=f
+> relacl|mail_outbox|migrador_nekkora|SELECT|grant=f
+> relacl|mail_outbox|migrador_nekkora|TRIGGER|grant=f
+> relacl|mail_outbox|migrador_nekkora|TRUNCATE|grant=f
+> relacl|mail_outbox|migrador_nekkora|UPDATE|grant=f
+> relacl|mail_outbox|nekkora_platform|SELECT|grant=f
+> trg|mail_outbox|trg_mail_outbox_prevent_truncate|enabled=O|CREATE TRIGGER trg_mail_outbox_prevent_truncate BEFORE TRUNCATE ON public.mail_outbox FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|mail_outbox|trg_mail_outbox_protect|enabled=O|CREATE TRIGGER trg_mail_outbox_protect BEFORE INSERT OR DELETE OR UPDATE ON public.mail_outbox FOR EACH ROW EXECUTE FUNCTION protect_mail_outbox()

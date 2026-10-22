@@ -187,14 +187,25 @@ public class PlatformConfig {
      * Porta de e-mail. Padrao: {@link LocalMailSender} (so a intencao). {@code nekkora.mail.transport=homologacao} liga
      * o transporte de HOMOLOGACAO (caixa local, sem envio externo, desfechos simulados), que so existe com
      * {@code nekkora.environment=ensaio-*} e {@code nekkora.mail.caixa-dir} gravavel: sem isso, a Platform NAO sobe
-     * (nunca cai silenciosamente no local). Qualquer outro valor de transporte tambem impede a partida.
+     * (nunca cai silenciosamente no local). {@code m365} (missao 002, PR 5): fila persistente ({@code OutboxMailSender}) com o
+     * transporte Microsoft Graph de {@link MailConfig}, que recusa a partida sem tenant, cliente, certificado ou remetente.
+     * Qualquer outro valor de transporte tambem impede a partida.
      */
     @Bean
     @ConditionalOnMissingBean(MailSender.class)
     MailSender mailSender(@org.springframework.beans.factory.annotation.Value("${nekkora.mail.transport:local}") String transport,
                           @org.springframework.beans.factory.annotation.Value("${nekkora.mail.caixa-dir:}") String caixaDir,
-                          @org.springframework.beans.factory.annotation.Value("${nekkora.environment:}") String environment) {
+                          @org.springframework.beans.factory.annotation.Value("${nekkora.environment:}") String environment,
+                          org.springframework.beans.factory.ObjectProvider<com.nekkora.platform.mail.GraphMailTransport> graph,
+                          OrgTransactions tx, SecretCipher cipher, IdentityHmac hmac, com.nekkora.platform.mail.MailTemplates templates,
+                          PlatformProperties p) {
         return switch (transport == null ? "" : transport.trim()) {
+            case "m365" -> new com.nekkora.platform.mail.OutboxMailSender(tx, cipher, hmac, graph.getObject(), templates, kind -> switch (kind) {
+                // prazo da mensagem = prazo do token que ela leva; avisos: 24 h
+                case PASSWORD_RECOVERY -> p.session().passwordRecovery();
+                case IDENTITY_SIGNUP_CONFIRMATION -> p.session().emailVerification();
+                default -> java.time.Duration.ofHours(24);
+            });
             case "", "local" -> new LocalMailSender();
             case "homologacao" -> {
                 if (caixaDir == null || caixaDir.isBlank()) {
@@ -202,7 +213,7 @@ public class PlatformConfig {
                 }
                 yield new com.nekkora.platform.mail.CaixaHomologacaoMailSender(java.nio.file.Path.of(caixaDir), environment);
             }
-            default -> throw new IllegalStateException("nekkora.mail.transport desconhecido (use local ou homologacao)");
+            default -> throw new IllegalStateException("nekkora.mail.transport desconhecido (use local, homologacao ou m365)");
         };
     }
 
