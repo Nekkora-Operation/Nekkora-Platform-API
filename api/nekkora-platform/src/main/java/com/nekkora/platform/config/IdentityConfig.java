@@ -81,11 +81,14 @@ public class IdentityConfig {
         return new IdentityStepUpService(tx, auth, cipher, hmac, limits);
     }
 
-    /** Credenciais pela sessao de identidade: substituicao do fator (DC-17.13), aviso ao titular depois do commit. */
+    /**
+     * Credenciais pela sessao de identidade: substituicao do fator (DC-17.13), troca de senha (politica da Platform pela
+     * porta {@link PasswordRule}) e regeneracao dos codigos; avisos ao titular depois do commit.
+     */
     @Bean
     IdentityCredentialService identityCredentialService(IdentityTransactions tx, IdentityAuthRepository auth, SecretCipher cipher, IdentityHmac hmac,
-                                                        Limits limits, MailSender mail) {
-        return new IdentityCredentialService(tx, auth, cipher, hmac, limits, mail);
+                                                        Limits limits, MailSender mail, PasswordHasher hasher) {
+        return new IdentityCredentialService(tx, auth, cipher, hmac, limits, mail, hasher, PasswordPolicy::enforce);
     }
 
     /**

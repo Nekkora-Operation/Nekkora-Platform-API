@@ -206,6 +206,26 @@ public final class IdentityAuthRepository {
                 .param(sessionToken).param(newFactorId).param(pgArray(codeHashes)).query(Boolean.class).single());
     }
 
+    /**
+     * {@code identity_password_change} (017): troca a senha da identidade se o hash vigente ainda for {@code expectedHash}
+     * (o que o Argon2 conferiu), com a prova {@code step_up} (sessao comum, step-up de ate 5 min) medida depois dos locks;
+     * invalida os desafios pendentes, revoga as DEMAIS sessoes e grava o evento 12. {@code false} = recusa sem efeito.
+     */
+    public boolean changePassword(JdbcClient j, String sessionToken, String expectedHash, String newHash) {
+        return Boolean.TRUE.equals(j.sql("SELECT public.identity_password_change(?, ?, ?)")
+                .param(sessionToken).param(expectedHash).param(newHash).query(Boolean.class).single());
+    }
+
+    /**
+     * {@code identity_recovery_codes_regenerate} (019): invalida os codigos vivos e grava o conjunto novo para o fator
+     * confirmado vigente, com a prova {@code step_up} medida depois dos locks, e grava o evento 15. {@code false} = recusa
+     * sem efeito.
+     */
+    public boolean regenerateRecoveryCodes(JdbcClient j, String sessionToken, List<String> codeHashes) {
+        return Boolean.TRUE.equals(j.sql("SELECT public.identity_recovery_codes_regenerate(?, ?::text[])")
+                .param(sessionToken).param(pgArray(codeHashes)).query(Boolean.class).single());
+    }
+
     /** Prazo de uma sessao nova pelo relogio do BANCO e da transacao ({@code now()}), para caber no CHECK de 12 h da 017. */
     public OffsetDateTime sessionExpiry(JdbcClient j, Duration absolute) {
         return j.sql("SELECT now() + ?::interval").param(absolute.toSeconds() + " seconds").query(OffsetDateTime.class).single();
