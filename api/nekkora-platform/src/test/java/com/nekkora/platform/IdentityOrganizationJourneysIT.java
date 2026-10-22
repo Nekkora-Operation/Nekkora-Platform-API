@@ -19,6 +19,8 @@ import com.nekkora.core.testsupport.BrowserClient;
  * <li>suspensao da conta, retirada (revogacao) do vinculo e suspensao da organizacao tiram a organizacao da lista, recusam a
  * troca e derrubam a sessao de organizacao ja emitida na requisicao seguinte; a sessao de identidade continua.</li>
  * </ul>
+ * Essas mudancas de estado sao PREPARADAS no banco (superusuario): o teste demonstra a REACAO da API a elas, nao uma jornada
+ * administrativa completa executada so pela API.
  */
 class IdentityOrganizationJourneysIT extends IdentityTestBase {
 

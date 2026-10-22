@@ -19,6 +19,8 @@ A missão pede que as jornadas de organização sejam demonstradas pela API. A m
 | Falhas e resultados incertos não provocam repetição automática da criação | `OrganizationCreationIT.confirmacaoPerdidaDepoisDoCommitMantemAReserva` (resultado incerto: a reserva de R11 é mantida e nada é repetido), `falhaAoGravarOEventoDesfazTudo`; `IdentityTransactions` não tem laço de nova tentativa |
 | `canCreateOrganization` é indicação; a escrita reconfere | `IdentityOrgSessionIT.criacaoComAChavePropriaDesligadaE404EIndicacaoFalsa`; `OrganizationCreationIT.semStepUpRecusa403SemEfeitoEDevolveAReservaDeR11` e `tetoDeDezDentroDaFuncaoSobConcorrencia` (a função reconfere step-up e teto sob o lock da identidade) |
 
+**O que estes testes demonstram, e o que não demonstram.** As alterações de estado que retiram o acesso (suspensão da conta, retirada do vínculo, suspensão da organização) são **preparadas diretamente no banco** pelo teste (superusuário, no contexto da organização). Os testes demonstram, pela API, a **reação** da Platform a esses estados: lista, troca de sessão e sessão já emitida. **Não** são jornadas administrativas completas executadas exclusivamente pela API: as rotas administrativas de suspensão e retirada de vínculo ficam fora desta demonstração.
+
 **Fixture declarada nos testes novos.** Para suspender a conta ou retirar o vínculo da única administradora, o teste insere um segundo ORG_ADMIN. A regra da 003, "organização ficaria sem ORG_ADMIN efetivo", recusa a alteração sem ele, e continua valendo.
 
 **Capacidade inicial de execução.** Segue como decisão de produto pendente. A proposta está no PR #9, §5. Estes testes não dependem dela.
