@@ -1,0 +1,5 @@
+< con|identity_events|identity_events_event_type_check|CHECK (((event_type >= 1) AND (event_type <= 14)))
+> con|identity_events|identity_events_event_type_check|CHECK (((event_type >= 1) AND (event_type <= 15)))
+> fn|identity_recovery_codes_regenerate(text,text[])|owner=nekkora_identity_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=boolean|md5=...
+> fnacl|identity_recovery_codes_regenerate(text,text[])|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_recovery_codes_regenerate(text,text[])|nekkora_platform|EXECUTE|grant=f

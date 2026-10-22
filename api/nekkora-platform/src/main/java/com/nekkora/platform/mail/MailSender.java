@@ -28,7 +28,9 @@ public interface MailSender {
         /** Vinculacao (contrato P3): aviso de que a conta da organizacao passou a entrar pela identidade (sem token). */
         NOTICE_IDENTITY_LINKED,
         /** Substituicao do fator da identidade concluida (DC-17.13, T1): aviso ao titular, sem token. */
-        NOTICE_MFA_REPLACED
+        NOTICE_MFA_REPLACED,
+        /** Codigos de recuperacao da identidade regenerados (conjunto anterior invalidado): aviso ao titular, sem token. */
+        NOTICE_RECOVERY_CODES_REGENERATED
     }
 
     void send(Kind kind, UUID organization, String recipient, String tokenOrNull);

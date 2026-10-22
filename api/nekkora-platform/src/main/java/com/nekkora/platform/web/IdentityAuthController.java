@@ -47,11 +47,17 @@ public class IdentityAuthController {
     public static final String LOGOUT = "/api/v1/auth/logout";
     public static final String STEP_UP = "/api/v1/auth/step-up";
     public static final String ME_SESSION = "/api/v1/me/session";
+    public static final String PASSWORD = "/api/v1/auth/password";
+    public static final String RECOVERY_CODES = "/api/v1/auth/mfa/recovery-codes";
 
     public record Login(String email, char[] password) {
     }
 
     public record CodeRequest(String code, String recoveryCode) {
+    }
+
+    /** Troca de senha da identidade: as duas senhas sao zeradas depois do uso. */
+    public record PasswordChange(char[] currentPassword, char[] newPassword) {
     }
 
     /** Step-up: so o TOTP (codigo de recuperacao nao e alternativa). */
@@ -179,6 +185,39 @@ public class IdentityAuthController {
         }
         stepUps.stepUp(IdentityFilter.principalOrNull(req), IdentityFilter.token(req), body.code(), RequestContextFilter.ip(req));
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Troca de senha da identidade: sessao comum com step-up recente, senha atual e senha nova (politica da Platform). 204;
+     * corpo incompleto ou senha nova fora da politica: 400; senha atual errada, sem step-up ou sessao restrita: 403.
+     */
+    @PostMapping(PASSWORD)
+    public ResponseEntity<Void> changePassword(@RequestBody(required = false) PasswordChange body, HttpServletRequest req) {
+        char[] current = body == null ? null : body.currentPassword();
+        char[] next = body == null ? null : body.newPassword();
+        try {
+            requireEnabled();
+            if (current == null || next == null) {
+                throw ApiException.invalid("senha");
+            }
+            credentials.changePassword(IdentityFilter.principalOrNull(req), IdentityFilter.token(req), current, next, RequestContextFilter.ip(req));
+            return ResponseEntity.noContent().build();
+        } finally {
+            if (current != null) {
+                Arrays.fill(current, '\0');
+            }
+            if (next != null) {
+                Arrays.fill(next, '\0');
+            }
+        }
+    }
+
+    /** Regeneracao independente dos codigos de recuperacao: sessao comum com step-up recente. Conjunto novo uma unica vez. */
+    @PostMapping(RECOVERY_CODES)
+    public Map<String, Object> regenerateRecoveryCodes(HttpServletRequest req) {
+        requireEnabled();
+        List<String> codes = credentials.regenerateRecoveryCodes(IdentityFilter.principalOrNull(req), IdentityFilter.token(req), RequestContextFilter.ip(req));
+        return Map.of("recoveryCodes", List.copyOf(codes));
     }
 
     /** Sem chave e sem limitador (reduz acesso); sem sessao valida, no-op. Sempre 204 e o cookie expirado. */

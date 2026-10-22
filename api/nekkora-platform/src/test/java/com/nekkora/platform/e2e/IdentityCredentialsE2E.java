@@ -45,7 +45,8 @@ import com.nekkora.platform.auth.crypto.Totp;
  *
  * <p>Jornadas: (1) primeiro fator pelo desafio e organizacao criada; (2) substituicao do fator com step-up (caminho A),
  * outra sessao revogada; (3) senha + codigo de recuperacao -> sessao restrita -> troca do fator (caminho B) -> restricao
- * levantada e organizacao acessivel; (4) modo ambiguo recusado na borda; (5) nenhum segredo nos logs.
+ * levantada e organizacao acessivel; (4) modo ambiguo recusado na borda; (5) regeneracao dos codigos e troca de senha com
+ * step-up (PR 3), MFA preservado na entrada seguinte; (6) nenhum segredo nos logs.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class IdentityCredentialsE2E {
@@ -173,12 +174,41 @@ class IdentityCredentialsE2E {
 
     @Test
     @Order(5)
+    void regeneracaoDosCodigosETrocaDeSenhaComStepUp() throws Exception {
+        assertThat(id.post("/api/v1/auth/mfa/recovery-codes", null).status()).as("sem step-up").isEqualTo(403);
+        assertThat(id.post("/api/v1/auth/step-up", "{\"code\":\"" + code("f3") + "\"}").status()).isEqualTo(204);
+        BrowserClient.Response c = id.post("/api/v1/auth/mfa/recovery-codes", null);
+        assertThat(c.status()).isEqualTo(200);
+        List<String> novos = c.listField("recoveryCodes");
+        SEGREDOS.addAll(novos);
+        assertThat(valor("SELECT count(*) FROM identity_events WHERE identity_id = '" + IDENTIDADE + "' AND event_type = 15")).isEqualTo("1");
+
+        String nova = "senha-nova-credenciais-e2e-" + UUID.randomUUID().toString().substring(0, 8);
+        SEGREDOS.add(nova);
+        BrowserClient.Response t = id.post("/api/v1/auth/password", "{\"currentPassword\":\"" + SENHA + "\",\"newPassword\":\"" + nova + "\"}");
+        assertThat(t.status()).as(t.body()).isEqualTo(204);
+        assertThat(valor("SELECT count(*) FROM identity_events WHERE identity_id = '" + IDENTIDADE + "' AND event_type = 12")).isEqualTo("1");
+        BrowserClient antiga = browser();
+        antiga.csrf = antiga.get("/api/v1/csrf").field("csrfToken");
+        assertThat(antiga.post("/api/v1/auth/login", "{\"email\":\"" + EMAIL + "\",\"password\":\"" + SENHA + "\"}").status()).as("senha antiga").isEqualTo(401);
+        BrowserClient n = browser();
+        n.csrf = n.get("/api/v1/csrf").field("csrfToken");
+        BrowserClient.Response l = n.post("/api/v1/auth/login", "{\"email\":\"" + EMAIL + "\",\"password\":\"" + nova + "\"}");
+        assertThat(l.field("status")).as("MFA preservado").isEqualTo("mfa_required");
+        n.csrf = l.field("csrfToken");
+        assertThat(n.post("/api/v1/auth/mfa/verify", "{\"recoveryCode\":\"" + novos.get(0) + "\"}").status()).as("codigo regenerado vale").isEqualTo(200);
+        segredos(n);
+    }
+
+    @Test
+    @Order(6)
     void nenhumSegredoNosLogsDosContainers() throws Exception {
         Process p = new ProcessBuilder("docker", "compose", "-f", System.getenv("E2E_COMPOSE"), "logs", "--no-color", "--no-log-prefix")
                 .redirectErrorStream(true).start();
         String logs = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         assertThat(p.waitFor()).isZero();
-        assertThat(logs).contains("evento=identidade.fator_substituido ");
+        assertThat(logs).contains("evento=identidade.fator_substituido ").contains("evento=identidade.codigos_regenerados ")
+                .contains("evento=identidade.senha_trocada ");
         for (byte[] f : FATORES.values()) {
             SEGREDOS.add(Base32.encode(f));
         }
