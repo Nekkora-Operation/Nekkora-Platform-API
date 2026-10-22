@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # E2E entre processos da API v1: nginx (origem unica, TLS, limit_req) -> Platform (nekkora_platform) e Portal
-# (processo e papel nekkora_portal proprios) -> PostgreSQL 16 (001-019, instalacao limpa) e Redis.
+# (processo e papel nekkora_portal proprios) -> PostgreSQL 16 (001-020, instalacao limpa) e Redis.
 #
 # Migrations pelo MODELO DO MIGRADOR suportado pela 016 (revisao 5), como RealDatabase: nao vao direto para o
 # initdb.d (seriam aplicadas pelo superusuario); db/bootstrap/aplicar_como_migrador.sh as aplica como
@@ -49,9 +49,9 @@ done
 docker network inspect "${E2E_PROJETO}_e2e" >/dev/null 2>&1 && falha "rede ${E2E_PROJETO}_e2e ja existe"
 
 mkdir -p "$SAIDA/migracoes_montadas/migracoes" "$SAIDA/migracoes_montadas/bootstrap" "$SAIDA/tls"
-# Migrations: 001-019 escolhidas explicitamente (instalacao limpa), numa subpasta (o entrypoint so executa o primeiro
+# Migrations: 001-020 escolhidas explicitamente (instalacao limpa), numa subpasta (o entrypoint so executa o primeiro
 # nivel do initdb.d); o involucro 000_ chama o script do migrador apontando para ela.
-for n in $(seq -w 1 19); do
+for n in $(seq -w 1 20); do
     f=("$REPO"/db/migrations/0${n}_*.sql)
     [ -f "${f[0]}" ] && [ ${#f[@]} -eq 1 ] || falha "migration 0$n ausente ou ambigua"
     cp "${f[0]}" "$SAIDA/migracoes_montadas/migracoes/"

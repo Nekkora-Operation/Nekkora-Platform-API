@@ -46,7 +46,9 @@ import com.nekkora.platform.auth.crypto.Totp;
  * <p>Jornadas: (1) primeiro fator pelo desafio e organizacao criada; (2) substituicao do fator com step-up (caminho A),
  * outra sessao revogada; (3) senha + codigo de recuperacao -> sessao restrita -> troca do fator (caminho B) -> restricao
  * levantada e organizacao acessivel; (4) modo ambiguo recusado na borda; (5) regeneracao dos codigos e troca de senha com
- * step-up (PR 3), MFA preservado na entrada seguinte; (6) nenhum segredo nos logs.
+ * step-up (PR 3), MFA preservado na entrada seguinte; (6) recuperacao de senha por e-mail (PR 4): pedido uniforme pela
+ * borda e confirmacao com token de FIXTURE (declarado: o e-mail real esta fora desta etapa; o token e gravado so como hash,
+ * como a aplicacao grava), todas as sessoes revogadas, nenhuma sessao criada, MFA preservado; (7) nenhum segredo nos logs.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class IdentityCredentialsE2E {
@@ -202,13 +204,59 @@ class IdentityCredentialsE2E {
 
     @Test
     @Order(6)
+    void recuperacaoDeSenhaPorEmailRevogaTudoEPreservaOMfa() throws Exception {
+        BrowserClient p = browser();
+        p.csrf = p.get("/api/v1/csrf").field("csrfToken");
+        BrowserClient.Response r = p.post("/api/v1/auth/password-reset/request", "{\"email\":\"" + EMAIL + "\"}");
+        assertThat(r.status()).isEqualTo(202);
+        BrowserClient d = browser();
+        d.csrf = d.get("/api/v1/csrf").field("csrfToken");
+        BrowserClient.Response desconhecido = d.post("/api/v1/auth/password-reset/request", "{\"email\":\"ninguem-" + UUID.randomUUID() + "@o.test\"}");
+        assertThat(desconhecido.status()).as("mesma resposta para e-mail desconhecido").isEqualTo(202);
+        assertThat(desconhecido.body()).isEqualTo(r.body());
+        assertThat(valor("SELECT count(*) FROM identity_email_tokens WHERE identity_id = '" + IDENTIDADE + "' AND purpose = 2 AND consumed_at IS NULL AND revoked_at IS NULL"))
+                .as("token emitido pela borda (so o hash)").isEqualTo("1");
+        assertThat(valor("SELECT count(*) FROM identity_events WHERE identity_id = '" + IDENTIDADE + "' AND event_type = 16")).isEqualTo("1");
+
+        // fixture declarada: o token do e-mail nao chega ao cliente sem transporte real; um token conhecido e gravado como a
+        // aplicacao grava (so o hash, proposito 2, 30 min) e o emitido pela borda e revogado, como faria um pedido novo
+        String token = com.nekkora.core.token.Tokens.newToken();
+        SEGREDOS.add(token);
+        sql("SELECT set_config('nekkora.identity_id', '" + IDENTIDADE + "', false)",
+                "UPDATE identity_email_tokens SET revoked_at = greatest(clock_timestamp(), created_at) WHERE identity_id = '" + IDENTIDADE
+                        + "' AND purpose = 2 AND consumed_at IS NULL AND revoked_at IS NULL",
+                "INSERT INTO identity_email_tokens (purpose, identity_id, target_email, token_hash, expires_at) VALUES (2, '" + IDENTIDADE + "', '" + EMAIL
+                        + "', '" + com.nekkora.core.token.Tokens.sha256Hex(token) + "', now() + interval '30 minutes')");
+        String recuperada = "senha-recuperada-e2e-" + UUID.randomUUID().toString().substring(0, 8);
+        SEGREDOS.add(recuperada);
+        BrowserClient c = browser();
+        c.csrf = c.get("/api/v1/csrf").field("csrfToken");
+        BrowserClient.Response t = c.post("/api/v1/auth/password-reset/confirm", "{\"token\":\"" + token + "\",\"newPassword\":\"" + recuperada + "\"}");
+        assertThat(t.status()).as(t.body()).isEqualTo(204);
+        assertThat(t.setCookies().stream().noneMatch(x -> x.startsWith("__Host-nekkora_id="))).as("nenhuma sessao criada").isTrue();
+        assertThat(id.get("/api/v1/me/session").status()).as("todas as sessoes revogadas").isEqualTo(401);
+        assertThat(valor("SELECT count(*) FROM identity_sessions WHERE identity_id = '" + IDENTIDADE + "' AND revoked_at IS NULL")).isEqualTo("0");
+        assertThat(c.post("/api/v1/auth/password-reset/confirm", "{\"token\":\"" + token + "\",\"newPassword\":\"" + recuperada + "-2\"}").status())
+                .as("uso unico").isEqualTo(400);
+        BrowserClient n = browser();
+        n.csrf = n.get("/api/v1/csrf").field("csrfToken");
+        BrowserClient.Response l = n.post("/api/v1/auth/login", "{\"email\":\"" + EMAIL + "\",\"password\":\"" + recuperada + "\"}");
+        assertThat(l.field("status")).as("MFA preservado").isEqualTo("mfa_required");
+        n.csrf = l.field("csrfToken");
+        assertThat(n.post("/api/v1/auth/mfa/verify", "{\"code\":\"" + code("f3") + "\"}").status()).isEqualTo(200);
+        segredos(n);
+    }
+
+    @Test
+    @Order(7)
     void nenhumSegredoNosLogsDosContainers() throws Exception {
         Process p = new ProcessBuilder("docker", "compose", "-f", System.getenv("E2E_COMPOSE"), "logs", "--no-color", "--no-log-prefix")
                 .redirectErrorStream(true).start();
         String logs = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         assertThat(p.waitFor()).isZero();
         assertThat(logs).contains("evento=identidade.fator_substituido ").contains("evento=identidade.codigos_regenerados ")
-                .contains("evento=identidade.senha_trocada ");
+                .contains("evento=identidade.senha_trocada ").contains("evento=identidade.recuperacao_emitida ")
+                .contains("evento=identidade.senha_redefinida ");
         for (byte[] f : FATORES.values()) {
             SEGREDOS.add(Base32.encode(f));
         }

@@ -97,7 +97,9 @@ class SignupContractTest {
                 IdentityAuthController.LOGOUT, List.of("204", "403", "identitySessionCookie"),
                 IdentityAuthController.STEP_UP, List.of("204", "400", "401", "403", "404", "429", "503", "identitySessionCookie", "csrfHeader"),
                 IdentityAuthController.PASSWORD, List.of("204", "400", "401", "403", "404", "429", "503", "identitySessionCookie", "csrfHeader"),
-                IdentityAuthController.RECOVERY_CODES, List.of("200", "401", "403", "404", "429", "503", "identitySessionCookie", "csrfHeader"));
+                IdentityAuthController.RECOVERY_CODES, List.of("200", "401", "403", "404", "429", "503", "identitySessionCookie", "csrfHeader"),
+                IdentityAuthController.PASSWORD_RESET_REQUEST, List.of("202", "400", "403", "404", "429", "503", "preAuthCookie", "csrfHeader"),
+                IdentityAuthController.PASSWORD_RESET_CONFIRM, List.of("204", "400", "403", "404", "429", "503", "preAuthCookie", "csrfHeader"));
         for (Map.Entry<String, List<String>> e : exercitados.entrySet()) {
             Map<String, Object> post = (Map<String, Object>) ((Map<String, Object>) paths.get(e.getKey())).get("post");
             Map<String, Object> respostas = (Map<String, Object>) post.get("responses");

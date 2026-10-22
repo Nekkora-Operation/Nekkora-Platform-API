@@ -75,6 +75,8 @@ public final class Routes {
             case "/api/v1/signup", "/api/v1/signup/confirm", "/api/v1/signup/confirmation/resend" -> Context.PRE_AUTHENTICATION;
             // entrada geral (Missao 1): senha em pre-autenticacao; MFA no desafio de identidade; logout de identidade
             case "/api/v1/auth/login" -> Context.PRE_AUTHENTICATION;
+            // recuperacao de senha da identidade (missao 002): pre-autenticacao, como a da organizacao
+            case "/api/v1/auth/password-reset/request", "/api/v1/auth/password-reset/confirm" -> Context.PRE_AUTHENTICATION;
             // cadastro de fator: desafio de login (primeiro fator) ou sessao de identidade (substituicao); as duas, ambigua
             case IDENTITY_ENROLL_START, IDENTITY_ENROLL_CONFIRM -> switch (enrollMode(req)) {
                 case CHALLENGE -> Context.IDENTITY_CHALLENGE;

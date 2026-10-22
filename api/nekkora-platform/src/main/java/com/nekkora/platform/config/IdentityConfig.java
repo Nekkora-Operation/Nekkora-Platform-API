@@ -23,6 +23,7 @@ import com.nekkora.platform.identity.IdentityLinkRepository;
 import com.nekkora.platform.identity.IdentityLoginService;
 import com.nekkora.platform.identity.IdentityOrgRepository;
 import com.nekkora.platform.identity.IdentityOrganizationsService;
+import com.nekkora.platform.identity.IdentityPasswordRecoveryService;
 import com.nekkora.platform.identity.IdentityRepository;
 import com.nekkora.platform.identity.IdentitySessionResolver;
 import com.nekkora.platform.identity.IdentityStepUpService;
@@ -203,14 +204,27 @@ public class IdentityConfig {
                 p.limits().recoveryResponseFloor());
     }
 
+    /**
+     * Recuperacao de senha da identidade por e-mail (missao 002, PR 4): token de {@code nekkora.session.password-recovery}
+     * (30 min), piso de resposta igual ao de requestRecovery, e-mail fora da resposta pela mesma fila do cadastro.
+     */
+    @Bean
+    IdentityPasswordRecoveryService identityPasswordRecoveryService(IdentityTransactions tx, IdentityRepository identities, IdentityAuthRepository auth,
+                                                                    PasswordHasher hasher, IdentityHmac hmac, Limits limits, SignupMailer mailer,
+                                                                    MailSender mail, PlatformProperties p) {
+        return new IdentityPasswordRecoveryService(tx, identities, auth, hasher, PasswordPolicy::enforce, hmac, limits, mailer, mail,
+                p.session().passwordRecovery(), p.limits().recoveryResponseFloor());
+    }
+
     /** Chaves separadas do cadastro, da entrada geral, da criacao de organizacao e da vinculacao: antes da cadeia de seguranca, depois do contexto e do limite de corpo. */
     @Bean
     FilterRegistrationBean<IdentityRoutesGate> identityRoutesGate(@Value("${nekkora.cadastro.enabled:false}") boolean signupEnabled,
                                                                   @Value("${nekkora.entrada-geral.enabled:false}") boolean entryEnabled,
                                                                   @Value("${nekkora.criacao-organizacao.enabled:false}") boolean creationEnabled,
-                                                                  @Value("${nekkora.vinculacao.enabled:false}") boolean linkEnabled) {
+                                                                  @Value("${nekkora.vinculacao.enabled:false}") boolean linkEnabled,
+                                                                  @Value("${nekkora.recuperacao-senha.enabled:false}") boolean recoveryEnabled) {
         FilterRegistrationBean<IdentityRoutesGate> r = new FilterRegistrationBean<>(new IdentityRoutesGate(signupEnabled, entryEnabled, creationEnabled,
-                linkEnabled));
+                linkEnabled, recoveryEnabled));
         r.setOrder(Ordered.HIGHEST_PRECEDENCE + 2);
         r.addUrlPatterns("/api/*");
         return r;
