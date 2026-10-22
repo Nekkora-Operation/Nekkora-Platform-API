@@ -224,7 +224,8 @@ public final class GraphMailTransport implements MailTransport {
     private static java.util.Optional<Duration> seconds(String v) {
         try {
             long n = Long.parseLong(v.trim());
-            return n >= 0 && n <= 3600 ? java.util.Optional.of(Duration.ofSeconds(n)) : java.util.Optional.empty();
+            // respeitado por inteiro ate 7 dias (o prazo maximo de uma mensagem na fila); acima disso, a mensagem expira antes
+            return n >= 0 ? java.util.Optional.of(Duration.ofSeconds(Math.min(n, Duration.ofDays(7).toSeconds()))) : java.util.Optional.empty();
         } catch (NumberFormatException e) {
             return java.util.Optional.empty();
         }

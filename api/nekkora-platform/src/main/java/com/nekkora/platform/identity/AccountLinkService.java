@@ -23,6 +23,7 @@ import com.nekkora.platform.auth.crypto.PasswordHasher;
 import com.nekkora.platform.auth.crypto.Totp;
 import com.nekkora.platform.identity.IdentitySessionResolver.IdentityPrincipal;
 import com.nekkora.platform.limits.Limits;
+import com.nekkora.platform.mail.MailIntents;
 import com.nekkora.platform.mail.MailSender;
 
 /**
@@ -55,10 +56,10 @@ public final class AccountLinkService {
     private final PasswordHasher hasher;
     private final IdentityHmac hmac;
     private final Limits limits;
-    private final MailSender mail;
+    private final MailIntents mail;
 
     public AccountLinkService(IdentityTransactions tx, IdentityAuthRepository auth, IdentityLinkRepository links, LegacyAccountPort accounts,
-                              PasswordHasher hasher, IdentityHmac hmac, Limits limits, MailSender mail) {
+                              PasswordHasher hasher, IdentityHmac hmac, Limits limits, MailIntents mail) {
         this.tx = tx;
         this.auth = auth;
         this.links = links;
@@ -150,6 +151,11 @@ public final class AccountLinkService {
                 if (p.totpStep() != null && !stillAccepted(p.totpStep())) {
                     throw new ProofRollback("passo_vencido");
                 }
+                if (p.usedRecoveryCode()) {
+                    // aviso NA transacao do consumo do codigo local; chave = o desafio de vinculacao emitido
+                    mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_RECOVERY_CODE_USED, organizationId, email.get(), null,
+                            "vinculacao:" + Tokens.sha256Hex(token)));
+                }
                 return new Outcome(null, p.usedRecoveryCode());
             }).orElse(Outcome.refused("sessao"));
         } catch (ProofRollback e) {
@@ -166,9 +172,6 @@ public final class AccountLinkService {
             throw refused(identity, target, ip, r.rule());
         }
         LOG.info("evento=identidade.vinculacao_desafio identidade={} ip={} correlacao={}", identity, ClientIpResolver.truncated(ip), correlation);
-        if (r.usedRecoveryCode()) {
-            mail.send(MailSender.Kind.NOTICE_RECOVERY_CODE_USED, organizationId, email.get(), null);
-        }
         return token;
     }
 
@@ -192,14 +195,21 @@ public final class AccountLinkService {
         }
         String identity = hmac.global(email.get());
         boolean linked = Tokens.isValidFormat(linkToken)
-                && tx.preAuthentication(Mode.READ_WRITE, j -> links.link(j, sessionToken, linkToken, organizationId));
+                && tx.preAuthentication(Mode.READ_WRITE, j -> {
+                    if (!links.link(j, sessionToken, linkToken, organizationId)) {
+                        return false;
+                    }
+                    // aviso NA transacao da vinculacao; chave = o desafio de vinculacao consumido (uso unico)
+                    mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_IDENTITY_LINKED, organizationId, email.get(), null,
+                            "vinculada:" + Tokens.sha256Hex(linkToken)));
+                    return true;
+                });
         if (!linked) {
             LOG.info("evento=identidade.vinculacao_negada identidade={} ip={}", identity, ClientIpResolver.truncated(ip));
             throw ApiException.forbidden("vinculacao");
         }
         LOG.info("evento=identidade.vinculada org={} identidade={} ip={} correlacao={}", organizationId, identity, ClientIpResolver.truncated(ip),
                 RequestContext.correlation());
-        mail.send(MailSender.Kind.NOTICE_IDENTITY_LINKED, organizationId, email.get(), null);
     }
 
     private ApiException refused(String identity, String target, String ip, String rule) {

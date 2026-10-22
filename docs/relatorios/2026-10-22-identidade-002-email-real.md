@@ -94,43 +94,91 @@ Variáveis, todas por ambiente ou cofre e nada versionado:
 | Entra recusa o token (4xx) | RECUSADO, sem envio |
 | Entra fora (rede ou 5xx) | RETENTÁVEL |
 
+### Intenção durável junto do ato (revisão 1)
+
+Achado da revisão: a primeira versão gravava na fila **depois** do commit. Cadastro e recuperação ainda passavam pela fila em memória antes disso. Uma queda nesse intervalo deixava o ato confirmado sem mensagem recuperável, e na vinculação e em caminhos por organização uma falha de gravação respondia 500 depois do commit.
+
+**Correção: porta `MailIntents`.** Todos os serviços registram a mensagem **dentro da transação do ato**:
+- cadastro e reemissão;
+- pedido e confirmação da recuperação de senha (identidade e organização);
+- troca de senha (identidade e organização);
+- uso de código de recuperação (identidade, organização e vinculação);
+- vinculação;
+- troca de fator;
+- regeneração de códigos;
+- reset administrativo e aviso aos demais administradores.
+
+Comportamento por transporte:
+- **`m365` (`OutboxMailIntents`):** a linha de `mail_outbox` é gravada com o mesmo cliente da transação. Ou o ato e a intenção confirmam juntos, ou nenhum. Não há mais intervalo entre o commit e a gravação, nem 500 depois do commit por falha de gravação: essa falha desfaz o ato, que pode ser repetido. O envio continua fora de transação.
+- **`local` e `homologacao` (`AfterCommitMailIntents`):** o envio é agendado para depois do commit, como antes, sem persistência. A falha do transporte só vai ao log. Cadastro e recuperação da identidade continuam saindo pela fila em memória.
+
+A única mensagem sem ato a acompanhar, o aviso de "conta já existente" do cadastro, é gravada em transação própria.
+
+**Deduplicação persistente.** Cada intenção tem uma **chave estável do evento**, `event_key` (UNIQUE), formada pelo tipo mais o fato de negócio único da transação:
+
+| Mensagem | Fato de negócio da chave |
+|---|---|
+| mensagens com token | hash do token |
+| troca de senha | hash novo |
+| troca de fator | fator novo |
+| regeneração de códigos | hash do conjunto |
+| uso de código | sessão criada |
+| vinculação | desafio consumido |
+| reset administrativo | correlação do evento, gerada pelo servidor e gravada no evento |
+
+`ON CONFLICT DO NOTHING`: o mesmo evento nunca vira dois trabalhos. Isso não promete entrega exatamente uma vez. Substitui a janela no Redis do desenho §6.3, com a justificativa pedida: a posse exclusiva protege um trabalho, e a chave do evento impede dois trabalhos para o mesmo evento.
+
 ### Fila persistente (021) e despacho (`MailDispatcher`)
 
-- **Gravação.** `send()` grava um trabalho **depois do commit** da alteração de segurança, como todas as portas. Destinatário e token vão **cifrados juntos**: AES-GCM, chaves de `nekkora.keys`, AAD = `mail|job_id|key_id`. Em claro ficam só o HMAC do destinatário (`IdentityHmac.global`) e metadados.
-- **Ciclo de despacho** (a cada 5 s, chave `nekkora.mail.despacho.enabled`):
-  1. ENVIANDO com posse vencida, ou seja, queda durante o envio: **INCERTO**, sem reenvio;
+- **Cifra:** destinatário e tokens vão **cifrados juntos** (AES-GCM, chaves de `nekkora.keys`, AAD = `mail|job_id|key_id`). Em claro ficam só o HMAC do destinatário, a chave do evento e metadados.
+- **Ciclo** (a cada 5 s):
+  1. ENVIANDO com posse vencida (queda durante o envio): **INCERTO**, sem reenvio;
   2. PENDENTE com prazo vencido: **EXPIRADO**, sem envio;
-  3. reivindicação com `FOR UPDATE SKIP LOCKED`: duas instâncias nunca pegam o mesmo trabalho;
-  4. envio fora de transação;
-  5. desfecho preso à tentativa reivindicada.
-- **Terminais** (ACEITO, RECUSADO, INCERTO, EXPIRADO): o payload cifrado é **apagado** no mesmo UPDATE.
-- **Tentativas:** RETENTÁVEL volta a PENDENTE com espera crescente (30 s, 2 min, 10 min, 30 min) ou o `Retry-After`. O máximo são **5 tentativas**; esgotadas, INCERTO (desenho §6.1).
-- **Prazo por tipo:** recuperação de senha 30 min, confirmação de cadastro 24 h, avisos 24 h. O teto do banco é de 7 dias.
-- **Ritmo:** no máximo 25 envios por minuto por instância (`nekkora.mail.despacho.por-minuto`), abaixo do limite de 30 do Exchange Online. Envio um a um, abaixo do limite de 4 concorrentes do Graph.
-- **Proteção no banco** (trigger da 021):
-  - a origem do trabalho é imutável;
+  3. depois, **um trabalho por vez** (revisão 1):
+     - reivindicação com `FOR UPDATE SKIP LOCKED`;
+     - montagem da mensagem;
+     - **reconferência imediatamente antes do envio**: ainda ENVIANDO, mesma tentativa, posse e prazo válidos pelo relógio do banco, com a posse renovada no mesmo comando;
+     - envio;
+     - desfecho preso à tentativa.
+- **Posse perdida antes do envio:** **não envia**. O trabalho volta a PENDENTE, sabidamente não enviado, com espera de 30 s, e o ciclo termina. Nenhum trabalho fica reivindicado esperando a vez num lote.
+- **Posse perdida durante o envio** (transporte mais lento que a posse): outra instância já o levou a INCERTO, e o desfecho só vai ao log (`mail.desfecho_sem_posse`).
+- **Configuração da posse:** `nekkora.mail.despacho.posse`, padrão 2 min. A partida é recusada se ela for menor que 3× o tempo máximo do transporte.
+- **Terminais:** o payload cifrado é **apagado**.
+- **Tentativas:** RETENTÁVEL volta a PENDENTE com o **maior** entre a espera crescente (30 s, 2 min, 10 min, 30 min) e o `Retry-After`.
+  - O `Retry-After` é respeitado **por inteiro**, até 7 dias. Antes, valores acima de 1 h eram ignorados.
+  - Se passar do prazo da mensagem, ela expira.
+  - O máximo são 5 tentativas; esgotadas, INCERTO. Um trabalho no limite não é mais reivindicado.
+- **Prazo por tipo:**
+
+  | Tipo | Prazo |
+  |---|---|
+  | recuperação de senha | 30 min |
+  | cadastro | 24 h |
+  | avisos | 24 h |
+  | avisos emergenciais | 23 h (a 016 encerra a tentativa ENFILEIRADA em 24 h) |
+
+- **Ritmo:** 25 envios por minuto por instância, um a um.
+- **Avisos da recuperação emergencial (016), revisão 1:** passam pela fila persistente com a tentativa de origem (`notice_ref`). A porta devolve ENFILEIRADO na hora, sem espera síncrona. O despacho respeita o `Retry-After` e devolve o desfecho terminal à tentativa (`EmergencyNotices.recordTransportResult`):
+
+  | Desfecho na fila | Resultado na 016 |
+  |---|---|
+  | ACEITO | ACEITA |
+  | RECUSADO ou EXPIRADO | FALHOU |
+  | INCERTO | DESCONHECIDO |
+
+  Isso substitui a primeira versão, que limitava a espera a 2 s.
+- **Retenção, com limpeza controlada:** trabalhos terminais encerrados há mais de **30 dias** são apagados em lotes de 500, a cada hora. A trigger recusa qualquer outro DELETE (pendente, enviando ou recente). A Platform tem DELETE só dentro dessa regra. Restam apenas metadados nas linhas.
+- **Proteção no banco:**
+  - a origem do trabalho é imutável: id, tipo, HMAC, chave do evento, referência, correlação, criação e prazo;
   - um estado terminal não volta;
   - as tentativas só aumentam;
   - o payload só pode ser apagado;
-  - DELETE e TRUNCATE são recusados.
+  - TRUNCATE é recusado.
 
-  A Platform tem só SELECT, INSERT e UPDATE por coluna, e nenhum DELETE.
-- **Avisos da recuperação emergencial (016):** já têm persistência própria (`EmergencyNotices`). Vão direto ao transporte com até 3 tentativas curtas, só para RETENTÁVEL, e o desfecho é mapeado para `MailSender.Outcome`.
-
-**Duplicidade.** Não há entrega "exatamente uma vez": o Graph não tem chave de idempotência.
-- O que **pode ter saído** (INCERTO) nunca é reenviado automaticamente (desenho §6.2).
-- O que **com certeza não saiu** (RETENTÁVEL) é repetido.
-- Um aviso duplicado é, no pior caso, incômodo. Um token de cadastro ou de recuperação tem uso único, e o pedido seguinte revoga o anterior.
-- A janela de deduplicação no Redis, prevista no desenho §6.3, **não** foi implementada. A fila persistente com reivindicação exclusiva já impede o envio duplo pela própria aplicação. Fica registrada como divergência do desenho, para decisão.
-
-**A alteração de segurança nunca depende do e-mail.**
-- A gravação na fila acontece depois do commit.
-- Capturam a falha e registram em log:
-  - os serviços desta missão (troca de fator, troca de senha, regeneração de códigos e recuperação de senha);
-  - a verificação com código de recuperação;
-  - o cadastro, cuja fila assíncrona já existia.
-- A vinculação (P3) e os caminhos por organização chamam a porta sem captura, como antes. Neles, uma falha **de gravação na fila** (banco) produz 500 depois do commit. A alteração fica, mas a resposta engana.
-- A falha do **transporte** nunca chega à requisição.
+**Duplicidade.** Não há entrega "exatamente uma vez".
+- O que **pode ter saído** (INCERTO) nunca é reenviado automaticamente.
+- O que **com certeza não saiu** (RETENTÁVEL, ou posse perdida antes do envio) é repetido.
+- O mesmo evento nunca gera dois trabalhos.
 
 **Observabilidade.** Os eventos de log registram o job, o tipo, a tentativa, o desfecho, o status HTTP e a correlação:
 - `mail.enfileirado`;
@@ -184,16 +232,20 @@ Códigos de saída: 0 aceito, 2 recusado, 3 retentável, 4 incerto, 64 uso incor
 | Partida recusada sem tenant, remetente ou certificado, ou com senha errada | `partidaRecusadaSemConfiguracao` |
 | Saída por proxy | `saidaPorProxyConfigurado` |
 | Comando de prova: aceito (0), recusa a outro remetente (2), uso incorreto (64), sem segredo na saída | `comandoDeProvaDeHomologacao` |
-| Cadastro real → fila **cifrada** (destinatário e token ausentes do payload em repouso e do log) → despacho → 202 → ACEITO com payload apagado → o token do link conclui o cadastro | `MailOutboxIT.cadastroEnfileiraCifradoEODespachoEntregaEApagaOPayload` |
+| **Intenção durável:** cadastro real grava a intenção na transação do ato (existe na resposta, sem despacho); um despachante **novo** (o reinício) a envia; o ato não se repete (um evento de pedido); fila cifrada (destinatário e token ausentes em repouso e no log); o token do link conclui o cadastro | `MailOutboxIT.intencaoGravadaComOAtoSobreviveAoReinicioSemRepetirOAto` |
+| **Atomicidade:** se a intenção não pode ser gravada (trigger de falha temporária no teste), o ato não confirma: nenhuma identidade nasce | `semIntencaoGravadaOAtoNaoConfirma` |
+| **Deduplicação:** a mesma chave de evento gera um trabalho | `mesmaChaveDeEventoGeraUmTrabalho` |
+| **Posse antes do envio:** posse de 1 ms vencida entre a reivindicação e o envio, então não envia e volta à fila com espera; depois sai uma vez. **Contraprova:** sem a reconferência, o teste falha | `trabalhoNaoComecaDepoisDePerderAPosse` |
+| **Dois despachantes, transporte lento** (1,5 s) com posse curta (1 s): todo envio começa com o trabalho ENVIANDO e a posse válida; nenhum trabalho é enviado duas vezes; todos terminam terminais | `doisDespachantesComTransporteLentoNuncaEnviamSemPosse` |
+| **Retry-After do aviso emergencial:** ENFILEIRADO sem espera; 60 s e 1 h respeitados sem tentativa antes; desfecho devolvido à tentativa | `avisoEmergencialRespeitaORetryAfterEDevolveODesfecho` |
 | RETENTÁVEL volta à fila com espera e depois é aceito | `retentavelVoltaAFilaEDepoisEAceito` |
-| RECUSADO e INCERTO são terminais e não são repetidos | `recusaEIncertezaSaoTerminaisENaoSaoRepetidas` |
+| RECUSADO e INCERTO são terminais e não se repetem | `recusaEIncertezaSaoTerminaisENaoSaoRepetidas` |
 | 5 tentativas esgotadas: INCERTO | `tentativasEsgotadasViramIncerto` |
-| Recuperação após queda: posse vencida vira INCERTO, sem reenvio | `posseVencidaDepoisDeQuedaViraIncertoSemReenvio` |
+| Posse vencida depois de queda: INCERTO, sem reenvio | `posseVencidaDepoisDeQuedaViraIncertoSemReenvio` |
 | Prazo vencido: EXPIRADO, sem envio | `prazoVencidoExpiraSemEnviar` |
-| Dois despachos concorrentes: cada trabalho enviado uma vez | `despachosConcorrentesEnviamCadaTrabalhoUmaVez` |
 | Ritmo por minuto | `ritmoPorMinutoLimitaOsEnvios` |
-| Avisos emergenciais: tentativas curtas e mapeamento | `avisoEmergencialVaiDiretoAoTransporteComTentativasCurtas` |
-| Banco: origem imutável, terminal imutável, sem apagamento, Platform sem DELETE | `bancoProtegeOrigemTerminalEApagamento` |
+| Banco: origem e terminal imutáveis; DELETE fora da retenção recusado | `bancoProtegeOrigemTerminalEApagamento` |
+| **Retenção:** terminal recente fica; terminal com mais de 30 dias sai pela limpeza; pendente fica; a Platform não apaga fora da regra | `retencaoApagaSoTerminaisAntigos` |
 | Modelos: todo tipo, link na origem com token no fragmento, avisos sem link | `MailTemplatesTest` |
 
 **Suíte de banco** `db/tests/correio-021`:
@@ -201,7 +253,7 @@ Códigos de saída: 0 aceito, 2 recusado, 3 retentável, 4 incerto, 64 uso incor
 | Caso | Resultado |
 |---|---|
 | A, instalação limpa 001–021 | a 021 é aplicada **sem** janela (`elevada=nao`); invariantes de 012 a 021 depois da retirada; marcador `versao=021` |
-| B2, base populada 020 → 021 (80 tabelas) | dados idênticos; catálogo com exatamente 87 linhas previstas, todas acréscimos de `mail_outbox` e da sua proteção; igual à instalação limpa |
+| B2, base populada 020 → 021 (80 tabelas) | dados idênticos; catálogo com exatamente 113 linhas previstas, todas acréscimos de `mail_outbox` e da sua proteção (inclui a chave do evento, a referência da tentativa e o índice de retenção); igual à instalação limpa |
 | B3, reaplicação | recusada |
 
 **Regressão completa, E2E e CI:** registradas no PR.
@@ -209,21 +261,41 @@ Códigos de saída: 0 aceito, 2 recusado, 3 retentável, 4 incerto, 64 uso incor
 ## 4. Limitações e divergências declaradas
 
 - **Homologação real não executada:** bloqueio externo (§5). O transporte foi provado contra o Entra e o Graph **falsos**. A chamada real, o recebimento e os cabeçalhos de autenticação dependem das ações autorizadas.
-- **Janela de deduplicação no Redis** (desenho §6.3) não implementada, como explicado na §2. Decisão da responsável.
-- **Retenção da fila:** as linhas terminais guardam só metadados e nunca são apagadas; a Platform não tem DELETE. A política de retenção fica para decisão própria.
+- **Deduplicação:** o desenho §6.3 previa uma janela no Redis. Ela foi substituída por uma chave estável do evento, UNIQUE no banco (§2). Mudança para conferência da responsável.
+- **Retenção:** 30 dias depois de encerrado, com limpeza em lotes. O prazo é proposta desta revisão, para conferência.
+- **Posse perdida antes do envio, com a varredura chegando primeiro:** se outra instância encerrar o trabalho como INCERTO antes da reconferência, ele não é enviado e fica INCERTO, mesmo sabidamente não enviado. Isso exige que esta instância trave por mais que a posse inteira entre a reivindicação e o envio. A posse padrão (2 min) e a partida recusada abaixo de 3× o tempo do transporte tornam o caso excepcional, e o log registra `mail.envio_cancelado_sem_posse`.
 - **Ritmo por instância:** com mais de uma instância da Platform, a soma dos ritmos precisa caber em 30 por minuto. Isso é configuração, não coordenação.
-- **Vinculação e caminhos por organização:** uma falha de **gravação** na fila produz 500 depois do commit. É o comportamento de antes com qualquer falha da porta; a alteração de segurança fica.
 - **Avisos ainda inexistentes:** a recuperação de senha **por organização** não envia aviso de senha trocada na confirmação. É um fluxo antigo, mantido como está.
 
 ## 5. Ações externas para autorização
 
 Nenhuma foi executada. A ordem é obrigatória.
 
+### 0. Reconciliação do tenant, antes de qualquer alteração (revisão 1)
+
+**Divergência apontada na revisão.** Este relatório usa o tenant `facfe491-5e10-4f17-bb17-7c2115baea8f`, que é o `Guid` de `Get-OrganizationConfig` na conferência de 2026-10-11. Uma captura do Entra enviada anteriormente mostrava `ae4ed48d-e7d8-4f24-83f2-443e997c5a65`.
+
+Pode haver explicação legítima: `Get-OrganizationConfig.Guid` é o identificador da organização no Exchange Online e **não** é necessariamente o Tenant ID do Entra. Mas isso só se resolve lendo o tenant atual. O nome `radiantsai` sozinho não identifica o tenant. **Nenhuma ação das seções A a F deve ser executada antes disso.**
+
+Leituras, sem nenhuma alteração:
+
+| # | Leitura | Onde |
+|---|---|---|
+| R-1 | Tenant ID e nome do tenant | Entra ID → Visão geral; ou `Connect-MgGraph -Scopes Organization.Read.All; Get-MgOrganization \| Format-List Id, DisplayName, VerifiedDomains` |
+| R-2 | Organização do Exchange conectada | `Get-ConnectionInformation \| Format-List TenantID, Organization, UserPrincipalName` (Exchange Online PowerShell) |
+| R-3 | `nekkora.com` verificado e `Authoritative` **nesse** tenant | `Get-AcceptedDomain nekkora.com \| Format-List DomainName, DomainType`; e `nekkora.com` em `VerifiedDomains` de R-1 |
+| R-4 | A caixa `no-reply@nekkora.com` **nesse** tenant | `Get-Recipient no-reply@nekkora.com \| Format-List Name, RecipientTypeDetails, PrimarySmtpAddress, ExternalDirectoryObjectId` |
+| R-5 | DKIM do domínio **nesse** tenant | `Get-DkimSigningConfig -Identity nekkora.com \| Format-List Enabled, Selector1CNAME, Selector2CNAME` |
+
+**Resultado exigido:**
+- **R-1 e R-2 apontam para o mesmo Tenant ID**, e o domínio, a caixa e o DKIM estão nele. Esse Tenant ID passa a ser o de `NEKKORA_M365_TENANT` e o do aplicativo de D1; o relatório é atualizado com ele.
+- **R-1 e R-2 divergem**, ou `nekkora.com` está em outro tenant: a missão para aqui e volta para decisão.
+
 ### A. `dmarc@nekkora.com` (L-8), antes do registro DMARC
 
 | Item | Valor |
 |---|---|
-| Destino | Exchange Online, tenant `radiantsai.onmicrosoft.com` (`facfe491-5e10-4f17-bb17-7c2115baea8f`) |
+| Destino | Exchange Online do tenant confirmado na seção 0 (R-1 e R-2) |
 | Ação | caixa compartilhada `dmarc@nekkora.com`, acompanhada por pessoa a definir pela responsável |
 | Comandos | `New-Mailbox -Shared -Name "dmarc" -DisplayName "Relatorios DMARC" -PrimarySmtpAddress dmarc@nekkora.com`<br>`Add-MailboxPermission dmarc@nekkora.com -User <pessoa> -AccessRights FullAccess` |
 | Prova | um e-mail externo a `dmarc@nekkora.com` chega à caixa |

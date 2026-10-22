@@ -18,6 +18,7 @@ import com.nekkora.core.web.RequestContext;
 import com.nekkora.platform.auth.crypto.IdentityHmac;
 import com.nekkora.platform.auth.crypto.PasswordHasher;
 import com.nekkora.platform.limits.Limits;
+import com.nekkora.platform.mail.MailIntents;
 import com.nekkora.platform.mail.MailSender;
 
 /**
@@ -49,13 +50,12 @@ public final class IdentityPasswordRecoveryService {
     private final PasswordRule passwordRule;
     private final IdentityHmac hmac;
     private final Limits limits;
-    private final SignupMailer mailer;
-    private final MailSender mail;
+    private final MailIntents mail;
     private final Duration tokenValidity;
     private final Duration responseFloor;
 
     public IdentityPasswordRecoveryService(IdentityTransactions tx, IdentityRepository identities, IdentityAuthRepository auth, PasswordHasher hasher,
-                                           PasswordRule passwordRule, IdentityHmac hmac, Limits limits, SignupMailer mailer, MailSender mail,
+                                           PasswordRule passwordRule, IdentityHmac hmac, Limits limits, MailIntents mail,
                                            Duration tokenValidity, Duration responseFloor) {
         this.tx = tx;
         this.identities = identities;
@@ -64,7 +64,6 @@ public final class IdentityPasswordRecoveryService {
         this.passwordRule = passwordRule;
         this.hmac = hmac;
         this.limits = limits;
-        this.mailer = mailer;
         this.mail = mail;
         this.tokenValidity = tokenValidity;
         this.responseFloor = responseFloor;
@@ -98,10 +97,11 @@ public final class IdentityPasswordRecoveryService {
                 identities.revokeLiveRecoveryTokens(j, id.identityId());
                 identities.insertRecoveryToken(j, id.identityId(), to, Tokens.sha256Hex(token), tokenValidity);
                 identities.event(j, id.identityId(), IdentityRepository.EV_PASSWORD_RECOVERY_REQUESTED, correlation);
+                // e-mail com o token NA transacao que o emite; chave = hash do token
+                mail.record(j, new MailIntents.Intent(MailSender.Kind.PASSWORD_RECOVERY, null, to, token, "token:" + Tokens.sha256Hex(token)));
                 return to;
             });
             if (target.isPresent()) {
-                mailer.enqueue(MailSender.Kind.PASSWORD_RECOVERY, target.get(), token);
                 LOG.info("evento=identidade.recuperacao_emitida identidade={} ip={} correlacao={}", identity, ClientIpResolver.truncated(ip), correlation);
             }
         } finally {
@@ -123,17 +123,22 @@ public final class IdentityPasswordRecoveryService {
         String newHash = hasher.generate(newPassword);
         // a chave resolve a identidade do token (qualquer proposito); a funcao confere o proposito 2 e tudo o mais sob os locks
         Optional<String> email = tx.inIdentity(new TokenEmail(token), Mode.READ_WRITE,
-                (id, j) -> identities.passwordReset(j, token, newHash) ? auth.email(j, id.identityId()).orElse(null) : null);
+                (id, j) -> {
+                    if (!identities.passwordReset(j, token, newHash)) {
+                        return null;
+                    }
+                    String to = auth.email(j, id.identityId()).orElse(null);
+                    if (to != null) {
+                        // aviso NA transacao da troca; chave = o token consumido (uso unico)
+                        mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_PASSWORD_CHANGED, null, to, null, "redefinicao:" + Tokens.sha256Hex(token)));
+                    }
+                    return to;
+                });
         if (email.isEmpty()) {
             LOG.info("evento=identidade.recuperacao_negada ip={}", ClientIpResolver.truncated(ip));
             throw ApiException.invalid("token");
         }
         LOG.info("evento=identidade.senha_redefinida identidade={} ip={}", hmac.global(email.get()), ClientIpResolver.truncated(ip));
-        try {
-            mail.send(MailSender.Kind.NOTICE_PASSWORD_CHANGED, null, email.get(), null);
-        } catch (RuntimeException e) {
-            LOG.warn("evento=identidade.aviso_falhou tipo=NOTICE_PASSWORD_CHANGED correlacao={}", RequestContext.correlation());
-        }
     }
 
     private void floor(long startNanos) {

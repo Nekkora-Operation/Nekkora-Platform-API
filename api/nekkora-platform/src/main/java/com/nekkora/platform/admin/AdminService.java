@@ -14,6 +14,7 @@ import com.nekkora.core.web.ApiError;
 import com.nekkora.core.web.ApiException;
 import com.nekkora.core.web.RequestContext;
 import com.nekkora.platform.account.AccountRepository;
+import com.nekkora.platform.mail.MailIntents;
 import com.nekkora.platform.mail.MailSender;
 import com.nekkora.platform.mfa.MfaRepository;
 import com.nekkora.platform.session.SessionRepository;
@@ -33,10 +34,10 @@ public final class AdminService {
     private final AccountRepository accounts;
     private final SessionRepository sessions;
     private final MfaRepository mfa;
-    private final MailSender mail;
+    private final MailIntents mail;
     private final java.time.Duration stepUpWindow;
 
-    public AdminService(OrgTransactions tx, AccountRepository accounts, SessionRepository sessions, MfaRepository mfa, MailSender mail,
+    public AdminService(OrgTransactions tx, AccountRepository accounts, SessionRepository sessions, MfaRepository mfa, MailIntents mail,
                         java.time.Duration stepUpWindow) {
         this.tx = tx;
         this.accounts = accounts;
@@ -183,19 +184,22 @@ public final class AdminService {
             mfa.invalidateForAccount(j, target, null);
             mfa.disableFactor(j, target);
             sessions.revokeForAccount(j, target, null);
-            mfa.recordEvent(j, org, target, actor.userId(), MfaRepository.EV_RESET_ADMIN, correlation(), reason.code());
+            UUID ev = correlation();
+            mfa.recordEvent(j, org, target, actor.userId(), MfaRepository.EV_RESET_ADMIN, ev, reason.code());
             email[0] = accounts.byId(j, org, target).map(AccountRepository.Account::email).orElse(null);
             if (accounts.isEffectiveOrgAdmin(j, org, target)) {
                 otherAdmins.addAll(accounts.effectiveOrgAdminEmails(j, org, target));
             }
+            // intencoes NA transacao do reset (fila duravel no transporte real): chave = evento do reset (+ destinatario)
+            if (email[0] != null) {
+                mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_MFA_RESET, org, email[0], null, "reset:" + target + ":" + ev));
+            }
+            for (String other : otherAdmins) {
+                mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_MFA_RESET_ADMIN_TARGET, org, other, null,
+                        "reset:" + target + ":" + ev + ":" + com.nekkora.core.token.Tokens.sha256Hex(other)));
+            }
             return null;
         });
-        if (email[0] != null) {
-            mail.send(MailSender.Kind.NOTICE_MFA_RESET, org, email[0], null);
-        }
-        for (String other : otherAdmins) {
-            mail.send(MailSender.Kind.NOTICE_MFA_RESET_ADMIN_TARGET, org, other, null);
-        }
     }
 
     /** Ator: conta interna, sessao ainda valida (reavaliada aqui), permissao da matriz, e alvo != ator quando houver alvo. */

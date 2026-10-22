@@ -11,6 +11,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashSet;
@@ -34,12 +35,13 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
+import com.nekkora.core.db.OrgTransactions;
 import com.nekkora.core.testsupport.BrowserClient;
 import com.nekkora.core.testsupport.RealDatabase;
 import com.nekkora.core.testsupport.RealRedis;
 import com.nekkora.platform.PlatformApplication;
 import com.nekkora.platform.auth.crypto.IdentityHmac;
-import com.nekkora.platform.identity.SignupMailer;
+import com.nekkora.platform.auth.crypto.SecretCipher;
 
 import tools.jackson.databind.json.JsonMapper;
 
@@ -101,16 +103,25 @@ class MailOutboxIT {
         r.add("nekkora.mail.despacho.por-minuto", () -> "1000");
     }
 
+
     @LocalServerPort
     int port;
     @Autowired
     MailSender mail;
     @Autowired
+    MailIntents intents;
+    @Autowired
     MailDispatcher dispatcher;
     @Autowired
     IdentityHmac hmac;
     @Autowired
-    SignupMailer signupMailer;
+    OrgTransactions tx;
+    @Autowired
+    SecretCipher cipher;
+    @Autowired
+    MailTemplates templates;
+    @Autowired
+    GraphMailTransport transport;
 
     /** Fila isolada por teste: trabalhos ainda vivos de outro teste sao encerrados (o despacho pega tudo o que esta vencido). */
     @BeforeEach
@@ -120,43 +131,129 @@ class MailOutboxIT {
                 + " payload_nonce = NULL, key_id = NULL WHERE state IN (1, 2)");
     }
 
-    // ------------------------------------------------------------------ caminho completo
+    // ------------------------------------------------------------------ intencao duravel junto do ato
 
     /**
-     * Cadastro real -> trabalho na fila com destinatario e token CIFRADOS (nada em claro no banco nem no log) -> despacho ->
-     * 202 do Graph -> ACEITO com o payload apagado. O token do link funciona uma vez (a confirmacao pela API conclui).
+     * Cadastro real: a intencao e gravada NA transacao do ato (existe logo apos a resposta, sem despacho e sem fila em
+     * memoria), com destinatario e token cifrados. "Queda" depois do commit = nenhum despacho desta instancia; um despachante
+     * NOVO (o reinicio) a envia, e o ato nao se repete (um evento de pedido de cadastro). O token do e-mail conclui o cadastro.
      */
     @Test
-    void cadastroEnfileiraCifradoEODespachoEntregaEApagaOPayload(CapturedOutput out) throws Exception {
+    void intencaoGravadaComOAtoSobreviveAoReinicioSemRepetirOAto(CapturedOutput out) throws Exception {
         assertThat(mail).isInstanceOf(OutboxMailSender.class);
+        assertThat(intents).isInstanceOf(OutboxMailIntents.class);
         String email = "fila-" + UUID.randomUUID().toString().substring(0, 8) + "@exemplo.test";
-        BrowserClient b = browser();
-        assertThat(b.post("/api/v1/signup", "{\"email\":\"" + email + "\"}").status()).isEqualTo(202);
-        for (int i = 0; i < 100 && signupMailer.pending() > 0; i++) {
-            Thread.sleep(50);
-        }
+        assertThat(browser().post("/api/v1/signup", "{\"email\":\"" + email + "\"}").status()).isEqualTo(202);
         String hash = hmac.global(email);
-        assertThat(sql("SELECT kind || '|' || state || '|' || attempts FROM mail_outbox WHERE recipient_hmac = '" + hash + "'"))
-                .isEqualTo("IDENTITY_SIGNUP_CONFIRMATION|1|0");
+        assertThat(sql("SELECT kind || '|' || state || '|' || attempts || '|' || (event_key LIKE 'IDENTITY_SIGNUP_CONFIRMATION:token:%')"
+                + " FROM mail_outbox WHERE recipient_hmac = '" + hash + "'")).as("intencao ja duravel na resposta").isEqualTo("IDENTITY_SIGNUP_CONFIRMATION|1|0|true");
         byte[] payload = bytes("SELECT payload_ciphertext FROM mail_outbox WHERE recipient_hmac = '" + hash + "'");
         assertThat(contains(payload, email.getBytes(StandardCharsets.UTF_8))).as("destinatario cifrado").isFalse();
 
+        MailDispatcher reiniciado = new MailDispatcher(tx, cipher, transport, templates, 1000, Duration.ofMinutes(2), (n, o) -> { });
         int antes = FAKE.sends();
-        assertThat(dispatcher.dispatchPending()).isGreaterThanOrEqualTo(1);
+        assertThat(reiniciado.dispatchPending()).isGreaterThanOrEqualTo(1);
         assertThat(FAKE.sends()).isEqualTo(antes + 1);
         String body = FAKE.sendRequests.get(FAKE.sends() - 1).body();
-        assertThat(JSON.readTree(body).path("message").path("toRecipients").get(0).path("emailAddress").path("address").asString()).isEqualTo(email);
         Matcher m = Pattern.compile(Pattern.quote(ORIGIN) + "/cadastro/confirmar#token=([A-Za-z0-9_-]{43})").matcher(body);
         assertThat(m.find()).as("link na origem publica, token no fragmento").isTrue();
         String token = m.group(1);
         assertThat(contains(payload, token.getBytes(StandardCharsets.UTF_8))).as("token cifrado na fila").isFalse();
-        assertThat(sql("SELECT state || '|' || attempts || '|' || last_status || '|' || (payload_ciphertext IS NULL) || (finished_at IS NOT NULL)"
-                + " FROM mail_outbox WHERE recipient_hmac = '" + hash + "'")).isEqualTo("3|1|202|truetrue");
-
-        BrowserClient c = browser();
-        assertThat(c.post("/api/v1/signup/confirm", "{\"token\":\"" + token + "\",\"password\":\"senha-pela-fila-de-email-1\",\"displayName\":\"Pessoa\"}")
+        assertThat(sql("SELECT state || '|' || (payload_ciphertext IS NULL) FROM mail_outbox WHERE recipient_hmac = '" + hash + "'")).isEqualTo("3|true");
+        assertThat(sql("SELECT count(*) FROM identity_events e JOIN identities i ON i.identity_id = e.identity_id WHERE i.email = '" + email
+                + "' AND e.event_type = 1")).as("o ato nao se repete").isEqualTo("1");
+        assertThat(browser().post("/api/v1/signup/confirm", "{\"token\":\"" + token + "\",\"password\":\"senha-pela-fila-de-email-1\",\"displayName\":\"Pessoa\"}")
                 .status()).as("o token do e-mail conclui o cadastro").isEqualTo(204);
-        assertThat(out.getAll()).doesNotContain(email).doesNotContain(token).contains("evento=mail.enfileirado").contains("evento=mail.desfecho");
+        assertThat(out.getAll()).doesNotContain(email).doesNotContain(token);
+    }
+
+    /** Se a intencao nao puder ser gravada, o ato tambem nao confirma: nenhuma identidade nasce sem a sua mensagem. */
+    @Test
+    void semIntencaoGravadaOAtoNaoConfirma() throws Exception {
+        String email = "atomico-" + UUID.randomUUID().toString().substring(0, 8) + "@exemplo.test";
+        DB.asSuperuser("CREATE FUNCTION pg_temp_falha_fila() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'falha simulada da fila'; END $$",
+                "CREATE TRIGGER trg_teste_falha_fila BEFORE INSERT ON mail_outbox FOR EACH ROW EXECUTE FUNCTION pg_temp_falha_fila()");
+        try {
+            assertThat(browser().post("/api/v1/signup", "{\"email\":\"" + email + "\"}").status()).isEqualTo(500);
+        } finally {
+            DB.asSuperuser("DROP TRIGGER trg_teste_falha_fila ON mail_outbox", "DROP FUNCTION pg_temp_falha_fila()");
+        }
+        assertThat(sql("SELECT count(*) FROM identities WHERE email = '" + email + "'")).as("ato desfeito com a intencao").isEqualTo("0");
+        assertThat(browser().post("/api/v1/signup", "{\"email\":\"" + email + "\"}").status()).as("controle").isEqualTo(202);
+        assertThat(sql("SELECT count(*) FROM identities WHERE email = '" + email + "'")).isEqualTo("1");
+    }
+
+    /** Deduplicacao persistente: o mesmo evento (mesma chave) nunca vira dois trabalhos. */
+    @Test
+    void mesmaChaveDeEventoGeraUmTrabalho() throws Exception {
+        String email = "dedup-" + UUID.randomUUID().toString().substring(0, 8) + "@exemplo.test";
+        MailIntents.Intent i = new MailIntents.Intent(MailSender.Kind.NOTICE_PASSWORD_CHANGED, null, email, null, "senha:" + UUID.randomUUID());
+        intents.recordAlone(i);
+        intents.recordAlone(i);
+        assertThat(sql("SELECT count(*) FROM mail_outbox WHERE recipient_hmac = '" + hmac.global(email) + "'")).isEqualTo("1");
+    }
+
+    // ------------------------------------------------------------------ posse
+
+    /**
+     * Posse vencida ENTRE a reivindicacao e o envio (posse de 1 ms): o trabalho NAO e enviado e volta a PENDENTE
+     * (sabidamente nao enviado); depois, com posse normal, sai uma vez.
+     */
+    @Test
+    void trabalhoNaoComecaDepoisDePerderAPosse() throws Exception {
+        UUID job = enqueue();
+        MailDispatcher instantaneo = new MailDispatcher(tx, cipher, transport, templates, 1000, Duration.ofMillis(1), (n, o) -> { });
+        int antes = FAKE.sends();
+        Thread.sleep(5);
+        assertThat(instantaneo.dispatchPending()).isZero();
+        assertThat(FAKE.sends()).as("nenhum envio sem posse").isEqualTo(antes);
+        assertThat(state(job)).as("de volta a fila").startsWith("1|1|");
+        assertThat(sql("SELECT next_attempt_at > clock_timestamp() FROM mail_outbox WHERE job_id = '" + job + "'")).as("com espera").isEqualTo("t");
+        vencerEspera(job);
+        dispatcher.dispatchPending();
+        assertThat(state(job)).startsWith("3|2|202");
+        assertThat(FAKE.sends()).isEqualTo(antes + 1);
+    }
+
+    /**
+     * Dois despachantes, um com transporte LENTO (1,5 s por envio) e posse CURTA (1 s). Para todo envio que comeca, o
+     * trabalho estava ENVIANDO e com posse valida naquele instante; nenhum trabalho e enviado duas vezes; no fim, todos
+     * terminais. O envio lento que perde a posse no meio fica INCERTO (nunca reenviado).
+     */
+    @Test
+    void doisDespachantesComTransporteLentoNuncaEnviamSemPosse() throws Exception {
+        List<UUID> jobs = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            jobs.add(enqueue());
+        }
+        java.util.concurrent.ConcurrentLinkedQueue<String> violacoes = new java.util.concurrent.ConcurrentLinkedQueue<>();
+        java.util.concurrent.ConcurrentHashMap<UUID, Integer> envios = new java.util.concurrent.ConcurrentHashMap<>();
+        MailTransport lento = conferindoPosse(1500, violacoes, envios);
+        MailTransport rapido = conferindoPosse(0, violacoes, envios);
+        MailDispatcher a = new MailDispatcher(tx, cipher, lento, templates, 1000, Duration.ofSeconds(1), (n, o) -> { });
+        MailDispatcher b = new MailDispatcher(tx, cipher, rapido, templates, 1000, Duration.ofMinutes(2), (n, o) -> { });
+        ExecutorService ex = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> fa = ex.submit(a::dispatchPending);
+            Future<?> fb = ex.submit(() -> {
+                long fim = System.nanoTime() + 5_000_000_000L;
+                while (System.nanoTime() < fim) {
+                    b.dispatchPending();
+                    pause(100);
+                }
+                return null;
+            });
+            fa.get(60, TimeUnit.SECONDS);
+            fb.get(60, TimeUnit.SECONDS);
+        } finally {
+            ex.shutdownNow();
+        }
+        b.dispatchPending();
+        assertThat(violacoes).as("envio comecado sem posse").isEmpty();
+        assertThat(envios.values()).as("nenhum envio duplicado").allMatch(n -> n == 1);
+        for (UUID j : jobs) {
+            assertThat(state(j)).as("terminal").matches("^[35]\\|.*");
+        }
     }
 
     // ------------------------------------------------------------------ tentativas e desfechos
@@ -179,7 +276,6 @@ class MailOutboxIT {
         FAKE.script.add(FakeGraph.Reply.of(403));
         dispatcher.dispatchPending();
         assertThat(state(recusado)).isEqualTo("4|1|403|true");
-
         UUID incerto = enqueue();
         FAKE.script.add(new FakeGraph.Reply(202, null, 2500));
         dispatcher.dispatchPending();
@@ -211,7 +307,6 @@ class MailOutboxIT {
         assertThat(state(job)).isEqualTo("5|1|null|true");
     }
 
-    /** Prazo da mensagem vencido antes do envio: EXPIRADO, sem envio, payload apagado. */
     @Test
     void prazoVencidoExpiraSemEnviar() throws Exception {
         UUID job = enqueue();
@@ -223,37 +318,9 @@ class MailOutboxIT {
         assertThat(state(job)).isEqualTo("6|0|null|true");
     }
 
-    /** Dois despachos concorrentes (duas instancias): cada trabalho e enviado exatamente uma vez. */
     @Test
-    void despachosConcorrentesEnviamCadaTrabalhoUmaVez() throws Exception {
-        List<UUID> jobs = new ArrayList<>();
-        for (int i = 0; i < 12; i++) {
-            jobs.add(enqueue());
-        }
-        int antes = FAKE.sends();
-        ExecutorService ex = Executors.newFixedThreadPool(2);
-        try {
-            Future<Integer> a = ex.submit(dispatcher::dispatchPending);
-            Future<Integer> b = ex.submit(dispatcher::dispatchPending);
-            a.get(60, TimeUnit.SECONDS);
-            b.get(60, TimeUnit.SECONDS);
-        } finally {
-            ex.shutdownNow();
-        }
-        dispatcher.dispatchPending();
-        for (UUID j : jobs) {
-            assertThat(state(j)).startsWith("3|1|202");
-        }
-        List<FakeGraph.Request> novos = FAKE.sendRequests.subList(antes, FAKE.sends());
-        assertThat(new HashSet<>(novos.stream().map(FakeGraph.Request::clientRequestId).toList())).as("um envio por trabalho").hasSize(novos.size());
-        assertThat(novos.size()).isGreaterThanOrEqualTo(12);
-    }
-
-    /** Ritmo: com 3 por minuto, um ciclo envia 3 de 5 e o seguinte, no mesmo minuto, nenhum; os demais seguem PENDENTES. */
-    @Test
-    void ritmoPorMinutoLimitaOsEnvios(@Autowired com.nekkora.core.db.OrgTransactions tx, @Autowired com.nekkora.platform.auth.crypto.SecretCipher cipher,
-                                      @Autowired MailTemplates templates, @Autowired GraphMailTransport transport) throws Exception {
-        MailDispatcher lento = new MailDispatcher(tx, cipher, transport, templates, 3);
+    void ritmoPorMinutoLimitaOsEnvios() throws Exception {
+        MailDispatcher lento = new MailDispatcher(tx, cipher, transport, templates, 3, Duration.ofMinutes(2), (n, o) -> { });
         List<UUID> jobs = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
             jobs.add(enqueue());
@@ -262,52 +329,102 @@ class MailOutboxIT {
         assertThat(lento.dispatchPending()).isEqualTo(3);
         assertThat(lento.dispatchPending()).as("mesmo minuto: sem orcamento").isZero();
         assertThat(FAKE.sends()).isEqualTo(antes + 3);
-        assertThat(jobs.stream().filter(j -> {
-            try {
-                return state(j).startsWith("1|0|");
-            } catch (Exception e) {
-                throw new IllegalStateException(e);
-            }
-        }).count()).isEqualTo(2);
+        long pendentes = 0;
+        for (UUID j : jobs) {
+            pendentes += state(j).startsWith("1|0|") ? 1 : 0;
+        }
+        assertThat(pendentes).isEqualTo(2);
     }
 
     // ------------------------------------------------------------------ avisos da recuperacao emergencial (016)
 
+    /**
+     * Aviso emergencial: ENFILEIRADO na hora (ninguem fica esperando); o Retry-After do provedor e respeitado POR INTEIRO
+     * (60 s e 1 h), sem nova tentativa antes; o desfecho terminal volta a tentativa de origem.
+     */
     @Test
-    void avisoEmergencialVaiDiretoAoTransporteComTentativasCurtas() {
-        UUID org = UUID.randomUUID();
-        FAKE.script.add(FakeGraph.Reply.of(503));
-        FAKE.script.add(FakeGraph.Reply.of(202));
-        assertThat(mail.sendEmergencyNotice(MailSender.Kind.NOTICE_MFA_EMERGENCY_HOLDER, org, "titular@exemplo.test", "a".repeat(43), "b".repeat(43),
-                UUID.randomUUID())).isEqualTo(MailSender.Outcome.ACEITO_PELO_TRANSPORTE);
-        FAKE.script.add(FakeGraph.Reply.of(403));
-        assertThat(mail.sendEmergencyNotice(MailSender.Kind.NOTICE_MFA_EMERGENCY_ADMIN, org, "admin@exemplo.test", null, "c".repeat(43), UUID.randomUUID()))
-                .isEqualTo(MailSender.Outcome.RECUSADO_DEFINITIVO);
-        for (int i = 0; i < 3; i++) {
-            FAKE.script.add(FakeGraph.Reply.of(503));
-        }
-        assertThat(mail.sendEmergencyNotice(MailSender.Kind.NOTICE_MFA_EMERGENCY_EXECUTED, org, "x@exemplo.test", null, null, UUID.randomUUID()))
-                .as("esgotadas: INCERTO").isEqualTo(MailSender.Outcome.INCERTO);
+    void avisoEmergencialRespeitaORetryAfterEDevolveODesfecho() throws Exception {
+        java.util.concurrent.ConcurrentHashMap<UUID, MailSender.Outcome> devolvidos = new java.util.concurrent.ConcurrentHashMap<>();
+        MailDispatcher d = new MailDispatcher(tx, cipher, transport, templates, 1000, Duration.ofMinutes(2), devolvidos::put);
+        UUID tentativa = UUID.randomUUID();
+        long t0 = System.nanoTime();
+        assertThat(mail.sendEmergencyNotice(MailSender.Kind.NOTICE_MFA_EMERGENCY_HOLDER, UUID.randomUUID(), "titular@exemplo.test", "a".repeat(43),
+                "b".repeat(43), tentativa)).isEqualTo(MailSender.Outcome.ENFILEIRADO);
+        assertThat((System.nanoTime() - t0) / 1_000_000).as("sem espera sincrona").isLessThan(2000);
+        UUID job = UUID.fromString(sql("SELECT job_id FROM mail_outbox WHERE notice_ref = '" + tentativa + "'"));
+
+        FAKE.script.add(new FakeGraph.Reply(429, "60", 0));
+        d.dispatchPending();
+        assertThat(sql("SELECT state || '|' || (next_attempt_at >= clock_timestamp() + interval '59 seconds') FROM mail_outbox WHERE job_id = '" + job + "'"))
+                .as("60 s respeitados").isEqualTo("1|true");
+        int antes = FAKE.sends();
+        d.dispatchPending();
+        assertThat(FAKE.sends()).as("nenhuma tentativa antes do prazo").isEqualTo(antes);
+        vencerEspera(job);
+        FAKE.script.add(new FakeGraph.Reply(503, "3600", 0));
+        d.dispatchPending();
+        assertThat(sql("SELECT next_attempt_at >= clock_timestamp() + interval '3599 seconds' FROM mail_outbox WHERE job_id = '" + job + "'"))
+                .as("1 h respeitada (antes, acima de 1 h era ignorado)").isEqualTo("t");
+        vencerEspera(job);
+        d.dispatchPending();
+        assertThat(state(job)).startsWith("3|3|202");
+        assertThat(devolvidos).containsEntry(tentativa, MailSender.Outcome.ACEITO_PELO_TRANSPORTE);
+        String corpo = FAKE.sendRequests.get(FAKE.sends() - 1).body();
+        assertThat(corpo).contains("/mfa-emergencia/confirmar#token=" + "a".repeat(43)).contains("/mfa-emergencia/contestar#token=" + "b".repeat(43));
     }
 
-    // ------------------------------------------------------------------ protecoes do banco
+    // ------------------------------------------------------------------ protecoes e retencao
 
     @Test
     void bancoProtegeOrigemTerminalEApagamento() throws Exception {
         UUID job = enqueue();
         assertThatThrownBy(() -> DB.asSuperuser("UPDATE mail_outbox SET kind = 'PASSWORD_RECOVERY' WHERE job_id = '" + job + "'"))
                 .hasStackTraceContaining("origem do trabalho");
-        assertThatThrownBy(() -> DB.asSuperuser("DELETE FROM mail_outbox WHERE job_id = '" + job + "'")).hasStackTraceContaining("nao e apagado");
+        assertThatThrownBy(() -> DB.asSuperuser("DELETE FROM mail_outbox WHERE job_id = '" + job + "'")).hasStackTraceContaining("30 dias");
         FAKE.script.add(FakeGraph.Reply.of(202));
         dispatcher.dispatchPending();
         assertThatThrownBy(() -> DB.asSuperuser("UPDATE mail_outbox SET state = 1 WHERE job_id = '" + job + "'")).hasStackTraceContaining("terminal");
+    }
+
+    /** Retencao: terminal recente nao sai; terminal encerrado ha mais de 30 dias sai pela limpeza; pendente nunca. */
+    @Test
+    void retencaoApagaSoTerminaisAntigos() throws Exception {
+        UUID recente = enqueue();
+        dispatcher.dispatchPending();
+        UUID antigo = enqueue();
+        dispatcher.dispatchPending();
+        DB.asSuperuser("SET session_replication_role = replica; UPDATE mail_outbox SET created_at = clock_timestamp() - interval '40 days',"
+                + " deadline_at = clock_timestamp() - interval '39 days', finished_at = clock_timestamp() - interval '31 days' WHERE job_id = '" + antigo
+                + "'; SET session_replication_role = origin");
+        UUID pendente = enqueue();
+        dispatcher.purgeFinished();
+        assertThat(sql("SELECT count(*) FROM mail_outbox WHERE job_id = '" + antigo + "'")).as("antigo apagado").isEqualTo("0");
+        assertThat(sql("SELECT count(*) FROM mail_outbox WHERE job_id = '" + recente + "'")).as("recente fica").isEqualTo("1");
+        assertThat(sql("SELECT count(*) FROM mail_outbox WHERE job_id = '" + pendente + "'")).as("pendente fica").isEqualTo("1");
         try (Connection c = DB.connectAs("nekkora_platform"); PreparedStatement ps = c.prepareStatement("DELETE FROM mail_outbox WHERE job_id = ?")) {
-            ps.setObject(1, job);
-            assertThatThrownBy(ps::executeUpdate).isInstanceOf(SQLException.class).hasMessageContaining("permission denied");
+            ps.setObject(1, recente);
+            assertThatThrownBy(ps::executeUpdate).isInstanceOf(SQLException.class).hasMessageContaining("30 dias");
         }
     }
 
     // ------------------------------------------------------------------ apoio
+
+    /** Transporte de teste: confere a posse no INICIO de cada envio, conta envios por trabalho e responde 202 depois de {@code ms}. */
+    private MailTransport conferindoPosse(long ms, java.util.Queue<String> violacoes, java.util.Map<UUID, Integer> envios) {
+        return m -> {
+            try {
+                String ok = sql("SELECT state = 2 AND lease_until > clock_timestamp() FROM mail_outbox WHERE correlation_id = '" + m.correlation() + "'");
+                if (!"t".equals(ok)) {
+                    violacoes.add(m.correlation() + ":" + ok);
+                }
+            } catch (Exception e) {
+                violacoes.add("consulta: " + e.getClass().getSimpleName());
+            }
+            envios.merge(m.correlation(), 1, Integer::sum);
+            pause(ms);
+            return new MailTransport.Delivery(MailTransport.Result.ACEITO, 202, null);
+        };
+    }
 
     private UUID enqueue() throws Exception {
         String email = "aviso-" + UUID.randomUUID().toString().substring(0, 8) + "@exemplo.test";
@@ -323,6 +440,14 @@ class MailOutboxIT {
     private static String state(UUID job) throws Exception {
         return sql("SELECT state || '|' || attempts || '|' || coalesce(last_status::text, 'null') || '|' || (payload_ciphertext IS NULL)"
                 + " FROM mail_outbox WHERE job_id = '" + job + "'");
+    }
+
+    private static void pause(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private BrowserClient browser() {

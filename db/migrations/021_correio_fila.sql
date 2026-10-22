@@ -15,9 +15,16 @@
 --     (definitivo), 5 INCERTO (pode ter saido: nunca reenviado automaticamente), 6 EXPIRADO (prazo da mensagem vencido
 --     antes do envio);
 --   * terminal (3 a 6): o payload cifrado e APAGADO no mesmo UPDATE; a linha guarda so metadados;
---   * tentativas no maximo 5; prazo da mensagem de no maximo 7 dias.
--- A trigger recusa mudar a origem do trabalho (id, tipo, HMAC, correlacao, criacao, prazo), voltar de estado terminal,
--- ou reduzir tentativas. Nenhum DELETE pela Platform (retencao fica para decisao propria).
+--   * tentativas no maximo 5; prazo da mensagem de no maximo 7 dias;
+--   * INTENCAO DURAVEL: o trabalho e gravado NA MESMA TRANSACAO do ato de negocio (cadastro, troca de senha, reset...):
+--     ou os dois confirmam, ou nenhum. O envio continua fora de transacao (despacho);
+--   * DEDUPLICACAO PERSISTENTE: event_key e a chave estavel do evento (tipo + fato de negocio unico: hash do token, fator
+--     novo, sessao criada...), UNIQUE: o mesmo evento nunca vira dois trabalhos. Nao promete entrega exatamente uma vez;
+--   * notice_ref: tentativa do aviso da recuperacao emergencial (016), para devolver o desfecho assincrono a ela;
+--   * RETENCAO: trabalho terminal pode ser apagado SO 30 dias depois de encerrado (limpeza controlada, em lotes, pelo
+--     despacho); antes disso, ou fora de estado terminal, DELETE e recusado.
+-- A trigger recusa mudar a origem do trabalho (id, tipo, HMAC, chave do evento, referencia, correlacao, criacao, prazo),
+-- voltar de estado terminal, reduzir tentativas, ou apagar fora da retencao.
 --
 -- Sem janela de elevacao: a tabela e a trigger pertencem ao migrador (dono do banco), como as demais tabelas de public.
 
@@ -41,6 +48,8 @@ CREATE TABLE public.mail_outbox (
     kind                   TEXT NOT NULL CHECK (kind ~ '^[A-Z][A-Z_]{2,63}$'),
     target_organization_id UUID,
     recipient_hmac         TEXT NOT NULL CHECK (recipient_hmac ~ '^[A-Za-z0-9_-]{1,32}[.][0-9a-f]{32}$'),   -- IdentityHmac.global: id da chave + HMAC
+    event_key              TEXT NOT NULL UNIQUE CHECK (event_key ~ '^[A-Z][A-Z_]{2,63}:[A-Za-z0-9._:-]{8,160}$'),
+    notice_ref             UUID,
     payload_ciphertext     BYTEA,
     payload_nonce          BYTEA,
     key_id                 TEXT,
@@ -57,13 +66,15 @@ CREATE TABLE public.mail_outbox (
     CHECK (payload_ciphertext IS NOT NULL OR (payload_nonce IS NULL AND key_id IS NULL)),
     CHECK ((state IN (1, 2)) = (finished_at IS NULL)),
     CHECK ((state = 2) = (lease_until IS NOT NULL)),
-    CHECK (deadline_at > created_at AND deadline_at <= created_at + interval '7 days')
+    CHECK (deadline_at > created_at AND deadline_at <= created_at + interval '7 days'),
+    CHECK ((notice_ref IS NOT NULL) = (kind IN ('NOTICE_MFA_EMERGENCY_HOLDER', 'NOTICE_MFA_EMERGENCY_ADMIN', 'NOTICE_MFA_EMERGENCY_EXECUTED')))
 );
 COMMENT ON TABLE public.mail_outbox IS 'Missao 002 (021): fila persistente de e-mail; destinatario e token cifrados; payload apagado no estado terminal';
 COMMENT ON COLUMN public.mail_outbox.state IS '1=PENDENTE, 2=ENVIANDO, 3=ACEITO (aceite do provedor, nao entrega), 4=RECUSADO, 5=INCERTO, 6=EXPIRADO';
 COMMENT ON COLUMN public.mail_outbox.target_organization_id IS 'so para o link (rotas por organizacao); sem FK: nao e tabela de tenant';
 CREATE INDEX ix_mail_outbox_pendentes ON public.mail_outbox (next_attempt_at) WHERE state = 1;
 CREATE INDEX ix_mail_outbox_enviando ON public.mail_outbox (lease_until) WHERE state = 2;
+CREATE INDEX ix_mail_outbox_encerrados ON public.mail_outbox (finished_at) WHERE state >= 3;
 
 -- === 3. Protecao ===
 CREATE FUNCTION public.protect_mail_outbox() RETURNS TRIGGER
@@ -72,7 +83,11 @@ SET search_path = pg_catalog, pg_temp
 AS $$
 BEGIN
     IF TG_OP = 'DELETE' THEN
-        RAISE EXCEPTION 'trabalho de e-mail nao e apagado' USING ERRCODE = '23514';
+        -- retencao: so trabalho terminal, 30 dias depois de encerrado (so metadados restam nele)
+        IF OLD.state IN (1, 2) OR OLD.finished_at > clock_timestamp() - interval '30 days' THEN
+            RAISE EXCEPTION 'trabalho de e-mail so e apagado terminal e 30 dias depois de encerrado' USING ERRCODE = '23514';
+        END IF;
+        RETURN OLD;
     END IF;
     IF TG_OP = 'INSERT' THEN
         IF NEW.state <> 1 OR NEW.attempts <> 0 OR NEW.lease_until IS NOT NULL OR NEW.last_status IS NOT NULL THEN
@@ -85,6 +100,7 @@ BEGIN
     END IF;
     IF NEW.job_id <> OLD.job_id OR NEW.kind <> OLD.kind OR NEW.recipient_hmac <> OLD.recipient_hmac
        OR NEW.target_organization_id IS DISTINCT FROM OLD.target_organization_id OR NEW.correlation_id <> OLD.correlation_id
+       OR NEW.event_key <> OLD.event_key OR NEW.notice_ref IS DISTINCT FROM OLD.notice_ref
        OR NEW.created_at <> OLD.created_at OR NEW.deadline_at <> OLD.deadline_at THEN
         RAISE EXCEPTION 'origem do trabalho de e-mail e imutavel' USING ERRCODE = '23514';
     END IF;
@@ -103,10 +119,10 @@ REVOKE ALL ON FUNCTION public.protect_mail_outbox() FROM PUBLIC;
 CREATE TRIGGER trg_mail_outbox_protect BEFORE INSERT OR UPDATE OR DELETE ON public.mail_outbox FOR EACH ROW EXECUTE FUNCTION public.protect_mail_outbox();
 CREATE TRIGGER trg_mail_outbox_prevent_truncate BEFORE TRUNCATE ON public.mail_outbox FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate();
 
--- === 4. Privilegios: so a Platform, sem DELETE ===
+-- === 4. Privilegios: so a Platform; DELETE so dentro da retencao (trigger) ===
 REVOKE ALL ON public.mail_outbox FROM PUBLIC;
-GRANT SELECT, INSERT (job_id, kind, target_organization_id, recipient_hmac, payload_ciphertext, payload_nonce, key_id, state,
-                      next_attempt_at, deadline_at, correlation_id),
+GRANT SELECT, DELETE, INSERT (job_id, kind, target_organization_id, recipient_hmac, event_key, notice_ref, payload_ciphertext, payload_nonce,
+                      key_id, state, next_attempt_at, deadline_at, correlation_id),
       UPDATE (payload_ciphertext, payload_nonce, key_id, state, attempts, next_attempt_at, lease_until, last_status, finished_at)
     ON public.mail_outbox TO nekkora_platform;
 
@@ -125,7 +141,8 @@ BEGIN
     IF v_bad IS NOT NULL THEN
         RAISE EXCEPTION '021: papel com acesso a mail_outbox alem da Platform: %', v_bad;
     END IF;
-    IF has_table_privilege('nekkora_platform', 'public.mail_outbox', 'DELETE, TRUNCATE, REFERENCES, TRIGGER')
+    IF has_table_privilege('nekkora_platform', 'public.mail_outbox', 'TRUNCATE, REFERENCES, TRIGGER')
+       OR has_column_privilege('nekkora_platform', 'public.mail_outbox', 'event_key', 'UPDATE')
        OR has_column_privilege('nekkora_platform', 'public.mail_outbox', 'kind', 'UPDATE')
        OR has_column_privilege('nekkora_platform', 'public.mail_outbox', 'recipient_hmac', 'UPDATE')
        OR has_column_privilege('nekkora_platform', 'public.mail_outbox', 'deadline_at', 'UPDATE')

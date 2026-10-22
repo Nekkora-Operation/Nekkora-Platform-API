@@ -26,6 +26,7 @@ import com.nekkora.platform.auth.crypto.SecretCipher;
 import com.nekkora.platform.auth.crypto.Totp;
 import com.nekkora.platform.identity.IdentitySessionResolver.IdentityPrincipal;
 import com.nekkora.platform.limits.Limits;
+import com.nekkora.platform.mail.MailIntents;
 import com.nekkora.platform.mail.MailSender;
 
 /**
@@ -72,12 +73,12 @@ public final class IdentityCredentialService {
     private final SecretCipher cipher;
     private final IdentityHmac hmac;
     private final Limits limits;
-    private final MailSender mail;
+    private final MailIntents mail;
     private final PasswordHasher hasher;
     private final PasswordRule passwordRule;
 
     public IdentityCredentialService(IdentityTransactions tx, IdentityAuthRepository auth, SecretCipher cipher, IdentityHmac hmac, Limits limits,
-                                     MailSender mail, PasswordHasher hasher, PasswordRule passwordRule) {
+                                     MailIntents mail, PasswordHasher hasher, PasswordRule passwordRule) {
         this.tx = tx;
         this.auth = auth;
         this.cipher = cipher;
@@ -183,6 +184,8 @@ public final class IdentityCredentialService {
                 if (!stillAccepted(step.getAsLong())) {
                     throw new ReplaceRollback(new Outcome("passo_vencido", false));
                 }
+                // aviso NA transacao da troca; chave = o fator novo
+                mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_MFA_REPLACED, null, o.email(), null, "fator:" + pending.get().id()));
                 return Outcome.DONE;
             }).orElse(new Outcome("sessao", false));
         } catch (ReplaceRollback e) {
@@ -193,7 +196,6 @@ public final class IdentityCredentialService {
         }
         LOG.info("evento=identidade.fator_substituido identidade={} restrita_antes={} ip={} correlacao={}", o.limiterKey(), who.restricted(),
                 ClientIpResolver.truncated(ip), correlation);
-        notice(MailSender.Kind.NOTICE_MFA_REPLACED, o.email());
         return new Replaced(codes, false);
     }
 
@@ -231,6 +233,8 @@ public final class IdentityCredentialService {
                 return new Outcome("sessao", false);
             }
             if (auth.changePassword(j, sessionToken, hash, newHash)) {
+                // aviso NA transacao da troca; chave = o hash novo
+                mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_PASSWORD_CHANGED, null, o.email(), null, "senha:" + Tokens.sha256Hex(newHash)));
                 return Outcome.DONE;
             }
             // recusa sem efeito: sessao caiu (401); sem step-up, restrita no intervalo ou senha trocada no intervalo (403)
@@ -240,7 +244,6 @@ public final class IdentityCredentialService {
             throw refused(r, o, ip, "troca_senha");
         }
         LOG.info("evento=identidade.senha_trocada identidade={} ip={}", o.limiterKey(), ClientIpResolver.truncated(ip));
-        notice(MailSender.Kind.NOTICE_PASSWORD_CHANGED, o.email());
     }
 
     // ------------------------------------------------------------------ regeneracao dos codigos
@@ -259,6 +262,9 @@ public final class IdentityCredentialService {
                 return new Outcome("sessao", false);
             }
             if (auth.regenerateRecoveryCodes(j, sessionToken, hashes)) {
+                // aviso NA transacao da regeneracao; chave = o conjunto novo (hash dos hashes)
+                mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_RECOVERY_CODES_REGENERATED, null, o.email(), null,
+                        "codigos:" + Tokens.sha256Hex(String.join(",", hashes))));
                 return Outcome.DONE;
             }
             return new Outcome(auth.sessionStillValid(j, who.sessionId()) ? "sem_prova" : "sessao", false);
@@ -267,20 +273,10 @@ public final class IdentityCredentialService {
             throw refused(r, o, ip, "regeneracao_codigos");
         }
         LOG.info("evento=identidade.codigos_regenerados identidade={} ip={}", o.limiterKey(), ClientIpResolver.truncated(ip));
-        notice(MailSender.Kind.NOTICE_RECOVERY_CODES_REGENERATED, o.email());
         return codes;
     }
 
     // ------------------------------------------------------------------ apoio
-
-    /** Aviso ao titular DEPOIS do commit: a falha do transporte nao desfaz a alteracao de seguranca. */
-    private void notice(MailSender.Kind kind, String email) {
-        try {
-            mail.send(kind, null, email, null);
-        } catch (RuntimeException e) {
-            LOG.warn("evento=identidade.aviso_falhou tipo={} correlacao={}", kind, RequestContext.correlation());
-        }
-    }
 
     private static int bytesUtf8(char[] c) {
         return StandardCharsets.UTF_8.encode(CharBuffer.wrap(c)).remaining();

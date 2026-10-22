@@ -13,11 +13,20 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import org.springframework.beans.factory.ObjectProvider;
+
 import com.nekkora.core.db.OrgTransactions;
+import com.nekkora.platform.auth.crypto.IdentityHmac;
 import com.nekkora.platform.auth.crypto.SecretCipher;
+import com.nekkora.platform.emergency.EmergencyNotices;
+import com.nekkora.platform.identity.SignupMailer;
+import com.nekkora.platform.mail.AfterCommitMailIntents;
 import com.nekkora.platform.mail.GraphMailTransport;
 import com.nekkora.platform.mail.MailDispatcher;
+import com.nekkora.platform.mail.MailIntents;
+import com.nekkora.platform.mail.MailSender;
 import com.nekkora.platform.mail.MailTemplates;
+import com.nekkora.platform.mail.OutboxMailIntents;
 
 /**
  * Transporte real de e-mail (missao 002, PR 5; desenho de 2026-10-11): so com {@code nekkora.mail.transport=m365}. Sem
@@ -55,14 +64,49 @@ public class MailConfig {
         return t;
     }
 
+    /**
+     * Intencao duravel (m365): a fila gravada na transacao do ato. Prazo da mensagem = prazo do token que ela leva (recuperacao
+     * de senha 30 min, cadastro 24 h); avisos 24 h; avisos da recuperacao emergencial 23 h (a 016 encerra a tentativa
+     * ENFILEIRADA como DESCONHECIDO em 24 h).
+     */
+    @Bean
+    @ConditionalOnProperty(name = "nekkora.mail.transport", havingValue = "m365")
+    OutboxMailIntents outboxMailIntents(OrgTransactions tx, SecretCipher cipher, IdentityHmac hmac, PlatformProperties p) {
+        return new OutboxMailIntents(tx, cipher, hmac, kind -> switch (kind) {
+            case PASSWORD_RECOVERY -> p.session().passwordRecovery();
+            case IDENTITY_SIGNUP_CONFIRMATION -> p.session().emailVerification();
+            case NOTICE_MFA_EMERGENCY_HOLDER, NOTICE_MFA_EMERGENCY_ADMIN, NOTICE_MFA_EMERGENCY_EXECUTED -> Duration.ofHours(23);
+            default -> Duration.ofHours(24);
+        });
+    }
+
+    /**
+     * Porta das intencoes, usada por todos os servicos DENTRO da transacao do ato: duravel no m365; nos demais transportes,
+     * envio depois do commit (cadastro e recuperacao de senha da identidade pela fila em memoria do cadastro).
+     */
+    @Bean
+    @org.springframework.context.annotation.Primary
+    MailIntents mailIntents(@Value("${nekkora.mail.transport:local}") String transport, ObjectProvider<OutboxMailIntents> outbox, MailSender mail,
+                            SignupMailer mailer) {
+        return "m365".equals(transport == null ? "" : transport.trim()) ? outbox.getObject() : new AfterCommitMailIntents(mail, mailer::enqueue);
+    }
+
     @Bean
     @ConditionalOnProperty(name = "nekkora.mail.transport", havingValue = "m365")
     MailDispatcher mailDispatcher(OrgTransactions tx, SecretCipher cipher, GraphMailTransport transport, MailTemplates templates,
-                                  @Value("${nekkora.mail.despacho.por-minuto:25}") int perMinute) {
-        return new MailDispatcher(tx, cipher, transport, templates, perMinute);
+                                  ObjectProvider<EmergencyNotices> notices,
+                                  @Value("${nekkora.mail.despacho.por-minuto:25}") int perMinute,
+                                  @Value("${nekkora.mail.despacho.posse:2m}") Duration lease,
+                                  @Value("${nekkora.mail.m365.timeout:5s}") Duration timeout) {
+        // a posse precisa cobrir o token e o envio com folga: menos que 3x o tempo maximo do transporte, recusa a partida
+        if (lease.compareTo(timeout.multipliedBy(3)) < 0) {
+            throw new IllegalStateException("nekkora.mail.despacho.posse menor que 3x nekkora.mail.m365.timeout");
+        }
+        return new MailDispatcher(tx, cipher, transport, templates, perMinute, lease,
+                (notice, outcome) -> notices.getObject().recordTransportResult(notice, outcome));
     }
 
-    /** Ciclo da fila a cada 5 s; alarme do certificado uma vez por dia (60 e 30 dias, DC-M2.4). Desligavel para testes. */
+    /** Ciclo da fila a cada 5 s; retencao a cada hora; alarme do certificado uma vez por dia (60 e 30 dias, DC-M2.4). */
     @Bean(destroyMethod = "shutdownNow")
     @ConditionalOnProperty(name = "nekkora.mail.transport", havingValue = "m365")
     ScheduledExecutorService mailDispatcherScheduler(MailDispatcher dispatcher, GraphMailTransport transport,
@@ -80,6 +124,13 @@ public class MailConfig {
                     LOG.warn("evento=mail.ciclo_falhou causa={}", e.getClass().getSimpleName());
                 }
             }, 5, 5, TimeUnit.SECONDS);
+            s.scheduleWithFixedDelay(() -> {
+                try {
+                    dispatcher.purgeFinished();
+                } catch (RuntimeException e) {
+                    LOG.warn("evento=mail.retencao_falhou causa={}", e.getClass().getSimpleName());
+                }
+            }, 1, 60, TimeUnit.MINUTES);
         }
         s.scheduleWithFixedDelay(() -> logCertificate(transport), 1, 1, TimeUnit.DAYS);
         return s;

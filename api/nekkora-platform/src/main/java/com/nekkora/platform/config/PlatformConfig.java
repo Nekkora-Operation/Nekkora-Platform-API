@@ -196,16 +196,9 @@ public class PlatformConfig {
     MailSender mailSender(@org.springframework.beans.factory.annotation.Value("${nekkora.mail.transport:local}") String transport,
                           @org.springframework.beans.factory.annotation.Value("${nekkora.mail.caixa-dir:}") String caixaDir,
                           @org.springframework.beans.factory.annotation.Value("${nekkora.environment:}") String environment,
-                          org.springframework.beans.factory.ObjectProvider<com.nekkora.platform.mail.GraphMailTransport> graph,
-                          OrgTransactions tx, SecretCipher cipher, IdentityHmac hmac, com.nekkora.platform.mail.MailTemplates templates,
-                          PlatformProperties p) {
+                          org.springframework.beans.factory.ObjectProvider<com.nekkora.platform.mail.OutboxMailIntents> outbox) {
         return switch (transport == null ? "" : transport.trim()) {
-            case "m365" -> new com.nekkora.platform.mail.OutboxMailSender(tx, cipher, hmac, graph.getObject(), templates, kind -> switch (kind) {
-                // prazo da mensagem = prazo do token que ela leva; avisos: 24 h
-                case PASSWORD_RECOVERY -> p.session().passwordRecovery();
-                case IDENTITY_SIGNUP_CONFIRMATION -> p.session().emailVerification();
-                default -> java.time.Duration.ofHours(24);
-            });
+            case "m365" -> new com.nekkora.platform.mail.OutboxMailSender(outbox.getObject());
             case "", "local" -> new LocalMailSender();
             case "homologacao" -> {
                 if (caixaDir == null || caixaDir.isBlank()) {
@@ -219,7 +212,7 @@ public class PlatformConfig {
 
     @Bean
     AuthService authService(OrgTransactions tx, AccountRepository accounts, SessionRepository sessions, MfaRepository mfa, PasswordHasher hasher,
-                            SecretCipher secretCipher, IdentityHmac hmac, Limits limits, MailSender mail, PlatformProperties p) {
+                            SecretCipher secretCipher, IdentityHmac hmac, Limits limits, com.nekkora.platform.mail.MailIntents mail, PlatformProperties p) {
         return new AuthService(tx, accounts, sessions, mfa, hasher, secretCipher, hmac, limits, mail, p.session(), p.limits());
     }
 
@@ -251,7 +244,7 @@ public class PlatformConfig {
     }
 
     @Bean
-    AdminService adminService(OrgTransactions tx, AccountRepository accounts, SessionRepository sessions, MfaRepository mfa, MailSender mail,
+    AdminService adminService(OrgTransactions tx, AccountRepository accounts, SessionRepository sessions, MfaRepository mfa, com.nekkora.platform.mail.MailIntents mail,
                               PlatformProperties p) {
         return new AdminService(tx, accounts, sessions, mfa, mail, p.session().stepUp());
     }

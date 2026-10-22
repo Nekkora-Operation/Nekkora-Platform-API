@@ -21,7 +21,7 @@ Depois da retirada das janelas, a suíte roda as invariantes da 012, 013, 014 (a
 
 As da 021 conferem:
 - só a Platform tem acesso à tabela; os papéis predefinidos `pg_*` ficam de fora;
-- a Platform não tem DELETE nem UPDATE da origem do trabalho;
+- a Platform não tem UPDATE da origem do trabalho nem da chave do evento, e só apaga dentro da retenção (a trigger recusa outros DELETEs);
 - a tabela não tem `organization_id` (não é tabela de tenant; a contagem de 43 da 017 continua valendo);
 - as duas triggers estão ligadas.
 
@@ -31,15 +31,16 @@ Marcador `versao=021`.
 
 | Caso | O que confere |
 |---|---|
-| B2 | 021 aplicada **sem** janela. Dados idênticos (80 tabelas). Diff de catálogo **exatamente** `esperado/B22_diff_esperado.txt`: 87 linhas, todas acréscimos e todas de `mail_outbox` ou de sua função de proteção (colunas, CHECKs, índices, triggers, privilégios por coluna da Platform: 11 de INSERT e 9 de UPDATE, mais o SELECT). Catálogo igual ao da instalação limpa. Invariantes. Marcador `versao=021` |
+| B2 | 021 aplicada **sem** janela. Dados idênticos (80 tabelas). Diff de catálogo **exatamente** `esperado/B22_diff_esperado.txt`: 113 linhas, todas acréscimos e todas de `mail_outbox` ou de sua função de proteção (colunas, CHECKs, chave do evento UNIQUE, índices, triggers, privilégios da Platform: SELECT e DELETE na tabela, 13 colunas de INSERT e 9 de UPDATE). Catálogo igual ao da instalação limpa. Invariantes. Marcador `versao=021` |
 | B3 | Reaplicar a 021 é recusado pela pré-condição (a tabela já existe); nada muda |
 
 O comportamento é coberto por `MailOutboxIT` (nekkora-platform), com o papel real `nekkora_platform`:
-- fila cifrada;
+- intenção gravada junto do ato, deduplicação pela chave do evento e fila cifrada;
 - tentativas e desfechos;
 - posse vencida depois de queda;
 - prazo vencido;
 - despachos concorrentes;
-- proteções da trigger e ausência de DELETE.
+- posse conferida antes de cada envio;
+- proteções da trigger e retenção de 30 dias.
 
 As saídas ficam em `saidas/` (não versionadas).

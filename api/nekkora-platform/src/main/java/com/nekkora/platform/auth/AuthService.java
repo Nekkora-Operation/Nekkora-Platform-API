@@ -30,6 +30,7 @@ import com.nekkora.platform.config.PlatformProperties;
 import com.nekkora.platform.account.AccountRepository;
 import com.nekkora.platform.account.AccountRepository.Account;
 import com.nekkora.platform.limits.Limits;
+import com.nekkora.platform.mail.MailIntents;
 import com.nekkora.platform.mail.MailSender;
 import com.nekkora.platform.mfa.MfaRepository;
 import com.nekkora.platform.mfa.MfaRepository.Challenge;
@@ -100,12 +101,12 @@ public final class AuthService {
     private final SecretCipher secretCipher;
     private final IdentityHmac hmac;
     private final Limits limits;
-    private final MailSender mail;
+    private final MailIntents mail;
     private final PlatformProperties.Session cfg;
     private final PlatformProperties.Limits limitsConfig;
 
     public AuthService(OrgTransactions tx, AccountRepository accounts, SessionRepository sessions, MfaRepository mfa, PasswordHasher hasher,
-                       SecretCipher secretCipher, IdentityHmac hmac, Limits limits, MailSender mail, PlatformProperties.Session cfg,
+                       SecretCipher secretCipher, IdentityHmac hmac, Limits limits, MailIntents mail, PlatformProperties.Session cfg,
                        PlatformProperties.Limits limitsConfig) {
         this.tx = tx;
         this.accounts = accounts;
@@ -273,13 +274,16 @@ public final class AuthService {
                 mfa.invalidateForAccount(j, d.get().userId(), null);
                 mfa.recordEvent(j, org, d.get().userId(), null, MfaRepository.EV_RECOVERY_CODE, correlation());
             }
-            return new Ok(createSession(j, org, c.get(), null), c.get().email(), recovery, null);
+            // a sessao nasce DEPOIS da revogacao das demais (ordem original)
+            NewSession created = createSession(j, org, c.get(), null);
+            if (recovery) {
+                // aviso NA transacao do uso do codigo; chave = a sessao que ele criou
+                mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_RECOVERY_CODE_USED, org, c.get().email(), null,
+                        "sessao:" + Tokens.sha256Hex(created.token())));
+            }
+            return new Ok(created, c.get().email(), recovery, null);
         }));
-        NewSession s = complete(r, org, identity, ip);
-        if (((Ok) r).usedRecoveryCode()) {
-            mail.send(MailSender.Kind.NOTICE_RECOVERY_CODE_USED, org, ((Ok) r).email(), null);
-        }
-        return s;
+        return complete(r, org, identity, ip);
     }
 
     // ------------------------------------------------------------------ sessao
@@ -365,7 +369,12 @@ public final class AuthService {
                 }
                 mfa.invalidateForAccount(j, s.userId(), null);
                 sessions.revokeForAccount(j, s.userId(), s.sessionId());
-                return accounts.byId(j, org, s.userId()).map(Account::email).orElse(null);
+                String to = accounts.byId(j, org, s.userId()).map(Account::email).orElse(null);
+                if (to != null) {
+                    // aviso NA transacao da troca; chave = o hash novo (o fato unico desta troca)
+                    mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_PASSWORD_CHANGED, org, to, null, "senha:" + Tokens.sha256Hex(newHash)));
+                }
+                return to;
             });
         } catch (DataAccessException e) {
             // vinculada no intervalo: a trigger da 017 recusa a troca do hash (23514); nada foi alterado
@@ -377,7 +386,6 @@ public final class AuthService {
         if (email == null) {
             throw ApiException.unauthenticated("sessao_ou_credencial_alterada");
         }
-        mail.send(MailSender.Kind.NOTICE_PASSWORD_CHANGED, org, email, null);
     }
 
     /** Sempre "aceito" (202 identico). Piso de tempo de resposta fora de transacao. */
@@ -399,11 +407,14 @@ public final class AuthService {
                     // revoked_at ajustado ao created_at se o relogio do banco recuou (CHECK da 002), como nas sessoes
                     j.sql("UPDATE public.password_reset_tokens SET revoked_at = greatest(clock_timestamp(), created_at) WHERE user_id = ? AND consumed_at IS NULL AND revoked_at IS NULL")
                             .param(account.get().userId()).update();
-                    return j.sql("""
+                    j.sql("""
                             INSERT INTO public.password_reset_tokens (user_id, token_hash, created_at, expires_at)
                             SELECT ?, ?, t.agora, t.agora + ?::interval FROM (SELECT clock_timestamp() AS agora) t
                             """).param(account.get().userId()).param(Tokens.sha256Hex(token))
                             .param(SessionRepository.interval(cfg.passwordRecovery())).update();
+                    // e-mail com o token NA transacao que o emite; chave = hash do token
+                    mail.record(j, new MailIntents.Intent(MailSender.Kind.PASSWORD_RECOVERY, org, account.get().email(), token, "token:" + Tokens.sha256Hex(token)));
+                    return 1;
                 });
             } catch (DataAccessException e) {
                 // vinculada entre a leitura e o lock: a trigger da 017 recusa o token (23514). "Nao enviar": a resposta
@@ -413,7 +424,6 @@ public final class AuthService {
                 }
                 return;
             }
-            mail.send(MailSender.Kind.PASSWORD_RECOVERY, org, account.get().email(), token);
         } finally {
             floor(requestStartNanos);
         }
