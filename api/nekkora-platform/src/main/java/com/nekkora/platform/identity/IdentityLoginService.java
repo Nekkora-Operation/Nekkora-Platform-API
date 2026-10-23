@@ -30,6 +30,7 @@ import com.nekkora.platform.auth.crypto.RecoveryCodes;
 import com.nekkora.platform.auth.crypto.SecretCipher;
 import com.nekkora.platform.auth.crypto.Totp;
 import com.nekkora.platform.limits.Limits;
+import com.nekkora.platform.mail.MailIntents;
 import com.nekkora.platform.mail.MailSender;
 
 /**
@@ -65,12 +66,12 @@ public final class IdentityLoginService {
     private final SecretCipher cipher;
     private final IdentityHmac hmac;
     private final Limits limits;
-    private final MailSender mail;
+    private final MailIntents mail;
     private final Duration challengeValidity;
     private final Duration sessionAbsolute;
 
     public IdentityLoginService(IdentityTransactions tx, IdentityAuthRepository auth, PasswordHasher hasher, SecretCipher cipher, IdentityHmac hmac,
-                                Limits limits, MailSender mail, Duration challengeValidity, Duration sessionAbsolute) {
+                                Limits limits, MailIntents mail, Duration challengeValidity, Duration sessionAbsolute) {
         this.tx = tx;
         this.auth = auth;
         this.hasher = hasher;
@@ -229,7 +230,16 @@ public final class IdentityLoginService {
                 factorId = f.get().id();
             }
             OffsetDateTime e = auth.sessionExpiry(j, sessionAbsolute);
+            if (codeHashFinal != null) {
+                // aviso do uso do codigo NA transacao (chave = o desafio, de uso unico), ANTES da funcao: as decisoes dela,
+                // medidas depois dos locks, ficam sendo as ultimas antes do commit; se ela nao criar a sessao, a intencao e
+                // desfeita junto (IntentRollback)
+                mail.record(j, new MailIntents.Intent(MailSender.Kind.NOTICE_RECOVERY_CODE_USED, null, o.email(), null, "desafio:" + o.challengeId()));
+            }
             IdentityAuthRepository.Completion c = auth.loginComplete(j, challengeToken, step, codeHashFinal, Tokens.sha256Hex(token), csrf, e);
+            if (codeHashFinal != null && !c.created()) {
+                throw new IntentRollback(Completed.of(c, e));
+            }
             if (c.created() && step != null) {
                 // a funcao ainda espera desafio, credencial e fator DEPOIS desta validacao: o passo e reconferido ao fim
                 if (!stillAccepted(step)) {
@@ -244,13 +254,6 @@ public final class IdentityLoginService {
         finish(r, o, challengeToken, ip, codeHash != null ? "codigo_recuperacao" : "totp");
         OffsetDateTime expires = r.expires();
         boolean recovery = codeHash != null;
-        if (recovery) {
-            try {
-                mail.send(MailSender.Kind.NOTICE_RECOVERY_CODE_USED, null, o.email(), null);
-            } catch (RuntimeException e) {
-                LOG.warn("evento=identidade.aviso_falhou tipo=NOTICE_RECOVERY_CODE_USED correlacao={}", RequestContext.correlation());
-            }
-        }
         return new NewSession(token, csrf, expires, null, recovery);
     }
 
@@ -325,6 +328,16 @@ public final class IdentityLoginService {
         }
     }
 
+    /** A funcao nao concluiu depois de a intencao de e-mail ser gravada: desfaz a transacao; o desfecho segue o mesmo. */
+    private static final class IntentRollback extends RuntimeException {
+        final transient Completed completed;
+
+        IntentRollback(Completed completed) {
+            super(null, null, false, false);
+            this.completed = completed;
+        }
+    }
+
     /**
      * Janela do TOTP no instante medido AGORA (depois de todas as esperas ja ocorridas na transacao): o passo aceito tem
      * de estar entre agora-1 e agora+1, a mesma tolerancia de {@code Totp.verify}.
@@ -349,6 +362,8 @@ public final class IdentityLoginService {
             }).orElse(Completed.denied("desafio"));
         } catch (CompletionRollback e) {
             return Completed.denied(e.rule);
+        } catch (IntentRollback e) {
+            return e.completed;
         }
     }
 

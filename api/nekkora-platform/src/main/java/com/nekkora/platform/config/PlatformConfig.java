@@ -187,14 +187,18 @@ public class PlatformConfig {
      * Porta de e-mail. Padrao: {@link LocalMailSender} (so a intencao). {@code nekkora.mail.transport=homologacao} liga
      * o transporte de HOMOLOGACAO (caixa local, sem envio externo, desfechos simulados), que so existe com
      * {@code nekkora.environment=ensaio-*} e {@code nekkora.mail.caixa-dir} gravavel: sem isso, a Platform NAO sobe
-     * (nunca cai silenciosamente no local). Qualquer outro valor de transporte tambem impede a partida.
+     * (nunca cai silenciosamente no local). {@code m365} (missao 002, PR 5): fila persistente ({@code OutboxMailSender}) com o
+     * transporte Microsoft Graph de {@link MailConfig}, que recusa a partida sem tenant, cliente, certificado ou remetente.
+     * Qualquer outro valor de transporte tambem impede a partida.
      */
     @Bean
     @ConditionalOnMissingBean(MailSender.class)
     MailSender mailSender(@org.springframework.beans.factory.annotation.Value("${nekkora.mail.transport:local}") String transport,
                           @org.springframework.beans.factory.annotation.Value("${nekkora.mail.caixa-dir:}") String caixaDir,
-                          @org.springframework.beans.factory.annotation.Value("${nekkora.environment:}") String environment) {
+                          @org.springframework.beans.factory.annotation.Value("${nekkora.environment:}") String environment,
+                          org.springframework.beans.factory.ObjectProvider<com.nekkora.platform.mail.OutboxMailIntents> outbox) {
         return switch (transport == null ? "" : transport.trim()) {
+            case "m365" -> new com.nekkora.platform.mail.OutboxMailSender(outbox.getObject());
             case "", "local" -> new LocalMailSender();
             case "homologacao" -> {
                 if (caixaDir == null || caixaDir.isBlank()) {
@@ -202,13 +206,13 @@ public class PlatformConfig {
                 }
                 yield new com.nekkora.platform.mail.CaixaHomologacaoMailSender(java.nio.file.Path.of(caixaDir), environment);
             }
-            default -> throw new IllegalStateException("nekkora.mail.transport desconhecido (use local ou homologacao)");
+            default -> throw new IllegalStateException("nekkora.mail.transport desconhecido (use local, homologacao ou m365)");
         };
     }
 
     @Bean
     AuthService authService(OrgTransactions tx, AccountRepository accounts, SessionRepository sessions, MfaRepository mfa, PasswordHasher hasher,
-                            SecretCipher secretCipher, IdentityHmac hmac, Limits limits, MailSender mail, PlatformProperties p) {
+                            SecretCipher secretCipher, IdentityHmac hmac, Limits limits, com.nekkora.platform.mail.MailIntents mail, PlatformProperties p) {
         return new AuthService(tx, accounts, sessions, mfa, hasher, secretCipher, hmac, limits, mail, p.session(), p.limits());
     }
 
@@ -240,7 +244,7 @@ public class PlatformConfig {
     }
 
     @Bean
-    AdminService adminService(OrgTransactions tx, AccountRepository accounts, SessionRepository sessions, MfaRepository mfa, MailSender mail,
+    AdminService adminService(OrgTransactions tx, AccountRepository accounts, SessionRepository sessions, MfaRepository mfa, com.nekkora.platform.mail.MailIntents mail,
                               PlatformProperties p) {
         return new AdminService(tx, accounts, sessions, mfa, mail, p.session().stepUp());
     }
