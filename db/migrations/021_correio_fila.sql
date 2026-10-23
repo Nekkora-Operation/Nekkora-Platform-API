@@ -29,6 +29,13 @@
 -- voltar de estado terminal, reduzir tentativas, ou apagar fora da retencao.
 --
 -- Sem janela de elevacao: a tabela e a trigger pertencem ao migrador (dono do banco), como as demais tabelas de public.
+--
+-- Revisao 2 (missao PLATFORM-API-V1-003; revisao 1 = sha256 2aeaf4b9..., nunca aplicada em base persistente): a invariante
+-- 1 da sec. 5 contava como "acesso" o SELECT HERDADO de pg_read_all_data. A topologia de implantacao tem a identidade de
+-- backup logico backup_nekkora membro de pg_read_all_data (ops/homologacao/IMPLANTACAO.md, sec. 1), e a 021 era recusada
+-- na implantacao do ensaio-api-v1-002. A invariante passa a conferir as CONCESSOES da tabela e das colunas (ACL) e a
+-- participacao nos papeis que as recebem (dono e Platform), sem contar papeis predefinidos do PostgreSQL. Nada mais muda:
+-- tabela, trigger, privilegios e as demais invariantes sao os da revisao 1 (suite db/tests/correio-021, caso C).
 
 BEGIN;
 
@@ -133,13 +140,27 @@ DO $$
 DECLARE
     v_bad TEXT;
 BEGIN
-    SELECT string_agg(r.rolname, ', ' ORDER BY r.rolname) INTO v_bad FROM pg_roles r
-    -- papeis predefinidos do PostgreSQL (pg_read_all_data, pg_write_all_data...) ficam de fora: membership neles e conferida
-    -- pelas invariantes da 012/016
-    WHERE NOT r.rolsuper AND r.rolname <> 'nekkora_platform' AND r.rolname NOT LIKE 'pg\_%'
-      AND r.oid <> (SELECT relowner FROM pg_class WHERE oid = 'public.mail_outbox'::regclass)
-      AND (has_table_privilege(r.oid, 'public.mail_outbox', 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER')
-           OR has_any_column_privilege(r.oid, 'public.mail_outbox', 'SELECT, INSERT, UPDATE, REFERENCES'));
+    -- Acesso que esta migration controla: (a) CONCESSAO na tabela ou em qualquer coluna (ACL) a quem nao e o dono nem a
+    -- Platform, inclusive PUBLIC; (b) participacao (MEMBER: herda ou pode SET ROLE) no dono ou na Platform, de papel que nao
+    -- e superusuario. Papeis predefinidos do PostgreSQL (pg_read_all_data, pg_write_all_data...) concedem por participacao,
+    -- sem entrada na ACL: ficam de fora daqui, e quem participa deles e decisao da topologia de implantacao (o backup logico,
+    -- IMPLANTACAO.md sec. 1), nao desta migration. Revisao 1 usava has_table_privilege, que conta essa heranca.
+    WITH alvo AS (
+        SELECT c.oid, c.relowner FROM pg_class c WHERE c.oid = 'public.mail_outbox'::regclass
+    ), concessoes AS (
+        SELECT x.grantee FROM alvo a JOIN pg_class c ON c.oid = a.oid, aclexplode(c.relacl) x WHERE c.relacl IS NOT NULL
+        UNION
+        SELECT x.grantee FROM alvo a JOIN pg_attribute t ON t.attrelid = a.oid, aclexplode(t.attacl) x
+        WHERE t.attacl IS NOT NULL AND NOT t.attisdropped
+    ), indevidos AS (
+        SELECT CASE WHEN g.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(g.grantee) END AS nome
+        FROM concessoes g, alvo a WHERE g.grantee NOT IN (a.relowner, 'nekkora_platform'::regrole)
+        UNION
+        SELECT r.rolname FROM pg_roles r, alvo a
+        WHERE NOT r.rolsuper AND r.oid NOT IN (a.relowner, 'nekkora_platform'::regrole)
+          AND (pg_has_role(r.oid, a.relowner, 'MEMBER') OR pg_has_role(r.oid, 'nekkora_platform'::regrole, 'MEMBER'))
+    )
+    SELECT string_agg(nome, ', ' ORDER BY nome) INTO v_bad FROM indevidos;
     IF v_bad IS NOT NULL THEN
         RAISE EXCEPTION '021: papel com acesso a mail_outbox alem da Platform: %', v_bad;
     END IF;
