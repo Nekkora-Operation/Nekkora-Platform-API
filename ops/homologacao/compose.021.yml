@@ -1,0 +1,19 @@
+# SOBREPOSICAO da homologacao para ambientes com 016-021 (missao PLATFORM-API-V1-003). Usada pelo runner SO em ambientes
+# ensaio-* criados com HOMOLOG_ATE=021 (registrado em ambiente.env, HOMOLOG_COMPOSE_EXTRA), sempre junto de
+# compose.016.yml e compose.caixa.yml (o criar exige HOMOLOG_TRANSPORTE=homologacao). Nenhum valor secreto neste arquivo.
+#
+# Liga, SO neste ambiente descartavel, as chaves da camada de identidade (017-020) que ficam desligadas por padrao
+# (application.yml / IdentityConfig): cadastro web, entrada geral, criacao de organizacao pela identidade
+# (nekkora.criacao-organizacao.enabled, por ligacao relaxada do Spring), vinculacao de conta antiga e recuperacao de
+# senha da identidade. O e-mail
+# continua SIMULADO: o transporte e o de homologacao (caixa do ensaio, compose.caixa.yml) e a Platform segue so na rede
+# "interna" (internal: true), sem saida. O transporte real (m365) nao e configuravel por esta sobreposicao.
+
+services:
+  platform:
+    environment:
+      NEKKORA_CADASTRO: "true"
+      NEKKORA_ENTRADA_GERAL: "true"
+      NEKKORA_CRIACAOORGANIZACAO_ENABLED: "true"
+      NEKKORA_VINCULACAO: "true"
+      NEKKORA_RECUPERACAO_SENHA: "true"
