@@ -6,6 +6,10 @@
 -- email_membro) e phc_adm1, phc_adm2. Controle de transacao: BEGIN/COMMIT explicitos, psql -v ON_ERROR_STOP=1.
 \set ON_ERROR_STOP on
 BEGIN;
+-- contexto da organizacao na propria transacao (o caminho da aplicacao): desde a 017, credencial, fator, codigos, desafios
+-- e tokens da conta passam pela trigger refuse_local_entry_for_linked_account, que confere nekkora.organization_id
+-- (identity_check_context). Nenhuma protecao e desligada (missao PLATFORM-API-V1-003).
+SELECT set_config('nekkora.organization_id', :'org', true) IS NOT NULL AS fx_contexto \gset
 INSERT INTO organizations (organization_id, name, status) VALUES (:'org', 'Homologacao 016 sintetica ' || :'ambiente', 1);
 INSERT INTO users (user_id, organization_id, account_type, email, email_verified_at, status, display_name) VALUES
     (:'adm1', :'org', 1, :'email_adm1', now(), 2, 'Titular 016'),
