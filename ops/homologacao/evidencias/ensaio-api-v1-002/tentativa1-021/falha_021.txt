@@ -1,0 +1,7 @@
+-- 020_identidade_recuperacao_senha.sql (executeInTransaction=false, ELEVADA)
+-- 021_correio_fila.sql (executeInTransaction=false)
+ERROR: Migration of schema "public" to version "021 - correio fila" [non-transactional] failed! Please restore backups and roll back database and code!
+Caused by: org.postgresql.util.PSQLException: ERROR: 021: papel com acesso a mail_outbox alem da Platform: backup_nekkora
+Caused by: org.postgresql.util.PSQLException: ERROR: 021: papel com acesso a mail_outbox alem da Platform: backup_nekkora
+FALHA: migration 021_correio_fila.sql
+estado do migrador conferido limpo; trava liberada. Sem nova tentativa, sem repair, sem baseline.

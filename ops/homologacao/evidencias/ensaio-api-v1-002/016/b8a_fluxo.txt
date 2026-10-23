@@ -1,0 +1,13 @@
+== fixture declarada de contatos (unica fixture de B8a)
+fixture_contatos: org=ddee8bdf-17ae-4769-8040-0a45b7dc34a0 contatos=e327be3d-7968-4d7a-81e9-502e68fe8626,7d6ec06f-850d-4c64-afce-0c96e22d597b linhas=2 deslocamento=721h verificacoes=OK session_replication_role=origin
+classificacao=APLICADA execucao=37202937-7b41-493f-9e84-934143328d2a
+retorno=f6c25983-43ac-474b-a1e4-1222f683ca1a resultado=OK motivo=-
+solicitacao=3f0924b8-dd5c-40ee-b25e-57fdeae5c517 resultado=OK origem=BANCO estado=SOLICITADA motivo=-
+solicitacao=3f0924b8-dd5c-40ee-b25e-57fdeae5c517 resultado=OK origem=BANCO estado=VERIFICADA motivo=-
+solicitacao=3f0924b8-dd5c-40ee-b25e-57fdeae5c517 resultado=OK origem=BANCO estado=PRE_APROVADA motivo=-
+== avisos pelo despachante real com o transporte de homologacao
+tentativas aceitas: 2
+categorias=ACEITE_SIMULADO
+OK    H016.confirmar pela rota esperado=204 obtido=204
+solicitacao=3f0924b8-dd5c-40ee-b25e-57fdeae5c517 resultado=RECUSA origem=BANCO estado=PRE_APROVADA motivo=ESPERA_NAO_CUMPRIDA
+estado=3

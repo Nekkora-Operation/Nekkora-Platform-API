@@ -1,0 +1,10 @@
+solicitacao=3f0924b8-dd5c-40ee-b25e-57fdeae5c517 resultado=OK origem=BANCO estado=PRE_APROVADA motivo=-
+desfecho=RECUSADO tentativa=5:RECUSA_SIMULADA esperado=5:RECUSA_SIMULADA
+solicitacao=3f0924b8-dd5c-40ee-b25e-57fdeae5c517 resultado=OK origem=BANCO estado=PRE_APROVADA motivo=-
+desfecho=ENFILEIRADO tentativa=3:FILA_SIMULADA esperado=3:FILA_SIMULADA
+solicitacao=3f0924b8-dd5c-40ee-b25e-57fdeae5c517 resultado=OK origem=BANCO estado=PRE_APROVADA motivo=-
+desfecho=INCERTO tentativa=6:INCERTO_SIMULADO esperado=6:INCERTO_SIMULADO
+solicitacao=3f0924b8-dd5c-40ee-b25e-57fdeae5c517 resultado=OK origem=BANCO estado=PRE_APROVADA motivo=-
+desfecho=EXCECAO tentativa=6:INCERTO_SIMULADO esperado=6:INCERTO_SIMULADO
+solicitacao=3f0924b8-dd5c-40ee-b25e-57fdeae5c517 resultado=OK origem=BANCO estado=PRE_APROVADA motivo=-
+desfecho=ACEITO tentativa=4:ACEITE_SIMULADO esperado=4:ACEITE_SIMULADO
