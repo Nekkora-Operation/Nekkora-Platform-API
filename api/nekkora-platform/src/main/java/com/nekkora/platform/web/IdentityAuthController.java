@@ -21,6 +21,7 @@ import com.nekkora.core.web.RequestContextFilter;
 import com.nekkora.platform.config.PlatformProperties;
 import com.nekkora.platform.identity.IdentityCredentialService;
 import com.nekkora.platform.identity.IdentityLoginService;
+import com.nekkora.platform.identity.IdentityPasswordRecoveryService;
 import com.nekkora.platform.identity.IdentityStepUpService;
 
 /**
@@ -47,11 +48,27 @@ public class IdentityAuthController {
     public static final String LOGOUT = "/api/v1/auth/logout";
     public static final String STEP_UP = "/api/v1/auth/step-up";
     public static final String ME_SESSION = "/api/v1/me/session";
+    public static final String PASSWORD = "/api/v1/auth/password";
+    public static final String RECOVERY_CODES = "/api/v1/auth/mfa/recovery-codes";
+    public static final String PASSWORD_RESET_REQUEST = "/api/v1/auth/password-reset/request";
+    public static final String PASSWORD_RESET_CONFIRM = "/api/v1/auth/password-reset/confirm";
 
     public record Login(String email, char[] password) {
     }
 
     public record CodeRequest(String code, String recoveryCode) {
+    }
+
+    /** Pedido de recuperacao de senha da identidade: so o e-mail. */
+    public record RecoveryRequest(String email) {
+    }
+
+    /** Confirmacao da recuperacao: token do e-mail e senha nova (zerada depois do uso). */
+    public record RecoveryConfirmation(String token, char[] newPassword) {
+    }
+
+    /** Troca de senha da identidade: as duas senhas sao zeradas depois do uso. */
+    public record PasswordChange(char[] currentPassword, char[] newPassword) {
     }
 
     /** Step-up: so o TOTP (codigo de recuperacao nao e alternativa). */
@@ -61,15 +78,21 @@ public class IdentityAuthController {
     private final IdentityLoginService logins;
     private final IdentityStepUpService stepUps;
     private final IdentityCredentialService credentials;
+    private final IdentityPasswordRecoveryService recoveries;
     private final PreAuthCsrf csrfPre;
     private final PlatformProperties.Session cfg;
     private final boolean enabled;
+    private final boolean recoveryEnabled;
 
-    public IdentityAuthController(IdentityLoginService logins, IdentityStepUpService stepUps, IdentityCredentialService credentials, PreAuthCsrf csrfPre,
-                                  PlatformProperties.Session cfg, @Value("${nekkora.entrada-geral.enabled:false}") boolean enabled) {
+    public IdentityAuthController(IdentityLoginService logins, IdentityStepUpService stepUps, IdentityCredentialService credentials,
+                                  IdentityPasswordRecoveryService recoveries, PreAuthCsrf csrfPre, PlatformProperties.Session cfg,
+                                  @Value("${nekkora.entrada-geral.enabled:false}") boolean enabled,
+                                  @Value("${nekkora.recuperacao-senha.enabled:false}") boolean recoveryEnabled) {
         this.logins = logins;
         this.stepUps = stepUps;
         this.credentials = credentials;
+        this.recoveries = recoveries;
+        this.recoveryEnabled = recoveryEnabled;
         this.csrfPre = csrfPre;
         this.cfg = cfg;
         this.enabled = enabled;
@@ -179,6 +202,72 @@ public class IdentityAuthController {
         }
         stepUps.stepUp(IdentityFilter.principalOrNull(req), IdentityFilter.token(req), body.code(), RequestContextFilter.ip(req));
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Troca de senha da identidade: sessao comum com step-up recente, senha atual e senha nova (politica da Platform). 204;
+     * corpo incompleto ou senha nova fora da politica: 400; senha atual errada, sem step-up ou sessao restrita: 403.
+     */
+    @PostMapping(PASSWORD)
+    public ResponseEntity<Void> changePassword(@RequestBody(required = false) PasswordChange body, HttpServletRequest req) {
+        char[] current = body == null ? null : body.currentPassword();
+        char[] next = body == null ? null : body.newPassword();
+        try {
+            requireEnabled();
+            if (current == null || next == null) {
+                throw ApiException.invalid("senha");
+            }
+            credentials.changePassword(IdentityFilter.principalOrNull(req), IdentityFilter.token(req), current, next, RequestContextFilter.ip(req));
+            return ResponseEntity.noContent().build();
+        } finally {
+            if (current != null) {
+                Arrays.fill(current, '\0');
+            }
+            if (next != null) {
+                Arrays.fill(next, '\0');
+            }
+        }
+    }
+
+    /** Regeneracao independente dos codigos de recuperacao: sessao comum com step-up recente. Conjunto novo uma unica vez. */
+    @PostMapping(RECOVERY_CODES)
+    public Map<String, Object> regenerateRecoveryCodes(HttpServletRequest req) {
+        requireEnabled();
+        List<String> codes = credentials.regenerateRecoveryCodes(IdentityFilter.principalOrNull(req), IdentityFilter.token(req), RequestContextFilter.ip(req));
+        return Map.of("recoveryCodes", List.copyOf(codes));
+    }
+
+    /** Recuperacao de senha: chave propria E a da entrada geral; desligada, 404 (segunda barreira, depois do gate). */
+    private void requireRecoveryEnabled() {
+        if (!enabled || !recoveryEnabled) {
+            throw new ApiException(ApiError.NOT_FOUND, "recuperacao_senha_desligada", null);
+        }
+    }
+
+    /** Pedido de recuperacao de senha da identidade: sempre 202 sem corpo (e-mail malformado: 400). */
+    @PostMapping(PASSWORD_RESET_REQUEST)
+    public ResponseEntity<Void> requestPasswordReset(@RequestBody(required = false) RecoveryRequest body, HttpServletRequest req) {
+        requireRecoveryEnabled();
+        recoveries.request(body == null ? null : body.email(), RequestContextFilter.ip(req));
+        return ResponseEntity.accepted().build();
+    }
+
+    /** Confirmacao da recuperacao: 204; nenhuma sessao criada. Qualquer recusa: 400. */
+    @PostMapping(PASSWORD_RESET_CONFIRM)
+    public ResponseEntity<Void> confirmPasswordReset(@RequestBody(required = false) RecoveryConfirmation body, HttpServletRequest req) {
+        char[] next = body == null ? null : body.newPassword();
+        try {
+            requireRecoveryEnabled();
+            if (body == null || body.token() == null || next == null) {
+                throw ApiException.invalid("corpo");
+            }
+            recoveries.confirm(body.token(), next, RequestContextFilter.ip(req));
+            return ResponseEntity.noContent().build();
+        } finally {
+            if (next != null) {
+                Arrays.fill(next, '\0');
+            }
+        }
     }
 
     /** Sem chave e sem limitador (reduz acesso); sem sessao valida, no-op. Sempre 204 e o cookie expirado. */

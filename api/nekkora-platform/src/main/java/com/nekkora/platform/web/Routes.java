@@ -75,6 +75,8 @@ public final class Routes {
             case "/api/v1/signup", "/api/v1/signup/confirm", "/api/v1/signup/confirmation/resend" -> Context.PRE_AUTHENTICATION;
             // entrada geral (Missao 1): senha em pre-autenticacao; MFA no desafio de identidade; logout de identidade
             case "/api/v1/auth/login" -> Context.PRE_AUTHENTICATION;
+            // recuperacao de senha da identidade (missao 002): pre-autenticacao, como a da organizacao
+            case "/api/v1/auth/password-reset/request", "/api/v1/auth/password-reset/confirm" -> Context.PRE_AUTHENTICATION;
             // cadastro de fator: desafio de login (primeiro fator) ou sessao de identidade (substituicao); as duas, ambigua
             case IDENTITY_ENROLL_START, IDENTITY_ENROLL_CONFIRM -> switch (enrollMode(req)) {
                 case CHALLENGE -> Context.IDENTITY_CHALLENGE;
@@ -88,6 +90,8 @@ public final class Routes {
             // vinculacao de conta antiga (P3): as duas etapas com a sessao de identidade
             case "/api/v1/sessions/organization", "/api/v1/auth/step-up", "/api/v1/organizations",
                  "/api/v1/links/start", "/api/v1/links/confirm" -> Context.IDENTITY_SESSION;
+            // credenciais da identidade (missao 002): troca de senha e regeneracao dos codigos, com a sessao de identidade
+            case "/api/v1/auth/password", "/api/v1/auth/mfa/recovery-codes" -> Context.IDENTITY_SESSION;
             case "/auth/mfa/enroll/start", "/auth/mfa/enroll/confirm", "/auth/mfa/verify" -> Context.CHALLENGE;
             case "/auth/logout" -> Context.LOGOUT;
             default -> Context.SESSION;

@@ -23,6 +23,7 @@ import com.nekkora.platform.identity.IdentityLinkRepository;
 import com.nekkora.platform.identity.IdentityLoginService;
 import com.nekkora.platform.identity.IdentityOrgRepository;
 import com.nekkora.platform.identity.IdentityOrganizationsService;
+import com.nekkora.platform.identity.IdentityPasswordRecoveryService;
 import com.nekkora.platform.identity.IdentityRepository;
 import com.nekkora.platform.identity.IdentitySessionResolver;
 import com.nekkora.platform.identity.IdentityStepUpService;
@@ -35,6 +36,7 @@ import com.nekkora.platform.identity.PasswordRule;
 import com.nekkora.platform.identity.SignupMailer;
 import com.nekkora.platform.identity.SignupService;
 import com.nekkora.platform.limits.Limits;
+import com.nekkora.platform.mail.MailIntents;
 import com.nekkora.platform.mail.MailSender;
 import com.nekkora.platform.mfa.LinkedSessionStepUp;
 import com.nekkora.platform.mfa.MfaRepository;
@@ -70,7 +72,7 @@ public class IdentityConfig {
     /** Entrada geral (login, desafio, MFA, logout): desafio de 5 min e sessao de 12 h, os mesmos prazos da organizacao. */
     @Bean
     IdentityLoginService identityLoginService(IdentityTransactions tx, IdentityAuthRepository auth, PasswordHasher hasher, SecretCipher cipher,
-                                              IdentityHmac hmac, Limits limits, MailSender mail, PlatformProperties p) {
+                                              IdentityHmac hmac, Limits limits, MailIntents mail, PlatformProperties p) {
         return new IdentityLoginService(tx, auth, hasher, cipher, hmac, limits, mail, p.session().challenge(), p.session().absolute());
     }
 
@@ -81,11 +83,14 @@ public class IdentityConfig {
         return new IdentityStepUpService(tx, auth, cipher, hmac, limits);
     }
 
-    /** Credenciais pela sessao de identidade: substituicao do fator (DC-17.13), aviso ao titular depois do commit. */
+    /**
+     * Credenciais pela sessao de identidade: substituicao do fator (DC-17.13), troca de senha (politica da Platform pela
+     * porta {@link PasswordRule}) e regeneracao dos codigos; avisos ao titular depois do commit.
+     */
     @Bean
     IdentityCredentialService identityCredentialService(IdentityTransactions tx, IdentityAuthRepository auth, SecretCipher cipher, IdentityHmac hmac,
-                                                        Limits limits, MailSender mail) {
-        return new IdentityCredentialService(tx, auth, cipher, hmac, limits, mail);
+                                                        Limits limits, MailIntents mail, PasswordHasher hasher) {
+        return new IdentityCredentialService(tx, auth, cipher, hmac, limits, mail, hasher, PasswordPolicy::enforce);
     }
 
     /**
@@ -155,7 +160,7 @@ public class IdentityConfig {
     /** Vinculacao de conta antiga (P3): duas etapas, R13, aviso depois do commit. */
     @Bean
     AccountLinkService accountLinkService(IdentityTransactions tx, IdentityAuthRepository auth, IdentityLinkRepository links, LegacyAccountPort accounts,
-                                          PasswordHasher hasher, IdentityHmac hmac, Limits limits, MailSender mail) {
+                                          PasswordHasher hasher, IdentityHmac hmac, Limits limits, MailIntents mail) {
         return new AccountLinkService(tx, auth, links, accounts, hasher, hmac, limits, mail);
     }
 
@@ -195,9 +200,21 @@ public class IdentityConfig {
 
     @Bean
     SignupService signupService(IdentityTransactions tx, IdentityRepository identities, PasswordHasher hasher, IdentityHmac hmac, Limits limits,
-                                SignupMailer mailer, PlatformProperties p) {
-        return new SignupService(tx, identities, hasher, PasswordPolicy::enforce, hmac, limits, mailer, p.session().emailVerification(),
+                                MailIntents mail, PlatformProperties p) {
+        return new SignupService(tx, identities, hasher, PasswordPolicy::enforce, hmac, limits, mail, p.session().emailVerification(),
                 p.limits().recoveryResponseFloor());
+    }
+
+    /**
+     * Recuperacao de senha da identidade por e-mail (missao 002, PR 4): token de {@code nekkora.session.password-recovery}
+     * (30 min), piso de resposta igual ao de requestRecovery, e-mail fora da resposta pela mesma fila do cadastro.
+     */
+    @Bean
+    IdentityPasswordRecoveryService identityPasswordRecoveryService(IdentityTransactions tx, IdentityRepository identities, IdentityAuthRepository auth,
+                                                                    PasswordHasher hasher, IdentityHmac hmac, Limits limits, MailIntents mail,
+                                                                    PlatformProperties p) {
+        return new IdentityPasswordRecoveryService(tx, identities, auth, hasher, PasswordPolicy::enforce, hmac, limits, mail,
+                p.session().passwordRecovery(), p.limits().recoveryResponseFloor());
     }
 
     /** Chaves separadas do cadastro, da entrada geral, da criacao de organizacao e da vinculacao: antes da cadeia de seguranca, depois do contexto e do limite de corpo. */
@@ -205,9 +222,10 @@ public class IdentityConfig {
     FilterRegistrationBean<IdentityRoutesGate> identityRoutesGate(@Value("${nekkora.cadastro.enabled:false}") boolean signupEnabled,
                                                                   @Value("${nekkora.entrada-geral.enabled:false}") boolean entryEnabled,
                                                                   @Value("${nekkora.criacao-organizacao.enabled:false}") boolean creationEnabled,
-                                                                  @Value("${nekkora.vinculacao.enabled:false}") boolean linkEnabled) {
+                                                                  @Value("${nekkora.vinculacao.enabled:false}") boolean linkEnabled,
+                                                                  @Value("${nekkora.recuperacao-senha.enabled:false}") boolean recoveryEnabled) {
         FilterRegistrationBean<IdentityRoutesGate> r = new FilterRegistrationBean<>(new IdentityRoutesGate(signupEnabled, entryEnabled, creationEnabled,
-                linkEnabled));
+                linkEnabled, recoveryEnabled));
         r.setOrder(Ordered.HIGHEST_PRECEDENCE + 2);
         r.addUrlPatterns("/api/*");
         return r;

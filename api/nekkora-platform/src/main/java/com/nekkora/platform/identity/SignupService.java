@@ -19,6 +19,7 @@ import com.nekkora.core.web.RequestContext;
 import com.nekkora.platform.auth.crypto.IdentityHmac;
 import com.nekkora.platform.auth.crypto.PasswordHasher;
 import com.nekkora.platform.limits.Limits;
+import com.nekkora.platform.mail.MailIntents;
 import com.nekkora.platform.mail.MailSender;
 
 /**
@@ -49,7 +50,7 @@ public final class SignupService {
 
     private static final Logger LOG = LoggerFactory.getLogger(SignupService.class);
 
-    static final int EMAIL_MAX = 254;
+    static final int EMAIL_MAX = EmailFormat.MAX;
     static final int DISPLAY_NAME_MAX = 120;
 
     private final IdentityTransactions tx;
@@ -58,19 +59,19 @@ public final class SignupService {
     private final PasswordRule passwordRule;
     private final IdentityHmac hmac;
     private final Limits limits;
-    private final SignupMailer mailer;
+    private final MailIntents mail;
     private final Duration tokenValidity;
     private final Duration responseFloor;
 
     public SignupService(IdentityTransactions tx, IdentityRepository identities, PasswordHasher hasher, PasswordRule passwordRule, IdentityHmac hmac,
-                         Limits limits, SignupMailer mailer, Duration tokenValidity, Duration responseFloor) {
+                         Limits limits, MailIntents mail, Duration tokenValidity, Duration responseFloor) {
         this.tx = tx;
         this.identities = identities;
         this.hasher = hasher;
         this.passwordRule = passwordRule;
         this.hmac = hmac;
         this.limits = limits;
-        this.mailer = mailer;
+        this.mail = mail;
         this.tokenValidity = tokenValidity;
         this.responseFloor = responseFloor;
     }
@@ -95,7 +96,9 @@ public final class SignupService {
                 reissue(normalized, ip);
             } else if (current.get().status() == IdentityRepository.ACTIVE) {
                 if (limits.signupMailAllowed(hmac.global(normalized), ip)) {
-                    mailer.enqueue(MailSender.Kind.IDENTITY_SIGNUP_ALREADY_REGISTERED, current.get().email(), null);
+                    // sem ato de negocio a acompanhar: a intencao vai sozinha (chave = este pedido, gerado pelo servidor)
+                    mail.recordAlone(new MailIntents.Intent(MailSender.Kind.IDENTITY_SIGNUP_ALREADY_REGISTERED, null, current.get().email(), null,
+                            "pedido:" + correlation()));
                 }
             }
         } finally {
@@ -167,14 +170,14 @@ public final class SignupService {
                 identities.insertPending(j, id.identityId(), email);
                 identities.insertToken(j, id.identityId(), email, Tokens.sha256Hex(token), tokenValidity);
                 identities.event(j, id.identityId(), IdentityRepository.SIGNUP_REQUESTED, correlation());
+                // e-mail com o token NA transacao que o emite; chave = hash do token
+                mail.record(j, new MailIntents.Intent(MailSender.Kind.IDENTITY_SIGNUP_CONFIRMATION, null, email, token, "token:" + Tokens.sha256Hex(token)));
                 return Boolean.TRUE;
             });
         } catch (DuplicateKeyException e) {
             // cadastro concorrente do mesmo e-mail: o outro pedido criou a identidade; este nao cria nada (resposta igual)
             LOG.info("evento=cadastro.concorrente correlacao={}", RequestContext.correlation());
-            return;
         }
-        mailer.enqueue(MailSender.Kind.IDENTITY_SIGNUP_CONFIRMATION, email, token);
     }
 
     /** Reemissao para identidade PENDING: R9b, lock da identidade, revogacao do token vivo, token novo e e-mail. */
@@ -183,7 +186,7 @@ public final class SignupService {
             return;
         }
         String token = Tokens.newToken();
-        Optional<String> target = tx.inIdentity(new EmailCadastro(normalized), Mode.READ_WRITE, (id, j) -> {
+        tx.inIdentity(new EmailCadastro(normalized), Mode.READ_WRITE, (id, j) -> {
             Optional<IdentityRepository.State> s = identities.lock(j, id.identityId());
             if (s.isEmpty() || s.get().status() != IdentityRepository.PENDING) {
                 return null;
@@ -191,23 +194,14 @@ public final class SignupService {
             identities.revokeLiveTokens(j, id.identityId());
             identities.insertToken(j, id.identityId(), s.get().email(), Tokens.sha256Hex(token), tokenValidity);
             identities.event(j, id.identityId(), IdentityRepository.SIGNUP_REQUESTED, correlation());
+            mail.record(j, new MailIntents.Intent(MailSender.Kind.IDENTITY_SIGNUP_CONFIRMATION, null, s.get().email(), token,
+                    "token:" + Tokens.sha256Hex(token)));
             return s.get().email();
         });
-        target.ifPresent(e -> mailer.enqueue(MailSender.Kind.IDENTITY_SIGNUP_CONFIRMATION, e, token));
     }
 
     static boolean validEmail(String email) {
-        if (email == null || email.isEmpty() || email.length() > EMAIL_MAX || !email.equals(email.strip())) {
-            return false;
-        }
-        for (int i = 0; i < email.length(); i++) {
-            char c = email.charAt(i);
-            if (Character.isWhitespace(c) || Character.isISOControl(c)) {
-                return false;
-            }
-        }
-        int at = email.indexOf('@');
-        return at > 0 && at == email.lastIndexOf('@') && at < email.length() - 1;
+        return EmailFormat.valid(email);
     }
 
     static boolean validDisplayName(String name) {

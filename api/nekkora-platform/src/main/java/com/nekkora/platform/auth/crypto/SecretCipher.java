@@ -15,7 +15,7 @@ import javax.crypto.spec.SecretKeySpec;
  * AAD = organization_id || user_id || key_id - um ciphertext copiado para outra linha nao decifra. O fator da IDENTIDADE
  * (Missao 1, DC-17.3) usa AAD = "identity" || identity_id || key_id, sem organizacao: o prefixo separa os dois dominios. As chaves vem
  * do servico de segredos (na stack local, variavel de ambiente), identificadas por key_id para rotacao; nunca
- * versionadas. So a chave vigente cifra; qualquer chave conhecida decifra.
+ * versionadas. So a chave vigente cifra; qualquer chave conhecida decifra. A fila de e-mail (021) usa o prefixo "mail" no AAD.
  */
 public final class SecretCipher {
 
@@ -64,6 +64,23 @@ public final class SecretCipher {
             throw new IllegalStateException("key_id desconhecido");
         }
         return runCipher(Cipher.DECRYPT_MODE, c.keyId(), c.nonce(), identityAad(identity, c.keyId()), c.ciphertext());
+    }
+
+    /**
+     * Fila de e-mail (missao 002, migration 021): destinatario e token de um trabalho, em repouso. AAD = "mail|" + job_id +
+     * "|" + key_id: o payload copiado para outro trabalho nao decifra.
+     */
+    public Encrypted encryptForMail(byte[] payload, UUID job) {
+        byte[] nonce = new byte[12];
+        RANDOM.nextBytes(nonce);
+        return new Encrypted(runCipher(Cipher.ENCRYPT_MODE, currentKey, nonce, "mail|" + job + "|" + currentKey, payload), nonce, currentKey);
+    }
+
+    public byte[] decryptForMail(Encrypted c, UUID job) {
+        if (!keys.containsKey(c.keyId())) {
+            throw new IllegalStateException("key_id desconhecido");
+        }
+        return runCipher(Cipher.DECRYPT_MODE, c.keyId(), c.nonce(), "mail|" + job + "|" + c.keyId(), c.ciphertext());
     }
 
     private static String identityAad(UUID identity, String keyId) {

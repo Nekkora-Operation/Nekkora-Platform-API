@@ -36,6 +36,17 @@ nekkora:
   mail:
     transport: ${NEKKORA_MAIL_TRANSPORTE:local}
     caixa-dir: ${NEKKORA_MAIL_CAIXA:}
+    # transporte real (missao 002, PR 5; transport=m365): Graph so de aplicacao, certificado, RBAC para Aplicacoes na
+    # caixa unica. Todo valor vem do ambiente ou do cofre; o certificado e um arquivo PKCS#12 montado, nunca versionado
+    remetente: ${NEKKORA_MAIL_REMETENTE:}
+    m365:
+      tenant-id: ${NEKKORA_M365_TENANT:}
+      client-id: ${NEKKORA_M365_CLIENT:}
+      certificado: ${NEKKORA_M365_CERT:}
+      certificado-senha: ${NEKKORA_M365_CERT_SENHA:}
+      timeout: 5s
+      # saida por proxy (host:porta) quando a rede da Platform nao tem saida direta; vazio = conexao direta
+      proxy: ${NEKKORA_M365_PROXY:}
   emergency-notices:
     enabled: ${NEKKORA_AVISOS_EMERGENCIA:false}
   # cadastro web da identidade (Missao 1, DC-17.7): DESLIGADO por padrao; desligado, as rotas de cadastro respondem 404
@@ -49,6 +60,10 @@ nekkora:
   # bloqueios da entrada local de conta vinculada nao dependem dela
   vinculacao:
     enabled: ${NEKKORA_VINCULACAO:false}
+  # recuperacao de senha da identidade por e-mail (missao 002, PR 4): DESLIGADA por padrao; so abre com a entrada geral
+  # tambem ligada. A entrega real de e-mail continua sendo gate de liberacao (PR 5)
+  recuperacao-senha:
+    enabled: ${NEKKORA_RECUPERACAO_SENHA:false}
   trusted-proxies: ${NEKKORA_PROXIES_CONFIAVEIS:127.0.0.1/32,::1/128}
   database:
     url: ${NEKKORA_DB_URL}

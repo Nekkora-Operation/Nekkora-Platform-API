@@ -437,6 +437,96 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /api/v1/auth/password:
+    post:
+      tags: [Entrada geral (identidade)]
+      operationId: identityChangePassword
+      summary: 'Troca a senha da identidade (sessao comum com step-up recente); revoga as demais sessoes'
+      description: >
+        Missao 002. Sessao de identidade NAO restrita (cookie __Host-nekkora_id) e CSRF dela; step-up de ate 5 min
+        (POST /api/v1/auth/step-up, so TOTP). Senha nova pela politica da Platform (400). A senha atual e conferida por
+        Argon2 fora de transacao contra o hash vigente; errada: 403 e conta em R8 (identidade global). Numa so transacao,
+        identity_password_change (017) reconfere a prova depois dos locks e so troca se o hash vigente ainda for o
+        conferido; invalida os desafios pendentes, revoga as DEMAIS sessoes (a da requisicao continua) e grava o evento 12.
+        Sem step-up, sessao restrita ou senha trocada no intervalo: 403, sem efeito. Sessao que caiu: 401. Aviso
+        NOTICE_PASSWORD_CHANGED ao titular depois do commit (falha do aviso nao desfaz a troca). O MFA nao muda. R12. Mesma
+        chave da entrada geral: desligada, 404.
+      security: [ { identitySessionCookie: [], csrfHeader: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PasswordChange' } } } }
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+        '400': { description: 'Corpo incompleto ou senha nova fora da politica', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: invalid_request } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { description: 'Origin/CSRF invalido; senha atual errada; sem step-up recente; sessao restrita; senha trocada no intervalo', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
+        '404': { $ref: '#/components/responses/SignupDisabled' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/auth/mfa/recovery-codes:
+    post:
+      tags: [Entrada geral (identidade)]
+      operationId: identityRegenerateRecoveryCodes
+      summary: 'Regenera os codigos de recuperacao da identidade (sessao comum com step-up recente); o conjunto anterior e invalidado'
+      description: >
+        Missao 002. Sessao de identidade NAO restrita e CSRF dela; step-up de ate 5 min (so TOTP). Numa so transacao,
+        identity_recovery_codes_regenerate (019) trava identidade, sessao, fator confirmado e codigos vivos, reconfere a
+        prova depois dos locks, invalida o conjunto vivo e grava o novo para o fator vigente, com o evento 15. O conjunto
+        novo e devolvido UMA unica vez (so os hashes ficam no banco). Sem step-up ou sessao restrita: 403, sem efeito. Sessao
+        que caiu: 401. Aviso NOTICE_RECOVERY_CODES_REGENERATED depois do commit. R12. Mesma chave da entrada geral: desligada, 404.
+      security: [ { identitySessionCookie: [], csrfHeader: [] } ]
+      responses:
+        '200': { description: 'Conjunto novo de codigos', content: { application/json: { schema: { $ref: '#/components/schemas/RecoveryCodes' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { description: 'Origin/CSRF invalido; sem step-up recente; sessao restrita', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
+        '404': { $ref: '#/components/responses/SignupDisabled' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/auth/password-reset/request:
+    post:
+      tags: [Entrada geral (identidade)]
+      operationId: identityRequestPasswordReset
+      summary: 'Pede a recuperacao de senha da identidade por e-mail: resposta uniforme, sem enumeracao'
+      description: >
+        Missao 002 (migration 020). Pre-autenticacao (cookie __Host-nekkora_pre e CSRF dele). Sempre 202 sem corpo, com
+        piso de tempo (recovery-response-floor), para e-mail desconhecido, identidade nao ACTIVE ou nao verificada, limite
+        R14 excedido (identidade global e IP, valores de R5) ou token emitido. So a identidade ACTIVE com e-mail verificado
+        recebe token: sob o lock dela, os tokens de recuperacao vivos sao revogados, o novo e gravado (so o hash; uso unico;
+        prazo de 30 min) e o evento 16 e registrado; o e-mail sai fora do caminho da resposta. E-mail malformado: 400. R12:
+        429; Redis fora: 503. Chave propria nekkora.recuperacao-senha.enabled, so com a entrada geral ligada: desligada, 404.
+      security: [ { preAuthCookie: [], csrfHeader: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RecoveryRequest' } } } }
+      responses:
+        '202': { description: 'Pedido recebido (resposta identica em qualquer desfecho)' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '403': { $ref: '#/components/responses/CsrfForbidden' }
+        '404': { $ref: '#/components/responses/SignupDisabled' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/auth/password-reset/confirm:
+    post:
+      tags: [Entrada geral (identidade)]
+      operationId: identityConfirmPasswordReset
+      summary: 'Conclui a recuperacao: consome o token e troca a senha na mesma transacao; nenhuma sessao criada; MFA preservado'
+      description: >
+        Missao 002 (migration 020). Pre-autenticacao. Politica da senha nova e Argon2 antes da transacao; na transacao,
+        identity_password_reset trava identidade, token, credencial, demais tokens de recuperacao, desafios e sessoes, mede
+        a hora depois dos locks e reconfere o prazo; consome o token, troca a senha, revoga TODAS as sessoes de identidade,
+        invalida os desafios pendentes e os demais tokens de recuperacao e grava o evento 17. Nenhuma sessao e criada. O MFA
+        nao muda: a proxima entrada exige o fator ou um codigo de recuperacao. Token malformado, desconhecido, de outro
+        proposito, consumido, revogado ou vencido (inclusive durante a espera), identidade fora de ACTIVE, ou senha fora da
+        politica: 400, sem efeito. Aviso NOTICE_PASSWORD_CHANGED depois do commit. Mesma chave do pedido.
+      security: [ { preAuthCookie: [], csrfHeader: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RecoveryConfirmation' } } } }
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '403': { $ref: '#/components/responses/CsrfForbidden' }
+        '404': { $ref: '#/components/responses/SignupDisabled' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /api/v1/me/session:
     get:
       tags: [Entrada geral (identidade)]
@@ -1338,6 +1428,7 @@ components:
     IdentityEnrollmentConfirmation: { type: object, required: [recoveryCodes, csrfToken, restricted], properties: { recoveryCodes: { type: array, items: { type: string } }, csrfToken: { type: string }, restricted: { type: boolean, enum: [false] } } }
     IdentityFactorReplacement: { type: object, required: [recoveryCodes, restricted], properties: { recoveryCodes: { type: array, items: { type: string }, description: 'Conjunto novo; o anterior foi invalidado. Mostrado uma unica vez' }, restricted: { type: boolean, enum: [false] } } }
     IdentitySessionIssued: { type: object, required: [csrfToken, restricted], properties: { csrfToken: { type: string }, restricted: { type: boolean, description: 'true: sessao nascida de codigo de recuperacao (DC-17.13), restrita ate concluir a troca do fator' } } }
+    RecoveryCodes: { type: object, required: [recoveryCodes], properties: { recoveryCodes: { type: array, items: { type: string }, description: 'Conjunto novo; o anterior foi invalidado. Mostrado uma unica vez' } } }
     IdentitySessionState: { type: object, required: [restricted, csrfToken], properties: { restricted: { type: boolean }, csrfToken: { type: string } } }
     EnrollmentConfirmation: { type: object, required: [recoveryCodes, csrfToken], properties: { recoveryCodes: { type: array, items: { type: string } }, csrfToken: { type: string } } }
     PasswordChange: { type: object, required: [currentPassword, newPassword], properties: { currentPassword: { type: string, format: password }, newPassword: { type: string, format: password, description: '12 a 128 pontos de codigo' } } }
