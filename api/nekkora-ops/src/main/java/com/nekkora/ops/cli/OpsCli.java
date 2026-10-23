@@ -3,6 +3,7 @@ package com.nekkora.ops.cli;
 import java.io.PrintStream;
 import java.nio.file.Path;
 import java.sql.DriverManager;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
@@ -20,9 +21,12 @@ import java.util.UUID;
  * Uso: {@code retorno <contato>} | {@code abrir <org> <alvo> <contato> entrada|retorno <id>}
  * | {@code verificar <solicitacao> <retorno-ok> <segundo-contato> <segundo-ok> NENHUM|TODOS_SEM_FATOR_E_CODIGOS_UTILIZAVEIS}
  * | {@code pre-aprovar|aprovar|executar|consultar <solicitacao>} | {@code reenviar-aviso <solicitacao> <destinatario>}
- * | {@code cancelar <solicitacao> <motivo>}.
+ * | {@code cancelar <solicitacao> <motivo>}
+ * | {@code ativar-organizacao <org> <responsavel> <workers> <simultaneas> <pendentes> <alerta-logs|-> <alerta-eventos|-> <motivo...>}
+ * (022: ativacao da organizacao com os limites explicitos; o motivo e o resto da linha).
  * Saida: {@code solicitacao=<uuid> resultado=... origem=... estado=... motivo=...}; em ABRIR, o UUID devolvido pelo
- * banco e o que o operador usa nos atos seguintes.
+ * banco e o que o operador usa nos atos seguintes. Em ATIVAR-ORGANIZACAO: {@code organizacao=<uuid> resultado=... evento=<uuid>
+ * motivo=...} (evento = auditoria gravada pelo banco, OK ou RECUSA).
  * Codigo de saida: 0 OK, 2 recusa, 3 falha confirmada, 4 desconhecido, 64 uso invalido.
  */
 public final class OpsCli {
@@ -67,6 +71,23 @@ public final class OpsCli {
                     + " motivo=" + LogLocal.codigo(rr.motivo()));
             return codigo(rr.classe());
         }
+        if ("ativar-organizacao".equals(a[0])) {
+            ExecutorAtos.ResultadoAtivacao ra;
+            try {
+                if (a.length < 9) {
+                    throw new IllegalArgumentException("argumentos");
+                }
+                String motivo = String.join(" ", Arrays.copyOfRange(a, 8, a.length));
+                ra = ex.ativarOrganizacao(UUID.fromString(a[1]), UUID.fromString(a[2]), motivo, Long.parseLong(a[3]), Long.parseLong(a[4]),
+                        Long.parseLong(a[5]), limiar(a[6]), limiar(a[7]));
+            } catch (RuntimeException e) {
+                err.println("uso invalido");
+                return 64;
+            }
+            out.println("organizacao=" + ra.organizacao() + " resultado=" + ra.classe() + " evento=" + (ra.evento() == null ? "-" : ra.evento())
+                    + " motivo=" + LogLocal.codigo(ra.motivo()));
+            return codigo(ra.classe());
+        }
         ExecutorAtos.Resultado r;
         try {
             r = switch (a[0]) {
@@ -105,6 +126,11 @@ public final class OpsCli {
             case FALHA_CONFIRMADA -> 3;
             case DESCONHECIDO -> 4;
         };
+    }
+
+    /** Limiar de alerta dos recursos 4-5: "-" = sem limiar (UNLIMITED); senao o valor (a validacao final e do banco). */
+    private static Long limiar(String s) {
+        return "-".equals(s) ? null : Long.valueOf(s);
     }
 
     private static String exigir(Map<String, String> env, String nome) {

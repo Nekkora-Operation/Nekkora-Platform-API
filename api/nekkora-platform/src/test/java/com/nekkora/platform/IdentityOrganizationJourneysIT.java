@@ -79,6 +79,34 @@ class IdentityOrganizationJourneysIT extends IdentityTestBase {
         assertSemAcesso(f, s, org);
     }
 
+    /**
+     * Capacidade inicial (022): a organizacao criada pela identidade nasce AGUARDANDO_ATIVACAO, com os recursos 1-3 em
+     * FINITE 0, e a API o informa na lista e em /o/{org}/me. A ATIVACAO em si (ato operacional com certificado) e coberta
+     * por OrgActivationIT (nekkora-ops); aqui o estado ATIVADA e PREPARADO no banco (gatilhos desligados so nessa escrita)
+     * para conferir a indicacao. Suspensa, a organizacao sai da lista; o estado de ativacao nao muda com a suspensao.
+     */
+    @Test
+    void organizacaoCriadaInformaAguardandoAtivacaoEDepoisAtivada() throws Exception {
+        ComFator f = comFator();
+        UUID org = criar(f, "Org capacidade inicial");
+        assertThat(f.browser().get("/api/v1/me/organizations").body())
+                .contains("\"organizationId\":\"" + org + "\"").contains("\"activationState\":\"AGUARDANDO_ATIVACAO\"");
+        assertThat(value("SELECT string_agg(c || ':' || l.limit_mode || '/' || coalesce(l.limit_value::text, '-'), ' ' ORDER BY c) FROM generate_series(1, 5) c,"
+                + " LATERAL get_effective_resource_limit('" + org + "', c) l")).isEqualTo("1:1/0 2:1/0 3:1/0 4:2/- 5:2/-");
+        BrowserClient s = sessaoDaOrganizacao(f, org);
+        assertThat(s.get("/api/v1/o/" + org + "/me").body()).contains("\"organizationActivationState\":\"AGUARDANDO_ATIVACAO\"");
+        DB.asSuperuser("SET session_replication_role = replica",
+                "UPDATE ops_activation.organization_states SET state = 2, activated_at = clock_timestamp(), activation_event_id = gen_random_uuid()"
+                        + " WHERE organization_id = '" + org + "'",
+                "SET session_replication_role = origin");
+        assertThat(f.browser().get("/api/v1/me/organizations").body()).contains("\"activationState\":\"ATIVADA\"");
+        assertThat(s.get("/api/v1/o/" + org + "/me").body()).contains("\"organizationActivationState\":\"ATIVADA\"");
+        DB.asSuperuser("UPDATE organizations SET status = 2 WHERE organization_id = '" + org + "'");
+        assertThat(f.browser().get("/api/v1/me/organizations").body()).doesNotContain(org.toString());
+        assertThat(value("SELECT status || '|' || (SELECT state FROM ops_activation.organization_states s WHERE s.organization_id = o.organization_id)"
+                + " FROM organizations o WHERE organization_id = '" + org + "'")).as("suspensa e ativada continuam distinguiveis").isEqualTo("2|2");
+    }
+
     // ------------------------------------------------------------------ apoio
 
     /**

@@ -168,6 +168,86 @@ public final class ExecutorAtos {
         });
     }
 
+    /** Desfecho da ativacao de organizacao (022): o evento de auditoria gravado pelo banco (OK ou RECUSA). */
+    public record ResultadoAtivacao(UUID organizacao, Classe classe, String motivo, UUID evento, String sqlstate) {
+    }
+
+    /**
+     * Ativacao da organizacao (022, {@code org_activation_activate}): limites EXPLICITOS dos recursos 1-3 (inteiros >= 1) e
+     * limiares de alerta 4-5 ({@code null} = sem limiar), conta responsavel provada pelo operador e motivo. Estado, limites
+     * e auditoria numa transacao do banco.
+     *
+     * <p>Resultado incerto (conexao perdida na chamada ou no commit): DESCONHECIDO, com alerta, sem nova tentativa
+     * automatica. O operador pode repetir o mesmo ato com seguranca: o banco trava a organizacao e recusa com JA_ATIVADA se
+     * a primeira chamada confirmou; nada e aplicado duas vezes.
+     */
+    public ResultadoAtivacao ativarOrganizacao(UUID organizacao, UUID responsavel, String motivo, long workers, long simultaneas,
+                                               long pendentes, Long alertaLogs, Long alertaEventos) {
+        String ato = "ATIVAR_ORGANIZACAO";
+        Connection c;
+        try {
+            c = abrirConexao();
+        } catch (SQLException e) {
+            log.registrar(ato, organizacao, "FALHA_CONFIRMADA", "CONEXAO_NAO_ESTABELECIDA", e.getSQLState(), "CONEXAO");
+            return new ResultadoAtivacao(organizacao, Classe.FALHA_CONFIRMADA, "CONEXAO_NAO_ESTABELECIDA", null, e.getSQLState());
+        }
+        try (c) {
+            String resultado;
+            String recusa;
+            UUID evento;
+            try {
+                c.setAutoCommit(false);
+                try (Statement st = c.createStatement()) {
+                    st.execute("SET LOCAL lock_timeout = '" + LOCK_TIMEOUT + "'");
+                }
+                try (PreparedStatement ps = c.prepareStatement(
+                        "SELECT r_resultado, r_motivo, r_evento FROM public.org_activation_activate(?, ?, ?, ?, ?, ?, ?, ?)")) {
+                    ps.setObject(1, organizacao);
+                    ps.setObject(2, responsavel);
+                    ps.setString(3, motivo);
+                    ps.setLong(4, workers);
+                    ps.setLong(5, simultaneas);
+                    ps.setLong(6, pendentes);
+                    ps.setObject(7, alertaLogs);
+                    ps.setObject(8, alertaEventos);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        rs.next();
+                        resultado = rs.getString(1);
+                        recusa = rs.getString(2);
+                        evento = rs.getObject(3, UUID.class);
+                    }
+                }
+            } catch (SQLException e) {
+                if (conexaoPerdida(e)) {
+                    return desconhecida(ato, organizacao, "CHAMADA");
+                }
+                reverter(c);
+                log.registrar(ato, organizacao, "FALHA_CONFIRMADA", "FALHA_TECNICA", e.getSQLState(), "CHAMADA");
+                return new ResultadoAtivacao(organizacao, Classe.FALHA_CONFIRMADA, "FALHA_TECNICA", null, e.getSQLState());
+            }
+            try {
+                c.commit();
+            } catch (SQLException e) {
+                if (conexaoPerdida(e)) {
+                    return desconhecida(ato, organizacao, "COMMIT");
+                }
+                log.registrar(ato, organizacao, "FALHA_CONFIRMADA", "FALHA_TECNICA", e.getSQLState(), "COMMIT");
+                return new ResultadoAtivacao(organizacao, Classe.FALHA_CONFIRMADA, "FALHA_TECNICA", null, e.getSQLState());
+            }
+            Classe classe = "OK".equals(resultado) ? Classe.OK : Classe.RECUSA;
+            log.registrar(ato, organizacao, classe.name(), recusa, null, null);
+            return new ResultadoAtivacao(organizacao, classe, recusa, evento, null);
+        } catch (SQLException e) {
+            return desconhecida(ato, organizacao, "CHAMADA");
+        }
+    }
+
+    private ResultadoAtivacao desconhecida(String ato, UUID organizacao, String etapa) {
+        log.registrar(ato, organizacao, "DESCONHECIDO", "RESULTADO_DESCONHECIDO", null, etapa);
+        log.alerta(ato, organizacao, "RESULTADO_DESCONHECIDO");
+        return new ResultadoAtivacao(organizacao, Classe.DESCONHECIDO, "RESULTADO_DESCONHECIDO", null, null);
+    }
+
     /** Consulta com a trava da solicitacao (so leitura; tambem usada na reconciliacao). */
     public Resultado consultar(UUID solicitacao) {
         try (Connection c = abrirConexao()) {
