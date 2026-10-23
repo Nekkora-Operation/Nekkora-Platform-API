@@ -61,12 +61,32 @@ cp "$TMP"/*.conf "$TMP/config/"
 export HOMOLOG_PROJETO=nekkora-homologacao-ensaio-validacao HOMOLOG_ID=ensaio-validacao HOMOLOG_SEGREDOS="$S" HOMOLOG_COMMIT=0000000 \
        HOMOLOG_PORTA=55999 HOMOLOG_MIGRACOES="$TMP/mig" HOMOLOG_SQL="$AQUI/sql" HOMOLOG_CONFIG="$TMP/config" \
        HOMOLOG_REDE_INTERNA=10.252.20 HOMOLOG_REDE_BORDA=10.252.21
-B="$AQUI/compose.homolog.yml"; O16="$AQUI/compose.016.yml"; CX="$AQUI/compose.caixa.yml"; O21="$AQUI/compose.021.yml"
+B="$AQUI/compose.homolog.yml"; O16="$AQUI/compose.016.yml"; CX="$AQUI/compose.caixa.yml"; O21="$AQUI/compose.021.yml"; M365="$AQUI/compose.m365.yml"
 render() { docker compose "$@" config 2>"$TMP/compose.err"; }
 if render -f "$B" > "$TMP/base.yml"; then ok "base renderiza"; else nok "base nao renderiza: $(head -3 "$TMP/compose.err")"; fi
 if render -f "$B" -f "$O16" --profile operacao > "$TMP/016.yml"; then ok "base + 016 renderiza"; else nok "016 nao renderiza: $(head -3 "$TMP/compose.err")"; fi
 if render -f "$B" -f "$O16" -f "$CX" --profile operacao --profile caixa > "$TMP/caixa.yml"; then ok "base + 016 + caixa renderiza"; else nok "caixa nao renderiza: $(head -3 "$TMP/compose.err")"; fi
 if render -f "$B" -f "$O16" -f "$CX" -f "$O21" --profile operacao --profile caixa > "$TMP/021.yml"; then ok "base + 016 + caixa + 021 renderiza"; else nok "021 nao renderiza: $(head -3 "$TMP/compose.err")"; fi
+# transporte real PREPARADO (missao 003, item 6): renderiza com valores de exemplo; a Platform continua so na interna e o
+# unico caminho de saida e o proxy-m365 (os dois nomes do Entra/Graph); nunca junto da caixa
+printf 'pkcs12-de-exemplo' > "$TMP/m365.p12"
+if env HOMOLOG_M365_CLIENT=00000000-0000-0000-0000-000000000000 HOMOLOG_M365_CERT="$TMP/m365.p12" docker compose -f "$B" -f "$O16" -f "$O21" -f "$M365" config > "$TMP/m365.yml" 2>"$TMP/compose.err"; then
+    ok "base + 016 + 021 + m365 (preparada) renderiza"
+else nok "m365 nao renderiza: $(head -3 "$TMP/compose.err")"; fi
+env HOMOLOG_M365_CLIENT=00000000-0000-0000-0000-000000000000 HOMOLOG_M365_CERT="$TMP/m365.p12" docker compose -f "$B" -f "$O16" -f "$O21" -f "$M365" config --format json > "$TMP/m365.json" 2>/dev/null
+confere "m365: Platform so na rede interna; proxy na interna e na saida propria; transporte m365 com o proxy e o tenant do Entra" "python - '$TMP/m365.json' <<'PY'
+import json, sys
+c = json.load(open(sys.argv[1], encoding='utf-8'))
+plat, prox = c['services']['platform'], c['services']['proxy-m365']
+env = plat.get('environment', {})
+ok = (set(plat['networks']) == {'interna'} and set(prox['networks']) == {'interna', 'saida_m365'} and prox.get('read_only') is True
+      and env.get('NEKKORA_MAIL_TRANSPORTE') == 'm365' and env.get('NEKKORA_M365_PROXY') == 'proxy-m365:3128'
+      and env.get('NEKKORA_M365_TENANT') == 'ae4ed48d-e7d8-4f24-83f2-443e997c5a65' and env.get('NEKKORA_MAIL_REMETENTE') == 'no-reply@nekkora.com'
+      and c['networks']['interna'].get('internal') is True and not c['networks']['saida_m365'].get('internal'))
+sys.exit(0 if ok else 1)
+PY"
+confere "m365: politica do proxy so CONNECT 443 para login.microsoftonline.com e graph.microsoft.com (tudo o mais negado)"     "grep -qx 'acl m365 dstdomain login.microsoftonline.com graph.microsoft.com' '$AQUI/proxy/squid.conf' && grep -qx 'http_access allow CONNECT m365' '$AQUI/proxy/squid.conf'      && grep -qx 'http_access deny all' '$AQUI/proxy/squid.conf' && grep -qx 'http_access deny CONNECT !porta_tls' '$AQUI/proxy/squid.conf' && [ \"\$(grep -c '^http_access allow' '$AQUI/proxy/squid.conf')\" = 1 ]"
+confere "m365: sobreposicao preparada NAO ligada ao runner (nenhuma referencia em homologacao.sh)" "! grep -q 'compose.m365.yml' '$AQUI/homologacao.sh'"
 confere "sub-redes pelo prefixo" "grep -q 'subnet: 10.252.20.0/24' '$TMP/base.yml' && grep -q 'subnet: 10.252.21.0/24' '$TMP/base.yml' && ! grep -q '10.252.10' '$TMP/base.yml'"
 confere "job operacao em .33, so no perfil" "grep -q 'ipv4_address: 10.252.20.33' '$TMP/016.yml' && ! grep -q 'operacao:' '$TMP/base.yml'"
 confere "chave da CA operacional montada so no job operacao" "[ \"\$(grep -c 'target: /tls/ops-ca.key' '$TMP/caixa.yml')\" = 1 ]"
