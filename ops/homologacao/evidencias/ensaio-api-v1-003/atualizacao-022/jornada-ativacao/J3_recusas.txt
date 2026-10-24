@@ -1,0 +1,4 @@
+fora do grupo: organizacao=d15a7cfc-962c-4a76-898f-b742e2ef25f2 resultado=FALHA_CONFIRMADA evento=- motivo=FALHA_TECNICA
+responsavel nao vinculado: organizacao=d15a7cfc-962c-4a76-898f-b742e2ef25f2 resultado=RECUSA evento=948013f3-d51e-4008-a0d0-e4643e5a15a9 motivo=RESPONSAVEL_NAO_VINCULADO
+parametro invalido: organizacao=d15a7cfc-962c-4a76-898f-b742e2ef25f2 resultado=RECUSA evento=6bae03c6-c741-417b-8d4f-616e3d321d0a motivo=PARAMETRO_INVALIDO
+revisao antes da ativacao: organizacao=d15a7cfc-962c-4a76-898f-b742e2ef25f2 resultado=RECUSA evento=105571b4-f03c-4de7-b79e-e5dedf316f72 motivo=NAO_ATIVADA

@@ -1,0 +1,85 @@
+== estado final do ensaio-api-v1-003 em 2026-10-24T12:53:01Z
+-- ambiente.env (sem segredos)
+HOMOLOG_ID=ensaio-api-v1-003
+HOMOLOG_COMMIT=6280314
+HOMOLOG_ATE=022
+-- historico do Flyway na base (versao|sucesso|checksum)
+001|true|-1946006881
+002|true|756812602
+003|true|1538120233
+004|true|-2141071085
+005|true|1816191529
+006|true|1061749436
+007|true|-1662932506
+008|true|1289425501
+009|true|511081077
+010|true|-1295719833
+011|true|-1218103511
+012|true|-1264253967
+013|true|-690681583
+014|true|1867551547
+015|true|427985808
+016|true|844422232
+017|true|654213273
+018|true|-833051769
+019|true|-1689631307
+020|true|217346886
+021|true|-2015621165
+022|true|-902647500
+-- copia imutavel das migrations do ambiente vs HEAD final das PRs (sha256)
+001_initial.sql ambiente=0d6ed7bdaf993119 #16(aae9348)=igual #17(a3e1469)=igual #19(1a9351e)=igual
+002_identity.sql ambiente=3c00fe2acc44f2b3 #16(aae9348)=igual #17(a3e1469)=igual #19(1a9351e)=igual
+003_access_control.sql ambiente=234fc14b791ef520 #16(aae9348)=igual #17(a3e1469)=igual #19(1a9351e)=igual
+004_workers_agents.sql ambiente=456082e3ea796c7f #16(aae9348)=igual #17(a3e1469)=igual #19(1a9351e)=igual
+005_automations_versions.sql ambiente=1a647b2c60f6ce5e #16(aae9348)=igual #17(a3e1469)=igual #19(1a9351e)=igual
+006_executions.sql ambiente=967082fe408a1d90 #16(aae9348)=igual #17(a3e1469)=igual #19(1a9351e)=igual
+007_events_logs.sql ambiente=432aae420b0d00c4 #16(aae9348)=igual #17(a3e1469)=igual #19(1a9351e)=igual
+008_parametros_secrets.sql ambiente=d01106249bbb93bb #16(aae9348)=igual #17(a3e1469)=igual #19(1a9351e)=igual
+009_agendamentos.sql ambiente=940972b9b40ebef6 #16(aae9348)=igual #17(a3e1469)=igual #19(1a9351e)=igual
+010_recursos_limites_retencao.sql ambiente=9411040c34186a07 #16(aae9348)=igual #17(a3e1469)=igual #19(1a9351e)=igual
+011_fechamento_expurgo.sql ambiente=38a509845cb44593 #16(aae9348)=igual #17(a3e1469)=igual #19(1a9351e)=igual
+012_security_rls.sql ambiente=d3929cc76261debb #16(aae9348)=igual #17(a3e1469)=igual #19(1a9351e)=igual
+013_portal_externo.sql ambiente=c6192bff305f3888 #16(aae9348)=igual #17(a3e1469)=igual #19(1a9351e)=igual
+014_mfa_sessoes.sql ambiente=5e5726b9a8f58d31 #16(aae9348)=igual #17(a3e1469)=igual #19(1a9351e)=igual
+015_restauracao_logica.sql ambiente=b4de5d81bb3cad9b #16(aae9348)=igual #17(a3e1469)=igual #19(1a9351e)=igual
+016_recuperacao_emergencial_mfa.sql ambiente=f37d984128e82414 #16(aae9348)=igual #17(a3e1469)=igual #19(1a9351e)=igual
+017_identidade_cadastro.sql ambiente=90b8ddbcceac1319 #16(aae9348)=igual #17(a3e1469)=igual #19(1a9351e)=igual
+018_instantes_terminais_relogio.sql ambiente=1bcfbacbe63d930e #16(aae9348)=igual #17(a3e1469)=igual #19(1a9351e)=igual
+019_identidade_regeneracao_codigos.sql ambiente=f0154b468931636c #16(aae9348)=igual #17(a3e1469)=igual #19(1a9351e)=igual
+020_identidade_recuperacao_senha.sql ambiente=7266db33ae1bce29 #16(aae9348)=igual #17(a3e1469)=igual #19(1a9351e)=igual
+021_correio_fila.sql ambiente=153c595a7ef9fbff #16(aae9348)=igual #17(a3e1469)=igual #19(1a9351e)=igual
+022_ativacao_organizacoes.sql ambiente=b752c7aa6fcfa4e3 #16(aae9348)=ausente #17(a3e1469)=ausente #19(1a9351e)=igual
+-- migrador: atributos elevados, memberships, sessoes
+0|0|0
+-- ops_activation.open_acts (deve ser 0) e organizacoes por estado
+open_acts=0
+estado 1=3
+estado 2=4
+-- imagens em execucao (id) e servicos
+gateway nginx:1.29-alpine Up 8 hours
+platform nekkora-homologacao-platform:6280314 Up 8 hours
+portal nekkora-homologacao-portal:6280314 Up 8 hours
+postgres postgres:16-alpine Up 9 hours (healthy)
+redis redis:7-alpine Up 9 hours (healthy)
+nekkora-homologacao-platform:6280314 sha256:62abe3899275
+nekkora-homologacao-portal:6280314 sha256:7f14abc3735f
+nginx:1.29-alpine sha256:5616878291a2
+postgres:16-alpine sha256:721873c34ceb
+redis:7-alpine sha256:858f009f9709
+-- fontes das imagens: commit identificador vs HEAD final do #19 (FONTES_IMAGENS)
+HOMOLOG_COMMIT=6280314
+diferencas 6280314..1a9351e nas fontes das imagens:
+   .../test/java/com/nekkora/ops/OrgActivationIT.java | 62 ++++++++++++++++++++++
+   1 file changed, 62 insertions(+)
+-- lista de elevacao: sha256 no HEAD final
+a3e1469 d122d22adba926e3f98c435cfdffd84dac6b956aeba3480ff85980afc9626a25
+1a9351e bf040a4712989bc5b744c00d16c2907c632c5547ae27609bdae9f23ac1df315c
+-- organizacoes ATIVADA sem ato de ativacao OK auditado (deve ser 0) e atos por tipo
+ativadas_sem_ato_ok=0
+act=1 OK - n=4
+act=1 RECUSA JA_ATIVADA n=3
+act=1 RECUSA PARAMETRO_INVALIDO n=2
+act=1 RECUSA RESPONSAVEL_NAO_VINCULADO n=2
+act=2 OK - n=2
+act=2 RECUSA NAO_ATIVADA n=2
+act=2 RECUSA SEM_MUDANCA n=2

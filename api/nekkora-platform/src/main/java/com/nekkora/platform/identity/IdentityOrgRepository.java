@@ -4,7 +4,9 @@ import java.sql.Array;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -22,8 +24,15 @@ public final class IdentityOrgRepository {
     public static final short EV_ORG_SESSION_ISSUED = 7;
     public static final short EV_ORG_SESSION_DENIED = 8;
 
-    public record Organization(UUID organizationId, String name, List<String> roles) {
+    /**
+     * {@code activationState}: ciclo de ativacao da 022 ({@code AGUARDANDO_ATIVACAO} | {@code ATIVADA}), independente da
+     * situacao administrativa. So indicacao para a interface; a capacidade continua decidida no banco pelos limites.
+     */
+    public record Organization(UUID organizationId, String name, List<String> roles, String activationState) {
     }
+
+    public static final String AGUARDANDO_ATIVACAO = "AGUARDANDO_ATIVACAO";
+    public static final String ATIVADA = "ATIVADA";
 
     public record Target(UUID organizationId, UUID userId) {
     }
@@ -32,12 +41,36 @@ public final class IdentityOrgRepository {
     public record SessionClock(OffsetDateTime mfaVerifiedAt, OffsetDateTime expiresAt) {
     }
 
-    /** {@code identity_organizations}: vinculo ACTIVE, conta elegivel, organizacao ativa; zero linhas para sessao restrita. */
+    /**
+     * {@code identity_organizations}: vinculo ACTIVE, conta elegivel, organizacao ativa; zero linhas para sessao restrita. O
+     * estado de ativacao vem de {@code org_activation_states} (022), so para as organizacoes que a funcao da 017 devolveu.
+     */
     public List<Organization> organizations(JdbcClient j, String sessionToken) {
-        return j.sql("SELECT organization_id, name, role_codes FROM public.identity_organizations(?)")
+        record Linha(UUID id, String name, List<String> roles) {
+        }
+        List<Linha> linhas = j.sql("SELECT organization_id, name, role_codes FROM public.identity_organizations(?)")
                 .param(sessionToken)
-                .query((rs, n) -> new Organization(rs.getObject(1, UUID.class), rs.getString(2), roles(rs.getArray(3))))
+                .query((rs, n) -> new Linha(rs.getObject(1, UUID.class), rs.getString(2), roles(rs.getArray(3))))
                 .list();
+        Map<UUID, String> estados = activationStates(j, linhas.stream().map(Linha::id).toList());
+        return linhas.stream().map(l -> new Organization(l.id(), l.name(), l.roles(), estados.getOrDefault(l.id(), AGUARDANDO_ATIVACAO))).toList();
+    }
+
+    /**
+     * {@code org_activation_states} (022): estado de ativacao de cada organizacao pedida. Organizacao sem estado (nao deveria
+     * existir: a 022 classifica as existentes e o gatilho cria o das novas) fica fora do mapa e e mostrada como aguardando,
+     * o lado que nao promete capacidade.
+     */
+    public static Map<UUID, String> activationStates(JdbcClient j, List<UUID> organizations) {
+        if (organizations.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> m = new HashMap<>();
+        j.sql("SELECT organization_id, activation_state FROM public.org_activation_states(?::uuid[])")
+                .param(organizations.stream().map(UUID::toString).toArray(String[]::new))
+                .query((rs, n) -> m.put(rs.getObject(1, UUID.class), rs.getShort(2) == 2 ? ATIVADA : AGUARDANDO_ATIVACAO))
+                .list();
+        return m;
     }
 
     /** {@code identity_org_session_target}: a candidata, ou vazio (sem vinculo, inelegivel, inexistente, sessao restrita). */

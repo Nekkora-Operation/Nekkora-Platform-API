@@ -1,0 +1,2 @@
+022: cannot execute CREATE ROLE in a read-only transaction
+022: (conferencia 7 nao encontrada)

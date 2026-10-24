@@ -1,0 +1,4 @@
+HOMOLOG_COMMIT=8d9af05 (8d9af052de468206d18da348cc2f1adde6e46791)
+HEAD=b10d88f6aac40216b081fb720887b7ccf47aa79a
+arvore_api=97433aa075fda00847f6682e3cb29fbc3809c570
+FONTES_IMAGENS=api/pom.xml api/mvnw api/.mvn api/e2e/Dockerfile api/e2e/Dockerfile.operacao api/nekkora-ops/src/test api/nekkora-core/pom.xml api/nekkora-core/src/main api/nekkora-ops/pom.xml api/nekkora-ops/src/main api/nekkora-platform/pom.xml api/nekkora-platform/src/main api/nekkora-portal/pom.xml api/nekkora-portal/src/main

@@ -31,3 +31,9 @@
 018 1bcfbacbe63d930e75d126c2d92ece5a4c85422ecb68c2e475d0c6e3f67c3418 tipo=superuser ambiente=ensaio-api-v1-003
 019 f0154b468931636cd355ecf5d3eae9871743d8d1b4f6431c224be4bd3b776744 tipo=superuser ambiente=ensaio-api-v1-003
 020 7266db33ae1bce291b0acf47d22b3ef5c6700116d774ce3d40baa2a14bd086b8 tipo=superuser ambiente=ensaio-api-v1-003
+# 022 (missao PLATFORM-API-V1-003, revisao; PROPOSTA para revisao da responsavel): SUPERUSER na janela, SO no
+# ensaio-api-v1-003, com o pre-voo oficial implantacao/preflight/022.sql (vinculo obrigatorio, lib/lista_elevacao.sh).
+# Necessidade (cabecalho da 022; suite db/tests/ativacao-022, B1: sem a janela, recusada por privilegio): CREATE ROLE,
+# ALTER FUNCTION ... OWNER TO nekkora_ops_mfa_owner, GRANT EXECUTE em provision_resource_limit (dono
+# nekkora_provisioning_owner) e SET de nekkora.fn_organization_id na configuracao das funcoes.
+022 b752c7aa6fcfa4e3271e0561851164d43ff4e7b2c9a8d40bf3ecc4f0582bd63d tipo=superuser ambiente=ensaio-api-v1-003

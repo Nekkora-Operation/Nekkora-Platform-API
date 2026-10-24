@@ -128,12 +128,12 @@ echo "== 5. elevacao e migrations"
 #   47bb9596... = proposta de P3 com "016 <sha256> ensaio-016a" (docs/relatorios/2026-09-29-p3it-anexos/elevacao-016-proposta.patch).
 # A proposta so e ACEITA como conteudo aprovado; esta validacao nao a ativa.
 #   d122d22a... = missao PLATFORM-API-V1-003 (PROPOSTA, para revisao): 011-013 legadas + 016-020 tipo=superuser vinculadas
-#   ao ensaio-api-v1-003 (na primeira versao do PR, 374c6620..., ao ensaio-api-v1-002). Enquanto o PR nao for aprovado, este
-#   e o conteudo do PR, nao uma autorizacao vigente.
+#   ao ensaio-api-v1-003 (na primeira versao do PR, 374c6620..., ao ensaio-api-v1-002); com a ativacao (022), bf040a47... acrescenta
+#   a 022 vinculada ao mesmo id. Enquanto o PR nao for aprovado, este e o conteudo do PR, nao uma autorizacao vigente.
 # Base fixada das proposta/adulteracoes abaixo: a lista 011-013 (7fd92fae...) no commit bf977d7 (main antes da missao 003),
 # e nao HEAD - com a lista operacional nova, acrescentar uma 016 a HEAD daria "versao repetida" e mudaria o caso testado.
 LISTA_011_013_SHA=7fd92faed3a8d66eb297d727806518a2983572d90eae0633bf4ddc5a7778370d
-LISTA_OPERACIONAL_SHA=d122d22adba926e3f98c435cfdffd84dac6b956aeba3480ff85980afc9626a25
+LISTA_OPERACIONAL_SHA=bf040a4712989bc5b744c00d16c2907c632c5547ae27609bdae9f23ac1df315c
 LISTA_PROPOSTA_016_SHA=47bb959662063868351a3f15b4248fb876d8f8cb2e14f9404bbb46f606eef1e3
 lista_aprovada() {   # $1 arquivo -> imprime "operacional" | "lista-011-013" | "proposta-016"; codigo 1 se nao aprovado
     local s; s="$(tr -d '\r' < "$1" | sha256sum | cut -c1-64)"
@@ -147,7 +147,7 @@ lista_aprovada() {   # $1 arquivo -> imprime "operacional" | "lista-011-013" | "
 BASE_LISTA="$TMP/l_base_011_013.txt"
 git -C "$REPO" show bf977d7:ops/homologacao/implantacao/elevacao.txt > "$BASE_LISTA"
 confere "base fixada (bf977d7) com o conteudo 011-013 aprovado" "[ \"\$(lista_aprovada '$BASE_LISTA')\" = lista-011-013 ]"
-confere "elevacao.txt operacional com conteudo aprovado (011-013 + 016-020 vinculadas ao ensaio-api-v1-003)" "[ \"\$(lista_aprovada '$AQUI/implantacao/elevacao.txt')\" = operacional ]"
+confere "elevacao.txt operacional com conteudo aprovado (011-013 + 016-020 e 022 vinculadas ao ensaio-api-v1-003)" "[ \"\$(lista_aprovada '$AQUI/implantacao/elevacao.txt')\" = operacional ]"
 PROP="$REPO/docs/relatorios/2026-09-29-p3it-anexos/elevacao-016-proposta.patch"
 mkdir -p "$TMP/lista/ops/homologacao/implantacao"
 cp "$BASE_LISTA" "$TMP/lista/ops/homologacao/implantacao/elevacao.txt"
@@ -273,13 +273,13 @@ recusa "021 com lista alternativa e a 018 SEM vinculo" ensaio-validacao-u HOMOLO
 lista_recusada "018 sem vinculo (versao de vinculo obrigatorio)" "$TMP/l021_018_sem_vinculo.txt" "sem vinculo ao id"
 l021 "$TMP/l021_017_bypass.txt" ensaio-validacao-v 017=bypass
 lista_recusada "017 com tipo=bypassrls (vinculo obrigatorio so superuser)" "$TMP/l021_017_bypass.txt" "so pode ter elevacao do tipo superuser"
-confere "lista operacional normalizada: 011-013 legadas e 016-020 superuser vinculadas SO ao ensaio-api-v1-003" \
-    "[ \"\$(lista_elevacao_normalizada '$AQUI/implantacao/elevacao.txt' \"\$VINCULO_OBRIGATORIO\" | awk '{print \$1, \$3, \$4}' | tr '\n' ' ')\" = '011 superuser - 012 superuser - 013 superuser - 016 superuser ensaio-api-v1-003 017 superuser ensaio-api-v1-003 018 superuser ensaio-api-v1-003 019 superuser ensaio-api-v1-003 020 superuser ensaio-api-v1-003 ' ]"
+confere "lista operacional normalizada: 011-013 legadas e 016-020 e 022 superuser vinculadas SO ao ensaio-api-v1-003" \
+    "[ \"\$(lista_elevacao_normalizada '$AQUI/implantacao/elevacao.txt' \"\$VINCULO_OBRIGATORIO\" | awk '{print \$1, \$3, \$4}' | tr '\n' ' ')\" = '011 superuser - 012 superuser - 013 superuser - 016 superuser ensaio-api-v1-003 017 superuser ensaio-api-v1-003 018 superuser ensaio-api-v1-003 019 superuser ensaio-api-v1-003 020 superuser ensaio-api-v1-003 022 superuser ensaio-api-v1-003 ' ]"
 confere "lista operacional: sha256 de 016-020 = bytes LF de db/migrations; 021 sem linha" \
     "( for v in 016 017 018 019 020; do lista_elevacao_normalizada '$AQUI/implantacao/elevacao.txt' \"\$VINCULO_OBRIGATORIO\" | grep -q \"^\$v \$(sha256sum '$REPO'/db/migrations/\${v}_*.sql | cut -c1-64) \" || exit 1; done ) && ! grep -q '^021 ' '$AQUI/implantacao/elevacao.txt'"
-confere "runner: versao de vinculo obrigatorio SEM linha recusada antes do Flyway; pre-voo oficial existente para 016-020" \
+confere "runner: versao de vinculo obrigatorio SEM linha recusada antes do Flyway; pre-voo oficial existente para 016-020 e 022" \
     "grep -q 'exige elevacao vinculada e nao esta na lista de elevacao; nada aplicado' '$AQUI/implantacao/implantar.sh' \
-     && ( for v in 016 017 018 019 020; do [ -s '$AQUI/implantacao/preflight/'\$v.sql ] && grep -q PREFLIGHT_OK '$AQUI/implantacao/preflight/'\$v.sql || exit 1; done )"
+     && ( for v in 016 017 018 019 020 022; do [ -s '$AQUI/implantacao/preflight/'\$v.sql ] && grep -q PREFLIGHT_OK '$AQUI/implantacao/preflight/'\$v.sql || exit 1; done )"
 
 echo "== 7. classificacao e reconciliacao das fixtures (casos sinteticos, sem banco)"
 F="$AQUI/lib/fixture_conferencia.py"
@@ -393,9 +393,10 @@ confere "T2: semear-pre014 exige a pausa antes-de-elevar@014 do runner, a chegad
      && grep -q 'a pausa ja foi liberada' '$AQUI/homologacao.sh' && grep -q 'sem trava local da implantacao' '$AQUI/homologacao.sh'"
 confere "ganchos de pausa e largada do runner continuam recusados fora de ensaio-*" \
     "grep -q 'ganchos de ensaio so em ambiente descartavel (id ensaio-\\*)' '$AQUI/implantacao/implantar.sh'"
-confere "elevacao.txt operacional sem linha da 014; 016-020 SO vinculadas ao ensaio-api-v1-003 (nenhuma sem vinculo ou de outro id)" \
+confere "elevacao.txt operacional sem linha da 014; 016-020 e 022 SO vinculadas ao ensaio-api-v1-003 (nenhuma sem vinculo ou de outro id)" \
     "lista_elevacao_normalizada '$AQUI/implantacao/elevacao.txt' \"\$VINCULO_OBRIGATORIO\" > '$TMP/lista_op.txt' 2>&1 && ! grep -qE '^014 ' '$TMP/lista_op.txt' \
      && [ \"\$(grep -cE '^(016|017|018|019|020) [0-9a-f]{64} superuser ensaio-api-v1-003\$' '$TMP/lista_op.txt')\" = 5 ] \
+     && [ \"\$(grep -cE '^022 [0-9a-f]{64} superuser ensaio-api-v1-003\$' '$TMP/lista_op.txt')\" = 1 ] \
      && [ \"\$(grep -cE '^(016|017|018|019|020) ' '$TMP/lista_op.txt')\" = 5 ]"
 
 echo "== 13. H02: janela BYPASSRLS da 014 esperada pela lista de elevacao em vigor (R2b-0b; h02_esperadas do executar.sh)"
@@ -590,8 +591,9 @@ recusa_fe "lib ligada: copia de trabalho com alteracoes" "lib com alteracao" ens
 # par correto: o frontend e aceito e a criacao segue ate a recusa SEGUINTE (lista da 016 sem a linha), sem criar nada
 recusa "par web/lib conferido passa e a criacao para na lista da 016" ensaio-validacao-fj HOMOLOG_ATE=016 HOMOLOG_FRONTEND_WEB="$W" HOMOLOG_FRONTEND_COMMIT="$CW" HOMOLOG_FRONTEND_LIB_COMMIT="$CL"
 confere "  (a recusa acima foi a da lista da 016, nao a do par)" "grep -q 'a 016 exige a linha de elevacao' '$TMP/recusa.txt'"
+# primeira ocorrencia de registro_fontes_imagens = a do criar (o atualizar, mais abaixo, tambem registra as fontes)
 confere "criar compila e copia o build DEPOIS da fotografia da lista e ANTES dos segredos" \
-    "awk '/registro_fontes_imagens \"\\\$REPO\"/ {a=NR} /frontend_preparar \"\\\$FRONTEND_WEB\"/ {b=NR} /segredos.py\" gerar/ && !c {c=NR} END {exit !(a && b && c && a < b && b < c)}' '$AQUI/homologacao.sh'"
+    "awk '/registro_fontes_imagens \"\\\$REPO\"/ && !a {a=NR} /frontend_preparar \"\\\$FRONTEND_WEB\"/ {b=NR} /segredos.py\" gerar/ && !c {c=NR} END {exit !(a && b && c && a < b && b < c)}' '$AQUI/homologacao.sh'"
 
 echo "== 20. semeadura, jornadas e sessao do ensaio-frontend (F1.5 P-A; banco real: testes/test_semear_frontend_banco.sh)"
 H="$AQUI/homologacao.sh"; SQLS="$AQUI/sql/semear_frontend.sql"; SQLX="$AQUI/sql/sessao_frontend.sql"; ORQ="$AQUI/lib/semear_frontend.py"
@@ -676,6 +678,11 @@ confere "verificador: so SELECT no banco (nenhum INSERT/UPDATE/DELETE nas consul
 confere "atualizacao do frontend: coleta do gateway pelo selecao_gateway.sh; referencia ANTES da coleta; copia de seguranca ANTES de escrever; recria SO o gateway; falha depois da escrita pede reverter (sem nova tentativa)" \
     "grep -qF '. \"\$FA_OPS/lib/selecao_gateway.sh\"' '$FA' && awk '/^fa_aplicar\(\) \{/ {d=1} d && /^    fa_confere_referencia$/ && !r {r=NR} d && /^    fa_sem_trafego$/ && !t {t=NR} d && /cp -p \"\\\$FA_ENV\" \"\\\$FA_BKP\"/ && !c {c=NR} d && /cat \"\\\$FA_D\/ambiente.env.novo\" > \"\\\$FA_ENV\"/ && !w {w=NR} d && /^\}/ {exit !(r && t && c && w && r < t && t < c && c < w)}' '$FA' \
      && [ \"\$(grep -v '^ *#' '$FA' | grep -c 'compose up -d --no-deps --force-recreate gateway')\" = 1 ] && ! grep -E 'logs .*\| *grep -c' '$FA' | grep -q ."
+confere "runner: pre-voo da pasta da lista alternativa SO para versao sintetica 9xx sem pre-voo oficial (022 e 016-020 sempre pelo oficial)" \
+    "[ \"\$(grep -c 'pf=\"\$(dirname \"\$LISTA\")/preflight/\$v.sql\"' '$AQUI/implantacao/implantar.sh')\" = 1 ] \
+     && grep -qF '[ ! -f \"\$pf\" ] && [ -n \"\${HOMOLOG_ELEVACAO_ARQ:-}\" ] && [[ \"\$v\" =~ ^9[0-9]{2}\$ ]]; then pf=' '$AQUI/implantacao/implantar.sh'"
+confere "atualizar 021 -> 022 com lista alternativa: recusa fora de ensaio-* e nas conferencias de existencia, gramatica, versao, sha256 e vinculo, sem alterar o ambiente; lista correta so para na liberacao: testes/test_atualizar_lista.sh" \
+    "bash '$AQUI/testes/test_atualizar_lista.sh' > '$TMP/atz.txt' 2>&1 && grep -q '^RESULTADO: atualizar com lista alternativa OK' '$TMP/atz.txt'"
 confere "procedimento da atualizacao do frontend com compose controlado (preparo, recusas sem escrita nem up, falhas pedindo reverter, caminho valido e reversao): testes/test_frontend_atualizar.sh" \
     "bash '$AQUI/testes/test_frontend_atualizar.sh' > '$TMP/fa.txt' 2>&1 && grep -q '^RESULTADO: atualizacao do frontend OK' '$TMP/fa.txt'"
 confere "verificador e reuso de TOTP (docker, regras da atora, anti-replay, totp-reuso, intencoes, ritmo, fases): testes/test_validar_f6a.py" \

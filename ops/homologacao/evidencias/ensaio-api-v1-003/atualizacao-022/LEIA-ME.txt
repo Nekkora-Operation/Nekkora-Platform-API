@@ -1,0 +1,14 @@
+Atualizacao 021 -> 022 do ensaio-api-v1-003 (base populada) e jornada da ativacao (missao PLATFORM-API-V1-003, revisao).
+Ordem: homologacao.sh atualizar (registro.txt) -> implantar (implantacao/: pre-voo 022 PREFLIGHT_OK, janela SUPERUSER da
+022 retirada e conferida 0|0|0, LIBERADO) -> subir -> jornadas-api -> jornada-ativacao.
+dados_antes_e_depois.txt: contagens e md5 do conteudo das tabelas de dados antes, depois do atualizar e depois da 022
+(identicos); classificacao das organizacoes (estado|origem|n) depois.
+recusa_atualizar_ensaio-api-v1-002.txt: o mesmo atualizar recusado, sem alterar nada, no ambiente com a 021 revisao 2.
+Tentativas da jornada (preservadas em saidas/, resumo aqui em tentativas/):
+- tentativa 1: o roteiro concedia nekkora_org_activation ANTES do cadastro, e a 016 so cadastra papel com participacao
+  exata em nekkora_ops_mfa (PAPEL_MEMBERSHIP_INVALIDA); erro do roteiro, corrigido (o operador op_hml_atv ficou como papel
+  sem cadastro). A ordem certa (DBA -> CADASTRAR -> grupo) e a do OrgActivationIT e das instrucoes do relatorio.
+- tentativa 2 (op_hml_atb): J1-J5 e J7-J9 OK; J6 falhou porque dois jobs "operacao" nao sobem juntos (IP fixo do job na
+  regra do pg_hba: "Address already in use"); J10 contou 8 eventos em vez de 9 por isso. Corrigido: os dois processos da CLI
+  em paralelo dentro de um job.
+- final (op_hml_atc, jornada-ativacao/): 11 OK, 0 FALHA, depois de uma nova rodada de jornadas-api (organizacoes novas).

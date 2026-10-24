@@ -470,7 +470,8 @@ class SeletorJornadas(unittest.TestCase):
                     if not info or info['revogada'] or (info['conta'] == 'expira' and expirado):
                         return self.responde(401, {'error': 'unauthenticated'})
                     c = next(x for x in teste.plano['contas'] if x['chave'] == info['conta'])
-                    return self.responde(200, {'accountType': 'internal', 'displayName': c['nome'], 'email': c['email'], 'organizationId': org})
+                    return self.responde(200, {'accountType': 'internal', 'displayName': c['nome'], 'email': c['email'], 'organizationId': org,
+                                                'organizationActivationState': 'ATIVADA'})   # campo obrigatorio desde a 022
                 return self.responde(404, {'error': 'not_found'})
 
             def do_POST(self):

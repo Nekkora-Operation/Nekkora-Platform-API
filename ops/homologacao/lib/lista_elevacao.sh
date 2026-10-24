@@ -17,8 +17,9 @@
 #     codigo 0: uma linha por versao em stdout, "VVV SHA256 TIPO ALVO" (ALVO "-" sem vinculo)
 #     codigo 1: mensagem "FALHA: ..." em stderr, nada em stdout
 # Lista UNICA das versoes de vinculo obrigatorio, usada pelo runner, pelo criar e pelas validacoes (antes cada um repetia
-# " 016 "). 017-020: elevacao medida (mapa_privilegios.sh) e pre-voo oficial proprio; 021 nao tem elevacao.
-VINCULO_OBRIGATORIO=" 016 017 018 019 020 "
+# " 016 "). 017-020: elevacao medida (mapa_privilegios.sh) e pre-voo oficial proprio; 021 nao tem elevacao;
+# 022 (ativacao): elevacao exigida (cabecalho da migration; suite db/tests/ativacao-022, B1) e pre-voo oficial proprio.
+VINCULO_OBRIGATORIO=" 016 017 018 019 020 022 "
 
 lista_elevacao_normalizada() {
     local arq="$1" vinculo="${2:-}" conteudo

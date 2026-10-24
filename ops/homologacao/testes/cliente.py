@@ -352,9 +352,27 @@ def h016_novo_mfa(f):
     salva(e)
 
 
+# ---------------------------------------------------------------- 022 (testes/jornada_ativacao.sh)
+
+def h_codigo_vinculo(f, chave, arquivo):
+    """Codigo de vinculo operacional emitido pelo PROPRIO titular, na sessao dele pelo gateway (conta responsavel da 022).
+    O codigo vai SO para o arquivo indicado (diretorio de segredos, fora do Git) e para SEGREDOS_VISTOS."""
+    e = estado()
+    n, st, _, _ = login(e, f['org'], f[chave])
+    confere(f'ATV.login {chave}', 200, st)
+    st, js, _, _ = n.req('POST', base(f['org']) + '/me/operational-link-code')
+    confere('ATV.codigo de vinculo emitido', 200, st)
+    codigo = (js or {}).get('code', '')
+    visto(codigo)
+    with open(arquivo, 'w', encoding='utf-8') as a:
+        a.write(codigo)
+    salva(e)
+
+
 if __name__ == '__main__':
     fixture = json.load(open(sys.argv[2], encoding='utf-8'))
     cenarios = {'h05': h05, 'h06': h06, 'h07_prep': h07_prep, 'h07_redis_fora': h07_redis_fora, 'h07_r7': h07_r7,
-                'h016_mfa': h016_mfa, 'h016_confirmar': h016_confirmar, 'h016_novo_mfa': h016_novo_mfa}
+                'h016_mfa': h016_mfa, 'h016_confirmar': h016_confirmar, 'h016_novo_mfa': h016_novo_mfa,
+                'h_codigo_vinculo': h_codigo_vinculo}
     cenarios[sys.argv[1]](fixture, *sys.argv[3:])
     sys.exit(1 if falhas else 0)

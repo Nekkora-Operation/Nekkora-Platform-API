@@ -1,0 +1,4 @@
+Error response from daemon: failed to set up container networking: Address already in use
+organizacao=7110f35f-ddd0-47ce-99c8-4c1e3c6fc76a resultado=OK evento=83be9879-bb2d-4b04-a4b0-92e57ffd3463 motivo=-
+limites=1:1/4 2:1/3 3:1/40 4:2/- 5:2/-
+04:39:34.233 OK - concorrente Y

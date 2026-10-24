@@ -1,0 +1,24 @@
+== implantacao 2026-10-24T04:32:50.414Z (lista de elevacao: elevacao.txt sha256 bf040a4712989bc5b744c00d16c2907c632c5547ae27609bdae9f23ac1df315c)
+historico antes: 001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true 016:true 017:true 018:true 019:true 020:true 021:true
+pre-voo da 022: codigo 0 e PREFLIGHT_OK (preflight_022.txt)
+-- 022_ativacao_organizacoes.sql (executeInTransaction=false, ELEVADA)
+ Container nekkora-homologacao-ensaio-api-v1-003-flyway-run-c5572523735b Creating 
+ Container nekkora-homologacao-ensaio-api-v1-003-flyway-run-c5572523735b Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 22 migrations (execution time 00:00.126s)
+Current version of schema "public": 021
+Migrating schema "public" to version "022 - ativacao organizacoes" [non-transactional]
+Successfully applied 1 migration to schema "public", now at version v022 (execution time 00:00.090s)
+ Container nekkora-homologacao-ensaio-api-v1-003-flyway-run-2d14a5385f69 Creating 
+ Container nekkora-homologacao-ensaio-api-v1-003-flyway-run-2d14a5385f69 Created 
+Flyway OSS Edition 11.20.3 by Redgate
+
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 22 migrations (execution time 00:00.130s)
+estado final do migrador: 0 atributos elevados, 0 memberships, 0 sessoes
+historico depois: 001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true 016:true 017:true 018:true 019:true 020:true 021:true 022:true
+== implantacao OK

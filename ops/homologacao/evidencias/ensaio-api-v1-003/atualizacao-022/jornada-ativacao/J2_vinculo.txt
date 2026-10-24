@@ -1,0 +1,2 @@
+vinculo=conta resultado=OK motivo=-
+vinculo=conta resultado=RECUSA motivo=PROVA_INVALIDA

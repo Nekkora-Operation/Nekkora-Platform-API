@@ -1,0 +1,1 @@
+organizacao=d15a7cfc-962c-4a76-898f-b742e2ef25f2 resultado=OK evento=49011d00-504c-49c3-bc6f-144b886e5cd9 motivo=-

@@ -1,0 +1,5 @@
+versao_022: 1
+estado|origem|organizacoes
+1|1|4
+1|2|1
+2|2|2

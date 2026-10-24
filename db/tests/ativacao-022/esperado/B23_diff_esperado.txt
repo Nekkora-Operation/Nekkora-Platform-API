@@ -1,0 +1,21 @@
+> fnacl|org_activation_act_open(uuid)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|org_activation_act_open(uuid)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|org_activation_act_open(uuid)|nekkora_provisioning_owner|EXECUTE|grant=f
+> fnacl|org_activation_activate(uuid,uuid,text,bigint,bigint,bigint,bigint,bigint)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|org_activation_activate(uuid,uuid,text,bigint,bigint,bigint,bigint,bigint)|nekkora_org_activation|EXECUTE|grant=f
+> fnacl|org_activation_revise(uuid,uuid,text,bigint,bigint,bigint,bigint,bigint)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|org_activation_revise(uuid,uuid,text,bigint,bigint,bigint,bigint,bigint)|nekkora_org_activation|EXECUTE|grant=f
+> fnacl|org_activation_state_of(uuid)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|org_activation_state_of(uuid)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|org_activation_state_of(uuid)|nekkora_provisioning_owner|EXECUTE|grant=f
+> fnacl|org_activation_states(uuid[])|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fnacl|org_activation_states(uuid[])|nekkora_platform|EXECUTE|grant=f
+> fnacl|provision_resource_limit(uuid,integer,smallint,bigint,uuid)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fn|org_activation_act_open(uuid)|owner=nekkora_ops_mfa_owner|secdef=t|vol=s|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=boolean|md5=...
+> fn|org_activation_activate(uuid,uuid,text,bigint,bigint,bigint,bigint,bigint)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_resultado text, r_motivo text, r_evento uuid)|md5=...
+> fn|org_activation_revise(uuid,uuid,text,bigint,bigint,bigint,bigint,bigint)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_resultado text, r_motivo text, r_evento uuid)|md5=...
+> fn|org_activation_state_of(uuid)|owner=nekkora_ops_mfa_owner|secdef=t|vol=s|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=smallint|md5=...
+> fn|org_activation_states(uuid[])|owner=nekkora_ops_mfa_owner|secdef=t|vol=s|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(organization_id uuid, activation_state smallint)|md5=...
+> nsp|ops_activation|owner=migrador_nekkora
+> trg|organization_resource_limit_revisions|trg_org_resource_limit_revisions_activation_guard|enabled=O|CREATE TRIGGER trg_org_resource_limit_revisions_activation_guard BEFORE INSERT ON public.organization_resource_limit_revisions FOR EACH ROW EXECUTE FUNCTION ops_activation.guard_execution_capacity()
+> trg|organizations|trg_organizations_activation_state|enabled=O|CREATE TRIGGER trg_organizations_activation_state AFTER INSERT ON public.organizations FOR EACH ROW EXECUTE FUNCTION ops_activation.on_organization_insert()
