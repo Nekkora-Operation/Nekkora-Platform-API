@@ -125,7 +125,7 @@ Decisão da revisão: alterações posteriores também exigem autorização e au
 - **Recusas:** `NAO_ATIVADA` (a revisão não substitui a ativação); `SEM_MUDANCA` quando os limites pedidos são os do último ato OK auditado. Isso torna seguras a repetição de um resultado incerto e a concorrência: a segunda revisão igual espera a primeira e recebe `SEM_MUDANCA`. Com valores diferentes, ver §7.5.
 - **Gatilho dos limites:** com a organização ATIVADA, nenhuma revisão dos recursos 1 a 5 é aceita fora de um ato em curso. O ato grava em `ops_activation.open_acts` a organização e a transação corrente (`pg_current_xact_id`) e apaga a linha antes de terminar; nada fica confirmado, e a invariante confere a tabela vazia. Um GUC de sessão não serviria, porque qualquer papel pode defini-lo. Só o INSERT direto de superusuário continua isento.
 - **Sem ampliar privilégio:** a comparação do `SEM_MUDANCA` usa a auditoria, não `organization_resource_limit_revisions` (o dono das funções não tem acesso a ela; a primeira versão da revisão tentou ler e o teste a pegou).
-- **CLI:** `revisar-capacidade` (mesmos argumentos de `ativar-organizacao`) e `vincular-conta <código>`. A CLI não tinha como registrar o vínculo da conta, que a ativação exige; agora o operador vincula com o código que o titular emite na própria sessão (`POST /api/v1/o/{org}/me/operational-link-code`, da 016). Só o sha256 vai ao banco.
+- **CLI:** `revisar-capacidade` (mesmos argumentos de `ativar-organizacao`) e `vincular-conta <código>`. Nos dois atos de capacidade, a saída mostra o identificador do ato (`evento=`, o evento de auditoria gravado pelo banco) e os limites efetivamente aplicados (`limites_aplicados=trabalhadores=…,simultaneas=…,pendentes=…,alerta_logs=…|-,alerta_eventos=…|-`; `-` quando o ato não aplicou nada: recusa, falha ou resultado desconhecido) (§7.8). A CLI não tinha como registrar o vínculo da conta, que a ativação exige; agora o operador vincula com o código que o titular emite na própria sessão (`POST /api/v1/o/{org}/me/operational-link-code`, da 016). Só o sha256 vai ao banco.
 
 ### 7.2 Acesso efetivo também na 022
 
@@ -135,9 +135,9 @@ A invariante da 022 conferia só a ACL de `ops_activation`, a mesma escolha da 0
 
 | Prova | Resultado |
 |---|---|
-| `OrgActivationIT` | **10/10** no HEAD final (§7.6): os 6 anteriores (o da ativação agora confere que o provisionamento direto é recusado depois de ATIVADA) + revisão auditada, recusas da revisão sem efeito, revisão concorrente **igual** com espera observada e revisão concorrente com **valores diferentes** (§7.5). O vínculo da conta passa pela CLI, e o reuso do código é recusado |
+| `OrgActivationIT` | **10/10**, teste dirigido no candidato (§7.6): os 6 anteriores (o da ativação agora confere que o provisionamento direto é recusado depois de ATIVADA) + revisão auditada, recusas da revisão sem efeito, revisão concorrente **igual** com espera observada e revisão concorrente com **valores diferentes** (§7.5). O vínculo da conta passa pela CLI, e o reuso do código é recusado |
 | `db/tests/ativacao-022` | **OK** (execução `2026-10-24T040432Z`): C2 com os cinco recursos recusados pelo provisionamento direto numa organização ATIVADA; C4 e C5 nos dois atos; **C7**, 7 contraprovas de acesso efetivo; diff de catálogo 021 → 022 com exatamente 21 linhas previstas |
-| Regressão Maven completa | **580 testes, 0 falhas, 0 erros, 0 ignorados** no `a24e181` (`regressao_maven.sh`, fontes estáveis): 570 da base, 9 do `OrgActivationIT` e 1 da API. Depois dele, até o HEAD final, o Java só ganha o 10º caso do `OrgActivationIT` (§7.6) |
+| Regressão Maven completa | **Local:** 580 testes, 0 falhas, 0 erros, 0 ignorados no commit anterior `a24e181` (`regressao_maven.sh`, fontes estáveis): 570 da base, 9 do `OrgActivationIT` e 1 da API. Não é uma execução local do HEAD final. **CI:** regressão inteira (`./mvnw -B -ntp test`) no HEAD `f52b9a7`, **581 testes, 0 falhas** (21 + 174 + 374 + 12 por módulo): os 580 mais o 10º caso do `OrgActivationIT` (§7.6) |
 | Recusa da atualização numa base com a 021 anterior | `homologacao.sh atualizar ensaio-api-v1-002` recusou antes de qualquer mudança: `copia de migrations do ambiente diferente do repositorio: 021(ambiente bf85b95bdc83... repositorio 153c595a7ef9...)`. O ambiente continuou LIBERADO, com a cópia e o `ambiente.env` byte a byte iguais |
 | **Atualização 021 → 022 de base populada, pelo runner** | `ensaio-api-v1-003`, populado com as jornadas e a 016. O `atualizar` preservou a cópia 001–021, gravou a nova com a 022 e reconstruiu as imagens do commit `6280314`. O `implantar` passou no pré-voo da 022 (`PREFLIGHT_OK`, 10 conferências); a janela SUPERUSER durou de 04:32:53 a 04:32:57 e foi retirada e conferida em 0\|0\|0; resultado **LIBERADO** (001–022, `flyway validate` OK). **Dados idênticos:** contagens e md5 do conteúdo de 8 tabelas iguais antes, depois do `atualizar` e depois da 022. Classificação: as 3 organizações anteriores ficaram AGUARDANDO_ATIVACAO, origem 2, todas com capacidade zero; nenhuma organização sem estado. O ramo de existentes com capacidade (ATIVADA, origem 2) é provado na suíte (B2) |
 | Jornadas pela API depois da 022 | **96 casos, 0 falhas**, em duas rodadas, com varredura sem achados. As organizações criadas depois nascem AGUARDANDO_ATIVACAO, origem 1 |
@@ -164,17 +164,18 @@ O `criar` com `HOMOLOG_ATE=021` exige só as linhas até a 021. A 022 entra pelo
 
 Comportamento definido:
 - **Serialização:** as duas revisões travam a organização (`FOR UPDATE`, na ordem organização → estado → operador) antes de qualquer decisão. A segunda espera o commit ou o rollback da primeira; nenhuma decide sobre um estado que a outra ainda pode mudar.
-- **Valores absolutos:** cada revisão define os cinco limites que pediu; não soma nem mescla com a outra. A que obtém o lock por último prevalece.
+- **Valores absolutos:** cada ato substitui os cinco limites pelos que pediu; não soma nem mescla com o outro, e cada um deixa a própria auditoria. Vale a última revisão **aplicada com sucesso na ordem de serialização**, não necessariamente a última requisição recebida.
 - **Decisão depois do lock:** autorização, conta responsável e `SEM_MUDANCA` são avaliados depois dos locks, com o último ato OK já confirmado. Se a segunda pede os mesmos valores da primeira, recebe `SEM_MUDANCA`, auditada e sem efeito. Se pede valores diferentes, aplica.
 - **Auditoria consistente:** cada ato OK grava o próprio evento (`act = 2`, operador, sessão, certificado, responsável, motivo, os cinco valores) e as próprias 5 revisões de limite. A ordem dos eventos (`created_at`, gravado depois do lock) é a ordem do lock. Os limites vigentes são sempre os do último ato OK auditado.
-- **Atualização perdida:** a segunda revisão não sabe que a primeira mudou os valores no intervalo. Fica registrada na auditoria, com os dois atos, mas não é recusada. Se a responsável quiser recusar esse caso, o ato pode receber o evento esperado como base (`LIMITES_ALTERADOS`). Não implementei: muda a CLI e não foi pedido.
+- **Atualização perdida:** a segunda revisão não sabe que a primeira mudou os valores no intervalo. Fica registrada na auditoria, com os dois atos, mas não é recusada. Exigir a versão esperada (`LIMITES_ALTERADOS`) ficou **fora**, por decisão da revisão final: a concorrência permanece como implementada.
+- **O que o operador vê:** a CLI mostra o identificador do ato e os limites que aquele ato aplicou (§7.8). Numa corrida, cada operador vê os próprios valores; os vigentes são os do último ato OK na ordem de serialização.
 
 Prova com intercalamento controlado no `OrgActivationIT` (`revisaoConcorrenteDiferenteSerializaNaOrdemDoLockEAuditaAsDuas`):
 - dois operadores do grupo, cada um com a própria conta responsável;
 - A revisa para 3/2/20 e segura a transação;
 - B pede 5/4/50 com alerta de logs de 1 GiB pela CLI e fica esperando o lock, observado em `pg_stat_activity`;
 - antes do commit de A, os limites continuam os da ativação;
-- depois do commit, B termina OK e os limites ficam os de B;
+- depois do commit, B termina OK e os limites ficam os de B; o resultado devolvido a B traz o próprio evento e os limites aplicados 5/4/50, alerta de logs 1 GiB;
 - dois eventos OK, cada um com o próprio operador, responsável, motivo, valores e 5 revisões, na ordem A → B, e nenhuma recusa;
 - as revisões de limite vigentes são exatamente as do evento de B, e há 10 revisões novas;
 - repetir os valores de A em seguida não é `SEM_MUDANCA` (a referência é o último ato, de B): aplica e volta a A;
@@ -214,13 +215,18 @@ A homologação (J6) prova a concorrência da ativação entre dois processos re
 - no runner, só o `atualizar` passa a aceitar a lista alternativa de laboratório (§7.7). O ambiente usou a lista revisada, e o caminho dela não mudou;
 - nas fontes das imagens, de `6280314` ao candidato, só muda o `OrgActivationIT.java`. Esse teste não entra nas imagens da Platform e do Portal, e o job de operação copia só `FerramentaHomologacao`, `IdpSimulado` e `Pki`.
 
-**Candidato deste PR: `1a9351e`.** Os commits posteriores só acrescentam este relatório e evidências.
+**Candidato anterior: `1a9351e`. Candidato atual: `91ea1d1`** (revisão final, §7.8). Os commits entre os dois só acrescentam este relatório e evidências.
+
+**O que a revisão final muda em relação ao que rodou nos ambientes** (§7.8):
+- `db/migrations`, `implantacao/` e as linhas de elevação: **nada** (sha256 da 022 `b752c7aa…` e lista revisada iguais);
+- runner: o `atualizar` só reordena conferências somente leitura, todas antes de qualquer mudança;
+- CLI (`nekkora-ops/src/main`, que entra na imagem do job de operação): a linha de saída dos atos de capacidade ganha `limites_aplicados=`, depois dos campos de antes. A jornada da ativação (11/11) e o laboratório j022 rodaram com a CLI anterior; os roteiros só leem `resultado=` e `motivo=`, que não mudam. Não repeti a jornada no ambiente: a linha nova está provada no `OrgActivationIT` e no `OpsCliSaidaCapacidadeTest`.
 
 | Prova | Commit | Resultado |
 |---|---|---|
-| `OrgActivationIT` | `8d9af05`; o Java é idêntico em `1a9351e` | **10 testes, 0 falhas, 0 erros, 0 ignorados** |
-| Regressão Maven completa | `a24e181` | **580 testes, 0 falhas, 0 erros, 0 ignorados**. Até o candidato, o Java só ganha o 10º caso do `OrgActivationIT`; não reexecutei a regressão completa |
-| CI (`./mvnw -B -ntp test`) | HEAD do PR | ver os checks do PR |
+| `OrgActivationIT` (teste dirigido de concorrência) | `8d9af05`; o Java é idêntico em `1a9351e` | **10 testes, 0 falhas, 0 erros, 0 ignorados** |
+| Regressão Maven completa, local | `a24e181` (commit anterior ao candidato) | **580 testes, 0 falhas, 0 erros, 0 ignorados**. Não reexecutei localmente no candidato: até ele, o Java só ganha o 10º caso do `OrgActivationIT` |
+| CI (`./mvnw -B -ntp test`, regressão inteira) | HEAD `f52b9a7` (o Java é o do candidato `1a9351e`) | **verde, 581 testes, 0 falhas, 0 erros** (21 + 174 + 374 + 12) |
 | `validar-config` | `1a9351e`, worktree limpa | ver a tabela da descrição do PR |
 | `db/tests/ativacao-022` | execução `2026-10-24T040432Z`; a 022 é a mesma desde então (sha `b752c7aa…`) | OK |
 | Janela da 022 em recusa, falha e sucesso | HEAD `b10d88f`, imagens `8d9af05` (§7.7) | 3 de 3 como esperado |
@@ -247,3 +253,32 @@ Evidências: `ops/homologacao/evidencias/ensaio-api-v1-003-j022/` (LEIA-ME, varr
 - retirada provada em sucesso (`ensaio-api-v1-003`) e em falha e recusa do pré-voo (016–020 no `ensaio-api-v1-002-janelas`, 022 no `ensaio-api-v1-003-j022`);
 - os arquivos 016–020 são os mesmos desde aquele laboratório;
 - as linhas continuam propostas, para a sua aprovação.
+
+### 7.8 Revisão final (2026-10-24): lista alternativa no `atualizar` e saída da CLI
+
+**Lista alternativa de elevação no `atualizar`.** É mudança funcional nova do runner (§7.7). Cada controle pedido, com a prova:
+
+| Controle | Prova | Resultado |
+|---|---|---|
+| Fora de `ensaio-*`, a opção é recusada antes de qualquer alteração | `testes/test_atualizar_lista.sh` (novo, estático, roda o `homologacao.sh` real contra ambientes fictícios e compara arquivos e bytes antes e depois); no `criar` e no `implantar`, `validar-config` (casos `lista alternativa fora de ensaio-*` e `lista_recusada`) | **2 de 2** no `atualizar` (com e sem a lista): `atualizar so em ambiente descartavel`, nada alterado |
+| A lista alternativa passa pelas verificações de hash, versão e vínculo ao ambiente | `test_atualizar_lista.sh` | **10 de 10** recusas, nenhuma com alteração: lista inexistente; linha fora do formato; 022 sem vínculo; 022 `tipo=bypassrls`; sha256 diferente do arquivo; vinculada a outro id; sem linha da 022; sha da 022 sob a versão 021; alvo 023; lista revisada (vinculada ao `ensaio-api-v1-003`). Controle positivo: a lista correta passa as conferências de arquivo e só para na liberação, que lê o banco |
+| … e ao pré-voo | `janela_022.sh` no `ensaio-api-v1-003-j022`, com a lista alternativa (§7.7, caso P); `validar-config` (conferências estáticas do código): pré-voo oficial da 022 existente, e o runner só aceita pré-voo da pasta da lista alternativa para versões sintéticas 9xx sem pré-voo oficial | pré-voo recusou, **nenhuma concessão** |
+| O registro identifica a lista usada | `atualizacao/registro.txt` do j022: `lista_de_elevacao=elevacao_lab.txt (ALTERNATIVA DE ENSAIO) sha256 381282c3…`; os três registros do runner na janela da 022: `lista de elevacao: elevacao_lab.txt ALTERNATIVA DE ENSAIO sha256 381282c3…` | presente nos 4 registros |
+| Uma falha continua retirando a elevação | `janela_022.sh`, caso F, com a lista alternativa (§7.7) | **revogado e conferido em 0\|0\|0 \[falha\]**, 022 fora do histórico |
+
+Para o teste estático alcançar as conferências da lista, o `atualizar` passou a fazê-las **antes** da conferência de liberação e da cópia do ambiente, que leem o banco e a cópia. As duas ordens são somente leitura e anteriores a qualquer mudança; as mensagens e as recusas são as mesmas.
+
+**Saída da CLI.** `ativar-organizacao` e `revisar-capacidade` passam a imprimir, depois dos campos de antes (os roteiros que leem `resultado=` e `motivo=` não mudam), os limites efetivamente aplicados. Exemplo de revisão OK: `organizacao=<uuid> resultado=OK evento=<uuid> motivo=- limites_aplicados=trabalhadores=5,simultaneas=4,pendentes=50,alerta_logs=1073741824,alerta_eventos=-`. O `evento` é o identificador do ato. Os limites saem do ato confirmado: as funções da 022 gravam exatamente esses cinco valores, com as cinco revisões e o evento na mesma transação, e o `OrgActivationIT` confere que eles são os vigentes no banco e os do evento. A 022 não muda.
+
+**Provas desta rodada** (dirigidas; sem nova rodada ampla):
+
+| Prova | Resultado |
+|---|---|
+| `OrgActivationIT` (com as asserções dos limites aplicados na ativação, na revisão, na recusa `SEM_MUDANCA` e na revisão concorrente com valores diferentes) | **10/10** |
+| `OpsCliSaidaCapacidadeTest` (novo, linha da CLI em OK, recusa e desconhecido) | **3/3** |
+| `OpsCliContinuidadeIT` | **4/4** |
+| `testes/test_atualizar_lista.sh` | **14 de 14** (13 recusas sem alteração e o controle positivo) |
+| `validar-config` completo, já com o teste novo e a conferência estática do pré-voo 9xx | **274 OK, 0 falhas** |
+| CI (regressão inteira) | no HEAD do PR, ver os checks |
+
+Numa primeira execução, o `validar-config` falhou em casos de Docker e de caminhos: o Docker Desktop estava parado e eu tinha exportado `MSYS2_ARG_CONV_EXCL` com `/tmp/`, o que só serve para as suítes de `db/tests`. Depois, um caso isolado do `guarda_fontes_imagens` (repositório sintético) falhou uma vez e passou 3 de 3 sozinho e na execução completa seguinte. O resultado registrado acima é o da execução completa limpa.
