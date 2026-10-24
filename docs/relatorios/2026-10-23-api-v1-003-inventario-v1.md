@@ -4,6 +4,8 @@
 
 **Decisão vigente: D-V1-0 = opção B.** A V1 é a V1 completa. GAP-07, GAP-08 e GAP-09 (execução, agendamento e Workers, e o canal do Agent) continuam necessários. **A V1 não está completa** e não pode ser declarada completa sem a integração com o Agent.
 
+**Revisão de 2026-10-24:** a 021 voltou a conferir o acesso efetivo (revisão 3); a ativação ganhou a revisão de capacidade auditada (D-ATV-2 decidida); a homologação passou para o `ensaio-api-v1-003`, com a atualização 021 → 022 de uma base populada e a jornada da ativação; a validação estática não depende mais da máquina antiga. As linhas abaixo já refletem isso. A ordem de merge recomendada continua #16 → #17 → #19, com esta PR à parte. Mesclar as quatro **não** encerra a V1.
+
 Legenda do estado: **feito** (código e evidência na `main`); **PR** (feito numa PR desta missão, sem merge); **parcial**; **aberto**; **decisão** (falta decisão de produto antes de implementar).
 
 ## 1. Lista única
@@ -21,8 +23,8 @@ Legenda do estado: **feito** (código e evidência na `main`); **PR** (feito num
 | Vinculação de conta antiga | P3 | `/links/*` | `AccountLinkIT`; J7 | **feito** | — | — |
 | Step-up por organização em sessão vinculada | P4 | `/o/{org}/auth/mfa/step-up` | `LinkedOrgStepUpIT` | **feito** | — | — |
 | Capacidade inicial zero e estado "aguardando ativação" | §5 do plano da 002; missão 003 item 5 | 022, `activationState` | `db/tests/ativacao-022`; `OrgActivationIT`; `IdentityOrganizationJourneysIT` | **PR** | merge da PR; valores comerciais (decisão de produto) | merge; decisão dos valores padrão da ativação (se houver) |
-| Ativação operacional auditada | idem | `org_activation_activate`, CLI `ativar-organizacao` | `OrgActivationIT` (6) | **PR** | merge; linha de elevação da 022 para levar a um ambiente | merge e homologação num ambiente com a 022 |
-| Mudança de capacidade depois da ativação | decorrente do item 5 | — (o provisionamento existente volta a valer depois de ATIVADA) | — | **decisão** | produto | ato `org_activation_revise` auditado, ou registro de que o provisionamento basta |
+| Ativação operacional auditada | idem | `org_activation_activate`, CLI `ativar-organizacao` e `vincular-conta` | `OrgActivationIT`; `db/tests/ativacao-022`; jornada da homologação (`jornada_ativacao.sh`) no `ensaio-api-v1-003` atualizado de 021 para 022 | **PR** | merge; aprovar a linha de elevação da 022 (vinculada ao `ensaio-api-v1-003`) | merge |
+| Mudança de capacidade depois da ativação | decorrente do item 5; **D-ATV-2 decidida na revisão**: exige autorização e auditoria | `org_activation_revise`, CLI `revisar-capacidade`; o provisionamento direto em organização ativada é recusado | `OrgActivationIT`; `db/tests/ativacao-022` (C2, C4, C5); jornada da homologação (J7, J8) | **PR** | merge | merge |
 | **Convite e onboarding de contas na organização** (D-INV-02) | inventário §6; F6b | **nenhuma rota**: contas novas só por provisionamento ou pela própria identidade (cadastro) | as jornadas J7/J8 precisaram de PREP (`semear_api_v1.sql`) | **decisão** | D-INV-02/03; GAP-10 | decisão; se (b), rotas de convite com e-mail real |
 | **Emissão do token de verificação de e-mail da conta** (GAP-04, D-INV-03) | inventário | só a confirmação (`/o/{org}/auth/email-verification/confirm`); nenhum emissor na Platform | `EmailVerificationRouteIT` (token semeado) | **decisão** | D-INV-02/03 | decisão; se mantida, emissão com testes e OpenAPI |
 | **Atribuição e remoção de papéis** (GAP-14, D-INV-09, F6b) | inventário; consolidação §2 | **nenhuma rota** (só leitura de membros e permissões) | OpenAPI | **decisão** (recomendado: V1 completa) | D-INV-09 | rotas com step-up, regra de "último ORG_ADMIN" da 003, testes e OpenAPI |
@@ -44,8 +46,8 @@ Legenda do estado: **feito** (código e evidência na `main`); **PR** (feito num
 
 | Requisito | Origem | Situação atual | Pendência | Critério de conclusão |
 |---|---|---|---|---|
-| **E-mail real** (GAP-10) | inventário; missão 002 PR 5 | transporte Graph e fila persistente **feitos** (021, revisão 2 na PR desta missão). Homologação real **não** feita | ações externas autorizadas (`2026-10-23-api-v1-003-email-real-preparacao.md`) | F1–F6 do relatório do e-mail com evidência real |
-| **Portões da 016** (5b/hml03 → P5 → ativação operacional da 014/016) | consolidação §6 | a 016 roda nas suítes e em ensaios. No `ensaio-api-v1-002`, 016–020 com elevação vinculada e pré-voo (PR). **Nenhum portão operacional executado**; produção sem 014/016 ativadas | executar na ordem, cada um com autorização própria; aprovar a proposta de elevação 016–020 (PR) | portões executados com evidência; decisão da topologia de produção (016 rev. 5: só o modelo do migrador declarado é suportado) |
+| **E-mail real** (GAP-10) | inventário; missão 002 PR 5 | transporte Graph e fila persistente **feitos** (021, revisão 3 na PR desta missão). Homologação local só com o e-mail simulado; validação externa **não** feita | ações externas autorizadas (`2026-10-23-api-v1-003-email-real-preparacao.md`) | F1–F6 do relatório do e-mail com evidência real |
+| **Portões da 016** (5b/hml03 → P5 → ativação operacional da 014/016) | consolidação §6 | a 016 roda nas suítes e em ensaios. No `ensaio-api-v1-003`, 016–020 e 022 com elevação vinculada e pré-voo (PR; o `ensaio-api-v1-002`, da 021 revisão 2, fica preservado). **Nenhum portão operacional executado**; produção sem 014/016 ativadas | executar na ordem, cada um com autorização própria; aprovar a proposta de elevação 016–020 e 022 (PR) | portões executados com evidência; decisão da topologia de produção (016 rev. 5: só o modelo do migrador declarado é suportado) |
 | **Origem do cliente atrás do proxy** (B10) | levantamento B10 | `ClientIpResolver` aceita `X-Forwarded-For` **só** de `NEKKORA_PROXIES_CONFIAVEIS`, e o gateway de homologação sobrescreve o cabeçalho com `$remote_addr`. **Confirmado de novo no ensaio:** no Docker Desktop, todo cliente chega como o IP da ponte (`10.252.99.0/24` nos logs, truncado) e divide os limites por IP (R1, R7, R12…) | depende da **topologia de borda de produção** (CDN/balanceador → nginx → Platform), ainda não decidida | nginx com `set_real_ip_from` restrito aos endereços do balanceador e `real_ip_header`, a Platform confiando só no nginx, e prova com dois clientes de IPs distintos |
 | **L06** (lista de execuções sem filtro, ≈ 886/814 ms contra 200/500 ms) | GAP-06 (DC-07) | índice recomendado, **não aplicado** | **decisão D-L06**: critério de desempenho da V1 ou não | (a) migration de índice com portão e nova medição; ou (b) aceitação documentada com o padrão de 30 dias |
 | Saúde e prontidão (GAP-11, D-INV-07) | inventário | — | **decisão** (recomendado: interna, P3) | decisão; endpoint interno se (a) |
@@ -99,10 +101,10 @@ O banco já fixa parte do contrato, que a próxima entrega deve respeitar e não
 
 | Id | Decisão | Recomendação registrada | Efeito |
 |---|---|---|---|
-| D-ATV-1 | Valores de capacidade na ativação: cada ativação informa os seus (atual) ou um padrão comercial | cada ativação informa (sem padrão no banco) | sem decisão, o operador escolhe por ativação, com motivo auditado |
-| D-ATV-2 | Mudança de capacidade depois da ativação: ato auditado próprio ou provisionamento existente | ato próprio (`org_activation_revise`), mesma auditoria | sem decisão, o provisionamento continua podendo alterar depois de ATIVADA |
-| D-ELEV-003 | Aprovar as linhas 016–020 vinculadas ao `ensaio-api-v1-002` | aprovar (necessidade medida, pré-voo e prova de retirada) | sem aprovação, o ambiente fica documentado mas a lista volta a 011–013 |
-| D-021-R2 | Aprovar a revisão 2 da 021 (invariante pela ACL) | aprovar (defeito reproduzido, contraprovas) | sem ela, a 021 não aplica em topologia com backup lógico |
+| D-ATV-1 | Valores de capacidade na ativação: cada ativação informa os seus (atual) ou um padrão comercial | cada ativação informa (sem padrão no banco); na revisão, mantidos capacidade inicial zero e limites explícitos | sem decisão, o operador escolhe por ativação, com motivo auditado |
+| D-ATV-2 | Mudança de capacidade depois da ativação | **decidida na revisão:** exige autorização e auditoria; implementada (`org_activation_revise`) | — |
+| D-ELEV-003 | Aprovar as linhas 016–020 e 022 vinculadas ao `ensaio-api-v1-003` | direção aprovada na revisão (elevação restrita ao ambiente, pré-voo, retirada comprovada também na falha); falta a aprovação do código | sem aprovação, a lista volta a 011–013 |
+| D-021-R3 | Aprovar a revisão 3 da 021 (acesso efetivo, backup como única exceção declarada) | revisar o código (pedido da revisão) | sem ela, a 021 não aplica na topologia com backup lógico |
 | D-INV-02/03/09/10 | Convite, verificação, papéis, ciclo externo | como na consolidação de 2026-10-11 | F6b |
 | D-INV-04 | Canal do Agent | missão de desenho própria | Marco 2 |
 | D-L06 | Critério de desempenho | — | índice ou aceitação |

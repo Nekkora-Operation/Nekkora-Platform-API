@@ -2,6 +2,16 @@
 
 **Data:** 2026-10-23. **Base:** relatório do transporte (`2026-10-22-identidade-002-email-real.md`, §5) e desenho aprovado (`2026-10-11-email-transacional-m365-desenho.md`). **Nenhuma alteração** foi feita no Microsoft 365, no DNS ou em cofre, e **nenhuma mensagem real** foi enviada. Tudo abaixo depende da autorização específica já combinada.
 
+## 0. Estado em três camadas (revisão de 2026-10-24)
+
+| Camada | Situação | O que prova e o que não prova |
+|---|---|---|
+| **Preparação** (código e configuração) | **Concluída.** Transporte Microsoft Graph com testes (relatório de 22/10), configuração do ambiente (`compose.m365.yml`), saída de rede restrita (`proxy/squid.conf`, política conferida, §3) e ações A–E redigidas | Prova que o código e a configuração estão prontos. Não prova nada no tenant real |
+| **Homologação local** | **Concluída só com o e-mail SIMULADO**: a caixa do ensaio grava a mensagem e o desfecho `ACEITE_SIMULADO`, sem envio externo (`ensaio-api-v1-003`, jornadas pela API) | Prova a fila, o cadastro, a recuperação e os avisos ponta a ponta dentro do ambiente. Não prova aceite pelo Microsoft 365, entrega, SPF, DKIM nem DMARC |
+| **Validação externa** (tenant, DNS, envio a caixa controlada) | **Não feita. Bloqueada** pela leitura autenticada R-1 a R-5 (§1.2), pelas decisões do §5 e pela autorização específica das ações A–E | Plano F1–F6 no §4. O aceite pelo transporte continua separado da entrega |
+
+A identificação do tenant (`ae4ed48d…`, §1.1) é coerente com a captura do Entra enviada na revisão. Mesmo assim, a conferência **autenticada** (R-1 a R-5) vem antes de qualquer alteração.
+
 ## 1. Reconciliação por leitura
 
 ### 1.1 Feita nesta missão (leituras públicas, sem autenticação)
@@ -84,8 +94,11 @@ Ordem obrigatória; nenhuma executada. Cada linha diz o destino e o impacto.
 
 ## 5. Decisões necessárias da responsável
 
-1. Autorizar as ações A–E, na ordem (cada uma é externa e publicável).
-2. Quem acompanha `dmarc@nekkora.com`.
-3. Qual cofre guarda a chave privada do aplicativo.
-4. A caixa controlada para os testes F1, F3, F4 e F6.
-5. A opção de rede: (a) o proxy preparado (recomendado) ou (b) uma rede de saída exclusiva da Platform.
+Confirmadas como pendentes na revisão de 2026-10-24:
+
+1. Quem acompanha `dmarc@nekkora.com`.
+2. Qual cofre guarda a chave privada do certificado do aplicativo.
+3. A caixa controlada que recebe os testes F1, F3, F4 e F6.
+4. A autorização explícita das alterações concretas no Microsoft 365, no DNS e na rede (ações A–E, na ordem; cada uma é externa e publicável) e dos envios de teste.
+
+Também em aberto: a opção de rede, (a) o proxy preparado (recomendado) ou (b) uma rede de saída exclusiva da Platform. A ordem recomendada na revisão é fechar #16 → #17 → #19 e concluir o e-mail real em seguida.
