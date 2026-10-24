@@ -30,12 +30,14 @@
 --
 -- Sem janela de elevacao: a tabela e a trigger pertencem ao migrador (dono do banco), como as demais tabelas de public.
 --
--- Revisao 2 (missao PLATFORM-API-V1-003; revisao 1 = sha256 2aeaf4b9..., nunca aplicada em base persistente): a invariante
--- 1 da sec. 5 contava como "acesso" o SELECT HERDADO de pg_read_all_data. A topologia de implantacao tem a identidade de
--- backup logico backup_nekkora membro de pg_read_all_data (ops/homologacao/IMPLANTACAO.md, sec. 1), e a 021 era recusada
--- na implantacao do ensaio-api-v1-002. A invariante passa a conferir as CONCESSOES da tabela e das colunas (ACL) e a
--- participacao nos papeis que as recebem (dono e Platform), sem contar papeis predefinidos do PostgreSQL. Nada mais muda:
--- tabela, trigger, privilegios e as demais invariantes sao os da revisao 1 (suite db/tests/correio-021, caso C).
+-- Revisao 3 (missao PLATFORM-API-V1-003; revisao 1 = sha256 2aeaf4b9..., revisao 2 = bf85b95b..., esta so nos ensaios
+-- descartaveis da missao; base com revisao anterior: o Flyway recusa por checksum, suite db/tests/correio-021, caso D):
+-- a invariante 1 da sec. 5 volta a conferir o ACESSO EFETIVO (heranca por qualquer cadeia de papeis, inclusive papeis predefinidos), com
+-- UMA excecao declarada: a identidade de backup logico backup_nekkora (IMPLANTACAO.md sec. 1), so leitura e so por
+-- pg_read_all_data. A revisao 1 contava esse SELECT herdado e a 021 era recusada na topologia suportada; a revisao 2 trocava
+-- o acesso efetivo pela ACL e pela participacao no dono e na Platform, o que deixava de ver a heranca por outros papeis
+-- (um papel qualquer membro de pg_read_all_data, por exemplo). Nada mais muda: tabela, trigger, privilegios e as demais
+-- invariantes sao os da revisao 1 (suite db/tests/correio-021, casos C e D).
 
 BEGIN;
 
@@ -138,13 +140,20 @@ GRANT SELECT, DELETE, INSERT (job_id, kind, target_organization_id, recipient_hm
 -- === 5. Invariantes ===
 DO $$
 DECLARE
+    -- Identidade de backup logico DECLARADA (modelo suportado: IMPLANTACAO.md sec. 1, ops/homologacao/sql/bootstrap.sql;
+    -- a mesma que a sec. 19 da 016 ja declara), nunca derivada do catalogo que esta sendo validado.
+    v_backup CONSTANT TEXT := 'backup_nekkora';
     v_bad TEXT;
 BEGIN
-    -- Acesso que esta migration controla: (a) CONCESSAO na tabela ou em qualquer coluna (ACL) a quem nao e o dono nem a
-    -- Platform, inclusive PUBLIC; (b) participacao (MEMBER: herda ou pode SET ROLE) no dono ou na Platform, de papel que nao
-    -- e superusuario. Papeis predefinidos do PostgreSQL (pg_read_all_data, pg_write_all_data...) concedem por participacao,
-    -- sem entrada na ACL: ficam de fora daqui, e quem participa deles e decisao da topologia de implantacao (o backup logico,
-    -- IMPLANTACAO.md sec. 1), nao desta migration. Revisao 1 usava has_table_privilege, que conta essa heranca.
+    -- Acesso EFETIVO (revisao 3): has_table_privilege/has_any_column_privilege contam concessao direta, PUBLIC e qualquer
+    -- heranca, inclusive a de papeis predefinidos (pg_read_all_data, pg_write_all_data). Recusado:
+    --   (a) CONCESSAO na tabela ou em coluna (ACL) a quem nao e o dono nem a Platform, inclusive PUBLIC e o backup;
+    --   (b) papel nao superusuario que PARTICIPA (MEMBER: herda ou pode SET ROLE; inclui o proprio papel) de algum papel com
+    --       acesso efetivo, fora o dono e a Platform. Pega a heranca por qualquer cadeia de papeis e o SET ROLE sem INHERIT.
+    -- Excecao UNICA e estreita: a identidade de backup declarada, quando seu acesso vem SO de pg_read_all_data (nenhuma
+    -- concessao propria, nenhuma outra participacao que de acesso) e e SO leitura. Quem participa do backup herda a mesma
+    -- leitura e e recusado. Os papeis predefinidos em si (pg_*) nao sao listados: nao fazem LOGIN e quem participa deles e
+    -- conferido aqui. Revisao 2 conferia so a ACL e a participacao no dono e na Platform, sem a heranca de outros papeis.
     WITH alvo AS (
         SELECT c.oid, c.relowner FROM pg_class c WHERE c.oid = 'public.mail_outbox'::regclass
     ), concessoes AS (
@@ -152,13 +161,25 @@ BEGIN
         UNION
         SELECT x.grantee FROM alvo a JOIN pg_attribute t ON t.attrelid = a.oid, aclexplode(t.attacl) x
         WHERE t.attacl IS NOT NULL AND NOT t.attisdropped
+    ), com_acesso AS (
+        SELECT g.oid FROM pg_roles g, alvo a
+        WHERE has_table_privilege(g.oid, a.oid, 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER')
+           OR has_any_column_privilege(g.oid, a.oid, 'SELECT, INSERT, UPDATE, REFERENCES')
+    ), alcance AS (
+        SELECT r.oid, r.rolname, array_agg(g.oid) AS fontes
+        FROM pg_roles r JOIN com_acesso g ON pg_has_role(r.oid, g.oid, 'MEMBER')
+        WHERE NOT r.rolsuper AND r.rolname !~ '^pg_'
+        GROUP BY r.oid, r.rolname
     ), indevidos AS (
         SELECT CASE WHEN g.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(g.grantee) END AS nome
         FROM concessoes g, alvo a WHERE g.grantee NOT IN (a.relowner, 'nekkora_platform'::regrole)
         UNION
-        SELECT r.rolname FROM pg_roles r, alvo a
-        WHERE NOT r.rolsuper AND r.oid NOT IN (a.relowner, 'nekkora_platform'::regrole)
-          AND (pg_has_role(r.oid, a.relowner, 'MEMBER') OR pg_has_role(r.oid, 'nekkora_platform'::regrole, 'MEMBER'))
+        SELECT x.rolname FROM alcance x, alvo a
+        WHERE x.oid NOT IN (a.relowner, 'nekkora_platform'::regrole)
+          AND NOT (x.rolname = v_backup
+                   AND x.fontes <@ ARRAY[x.oid, 'pg_read_all_data'::regrole::oid]
+                   AND NOT has_table_privilege(x.oid, a.oid, 'INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER')
+                   AND NOT has_any_column_privilege(x.oid, a.oid, 'INSERT, UPDATE, REFERENCES'))
     )
     SELECT string_agg(nome, ', ' ORDER BY nome) INTO v_bad FROM indevidos;
     IF v_bad IS NOT NULL THEN
