@@ -38,6 +38,7 @@ implanta() {   # $1 rotulo -> codigo do implantar; saida em $OUT/<rotulo>.txt
     HOMOLOG_AUTORIZA_ELEVACAO=1 bash "$H" implantar "$ID" > "$OUT/$1.txt" 2>&1 || rc=$?
     cp "$(ultimo_registro)/janelas_de_elevacao.txt" "$OUT/$1_janelas.txt" 2>/dev/null || : > "$OUT/$1_janelas.txt"
     cp "$(ultimo_registro)/implantacao.txt" "$OUT/$1_runner.txt" 2>/dev/null || : > "$OUT/$1_runner.txt"
+    cp "$(ultimo_registro)/preflight_022.txt" "$OUT/$1_preflight_conferencias.txt" 2>/dev/null || :
     return "$rc"
 }
 v=022
@@ -74,7 +75,7 @@ anota "$v|S sucesso; ambiente LIBERADO|$rc|$(grep -c "versao=$v" "$OUT/${v}_S_su
 # objetos da 022 so depois do sucesso; nenhum papel ou objeto deixado pelas falhas
 adm -c "SELECT 'open_acts=' || count(*) FROM ops_activation.open_acts" | tr -d '\r' | tee "$OUT/pos_sucesso.txt"
 echo "$v: $(grep -m1 -oE 'cannot execute [A-Za-z ]+ in a read-only transaction' "$OUT/${v}_F_falha_runner.txt" || echo '(mensagem nao encontrada)')" > "$OUT/motivo_da_falha.txt"
-echo "$v: $(grep -m1 -E '^7\|' "$OUT/${v}_P_preflight_runner.txt" "$OUT/${v}_P_preflight.txt" 2>/dev/null | head -1 || echo '(conferencia 7 nao encontrada)')" >> "$OUT/motivo_da_falha.txt"
+echo "$v: pre-voo $(grep -m1 '|FALHA|' "$OUT/${v}_P_preflight_preflight_conferencias.txt" 2>/dev/null || echo '(conferencia em falha nao encontrada)')" >> "$OUT/motivo_da_falha.txt"
 cat "$OUT/motivo_da_falha.txt"
 echo "RESULTADO: $erros linha(s) fora do esperado" | tee -a "$RES"
 [ "$erros" = 0 ]
