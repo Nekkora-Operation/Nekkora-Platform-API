@@ -23,9 +23,10 @@ import com.nekkora.ops.testsupport.Cenarios;
 import com.nekkora.ops.testsupport.OpsBanco;
 
 /**
- * Ativacao da organizacao (022, {@code org_activation_activate}) com operadores REAIS: certificado de cliente emitido pela
- * CA operacional e registrado, papel op_* membro do grupo nekkora_org_activation, conta responsavel provada pelo operador
- * (ops_operator_platform_accounts, prova emitida pela Platform). Cada recusa e conferida na auditoria e sem efeito.
+ * Ativacao da organizacao e revisao da capacidade depois de ativada (022, {@code org_activation_activate} e
+ * {@code org_activation_revise}) com operadores REAIS: certificado de cliente emitido pela CA operacional e registrado, papel
+ * op_* membro do grupo nekkora_org_activation, conta responsavel provada pelo operador (ops_operator_platform_accounts,
+ * prova emitida pela Platform). Cada recusa e conferida na auditoria e sem efeito.
  */
 class OrgActivationIT {
 
@@ -43,7 +44,12 @@ class OrgActivationIT {
         OpsBanco.Operador op = DB.operador(apelido);
         DB.sql("GRANT nekkora_org_activation TO " + op.papel());
         OpsBanco.Org interna = DB.organizacao();
-        assertThat(C.vincularConta(op, C.provaDeConta(interna.id(), interna.admin()))).isEqualTo("OK");
+        // vinculo pela CLI (vincular-conta): o titular emite o codigo na propria sessao; reusar o codigo e recusado
+        String codigo = C.provaDeConta(interna.id(), interna.admin());
+        assertThat(DB.cli(op).vincularConta(codigo).classe()).isEqualTo(Classe.OK);
+        ExecutorAtos.VinculoConta reuso = DB.cli(op).vincularConta(codigo);
+        assertThat(reuso.classe()).isEqualTo(Classe.RECUSA);
+        assertThat(reuso.motivo()).isEqualTo("PROVA_INVALIDA");
         return new Ativador(op, interna.admin());
     }
 
@@ -59,6 +65,26 @@ class OrgActivationIT {
     private long eventos(UUID org, String resultado, String motivo) {
         return DB.valor(Long.class, "SELECT count(*) FROM ops_activation.activation_events WHERE organization_id = ? AND result = ? "
                 + "AND reason_code IS NOT DISTINCT FROM ?", org, resultado, motivo);
+    }
+
+    private long eventosDoAto(UUID org, int ato, String resultado, String motivo) {
+        return DB.valor(Long.class, "SELECT count(*) FROM ops_activation.activation_events WHERE organization_id = ? AND act = ? "
+                + "AND result = ? AND reason_code IS NOT DISTINCT FROM ?", org, (short) ato, resultado, motivo);
+    }
+
+    /** provision_resource_limit pelo papel real de provisionamento; devolve o SQLSTATE da recusa ou null se aceitou. */
+    private String provisionarDireto(UUID org, int recurso, long valor, UUID autor) {
+        try (Connection c = DB.comoServico("nekkora_provisioning");
+             PreparedStatement ps = c.prepareStatement("SELECT provision_resource_limit(?, ?, 1::smallint, ?, ?)")) {
+            ps.setObject(1, org);
+            ps.setInt(2, recurso);
+            ps.setLong(3, valor);
+            ps.setObject(4, autor);
+            ps.execute();
+            return null;
+        } catch (SQLException e) {
+            return e.getSQLState();
+        }
     }
 
     private long revisoes(UUID org) {
@@ -106,16 +132,96 @@ class OrgActivationIT {
         assertThat(DB.valor(Long.class, "SELECT count(*) FROM organization_resource_limit_revisions r JOIN ops_activation.activation_events e "
                 + "ON r.revision_id = ANY (e.limit_revision_ids) WHERE e.event_id = ? AND r.provisioned_by_user_id = ? AND r.organization_id = ?",
                 r.evento(), a.responsavel(), o.id())).isEqualTo(5);
-        // depois de ativada, a mudanca de capacidade pelo caminho de provisionamento deixa de ser barrada pelo gatilho
-        try (Connection c = DB.comoServico("nekkora_provisioning");
-             PreparedStatement ps = c.prepareStatement("SELECT provision_resource_limit(?, 2, 1::smallint, 3, ?)")) {
-            ps.setObject(1, o.id());
-            ps.setObject(2, a.responsavel());
-            ps.execute();
-        } catch (SQLException e) {
-            throw new AssertionError("provisionamento depois da ativacao recusado: " + e.getSQLState(), e);
+        assertThat(DB.valor(Short.class, "SELECT act FROM ops_activation.activation_events WHERE event_id = ?", r.evento())).isEqualTo((short) 1);
+        // depois de ativada, o provisionamento direto continua barrado (D-ATV-2): so a revisao autorizada e auditada muda limite
+        for (int recurso = 1; recurso <= 5; recurso++) {
+            assertThat(provisionarDireto(o.id(), recurso, 3, a.responsavel())).isEqualTo("42501");
         }
-        assertThat(limites(o.id())).startsWith("1:1/2 2:1/3 ");
+        assertThat(limites(o.id())).isEqualTo("1:1/2 2:1/1 3:1/10 4:1/" + GIB + " 5:1/" + MIB_256);
+        assertThat(DB.valor(Long.class, "SELECT count(*) FROM ops_activation.open_acts")).isZero();
+    }
+
+    @Test
+    void revisaoAutorizadaMudaOsLimitesComAuditoria() {
+        Ativador a = ativador("rev");
+        OpsBanco.Org o = DB.organizacao();
+        ExecutorAtos cli = DB.cli(a.op());
+        assertThat(cli.ativarOrganizacao(o.id(), a.responsavel(), "ativacao", 1, 1, 5, null, null).classe()).isEqualTo(Classe.OK);
+        long revAntes = revisoes(o.id());
+        ResultadoAtivacao r = cli.revisarCapacidade(o.id(), a.responsavel(), "aditivo de contrato (ticket CS-2)", 4, 2, 40, GIB, null);
+        assertThat(r.classe()).isEqualTo(Classe.OK);
+        assertThat(limites(o.id())).isEqualTo("1:1/4 2:1/2 3:1/40 4:1/" + GIB + " 5:2/-");
+        assertThat(revisoes(o.id())).isEqualTo(revAntes + 5);
+        List<List<Object>> ev = DB.linhas("SELECT act, operator_id, session_role, cert_serial IS NOT NULL, responsible_user_id, motive, "
+                + "workers_registered, concurrent_executions, pending_executions, log_bytes_daily_alert, event_bytes_daily_alert, "
+                + "cardinality(limit_revision_ids) FROM ops_activation.activation_events WHERE event_id = ?", r.evento());
+        assertThat(ev).hasSize(1);
+        assertThat(ev.get(0)).containsExactly(2, a.op().id(), a.op().papel(), true, a.responsavel(), "aditivo de contrato (ticket CS-2)",
+                4L, 2L, 40L, GIB, null, 5);
+        assertThat(DB.valor(Long.class, "SELECT count(*) FROM organization_resource_limit_revisions r JOIN ops_activation.activation_events e "
+                + "ON r.revision_id = ANY (e.limit_revision_ids) WHERE e.event_id = ? AND r.provisioned_by_user_id = ? AND r.organization_id = ?",
+                r.evento(), a.responsavel(), o.id())).isEqualTo(5);
+        // o estado e a ativacao original nao mudam
+        assertThat(estado(o.id())).isEqualTo((short) 2);
+        assertThat(eventosDoAto(o.id(), 1, "OK", null)).isEqualTo(1);
+        assertThat(DB.valor(Long.class, "SELECT count(*) FROM ops_activation.open_acts")).isZero();
+    }
+
+    @Test
+    void revisaoRecusadaAuditadaESemEfeito() {
+        Ativador a = ativador("rvr");
+        ExecutorAtos cli = DB.cli(a.op());
+        // organizacao aguardando ativacao: a revisao nao substitui a ativacao
+        OpsBanco.Org aguardando = DB.organizacao();
+        assertThat(cli.revisarCapacidade(aguardando.id(), a.responsavel(), "antes da ativacao", 1, 1, 1, null, null).motivo()).isEqualTo("NAO_ATIVADA");
+        assertThat(estado(aguardando.id())).isEqualTo((short) 1);
+        assertThat(revisoes(aguardando.id())).isZero();
+        // ativada: limites iguais aos vigentes, parametros invalidos, responsavel nao provado
+        OpsBanco.Org o = DB.organizacao();
+        assertThat(cli.ativarOrganizacao(o.id(), a.responsavel(), "ativacao", 2, 1, 5, null, null).classe()).isEqualTo(Classe.OK);
+        String antes = limites(o.id());
+        long revAntes = revisoes(o.id());
+        assertThat(cli.revisarCapacidade(o.id(), a.responsavel(), "igual", 2, 1, 5, null, null).motivo()).isEqualTo("SEM_MUDANCA");
+        assertThat(cli.revisarCapacidade(o.id(), a.responsavel(), "zero", 0, 1, 5, null, null).motivo()).isEqualTo("PARAMETRO_INVALIDO");
+        assertThat(cli.revisarCapacidade(o.id(), a.responsavel(), "", 3, 1, 5, null, null).motivo()).isEqualTo("PARAMETRO_INVALIDO");
+        assertThat(cli.revisarCapacidade(o.id(), o.admin(), "responsavel errado", 3, 1, 5, null, null).motivo()).isEqualTo("RESPONSAVEL_NAO_VINCULADO");
+        assertThat(limites(o.id())).isEqualTo(antes);
+        assertThat(revisoes(o.id())).isEqualTo(revAntes);
+        assertThat(eventosDoAto(o.id(), 2, "OK", null)).isZero();
+        assertThat(eventosDoAto(o.id(), 2, "RECUSA", "SEM_MUDANCA")).isEqualTo(1);
+        assertThat(eventosDoAto(o.id(), 2, "RECUSA", "PARAMETRO_INVALIDO")).isEqualTo(2);
+        assertThat(eventosDoAto(aguardando.id(), 2, "RECUSA", "NAO_ATIVADA")).isEqualTo(1);
+    }
+
+    @Test
+    void revisaoConcorrenteIgualEsperaAPrimeiraERecebeSemMudanca() throws Exception {
+        Ativador a = ativador("rvc");
+        OpsBanco.Org o = DB.organizacao();
+        ExecutorAtos cliB = DB.cli(a.op());
+        assertThat(cliB.ativarOrganizacao(o.id(), a.responsavel(), "ativacao", 1, 1, 2, null, null).classe()).isEqualTo(Classe.OK);
+        try (Credencial cred = DB.credencial(a.op()); Connection ca = DB.conectar(cred)) {
+            ca.setAutoCommit(false);
+            String ra;
+            try (PreparedStatement ps = ca.prepareStatement("SELECT r_resultado FROM org_activation_revise(?, ?, 'concorrente A', 3, 2, 20, NULL, NULL)")) {
+                ps.setObject(1, o.id());
+                ps.setObject(2, a.responsavel());
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    ra = rs.getString(1);
+                }
+            }
+            assertThat(ra).isEqualTo("OK");
+            CompletableFuture<ResultadoAtivacao> b = CompletableFuture.supplyAsync(
+                    () -> cliB.revisarCapacidade(o.id(), a.responsavel(), "concorrente B", 3, 2, 20, null, null));
+            esperarBloqueio("org_activation_revise");
+            assertThat(b).isNotDone();
+            ca.commit();
+            ResultadoAtivacao rb = b.get(60, TimeUnit.SECONDS);
+            assertThat(rb.classe()).isEqualTo(Classe.RECUSA);
+            assertThat(rb.motivo()).isEqualTo("SEM_MUDANCA");
+        }
+        assertThat(limites(o.id())).isEqualTo("1:1/3 2:1/2 3:1/20 4:2/- 5:2/-");
+        assertThat(eventosDoAto(o.id(), 2, "OK", null)).isEqualTo(1);
     }
 
     @Test
@@ -223,14 +329,19 @@ class OrgActivationIT {
         ResultadoAtivacao r = DB.cli(fora).ativarOrganizacao(o.id(), o.admin(), "fora do grupo", 1, 1, 1, null, null);
         assertThat(r.classe()).isEqualTo(Classe.FALHA_CONFIRMADA);
         assertThat(r.sqlstate()).isEqualTo("42501");
+        ResultadoAtivacao rr = DB.cli(fora).revisarCapacidade(o.id(), o.admin(), "fora do grupo", 1, 1, 1, null, null);
+        assertThat(rr.classe()).isEqualTo(Classe.FALHA_CONFIRMADA);
+        assertThat(rr.sqlstate()).isEqualTo("42501");
         // servicos: Platform (onde atua o ORG_ADMIN do cliente), Portal e provisionamento
         for (String papel : List.of("nekkora_platform", "nekkora_portal", "nekkora_provisioning")) {
-            try (Connection c = DB.comoServico(papel);
-                 PreparedStatement ps = c.prepareStatement("SELECT * FROM org_activation_activate(?, ?, 'x', 1, 1, 1, NULL, NULL)")) {
-                ps.setObject(1, o.id());
-                ps.setObject(2, o.admin());
-                assertThatThrownBy(ps::executeQuery).isInstanceOf(SQLException.class)
-                        .satisfies(e -> assertThat(((SQLException) e).getSQLState()).isEqualTo("42501"));
+            for (String funcao : List.of("org_activation_activate", "org_activation_revise")) {
+                try (Connection c = DB.comoServico(papel);
+                     PreparedStatement ps = c.prepareStatement("SELECT * FROM " + funcao + "(?, ?, 'x', 1, 1, 1, NULL, NULL)")) {
+                    ps.setObject(1, o.id());
+                    ps.setObject(2, o.admin());
+                    assertThatThrownBy(ps::executeQuery).isInstanceOf(SQLException.class)
+                            .satisfies(e -> assertThat(((SQLException) e).getSQLState()).isEqualTo("42501"));
+                }
             }
         }
         // a Platform le so o estado, nunca as tabelas da ativacao

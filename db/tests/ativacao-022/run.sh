@@ -21,12 +21,18 @@
 #     C1 - organizacao criada depois da 022 (provision_organization, papel real nekkora_provisioning) nasce AGUARDANDO_ATIVACAO;
 #     C2 - capacidade de execucao barrada enquanto aguarda: provision_resource_limit pelo papel de provisionamento com
 #          recurso 1-3 diferente de FINITE 0 -> 42501; FINITE 0 e os recursos 4-5 passam; o superusuario nao e barrado;
+#          organizacao ATIVADA (classificada pela 022): NENHUM recurso 1-5 pelo provisionamento direto (42501, D-ATV-2);
 #     C3 - estado protegido: UPDATE direto (mesmo do superusuario), DELETE e TRUNCATE recusados;
-#     C4 - ato chamado sem certificado (op_* membro do grupo): RECUSA SEM_CERTIFICADO auditada; nada muda;
-#     C5 - quem nao e do grupo (Platform, provisionamento, op_* fora do grupo) nao executa o ato (42501);
-#     C6 - Platform: org_activation_states devolve so o estado; nenhuma leitura das tabelas de ops_activation.
-# O ato autorizado (certificado registrado, responsavel provado, repeticao, concorrencia, recusas) e coberto pelos testes
-# Java de nekkora-ops (OrgActivationIT), com operadores reais.
+#     C4 - ativacao e revisao chamadas sem certificado (op_* membro do grupo): RECUSA SEM_CERTIFICADO auditada (act 1 e 2);
+#          nada muda;
+#     C5 - quem nao e do grupo (Platform, provisionamento, op_* fora do grupo) nao executa nenhum dos dois atos (42501);
+#     C6 - Platform: org_activation_states devolve so o estado; nenhuma leitura das tabelas de ops_activation;
+#     C7 - contraprovas da invariante de ACESSO EFETIVO da 022 (cada uma em BEGIN ... ROLLBACK): controle passa; recusam
+#          heranca de pg_read_all_data e de pg_write_all_data, membro do backup, USAGE no schema, concessao de coluna e o
+#          backup com escrita.
+# Os atos autorizados (certificado registrado, responsavel provado, repeticao, concorrencia, recusas, revisao) sao cobertos
+# pelos testes Java de nekkora-ops (OrgActivationIT), com operadores reais, e pela jornada da homologacao
+# (ops/homologacao/testes/jornada_ativacao.sh) numa base populada atualizada de 021 para 022.
 #
 # Uso: db/tests/ativacao-022/run.sh   (Windows/Git Bash: ver README da suite)
 # Sucesso: os containers sao removidos. Falha: ficam no ar para inspecao e o comando de remocao e impresso.
@@ -244,6 +250,12 @@ SET ROLE nekkora_provisioning;
 SELECT provision_resource_limit('$NOVA', 3, 1::smallint, 0, '$RESP') IS NOT NULL;
 SELECT provision_resource_limit('$NOVA', 4, 1::smallint, 1000, '$RESP') IS NOT NULL;
 SQL
+ATIVA="$(consulta "$POP" nekkora "SELECT organization_id FROM ops_activation.organization_states WHERE state = 2 ORDER BY organization_id LIMIT 1")"
+[ -n "$ATIVA" ] || falha "C2: nenhuma organizacao ATIVADA na base populada"
+for c in 1 2 3 4 5; do
+    recusa_sql "$POP" "C2 provisionamento direto do recurso $c em organizacao ATIVADA" "organizacao ativada: limite (recurso $c) so pela revisao autorizada" \
+        "SET ROLE nekkora_provisioning; SELECT provision_resource_limit('$ATIVA', $c, 1::smallint, 3, '$RESP');"
+done
 psqlc "$POP" nekkora > "$SAIDA/C22_superusuario.txt" 2>&1 <<SQL || { cat "$SAIDA/C22_superusuario.txt"; falha "C2: superusuario barrado"; }
 BEGIN;
 INSERT INTO organization_resource_limit_revisions (organization_id, resource_code, revision_number, effective_from, limit_mode, limit_value, provisioned_by_user_id)
@@ -262,17 +274,47 @@ SET ROLE op_c4_teste;
 SELECT r_resultado || '|' || r_motivo FROM public.org_activation_activate('$NOVA', '$RESP', 'teste sem certificado', 1, 1, 1, NULL, NULL);
 SQL
 grep -qx 'RECUSA|SEM_CERTIFICADO' "$SAIDA/C40_sem_certificado.txt" || { cat "$SAIDA/C40_sem_certificado.txt"; falha "C4: recusa diferente de SEM_CERTIFICADO"; }
-[ "$(consulta "$POP" nekkora "SELECT result || '|' || reason_code || '|' || session_role FROM ops_activation.activation_events WHERE organization_id = '$NOVA'")" = "RECUSA|SEM_CERTIFICADO|nekkora" ] \
+[ "$(consulta "$POP" nekkora "SELECT act || '|' || result || '|' || reason_code || '|' || session_role FROM ops_activation.activation_events WHERE organization_id = '$NOVA'")" = "1|RECUSA|SEM_CERTIFICADO|nekkora" ] \
     || falha "C4: recusa nao auditada"
+psqlc "$POP" nekkora > "$SAIDA/C41_revisao_sem_certificado.txt" 2>&1 <<SQL || { cat "$SAIDA/C41_revisao_sem_certificado.txt"; falha "C4: chamada da revisao"; }
+SET ROLE op_c4_teste;
+SELECT r_resultado || '|' || r_motivo FROM public.org_activation_revise('$ATIVA', '$RESP', 'revisao sem certificado', 9, 9, 9, NULL, NULL);
+SQL
+grep -qx 'RECUSA|SEM_CERTIFICADO' "$SAIDA/C41_revisao_sem_certificado.txt" || { cat "$SAIDA/C41_revisao_sem_certificado.txt"; falha "C4: revisao com recusa diferente de SEM_CERTIFICADO"; }
+[ "$(consulta "$POP" nekkora "SELECT act || '|' || result || '|' || reason_code FROM ops_activation.activation_events WHERE organization_id = '$ATIVA'")" = "2|RECUSA|SEM_CERTIFICADO" ] \
+    || falha "C4: recusa da revisao nao auditada"
 [ "$(consulta "$POP" nekkora "SELECT state FROM ops_activation.organization_states WHERE organization_id = '$NOVA'")" = 1 ] || falha "C4: estado mudou"
 for p in nekkora_platform nekkora_provisioning op_c5_fora; do
-    recusa_sql "$POP" "C5 $p nao executa o ato" "permission denied for function org_activation_activate" \
-        "SET ROLE $p; SELECT * FROM public.org_activation_activate('$NOVA', '$RESP', 'x', 1, 1, 1, NULL, NULL);"
+    for f in org_activation_activate org_activation_revise; do
+        recusa_sql "$POP" "C5 $p nao executa $f" "permission denied for function $f" \
+            "SET ROLE $p; SELECT * FROM public.$f('$NOVA', '$RESP', 'x', 1, 1, 1, NULL, NULL);"
+    done
 done
 [ "$(printf "SET ROLE nekkora_platform;\nSELECT organization_id || '|' || activation_state FROM public.org_activation_states(ARRAY['$NOVA', '$ZERO']::uuid[]) ORDER BY 1;\n" | psqlc "$POP" nekkora | grep -v '^SET$' | sort | tr '\n' ' ')" \
     = "$(printf '%s|1\n%s|1\n' "$NOVA" "$ZERO" | sort | tr '\n' ' ')" ] || falha "C6: estados pela Platform"
 recusa_sql "$POP" "C6 Platform le a tabela de estados" "permission denied for schema ops_activation" "SET ROLE nekkora_platform; SELECT * FROM ops_activation.organization_states;"
 recusa_sql "$POP" "C6 Platform le a auditoria" "permission denied for schema ops_activation" "SET ROLE nekkora_platform; SELECT * FROM ops_activation.activation_events;"
+echo "   C7: contraprovas da invariante de acesso efetivo da 022"
+awk '/^-- === 10\. /{f=1} f && /^COMMIT;/{exit} f' "$M022" > "$SAIDA/C70_inv022.sql"
+[ "$(grep -c '^DO \$\$' "$SAIDA/C70_inv022.sql")" = 1 ] || falha "C7: extracao da sec. 10 da 022"
+c7() {   # $1 rotulo, $2 alteracao (vazia = controle), $3 papeis que a recusa tem de nomear (vazio = deve passar)
+    local o rc=0 m n
+    o="$({ echo "BEGIN;"; printf '%s\n' "$2"; cat "$SAIDA/C70_inv022.sql"; echo "ROLLBACK;"; } | psqlc "$POP" nekkora 2>&1)" || rc=$?
+    m="$(echo "$o" | grep -m1 -o '022: .*' || echo '-')"
+    echo "$1|rc=$rc|$m" >> "$SAIDA/C71_contraprovas.txt"
+    if [ -z "$3" ]; then [ "$rc" = 0 ] || falha "C7 $1: controle recusado ($o)"; return 0; fi
+    [ "$rc" != 0 ] && [[ "$m" == "022: papel com acesso efetivo a ops_activation alem do dono das funcoes: "* ]] || falha "C7 $1: esperada a recusa de acesso efetivo (rc=$rc: $o)"
+    for n in $3; do
+        [[ ", ${m#*funcoes: }, " == *", $n, "* ]] || falha "C7 $1: a recusa nao nomeia $n ($m)"
+    done
+}
+c7 controle "" ""
+c7 heranca_pg_read_all_data "CREATE ROLE c7_leitor LOGIN; GRANT pg_read_all_data TO c7_leitor;" "c7_leitor"
+c7 heranca_pg_write_all_data "CREATE ROLE c7_escritor LOGIN; GRANT pg_write_all_data TO c7_escritor;" "c7_escritor"
+c7 heranca_do_backup "CREATE ROLE c7_via_backup LOGIN; GRANT backup_nekkora TO c7_via_backup;" "c7_via_backup"
+c7 usage_no_schema "GRANT USAGE ON SCHEMA ops_activation TO nekkora_portal;" "nekkora_portal"
+c7 concessao_de_coluna "GRANT SELECT (state) ON ops_activation.organization_states TO nekkora_platform;" "nekkora_platform"
+c7 backup_com_escrita "GRANT pg_write_all_data TO backup_nekkora;" "backup_nekkora"
 consulta "$POP" nekkora "DROP ROLE op_c4_teste; DROP ROLE op_c5_fora" > /dev/null 2>&1 || consulta "$POP" nekkora "REVOKE nekkora_org_activation FROM op_c4_teste; REVOKE nekkora_ops_mfa FROM op_c5_fora" > /dev/null
 {
     echo "A: 22 migrations (001-022); janelas SUPERUSER com retirada 0|0|0: $(grep -c 'SUPERUSER revogado, estado 0|0|0' "$SAIDA/entrypoint_$LIMPA.txt") (022 com janela); sec. 19 da 016 depois de tudo: OK; invariantes 012/013/014(adaptada)/016/017(adaptada)/019(adaptada)/020/021/022 DEPOIS da retirada ($(cat "$SAIDA/A01_estado_migrador.txt")): OK; marcador versao=022"
@@ -280,7 +322,8 @@ consulta "$POP" nekkora "DROP ROLE op_c4_teste; DROP ROLE op_c5_fora" > /dev/nul
     echo "B1: 022 sem janela recusada por privilegio; dados, catalogo e schema inalterados"
     echo "B2: dados de public/ops identicos; classificacao: $(tr '\n' ';' < "$SAIDA/B22_classificacao.txt"); catalogo de public 021->022 = $(wc -l < "$SAIDA/B23_diff_resumo.txt" | tr -d ' ') linhas previstas; public e ops_activation = instalacao limpa; invariantes ($(cat "$SAIDA/B26_estado_migrador.txt")): OK"
     echo "B3: reaplicacao recusada pela pre-condicao"
-    echo "C: $(grep -c . "$SAIDA/C_recusas.txt") recusas conferidas (capacidade, estado protegido, chamadores fora do grupo, Platform sem leitura direta); C1 nova AGUARDANDO; C4 SEM_CERTIFICADO auditada; C6 estados pela Platform"
+    echo "C: $(grep -c . "$SAIDA/C_recusas.txt") recusas conferidas (capacidade aguardando e ativada, estado protegido, chamadores fora do grupo nos dois atos, Platform sem leitura direta); C1 nova AGUARDANDO; C4 SEM_CERTIFICADO auditada na ativacao e na revisao; C6 estados pela Platform"
+    echo "C7: $(grep -c . "$SAIDA/C71_contraprovas.txt") casos da invariante de acesso efetivo (controle; heranca de pg_read_all_data, de pg_write_all_data e do backup; USAGE no schema; concessao de coluna; backup com escrita): todos como esperado"
 } | tee "$SAIDA/resumo.txt"
 rm -f "$SAIDA/_b.txt"
 docker rm -f -v "$LIMPA" "$POP" > /dev/null

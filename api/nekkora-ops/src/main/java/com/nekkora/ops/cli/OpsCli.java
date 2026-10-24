@@ -22,10 +22,14 @@ import java.util.UUID;
  * | {@code verificar <solicitacao> <retorno-ok> <segundo-contato> <segundo-ok> NENHUM|TODOS_SEM_FATOR_E_CODIGOS_UTILIZAVEIS}
  * | {@code pre-aprovar|aprovar|executar|consultar <solicitacao>} | {@code reenviar-aviso <solicitacao> <destinatario>}
  * | {@code cancelar <solicitacao> <motivo>}
+ * | {@code vincular-conta <codigo>} (016: vinculo da conta da Platform que o operador controla, pelo codigo de uso unico que o
+ * titular emite na propria sessao; so o sha256 vai ao banco)
  * | {@code ativar-organizacao <org> <responsavel> <workers> <simultaneas> <pendentes> <alerta-logs|-> <alerta-eventos|-> <motivo...>}
- * (022: ativacao da organizacao com os limites explicitos; o motivo e o resto da linha).
+ * | {@code revisar-capacidade <org> <responsavel> <workers> <simultaneas> <pendentes> <alerta-logs|-> <alerta-eventos|-> <motivo...>}
+ * (022: ativacao da organizacao e revisao da capacidade depois de ativada, com os limites explicitos; o motivo e o resto
+ * da linha).
  * Saida: {@code solicitacao=<uuid> resultado=... origem=... estado=... motivo=...}; em ABRIR, o UUID devolvido pelo
- * banco e o que o operador usa nos atos seguintes. Em ATIVAR-ORGANIZACAO: {@code organizacao=<uuid> resultado=... evento=<uuid>
+ * banco e o que o operador usa nos atos seguintes. Em ATIVAR-ORGANIZACAO e REVISAR-CAPACIDADE: {@code organizacao=<uuid> resultado=... evento=<uuid>
  * motivo=...} (evento = auditoria gravada pelo banco, OK ou RECUSA).
  * Codigo de saida: 0 OK, 2 recusa, 3 falha confirmada, 4 desconhecido, 64 uso invalido.
  */
@@ -71,15 +75,27 @@ public final class OpsCli {
                     + " motivo=" + LogLocal.codigo(rr.motivo()));
             return codigo(rr.classe());
         }
-        if ("ativar-organizacao".equals(a[0])) {
+        if ("vincular-conta".equals(a[0])) {
+            if (a.length != 2 || a[1].isBlank()) {
+                err.println("uso invalido");
+                return 64;
+            }
+            ExecutorAtos.VinculoConta v = ex.vincularConta(a[1]);
+            out.println("vinculo=conta resultado=" + v.classe() + " motivo=" + LogLocal.codigo(v.motivo()));
+            return codigo(v.classe());
+        }
+        if ("ativar-organizacao".equals(a[0]) || "revisar-capacidade".equals(a[0])) {
             ExecutorAtos.ResultadoAtivacao ra;
             try {
                 if (a.length < 9) {
                     throw new IllegalArgumentException("argumentos");
                 }
                 String motivo = String.join(" ", Arrays.copyOfRange(a, 8, a.length));
-                ra = ex.ativarOrganizacao(UUID.fromString(a[1]), UUID.fromString(a[2]), motivo, Long.parseLong(a[3]), Long.parseLong(a[4]),
-                        Long.parseLong(a[5]), limiar(a[6]), limiar(a[7]));
+                ra = "ativar-organizacao".equals(a[0])
+                        ? ex.ativarOrganizacao(UUID.fromString(a[1]), UUID.fromString(a[2]), motivo, Long.parseLong(a[3]), Long.parseLong(a[4]),
+                                Long.parseLong(a[5]), limiar(a[6]), limiar(a[7]))
+                        : ex.revisarCapacidade(UUID.fromString(a[1]), UUID.fromString(a[2]), motivo, Long.parseLong(a[3]), Long.parseLong(a[4]),
+                                Long.parseLong(a[5]), limiar(a[6]), limiar(a[7]));
             } catch (RuntimeException e) {
                 err.println("uso invalido");
                 return 64;
