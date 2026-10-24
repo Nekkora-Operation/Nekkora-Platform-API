@@ -16,6 +16,8 @@
 #          (esperado/B22_diff_esperado.txt: tabela, colunas, CHECKs, indices, triggers, funcao de protecao e privilegios
 #          da Platform); catalogo = instalacao limpa A; invariantes; marcador versao=021.
 #     B3 - reaplicar a 021 e recusado pela pre-condicao; nada muda.
+#   C (identidade de backup): reproducao da revisao 1, aplicacao da atual e contraprovas de acesso efetivo.
+#   D (revisao anterior ja aplicada): checksum, equivalencia de esquema e compatibilidade, com o Flyway real.
 # O comportamento (fila cifrada, tentativas, posse vencida, prazo, concorrencia, protecoes) e coberto por MailOutboxIT
 # (nekkora-platform), com o papel real nekkora_platform.
 #
@@ -32,17 +34,20 @@ ELEVAR="${TESTE_ELEVAR:-011 012 013 016 017 018 019 020}"
 PROJETO="${TESTE_PROJETO:-nekkora-m021}"
 LIMPA="${PROJETO}-limpa"
 POP="${PROJETO}-populada"
+BKP="${PROJETO}-backup"
+REV="${PROJETO}-revanterior"
+IMAGEM_FLYWAY="${TESTE_IMAGEM_FLYWAY:-flyway/flyway:11-alpine}"
 SAIDA="$AQUI/saidas/$(date -u +%Y-%m-%dT%H%M%SZ)_${PROJETO}"
 IMAGEM=postgres:16-alpine
 PY=python3; "$PY" -c 1 >/dev/null 2>&1 || PY=python
 
 falha() {
     echo "ERRO: $*" >&2
-    echo "containers mantidos para inspecao. Remocao: docker rm -f -v $LIMPA $POP" >&2
+    echo "containers mantidos para inspecao. Remocao: docker rm -f -v $LIMPA $POP $BKP $REV" >&2
     exit 1
 }
 case "$PROJETO" in nekkora-platform|nekkora|*hml03*) falha "projeto '$PROJETO' reservado";; esac
-for c in "$LIMPA" "$POP"; do
+for c in "$LIMPA" "$POP" "$BKP" "$REV"; do
     docker container inspect "$c" >/dev/null 2>&1 && falha "container $c ja existe"
 done
 
@@ -175,6 +180,149 @@ diff "$SAIDA/B21_dados_021.txt" "$SAIDA/B31_dados.txt" > /dev/null || falha "B3:
 lista "$POP" nekkora > "$SAIDA/B31_catalogo.txt"
 diff "$SAIDA/B22_catalogo_021.txt" "$SAIDA/B31_catalogo.txt" > /dev/null || falha "B3: catalogo alterado"
 
+# ================================================================== C. identidade de backup da topologia de implantacao
+# (missao PLATFORM-API-V1-003): a homologacao (ops/homologacao/sql/bootstrap.sql, IMPLANTACAO.md sec. 1) tem backup_nekkora
+# LOGIN BYPASSRLS membro de pg_read_all_data. Na revisao 1 a invariante 1 da sec. 5 contava o SELECT HERDADO de
+# pg_read_all_data como acesso a mail_outbox e a 021 falhava na implantacao do ensaio-api-v1-002 (relatorio da missao).
+echo ">> C: 001-020 + identidade de backup (pg_read_all_data) -> 021 ($BKP)"
+sobe "$BKP" 20 020
+consulta "$BKP" nekkora "CREATE ROLE backup_nekkora LOGIN NOSUPERUSER NOCREATEROLE NOCREATEDB NOREPLICATION BYPASSRLS" > /dev/null
+consulta "$BKP" nekkora "GRANT pg_read_all_data TO backup_nekkora" > /dev/null
+lista "$BKP" nekkora > "$SAIDA/C00_catalogo_020.txt"
+echo "   C0: revisao 1 da 021 (bf977d7) com a identidade de backup: recusada pela invariante, nada muda"
+docker exec "$BKP" mkdir -p /nekkora-r1 > /dev/null
+git -C "$REPO" show bf977d7:db/migrations/021_correio_fila.sql > "$SAIDA/C01_021_revisao1.sql"
+[ "$(sha256sum "$SAIDA/C01_021_revisao1.sql" | cut -c1-64)" = 2aeaf4b9315b131110589ed507dd1464cf7af891280e8e394bdf22c55ab9207f ] || falha "C0: revisao 1 com outro sha256"
+docker cp "$SAIDA/C01_021_revisao1.sql" "$BKP":/nekkora-r1/021_correio_fila.sql > /dev/null
+if docker exec -e NEKKORA_DB=nekkora -e NEKKORA_DESDE=021 -e NEKKORA_ATE=021 -e NEKKORA_ELEVAR="$ELEVAR" -e NEKKORA_MIGRACOES=/nekkora-r1 \
+       "$BKP" sh /tmp/modelo.sh > "$SAIDA/C02_revisao1.txt" 2>&1; then falha "C0: a revisao 1 aplicou com a identidade de backup (reproducao esperada)"; fi
+grep -qF "021: papel com acesso a mail_outbox alem da Platform: backup_nekkora" "$SAIDA/C02_revisao1.txt" || { cat "$SAIDA/C02_revisao1.txt"; falha "C0: recusa diferente da reproduzida"; }
+[ "$(consulta "$BKP" nekkora "SELECT to_regclass('public.mail_outbox') IS NULL")" = t ] || falha "C0: mail_outbox ficou"
+lista "$BKP" nekkora > "$SAIDA/C03_catalogo.txt"
+diff "$SAIDA/C00_catalogo_020.txt" "$SAIDA/C03_catalogo.txt" > /dev/null || falha "C0: catalogo alterado pela recusa"
+[ "$(estado_migrador "$BKP")" = "0|0|0 dono_do_banco=migrador_nekkora" ] || falha "C0: migrador fora de 0|0|0"
+echo "   C1: revisao atual com a identidade de backup: aplicada sem janela; invariantes depois da retirada"
+modelo "$BKP" 021 021 "$SAIDA/C10_021.txt" || { cat "$SAIDA/C10_021.txt"; falha "C1: 021 recusada com a identidade de backup"; }
+grep -q "aplicada versao=021 elevada=nao" "$SAIDA/C10_021.txt" || falha "C1: 021 aplicada com elevacao"
+[ "$(consulta "$BKP" nekkora "SELECT has_table_privilege('backup_nekkora', 'public.mail_outbox', 'SELECT')")" = t ] || falha "C1: backup sem a leitura herdada (o caso nao exercita a heranca)"
+invariantes "$BKP" C11
+lista "$BKP" nekkora > "$SAIDA/C12_catalogo_021.txt"
+diff "$SAIDA/A02_catalogo_021.txt" "$SAIDA/C12_catalogo_021.txt" > "$SAIDA/C12_diff_limpa.txt" || falha "C1: catalogo difere da instalacao limpa (ver C12)"
+echo "   C2: a invariante recusa todo acesso efetivo fora da excecao do backup (cada caso em BEGIN ... ROLLBACK)"
+awk '/^-- === 5\. /{f=1} f && /^COMMIT;/{exit} f' "$M021" > "$SAIDA/C20_inv021.sql"
+[ "$(grep -c '^DO \$\$' "$SAIDA/C20_inv021.sql")" = 1 ] || falha "C2: extracao da sec. 5 da 021"
+c2() {   # $1 rotulo, $2 alteracao (vazia = controle), $3 papeis que a recusa tem de nomear (vazio = deve passar)
+    local o rc=0 m n
+    o="$({ echo "BEGIN;"; printf '%s\n' "$2"; cat "$SAIDA/C20_inv021.sql"; echo "ROLLBACK;"; } | psqlc "$BKP" nekkora 2>&1)" || rc=$?
+    m="$(echo "$o" | grep -m1 -o '021: .*' || echo '-')"
+    echo "$1|rc=$rc|$m" >> "$SAIDA/C21_contraprovas.txt"
+    if [ -z "$3" ]; then [ "$rc" = 0 ] || falha "C2 $1: controle recusado ($o)"; return 0; fi
+    [ "$rc" != 0 ] && [[ "$m" == "021: papel com acesso a mail_outbox alem da Platform: "* ]] || falha "C2 $1: esperada a recusa da invariante (rc=$rc: $o)"
+    for n in $3; do
+        [[ ", ${m#*Platform: }, " == *", $n, "* ]] || falha "C2 $1: a recusa nao nomeia $n ($m)"
+    done
+}
+c2 controle "" ""
+# concessao direta (ACL)
+c2 grant_explicito_ao_backup "GRANT SELECT ON public.mail_outbox TO backup_nekkora;" "backup_nekkora"
+c2 grant_de_coluna_ao_portal "GRANT SELECT (kind) ON public.mail_outbox TO nekkora_portal;" "nekkora_portal"
+c2 grant_a_public "GRANT SELECT ON public.mail_outbox TO PUBLIC;" "PUBLIC"
+c2 escrita_ao_backup "GRANT INSERT ON public.mail_outbox TO backup_nekkora;" "backup_nekkora"
+# heranca nao autorizada (sem nenhuma entrada nova na ACL da tabela): papel predefinido, cadeia, o proprio backup
+c2 heranca_pg_read_all_data "CREATE ROLE c2_leitor LOGIN; GRANT pg_read_all_data TO c2_leitor;" "c2_leitor"
+c2 heranca_pg_write_all_data "CREATE ROLE c2_escritor LOGIN; GRANT pg_write_all_data TO c2_escritor;" "c2_escritor"
+c2 heranca_do_backup "CREATE ROLE c2_via_backup LOGIN; GRANT backup_nekkora TO c2_via_backup;" "c2_via_backup"
+c2 cadeia_ate_predefinido "CREATE ROLE c2_grupo NOLOGIN; GRANT pg_read_all_data TO c2_grupo; CREATE ROLE c2_membro LOGIN; GRANT c2_grupo TO c2_membro;" "c2_grupo c2_membro"
+c2 cadeia_ate_concessao "CREATE ROLE c2_g2 NOLOGIN; GRANT SELECT (state) ON public.mail_outbox TO c2_g2; CREATE ROLE c2_m2 LOGIN; GRANT c2_g2 TO c2_m2;" "c2_g2 c2_m2"
+c2 membro_da_platform "CREATE ROLE c2_herdeiro NOLOGIN; GRANT nekkora_platform TO c2_herdeiro;" "c2_herdeiro"
+c2 set_role_sem_heranca "CREATE ROLE c2_setrole LOGIN; GRANT nekkora_platform TO c2_setrole WITH INHERIT FALSE;" "c2_setrole"
+c2 membro_do_dono "CREATE ROLE c2_dono NOLOGIN; GRANT migrador_nekkora TO c2_dono;" "c2_dono"
+# a excecao do backup e estreita: so leitura, so por pg_read_all_data
+c2 backup_em_pg_write_all_data "GRANT pg_write_all_data TO backup_nekkora;" "backup_nekkora"
+c2 backup_membro_de_outro_papel "CREATE ROLE c2_g3 NOLOGIN; GRANT SELECT ON public.mail_outbox TO c2_g3; GRANT c2_g3 TO backup_nekkora;" "backup_nekkora c2_g3"
+c2 backup_membro_da_platform "GRANT nekkora_platform TO backup_nekkora;" "backup_nekkora"
+echo "   C3: a revisao 2 (a1ab358) NAO via a heranca nao autorizada que a revisao atual recusa (lacuna fechada)"
+git -C "$REPO" show a1ab358:db/migrations/021_correio_fila.sql > "$SAIDA/C30_021_revisao2.sql"
+[ "$(sha256sum "$SAIDA/C30_021_revisao2.sql" | cut -c1-64)" = bf85b95bdc83712730e3d5e65059d23f912ea3d697ac6d7466d2d8324f734cd6 ] || falha "C3: revisao 2 com outro sha256"
+awk '/^-- === 5\. /{f=1} f && /^COMMIT;/{exit} f' "$SAIDA/C30_021_revisao2.sql" > "$SAIDA/C31_inv021_r2.sql"
+{ echo "BEGIN;"; echo "CREATE ROLE c3_leitor LOGIN; GRANT pg_read_all_data TO c3_leitor;"; cat "$SAIDA/C31_inv021_r2.sql"; echo "ROLLBACK;"; } \
+    | psqlc "$BKP" nekkora > "$SAIDA/C32_revisao2_heranca.txt" 2>&1 || falha "C3: a revisao 2 recusou a heranca (a lacuna nao se reproduz)"
+lista "$BKP" nekkora > "$SAIDA/C22_catalogo.txt"
+diff "$SAIDA/C12_catalogo_021.txt" "$SAIDA/C22_catalogo.txt" > /dev/null || falha "C2: catalogo alterado pelas contraprovas"
+
+# ================================================================== D. base com uma revisao ANTERIOR da 021 ja aplicada
+# Uma base registrada pelo Flyway com a 021 revisao 1 (ou 2) tem no historico o checksum daquela revisao. O caso mostra,
+# com o Flyway real (imagem do runner) e o migrador como usuario, como no runner: (D1) a revisao 1 so aplica numa base SEM
+# a identidade de backup (fora da topologia suportada); (D2) o esquema resultante e IDENTICO ao da revisao atual (as
+# revisoes diferem so na verificacao); (D3) o Flyway com a revisao atual RECUSA a base por checksum divergente, antes de
+# aplicar qualquer coisa (validateOnMigrate); (D4) a base satisfaz as invariantes da revisao atual, com e sem a identidade
+# de backup; (D5) demonstracao, SO nesta base descartavel, do procedimento revisado de realinhamento (flyway repair depois
+# de D2 e D4), que IMPLANTACAO.md nao permite ao runner e que exige decisao da responsavel.
+echo ">> D: 001-020 + 021 revisao 1 registrada pelo Flyway, depois a revisao atual ($REV)"
+sobe "$REV" 20 020
+FW_SENHA="descartavel-$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+consulta "$REV" nekkora "ALTER ROLE migrador_nekkora PASSWORD '$FW_SENHA'" > /dev/null
+mkdir -p "$SAIDA/D_r1" "$SAIDA/D_atual"
+cp "$SAIDA/C01_021_revisao1.sql" "$SAIDA/D_r1/V021__correio_fila.sql"
+cp "$M021" "$SAIDA/D_atual/V021__correio_fila.sql"
+fw() {   # $1 diretorio com a 021, $2 arquivo de saida, demais: comando do Flyway
+    local dir="$1" out="$2" c="${PROJETO}-flyway" rc=0
+    shift 2
+    docker container inspect "$c" >/dev/null 2>&1 && docker rm -f "$c" > /dev/null
+    docker create --name "$c" --network "container:$REV" "$IMAGEM_FLYWAY" \
+        -url=jdbc:postgresql://localhost:5432/nekkora -user=migrador_nekkora -password="$FW_SENHA" \
+        -cleanDisabled=true -validateOnMigrate=true -outOfOrder=false -baselineOnMigrate=false \
+        -executeInTransaction=false -postgresql.transactional.lock=false "$@" > /dev/null
+    docker cp "$dir/." "$c":/flyway/sql > /dev/null
+    docker start -a "$c" > "$out" 2>&1 || rc=$?
+    docker rm -f "$c" > /dev/null
+    return $rc
+}
+historico() { consulta "$REV" nekkora "SELECT string_agg(version || ':' || success || ':' || coalesce(checksum::text, '-'), ' ' ORDER BY installed_rank) FROM public.flyway_schema_history"; }
+sem_historico() { grep -v 'flyway_schema_history' "$1"; }
+fw "$SAIDA/D_r1" "$SAIDA/D10_baseline.txt" -baselineVersion=020 -baselineDescription=base_020_da_suite baseline \
+    || { cat "$SAIDA/D10_baseline.txt"; falha "D1: baseline da base descartavel"; }
+fw "$SAIDA/D_r1" "$SAIDA/D11_migrate_r1.txt" migrate || { cat "$SAIDA/D11_migrate_r1.txt"; falha "D1: revisao 1 recusada sem a identidade de backup"; }
+historico > "$SAIDA/D12_historico_r1.txt"
+grep -qE '^020:true:- 021:true:-?[0-9]+$' "$SAIDA/D12_historico_r1.txt" || falha "D1: historico inesperado ($(cat "$SAIDA/D12_historico_r1.txt"))"
+[ "$(estado_migrador "$REV")" = "0|0|0 dono_do_banco=migrador_nekkora" ] || falha "D1: migrador fora de 0|0|0"
+echo "   D2: esquema da revisao 1 = esquema da revisao atual (instalacao limpa A)"
+lista "$REV" nekkora > "$SAIDA/D20_catalogo_r1.txt"
+sem_historico "$SAIDA/A02_catalogo_021.txt" > "$SAIDA/_a.txt"
+sem_historico "$SAIDA/D20_catalogo_r1.txt" > "$SAIDA/_d.txt"
+diff "$SAIDA/_a.txt" "$SAIDA/_d.txt" > "$SAIDA/D20_diff_limpa.txt" || falha "D2: esquema da revisao 1 difere do da revisao atual (ver D20_diff_limpa.txt)"
+echo "   D3: Flyway com a revisao atual recusa por checksum; nada muda"
+if fw "$SAIDA/D_atual" "$SAIDA/D30_migrate_atual.txt" migrate; then falha "D3: Flyway aceitou a base com o checksum da revisao 1"; fi
+grep -qi "checksum mismatch for migration version 021" "$SAIDA/D30_migrate_atual.txt" || { cat "$SAIDA/D30_migrate_atual.txt"; falha "D3: recusa diferente do checksum"; }
+if fw "$SAIDA/D_atual" "$SAIDA/D31_validate_atual.txt" validate; then falha "D3: validate aceitou"; fi
+grep -qi "checksum mismatch for migration version 021" "$SAIDA/D31_validate_atual.txt" || { cat "$SAIDA/D31_validate_atual.txt"; falha "D3: validate recusou por outro motivo"; }
+[ "$(historico)" = "$(cat "$SAIDA/D12_historico_r1.txt")" ] || falha "D3: historico alterado pela recusa"
+lista "$REV" nekkora > "$SAIDA/D32_catalogo.txt"
+diff "$SAIDA/D20_catalogo_r1.txt" "$SAIDA/D32_catalogo.txt" > /dev/null || falha "D3: catalogo alterado pela recusa"
+echo "   D4: invariantes da revisao atual na base da revisao 1, sem e com a identidade de backup"
+invariantes "$REV" D40
+consulta "$REV" nekkora "CREATE ROLE backup_nekkora LOGIN NOSUPERUSER NOCREATEROLE NOCREATEDB NOREPLICATION BYPASSRLS" > /dev/null
+consulta "$REV" nekkora "GRANT pg_read_all_data TO backup_nekkora" > /dev/null
+invariantes "$REV" D41
+awk '/^-- === 5\. /{f=1} f && /^COMMIT;/{exit} f' "$SAIDA/C01_021_revisao1.sql" > "$SAIDA/D42_inv021_r1.sql"
+if { echo "BEGIN;"; cat "$SAIDA/D42_inv021_r1.sql"; echo "ROLLBACK;"; } | psqlc "$REV" nekkora > "$SAIDA/D42_inv_r1.txt" 2>&1; then
+    falha "D4: a invariante da revisao 1 aceitou a identidade de backup"
+fi
+grep -qF "alem da Platform: backup_nekkora" "$SAIDA/D42_inv_r1.txt" || falha "D4: recusa da revisao 1 diferente"
+echo "   D5: realinhamento revisado (SO nesta base descartavel; o runner nunca repara)"
+fw "$SAIDA/D_atual" "$SAIDA/D50_repair.txt" repair || { cat "$SAIDA/D50_repair.txt"; falha "D5: repair"; }
+fw "$SAIDA/D_atual" "$SAIDA/D51_validate.txt" validate || { cat "$SAIDA/D51_validate.txt"; falha "D5: validate depois do repair"; }
+historico > "$SAIDA/D52_historico.txt"
+[ "$(cut -d' ' -f1 "$SAIDA/D52_historico.txt")" = "$(cut -d' ' -f1 "$SAIDA/D12_historico_r1.txt")" ] || falha "D5: linha da 020 alterada"
+[ "$(cut -d' ' -f2 "$SAIDA/D52_historico.txt" | cut -d: -f1-2)" = "021:true" ] || falha "D5: linha da 021"
+[ "$(cut -d' ' -f2 "$SAIDA/D52_historico.txt")" != "$(cut -d' ' -f2 "$SAIDA/D12_historico_r1.txt")" ] || falha "D5: checksum nao realinhado"
+lista "$REV" nekkora > "$SAIDA/D53_catalogo.txt"
+diff "$SAIDA/D32_catalogo.txt" "$SAIDA/D53_catalogo.txt" > "$SAIDA/D53_diff.txt" || true
+grep -E '^[<>]' "$SAIDA/D53_diff.txt" | grep -v "backup_nekkora" > "$SAIDA/D53_fora.txt" || true
+[ ! -s "$SAIDA/D53_fora.txt" ] || { cat "$SAIDA/D53_fora.txt"; falha "D5: o realinhamento mudou o esquema"; }
+consulta "$REV" nekkora "ALTER ROLE migrador_nekkora PASSWORD NULL" > /dev/null
+rm -f "$SAIDA/_a.txt" "$SAIDA/_d.txt"
+
 {
     echo "A: 21 migrations (001-021); janelas SUPERUSER com retirada 0|0|0: $(grep -c 'SUPERUSER revogado, estado 0|0|0' "$SAIDA/entrypoint_$LIMPA.txt") (021 sem janela); invariantes 012/013/014(adaptada)/016/017(adaptada)/019(adaptada)/020/021 DEPOIS da retirada ($(cat "$SAIDA/A01_estado_migrador.txt")): OK; marcador versao=021"
     echo "B: $(cat "$SAIDA/B01_massa_001_012.txt")"
@@ -182,7 +330,16 @@ diff "$SAIDA/B22_catalogo_021.txt" "$SAIDA/B31_catalogo.txt" > /dev/null || falh
     echo "B: tabelas no instantaneo (public e ops): $(wc -l < "$SAIDA/B05_dados_020.txt" | tr -d ' ')"
     echo "B2: 021 sem janela: diff de dados vazio; catalogo 020->021 = exatamente $(wc -l < "$SAIDA/B22_diff_resumo.txt" | tr -d ' ') linhas previstas; = instalacao limpa; invariantes ($(cat "$SAIDA/B24_estado_migrador.txt")): OK; marcador versao=021"
     echo "B3: reaplicacao recusada pela pre-condicao; nada muda"
+    echo "C0: revisao 1 (2aeaf4b9...) com backup_nekkora em pg_read_all_data: recusada ('021: papel com acesso a mail_outbox alem da Platform: backup_nekkora'), sem efeito"
+    echo "C1: revisao atual com a mesma identidade: aplicada sem janela, leitura herdada do backup presente, invariantes depois da retirada OK, catalogo = instalacao limpa"
+    echo "C2: $(grep -c . "$SAIDA/C21_contraprovas.txt") casos (controle; concessao direta, de coluna, a PUBLIC e escrita; heranca de pg_read_all_data, de pg_write_all_data, do backup, por cadeia ate predefinido e ate concessao; membro e SET ROLE sem heranca da Platform; membro do dono; backup com escrita, com outro papel e membro da Platform): todos como esperado"
+    echo "C3: a invariante da revisao 2 aceita um papel qualquer membro de pg_read_all_data (lacuna); a atual o recusa (C2 heranca_pg_read_all_data)"
+    echo "D1: revisao 1 registrada pelo Flyway numa base sem a identidade de backup: $(cat "$SAIDA/D12_historico_r1.txt")"
+    echo "D2: esquema da revisao 1 = esquema da revisao atual (fora a tabela de historico do Flyway)"
+    echo "D3: Flyway com a revisao atual: recusa por checksum divergente da 021 (migrate e validate), historico e catalogo intactos"
+    echo "D4: invariantes da revisao atual OK na base da revisao 1, sem e com backup_nekkora em pg_read_all_data; a invariante da revisao 1 recusa o backup"
+    echo "D5: realinhamento revisado so na base descartavel: repair -> validate OK; historico $(cat "$SAIDA/D52_historico.txt"); esquema intacto"
 } | tee "$SAIDA/resumo.txt"
 rm -f "$SAIDA/_b.txt"
-docker rm -f -v "$LIMPA" "$POP" > /dev/null
+docker rm -f -v "$LIMPA" "$POP" "$BKP" "$REV" > /dev/null
 echo "saidas: $SAIDA"
