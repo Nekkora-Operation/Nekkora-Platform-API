@@ -122,7 +122,7 @@ Regressão completa do candidato final: registrada no PR.
 Decisão da revisão: alterações posteriores também exigem autorização e auditoria.
 
 - **`public.org_activation_revise`:** mesmos controles da ativação (grupo `nekkora_org_activation`, certificado registrado, conta responsável provada e de outra organização, limites explícitos dos cinco recursos, motivo). Auditoria na mesma tabela, com `act = 2` (a ativação é `act = 1`).
-- **Recusas:** `NAO_ATIVADA` (a revisão não substitui a ativação); `SEM_MUDANCA` quando os limites pedidos são os do último ato OK auditado. Isso torna seguras a repetição de um resultado incerto e a concorrência: a segunda revisão igual espera a primeira e recebe `SEM_MUDANCA`.
+- **Recusas:** `NAO_ATIVADA` (a revisão não substitui a ativação); `SEM_MUDANCA` quando os limites pedidos são os do último ato OK auditado. Isso torna seguras a repetição de um resultado incerto e a concorrência: a segunda revisão igual espera a primeira e recebe `SEM_MUDANCA`. Com valores diferentes, ver §7.5.
 - **Gatilho dos limites:** com a organização ATIVADA, nenhuma revisão dos recursos 1 a 5 é aceita fora de um ato em curso. O ato grava em `ops_activation.open_acts` a organização e a transação corrente (`pg_current_xact_id`) e apaga a linha antes de terminar; nada fica confirmado, e a invariante confere a tabela vazia. Um GUC de sessão não serviria, porque qualquer papel pode defini-lo. Só o INSERT direto de superusuário continua isento.
 - **Sem ampliar privilégio:** a comparação do `SEM_MUDANCA` usa a auditoria, não `organization_resource_limit_revisions` (o dono das funções não tem acesso a ela; a primeira versão da revisão tentou ler e o teste a pegou).
 - **CLI:** `revisar-capacidade` (mesmos argumentos de `ativar-organizacao`) e `vincular-conta <código>`. A CLI não tinha como registrar o vínculo da conta, que a ativação exige; agora o operador vincula com o código que o titular emite na própria sessão (`POST /api/v1/o/{org}/me/operational-link-code`, da 016). Só o sha256 vai ao banco.
@@ -135,9 +135,9 @@ A invariante da 022 conferia só a ACL de `ops_activation`, a mesma escolha da 0
 
 | Prova | Resultado |
 |---|---|
-| `OrgActivationIT` | **9/9**: os 6 anteriores (o da ativação agora confere que o provisionamento direto é recusado depois de ATIVADA) + revisão auditada, recusas da revisão sem efeito e revisão concorrente com espera observada. O vínculo da conta passa pela CLI, e o reuso do código é recusado |
+| `OrgActivationIT` | **10/10** no HEAD final (§7.6): os 6 anteriores (o da ativação agora confere que o provisionamento direto é recusado depois de ATIVADA) + revisão auditada, recusas da revisão sem efeito, revisão concorrente **igual** com espera observada e revisão concorrente com **valores diferentes** (§7.5). O vínculo da conta passa pela CLI, e o reuso do código é recusado |
 | `db/tests/ativacao-022` | **OK** (execução `2026-10-24T040432Z`): C2 com os cinco recursos recusados pelo provisionamento direto numa organização ATIVADA; C4 e C5 nos dois atos; **C7**, 7 contraprovas de acesso efetivo; diff de catálogo 021 → 022 com exatamente 21 linhas previstas |
-| Regressão Maven completa | **580 testes, 0 falhas, 0 erros, 0 ignorados** no `a24e181` (`regressao_maven.sh`, fontes estáveis): 570 da base, 9 do `OrgActivationIT` e 1 da API. O commit seguinte (`64b46ea`) só toca ferramentas de teste da homologação |
+| Regressão Maven completa | **580 testes, 0 falhas, 0 erros, 0 ignorados** no `a24e181` (`regressao_maven.sh`, fontes estáveis): 570 da base, 9 do `OrgActivationIT` e 1 da API. Depois dele, até o HEAD final, o Java só ganha o 10º caso do `OrgActivationIT` (§7.6) |
 | Recusa da atualização numa base com a 021 anterior | `homologacao.sh atualizar ensaio-api-v1-002` recusou antes de qualquer mudança: `copia de migrations do ambiente diferente do repositorio: 021(ambiente bf85b95bdc83... repositorio 153c595a7ef9...)`. O ambiente continuou LIBERADO, com a cópia e o `ambiente.env` byte a byte iguais |
 | **Atualização 021 → 022 de base populada, pelo runner** | `ensaio-api-v1-003`, populado com as jornadas e a 016. O `atualizar` preservou a cópia 001–021, gravou a nova com a 022 e reconstruiu as imagens do commit `6280314`. O `implantar` passou no pré-voo da 022 (`PREFLIGHT_OK`, 10 conferências); a janela SUPERUSER durou de 04:32:53 a 04:32:57 e foi retirada e conferida em 0\|0\|0; resultado **LIBERADO** (001–022, `flyway validate` OK). **Dados idênticos:** contagens e md5 do conteúdo de 8 tabelas iguais antes, depois do `atualizar` e depois da 022. Classificação: as 3 organizações anteriores ficaram AGUARDANDO_ATIVACAO, origem 2, todas com capacidade zero; nenhuma organização sem estado. O ramo de existentes com capacidade (ATIVADA, origem 2) é provado na suíte (B2) |
 | Jornadas pela API depois da 022 | **96 casos, 0 falhas**, em duas rodadas, com varredura sem achados. As organizações criadas depois nascem AGUARDANDO_ATIVACAO, origem 1 |
@@ -159,3 +159,91 @@ Linha `022 <sha256> tipo=superuser ambiente=ensaio-api-v1-003` em `implantacao/e
 - backup só em `pg_read_all_data`.
 
 O `criar` com `HOMOLOG_ATE=021` exige só as linhas até a 021. A 022 entra pelo `atualizar`, que confere a linha antes de mudar qualquer coisa.
+
+### 7.5 Revisões simultâneas com valores diferentes
+
+Comportamento definido:
+- **Serialização:** as duas revisões travam a organização (`FOR UPDATE`, na ordem organização → estado → operador) antes de qualquer decisão. A segunda espera o commit ou o rollback da primeira; nenhuma decide sobre um estado que a outra ainda pode mudar.
+- **Valores absolutos:** cada revisão define os cinco limites que pediu; não soma nem mescla com a outra. A que obtém o lock por último prevalece.
+- **Decisão depois do lock:** autorização, conta responsável e `SEM_MUDANCA` são avaliados depois dos locks, com o último ato OK já confirmado. Se a segunda pede os mesmos valores da primeira, recebe `SEM_MUDANCA`, auditada e sem efeito. Se pede valores diferentes, aplica.
+- **Auditoria consistente:** cada ato OK grava o próprio evento (`act = 2`, operador, sessão, certificado, responsável, motivo, os cinco valores) e as próprias 5 revisões de limite. A ordem dos eventos (`created_at`, gravado depois do lock) é a ordem do lock. Os limites vigentes são sempre os do último ato OK auditado.
+- **Atualização perdida:** a segunda revisão não sabe que a primeira mudou os valores no intervalo. Fica registrada na auditoria, com os dois atos, mas não é recusada. Se a responsável quiser recusar esse caso, o ato pode receber o evento esperado como base (`LIMITES_ALTERADOS`). Não implementei: muda a CLI e não foi pedido.
+
+Prova com intercalamento controlado no `OrgActivationIT` (`revisaoConcorrenteDiferenteSerializaNaOrdemDoLockEAuditaAsDuas`):
+- dois operadores do grupo, cada um com a própria conta responsável;
+- A revisa para 3/2/20 e segura a transação;
+- B pede 5/4/50 com alerta de logs de 1 GiB pela CLI e fica esperando o lock, observado em `pg_stat_activity`;
+- antes do commit de A, os limites continuam os da ativação;
+- depois do commit, B termina OK e os limites ficam os de B;
+- dois eventos OK, cada um com o próprio operador, responsável, motivo, valores e 5 revisões, na ordem A → B, e nenhuma recusa;
+- as revisões de limite vigentes são exatamente as do evento de B, e há 10 revisões novas;
+- repetir os valores de A em seguida não é `SEM_MUDANCA` (a referência é o último ato, de B): aplica e volta a A;
+- `open_acts` termina vazia.
+
+A homologação (J6) prova a concorrência da ativação entre dois processos reais, sem controlar o intercalamento. A das revisões fica no teste, onde o intercalamento é controlado.
+
+### 7.6 Estado final do `ensaio-api-v1-003` e resultados por commit candidato
+
+**O `ensaio-api-v1-003` terminou na 022.** Conferência somente leitura em 2026-10-24T12:3xZ (`evidencias/ensaio-api-v1-003/estado-final.txt`):
+- `ambiente.env`: `HOMOLOG_ATE=022`, `HOMOLOG_COMMIT=6280314`;
+- histórico do Flyway 001–022, todas com sucesso;
+- a cópia imutável das migrations do ambiente é byte a byte igual a `db/migrations` do candidato deste PR (001–022), do #17 e do #16 (001–021);
+- migrador em 0|0|0, `open_acts` vazia;
+- 3 organizações AGUARDANDO_ATIVACAO e 4 ATIVADA, nenhuma ATIVADA sem ato de ativação OK auditado;
+- Platform e Portal em execução com as imagens `:6280314`;
+- lista de elevação do candidato com o mesmo sha256 (`bf040a47…`) usado na implantação da 022.
+
+**Linha do tempo** (UTC, 2026-10-24; commits do runner e das migrations na worktree):
+
+| Instante | Etapa | Commit | Resultado |
+|---|---|---|---|
+| 04:11 | criação (parada antes da 016) | HEAD `b9b6619`, imagens `a39f684` | OK |
+| 04:13 | implantação 016–021 | `b9b6619` | janelas 016–020 retiradas em 0\|0\|0; LIBERADO |
+| 04:15 | preparar-016 | `b9b6619` | OK |
+| **04:15** | **jornadas pela API, antes da 022** | `b9b6619` | **96 casos, 0 falhas** |
+| 04:18 e 04:25 | testar-016 | `b9b6619` | B5–B8a OK; B10 e B11 PARCIAIS; B12 OK na 2ª execução |
+| 04:32 | atualizar 021 → 022 | HEAD `c4c6b3e`, imagens `6280314` | cópia anterior preservada |
+| 04:32 | implantação da 022 | `c4c6b3e` | pré-voo OK; janela retirada em 0\|0\|0; LIBERADO; 8 tabelas idênticas |
+| **04:33 e 04:40** | **jornadas pela API, depois da 022** | `c4c6b3e` | **96 casos, 0 falhas**, nas duas rodadas |
+| 04:36 e 04:38 | jornada da ativação, tentativas 1 e 2 | `c4c6b3e` | FALHA por defeitos do roteiro (§7.3), preservadas |
+| **04:43** | **jornada da ativação, final** | `c4c6b3e` + o roteiro corrigido, commitado em `a24e181` | **11 OK, 0 falha** |
+
+**Do implantado ao candidato:**
+- o `jornada_ativacao.sh` é idêntico de `a24e181` até o candidato;
+- de `c4c6b3e` ao candidato, `db/migrations` e `implantacao/` não mudam;
+- no runner, só o `atualizar` passa a aceitar a lista alternativa de laboratório (§7.7). O ambiente usou a lista revisada, e o caminho dela não mudou;
+- nas fontes das imagens, de `6280314` ao candidato, só muda o `OrgActivationIT.java`. Esse teste não entra nas imagens da Platform e do Portal, e o job de operação copia só `FerramentaHomologacao`, `IdpSimulado` e `Pki`.
+
+**Candidato deste PR: `1a9351e`.** Os commits posteriores só acrescentam este relatório e evidências.
+
+| Prova | Commit | Resultado |
+|---|---|---|
+| `OrgActivationIT` | `8d9af05`; o Java é idêntico em `1a9351e` | **10 testes, 0 falhas, 0 erros, 0 ignorados** |
+| Regressão Maven completa | `a24e181` | **580 testes, 0 falhas, 0 erros, 0 ignorados**. Até o candidato, o Java só ganha o 10º caso do `OrgActivationIT`; não reexecutei a regressão completa |
+| CI (`./mvnw -B -ntp test`) | HEAD do PR | ver os checks do PR |
+| `validar-config` | `1a9351e`, worktree limpa | ver a tabela da descrição do PR |
+| `db/tests/ativacao-022` | execução `2026-10-24T040432Z`; a 022 é a mesma desde então (sha `b752c7aa…`) | OK |
+| Janela da 022 em recusa, falha e sucesso | HEAD `b10d88f`, imagens `8d9af05` (§7.7) | 3 de 3 como esperado |
+
+### 7.7 Janela de elevação da 022: retirada em falha e em sucesso
+
+Faltava à 022 a prova da retirada em falha, que a 016–020 tinham no laboratório das janelas. Foi feita num laboratório descartável novo, o `ensaio-api-v1-003-j022` (sub-redes 10.252.88/89, porta 55764). Usou uma lista alternativa com 016–020 e 022 vinculadas ao próprio id, e o roteiro `testes/janela_022.sh`, do mesmo desenho das janelas 016–020.
+
+1. Criação até a 021 pelo caminho real, LIBERADO.
+2. O `atualizar` sem a lista do laboratório foi **recusado antes de qualquer mudança**: a linha da 022 na lista revisada é do `ensaio-api-v1-003`. Para isso, o `atualizar` passou a usar a mesma lista que o `implantar` usará: a revisada ou, só em `ensaio-*`, a alternativa `HOMOLOG_ELEVACAO_ARQ`, como no `criar` e no `implantar`. O registro da atualização grava qual lista e o sha256.
+3. Com a lista do laboratório, o `atualizar` acrescentou a 022.
+4. Resultado, 0 linhas fora do esperado:
+
+| Caso | Provocação | Resultado |
+|---|---|---|
+| P, recusa pelo pré-voo | `nekkora_org_activation` criado por fora com `CREATEDB` | conferência 7 em FALHA, `PREFLIGHT_FALHOU`; código 2; **nenhuma concessão**; migrador 0\|0\|0; 022 fora do histórico |
+| F, falha dentro da janela | conexões do migrador em `default_transaction_read_only` | SUPERUSER concedido às 12:50:36.340; o servidor recusou ("cannot execute CREATE ROLE in a read-only transaction"); **revogado e conferido em 0\|0\|0 \[falha\]** às 12:50:41.224; código 2; 022 fora do histórico; nenhuma linha `success=false` |
+| S, sucesso | implantar sem parada | concedido às 12:50:50.936 e **revogado e conferido em 0\|0\|0 \[fim da versão 022\]** às 12:50:55.905; 022 com sucesso; LIBERADO; `open_acts` vazia |
+
+Evidências: `ops/homologacao/evidencias/ensaio-api-v1-003-j022/` (LEIA-ME, varredura com 25 valores e 0 achados). O laboratório fica preservado.
+
+**Elevação, resumo final:**
+- 016–020 e 022 vinculadas ao `ensaio-api-v1-003`, com o sha256 dos arquivos finais;
+- retirada provada em sucesso (`ensaio-api-v1-003`) e em falha e recusa do pré-voo (016–020 no `ensaio-api-v1-002-janelas`, 022 no `ensaio-api-v1-003-j022`);
+- os arquivos 016–020 são os mesmos desde aquele laboratório;
+- as linhas continuam propostas, para a sua aprovação.

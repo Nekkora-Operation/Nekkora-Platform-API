@@ -1,0 +1,28 @@
+Laboratorio ensaio-api-v1-003-j022: janela de elevacao da 022 em RECUSA DO PRE-VOO, FALHA e SUCESSO (missao
+PLATFORM-API-V1-003, revisao de 2026-10-24: "retirada comprovada em sucesso e falha" tambem para a 022). Mesmo desenho do
+laboratorio das janelas 016-020 (evidencias/ensaio-api-v1-002/janelas-016-020). Descartavel, sem dados; nunca e o
+ambiente de homologacao (ensaio-api-v1-003).
+
+Ordem (HEAD b10d88f, imagens do 8d9af05):
+1. criar com HOMOLOG_ATE=021 e a lista alternativa criacao/elevacao_lab.txt (016-020 e 022 vinculadas a este id), sub-redes
+   10.252.88/89, porta 127.0.0.1:55764; implantar ate a 021 (janelas 016-020 retiradas, LIBERADO); concluir-criacao.
+2. atualizar SEM a lista do laboratorio: recusado antes de qualquer mudanca, porque a linha da 022 na lista revisada e do
+   ensaio-api-v1-003 (atualizacao/recusa_com_lista_operacional.txt). O vinculo ao ambiente vale tambem no atualizar.
+3. atualizar com a lista do laboratorio (a mesma que o implantar usa): copia 001-021 preservada, 022 acrescentada
+   (atualizacao/registro.txt registra a lista e o sha256).
+4. testes/janela_022.sh (janela-022/resultado.txt), 0 linhas fora do esperado:
+   - P: papel nekkora_org_activation criado por fora com CREATEDB; o pre-voo recusou na conferencia 7
+     (022_P_preflight_preflight_conferencias.txt), codigo 2, nenhuma linha de janela da 022, migrador 0|0|0, 022 fora do
+     historico. O papel foi removido em seguida.
+   - F: conexoes do migrador em default_transaction_read_only; a janela foi concedida, o servidor recusou
+     ("cannot execute CREATE ROLE in a read-only transaction"), a janela foi revogada e conferida em 0|0|0 [falha], codigo
+     2, 022 fora do historico e nenhuma linha success=false.
+   - S: implantar sem parada; janela da 022 [fim da versao 022], 0|0|0, 022:true, LIBERADO; open_acts vazia.
+
+Nota: nesta execucao o script ainda nao copiava o arquivo de conferencias do pre-voo nem o citava em motivo_da_falha.txt
+("conferencia 7 nao encontrada"). O arquivo 022_P_preflight_preflight_conferencias.txt foi copiado depois, sem alteracao,
+do registro do runner (saidas/ensaio-api-v1-003-j022/implantacao-20261024T125020Z/preflight_022.txt), e o script foi
+corrigido para copia-lo nas proximas execucoes. Nenhum resultado depende disso.
+
+varredura.txt: os 25 segredos do laboratorio (arquivos em ~/.nekkora/homologacao/ensaio-api-v1-003-j022) procurados nesta
+pasta, 0 achados.
