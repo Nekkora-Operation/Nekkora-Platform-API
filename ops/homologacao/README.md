@@ -11,6 +11,8 @@ ops/homologacao/homologacao.sh estado <id>     # LIBERADO só com migrador recup
 ops/homologacao/homologacao.sh recuperar <id>  # recupera o MIGRADOR (interrupção abrupta, falha na revogação); mesma trava no banco
 ops/homologacao/homologacao.sh implantar <id>  # aplica as versões pendentes; código 0 só com o ambiente LIBERADO ao fim
 ops/homologacao/homologacao.sh ensaio-interrupcao <id>   # controles da elevação; SÓ em ambiente descartável (id ensaio-*)
+ops/homologacao/homologacao.sh parar <id>      # para os containers do ambiente, sem remover nada
+ops/homologacao/homologacao.sh subir <id>      # sobe de novo; Platform, Portal e gateway só com o ambiente LIBERADO
 HOMOLOG_CONFIRMA_DESTRUIR=<id> ops/homologacao/homologacao.sh destruir <id>
 ops/homologacao/mapa_privilegios.sh            # mede o que a baseline exige da identidade de implantação
 ```
@@ -66,13 +68,35 @@ O runner para na primeira falha: sem nova tentativa, sem `repair`, sem `baseline
 
 Para liberar: `homologacao.sh recuperar <id>`, que obtém a trava no banco (senão recusa sem alterar nada), revoga, encerra as sessões, confere `0|0|0` e só então remove a trava local. Isso recupera o **migrador**. Se a instalação ficou incompleta, o ambiente **continua BLOQUEADO** até `homologacao.sh implantar <id>` concluir as versões pendentes. Procedimento completo em [IMPLANTACAO.md](IMPLANTACAO.md), §5.
 
-## Windows: checkout em caminho curto
+## Identidade e e-mail: 016–021 (`ensaio-api-v1-003`)
+
+Missão PLATFORM-API-V1-003. Relatório: `docs/relatorios/2026-10-23-api-v1-003-base-e-homologacao.md`. Só em ambiente descartável (`ensaio-*`), com o e-mail **simulado** na caixa do ensaio.
+
+```sh
+HOMOLOG_ATE=021 HOMOLOG_TRANSPORTE=homologacao HOMOLOG_REDE_INTERNA=10.252.92 HOMOLOG_REDE_BORDA=10.252.93 HOMOLOG_PORTA=55763   ops/homologacao/homologacao.sh criar ensaio-api-v1-003            # 001-015 e PARADA antes da 016
+HOMOLOG_AUTORIZA_ELEVACAO=1 ops/homologacao/homologacao.sh implantar ensaio-api-v1-003   # 016-020 com janela e pré-voo; 021 sem janela
+ops/homologacao/homologacao.sh concluir-criacao ensaio-api-v1-003  # senhas, volumes, Platform, Portal e gateway
+ops/homologacao/homologacao.sh preparar-016 ensaio-api-v1-003      # operadores, contatos e MFA da 016
+ops/homologacao/homologacao.sh jornadas-api ensaio-api-v1-003 [--somente J1,J2]   # jornadas pela API + varredura de segredos
+ops/homologacao/homologacao.sh testar-016 ensaio-api-v1-003        # avisos emergenciais (B5-B12)
+```
+
+- **`ensaio-api-v1-002` (preservado):** foi criado com a 021 **revisão 2**, que a revisão 3 substitui. A cópia de migrations dele (`saidas/ensaio-api-v1-002/migracoes`) é imutável, e a base continua coerente com ela. Ele não avança: a lista aceita uma linha por versão, e as linhas de 016–020 agora são do `ensaio-api-v1-003`. Além disso, levar a 021 revisão 3 até ele exigiria trocar o checksum registrado, o que o runner não faz (`IMPLANTACAO.md`, item 3; suíte `db/tests/correio-021`, caso D).
+
+- **Elevação:** 016–020 têm vínculo obrigatório (`VINCULO_OBRIGATORIO` em `lib/lista_elevacao.sh`). A linha tem de ser `tipo=superuser ambiente=<id exato>` e o pré-voo vem só de `implantacao/preflight/<versão>.sql`. Sem a linha, o `criar` recusa antes de criar qualquer recurso, e o runner recusa antes do Flyway. A 021 não tem janela.
+- **Sobreposições:** `compose.016.yml`, `compose.caixa.yml` e `compose.021.yml`. A última liga, só no ensaio, as chaves de cadastro, entrada geral, criação de organização, vinculação e recuperação de senha.
+- **Jornadas:** `testes/jornadas_api.py` fala só com o gateway e lê os tokens da caixa sem gravá-los. Cada caso é marcado API, CAIXA, BANCO (só leitura) ou PREP (estado preparado no banco: o que a API ainda não cria, por `sql/semear_api_v1.sql`). A varredura final procura todo valor visto nos logs dos serviços e na evidência, com controle positivo.
+- **Provas da elevação:** `testes/test_preflight_016_020.sh` (matriz de pré-voos contra base real) e `testes/janelas_016_020.sh <laboratório>` (falha dentro da janela, recusa pelo pré-voo e sucesso, por versão, num laboratório com lista alternativa).
+
+## Windows: checkout em caminho curto e fim de linha
 
 Algumas evidências têm até 142 caracteres a partir da raiz do repositório. Num diretório profundo, o checkout no Windows falha ("Filename too long"). Clone num caminho curto ou habilite caminhos longos:
 
 ```sh
-git clone -c core.longpaths=true <url>          # ou, uma vez: git config --global core.longpaths true
+git clone -c core.longpaths=true -c core.autocrlf=false <url>   # ou: git config core.longpaths true; git config core.autocrlf false
 ```
+
+Se o Git do sistema tiver `core.autocrlf=true` (padrão de algumas instalações no Windows), os arquivos sem regra em `.gitattributes` (`.txt`, `.patch`, `.sql` fora de `db/migrations`) saem em CRLF. Nesse caso, conferências estáticas que comparam bytes (lista de elevação, patch da proposta P3) falham por fim de linha, não por conteúdo.
 
 Os `.sh` e as migrations são LF (`.gitattributes`). O sha256 autorizado em `implantacao/elevacao.txt` é o dos bytes LF versionados. Uma cópia com CRLF tem outro sha256, e a elevação é recusada.
 

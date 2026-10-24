@@ -1,0 +1,6 @@
+containers: antes 46 (protegidos 41), depois 46 (protegidos 41), do ambiente 5
+redes: antes 23 (protegidos 21), depois 23 (protegidos 21), do ambiente 2
+volumes: antes 147 (protegidos 143), depois 147 (protegidos 143), do ambiente 4
+imagens: antes 49 (protegidos 46), depois 49 (protegidos 46), do ambiente 3
+objetos sem rotulo (ausencia legitima, lidos por completo): 26
+B12 OK: inventario completo e identico por ID fora do ambiente (containers, redes, volumes, imagens)

@@ -1,0 +1,8 @@
+servidor_versao_maior_16|OK|16.15
+sslinfo_disponivel_nao_confiavel_nao_instalada|OK|1.2 trusted=false superuser=true instalada=false
+schema_ops_ausente|OK|-
+mfa_events_sem_ops_request_id|OK|-
+historico_001_015_com_sucesso_sem_016_sem_falha|OK|001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true
+migrador_sem_atributo_nem_acl_de_parametro|OK|0 ACL de parametro no total
+papeis_016_ausentes_ou_compativeis_sem_participacao|OK|nenhum pre-existente
+PREFLIGHT_OK

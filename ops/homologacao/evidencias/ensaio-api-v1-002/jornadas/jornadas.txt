@@ -1,0 +1,107 @@
+jornada|caso|tipo|resultado|esperado|obtido
+J1|cadastro: pedido|API|OK|202|202
+J1|cadastro: mensagem de confirmacao com token, para a titular|CAIXA|OK|token presente|sim
+J1|cadastro: confirmacao pela titular|API|OK|204|204
+J1|cadastro: nenhuma sessao automatica (sem cookie de sessao de identidade)|API|OK|sem +__Host-nekkora_id|nenhum
+J1|cadastro: GET /me/session sem sessao|API|OK|401|401
+J1|cadastro: token de uso unico (reuso recusado)|API|OK|400|400
+J1|identidade ACTIVE e e-mail verificado depois da confirmacao|BANCO|OK|2|true|2|true
+J1|nota|-|-|-|duracao 5.1 s
+J2|senha errada: 401 generico|API|OK|401|401
+J2|senha certa, identidade sem fator: mfa_enrollment_required|API|OK|200 mfa_enrollment_required|200 mfa_enrollment_required
+J2|cadastro do primeiro fator: otpauth|API|OK|200|200
+J2|confirmacao com codigo errado: 401|API|OK|401|401
+J2|confirmacao do fator emite a sessao (cookie) com codigos de recuperacao|API|OK|200 +cookie codigos restricted=false|200 -__Host-nekkora_id_mfa,+__Host-nekkora_id 10
+J2|sessao de identidade valida e nao restrita|API|OK|200 restricted=false|200
+J2|logout|API|OK|204|204
+J2|depois do logout: sem sessao|API|OK|401|401
+J2|nova entrada: senha + TOTP do fator confirmado|API|OK|200 restricted=false|200
+J2|passo TOTP ja aceito nao serve de novo (anti-replay)|API|OK|401|401
+J2|nota|-|-|-|duracao 2.1 s
+J3|entrada por codigo de recuperacao: sessao RESTRITA|API|OK|200 restricted=true|200 True
+J3|demais sessoes revogadas no uso do codigo|API|OK|401|401
+J3|sessao restrita nao lista organizacoes|API|OK|403|403
+J3|sessao restrita nao faz step-up|API|OK|403|403
+J3|substituicao do fator na sessao restrita: otpauth novo|API|OK|200|200
+J3|confirmar com o fator ANTIGO: recusado|API|OK|403|403
+J3|confirmar com o fator NOVO: restricao levantada, codigos novos|API|OK|200 restricted=false|200
+J3|mesma sessao, agora sem restricao|API|OK|200 restricted=false|200
+J3|sessao liberada lista organizacoes|API|OK|200|200
+J3|TOTP do fator antigo nao vale mais (step-up)|API|OK|403|403
+J3|TOTP do fator novo vale (step-up)|API|OK|204|204
+J3|codigos antigos invalidados pela substituicao|API|OK|401|401
+J3|aviso NOTICE_RECOVERY_CODE_USED a titular|CAIXA|OK|presente|sim
+J3|aviso NOTICE_MFA_REPLACED a titular|CAIXA|OK|presente|sim
+J3|nota|-|-|-|duracao 47.2 s
+J4|segunda sessao (outro navegador)|API|OK|200|200
+J4|troca de senha SEM step-up: recusada|API|OK|403|403
+J4|step-up com TOTP|API|OK|204|204
+J4|troca com senha atual errada: recusada|API|OK|403|403
+J4|troca de senha com step-up|API|OK|204|204
+J4|a outra sessao foi revogada|API|OK|401|401
+J4|a sessao da requisicao continua|API|OK|200|200
+J4|senha antiga nao entra|API|OK|401|401
+J4|regeneracao dos codigos (step-up ainda valido)|API|OK|200|200
+J4|conjunto anterior de codigos invalidado|API|OK|401|401
+J4|aviso NOTICE_PASSWORD_CHANGED a titular|CAIXA|OK|presente|sim
+J4|aviso NOTICE_RECOVERY_CODES_REGENERATED a titular|CAIXA|OK|presente|sim
+J4|MFA intacto depois das trocas (um fator confirmado e ativo)|BANCO|OK|1|1
+J4|nota|-|-|-|duracao 32.8 s
+J5|pedido para e-mail desconhecido: 202 uniforme|API|OK|202|202
+J5|pedido da titular: 202|API|OK|202|202
+J5|mensagem de recuperacao com token para a titular|CAIXA|OK|token|sim
+J5|confirmacao: senha trocada, nenhuma sessao criada|API|OK|204 sem cookie|204 
+J5|token de recuperacao de uso unico|API|OK|400|400
+J5|todas as sessoes de identidade revogadas|API|OK|401|401
+J5|MFA preservado: a nova entrada pede o fator (nao o cadastro)|API|OK|200 mfa_required|200 mfa_required
+J5|entrada com a senha nova e o mesmo fator|API|OK|200|200
+J5|nota|-|-|-|duracao 20.9 s
+J6|identidade nova: lista vazia e canCreateOrganization|API|OK|200 [] true|200 {'organizations': [], 'canCreateOrganization': True}
+J6|criacao sem step-up: recusada|API|OK|403|403
+J6|criacao com step-up: 201|API|OK|201|201
+J6|a organizacao criada aparece com ORG_ADMIN|API|OK|['ORG_ADMIN']|['ORG_ADMIN']
+J6|troca pela sessao de organizacao|API|OK|sessao_criada +cookie|200 sessao_criada
+J6|GET /o/{org}/me na sessao de organizacao|API|OK|200|200
+J6|organizacao alheia/inexistente: sem_acesso|API|OK|sem_acesso|sem_acesso
+J6|capacidade inicial: 1-3 FINITE 0 (sem execucao), 4-5 UNLIMITED|BANCO|OK|1:1/0 2:1/0 3:1/0 4:2/- 5:2/-|1:1/0 2:1/0 3:1/0 4:2/- 5:2/-
+J6|conta criada pela identidade sem credencial local|BANCO|OK|0|0
+J6|nota|-|-|-|duracao 6.1 s
+J7|organizacao legada com duas contas antigas (semear_api_v1.sql)|PREP|OK|SEMEADURA_API_V1_OK|['SEMEADURA_API_V1_OK']
+J7|conta antiga: primeiro acesso pela entrada local (fator cadastrado pela API)|API|OK|200|200
+J7|identidade com o e-mail da conta antiga|API|OK|204|204
+J7|vinculacao etapa 1 com prova errada da conta antiga: 401 unico|API|OK|401|401
+J7|vinculacao etapa 1: prova da conta antiga (senha + TOTP dela)|API|OK|204 +link|204 +__Host-nekkora_link
+J7|vinculacao etapa 2 sem step-up da identidade: recusada e o cookie do desafio expira|API|OK|403 -link|403 -__Host-nekkora_link
+J7|step-up da identidade|API|OK|204|204
+J7|vinculacao etapa 1 refeita|API|OK|204 +link|204
+J7|vinculacao etapa 2 com step-up: vinculada|API|OK|204|204
+J7|sessao local antiga revogada no ato|API|OK|401|401
+J7|entrada local da conta vinculada fechada (401 generico)|API|OK|401|401
+J7|a organizacao legada aparece para a identidade|API|OK|presente|200
+J7|troca pela sessao da organizacao legada (sessao vinculada)|API|OK|sessao_criada|sessao_criada
+J7|aviso de vinculacao a titular|CAIXA|OK|presente|sim
+J7|nota|-|-|-|duracao 27.2 s
+J8|membro: sessao local ativa|API|OK|200|200
+J8|membro acessa /o/{org}/me|API|OK|200|200
+J8|administradora (sessao vinculada) suspende o membro pela API|API|OK|204|204
+J8|sessao do membro suspenso cai na requisicao seguinte|API|OK|401|401
+J8|membro suspenso nao entra (401 generico)|API|OK|401|401
+J8|reativacao pela API|API|OK|204|204
+J8|membro reativado volta a entrar (sessoes antigas nao sao restauradas)|API|OK|200|200
+J8|vinculo do membro retirado (estado preparado no banco: a API v1 nao retira vinculo)|PREP|OK|status 4 (REVOKED)|['4']
+J8|sessao do membro sem vinculo cai na requisicao seguinte|API|OK|401|401
+J8|logout da identidade derruba a sessao de organizacao derivada|API|OK|401|401
+J8|organizacao suspensa (estado preparado no banco: a API v1 nao suspende organizacao)|PREP|OK|sessao_criada antes|True
+J8|sessao de organizacao ja emitida cai com a organizacao suspensa|API|OK|401|401
+J8|organizacao suspensa sai da lista|API|OK|ausente|200
+J8|troca recusada (sem_acesso, resposta unica)|API|OK|sem_acesso|sem_acesso
+J8|a sessao de identidade continua|API|OK|200|200
+J8|nota|-|-|-|organizacao do J6 reativada no banco ao fim do caso (preparacao declarada)
+J8|nota|-|-|-|duracao 4.8 s
+J10|cadastro com senha no pedido: 400, sem efeito|API|OK|400|400
+J10|sem CSRF: 403|API|OK|403|403
+J10|token desconhecido: 400, sem efeito|API|OK|400|400
+J10|mesmo token confirmado em paralelo: exatamente uma troca (204) e uma recusa (400)|API|OK|[204, 400]|[204, 400]
+J10|exatamente um evento 17 (recuperacao concluida) pelas duas confirmacoes paralelas|BANCO|OK|1|1
+J10|a senha que venceu e a que vale|API|OK|200|200
+J10|nota|-|-|-|duracao 5.8 s

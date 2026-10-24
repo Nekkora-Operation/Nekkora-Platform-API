@@ -1,0 +1,6 @@
+origem=/c/Users/nicol/nekkora/Nekkora-Platform-API/ops/homologacao/implantacao/elevacao.txt
+tipo=operacional
+sha256=374c6620766879bfc995fb50b38a50724b1715800a21ec759b8fc8333af96cc8
+bytes=2949
+ambiente=ensaio-api-v1-002
+registrado_em=2026-10-23T21:12:19Z

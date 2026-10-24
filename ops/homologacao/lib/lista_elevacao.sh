@@ -9,12 +9,17 @@
 # O terceiro campo e legado (id) SE E SO SE nao contem "=". Linhas antigas continuam validas, com o mesmo significado.
 # Politica por versao (defesa no proprio formato):
 #   - 014: so "bypassrls" (a 014 precisa atravessar RLS, nao de SUPERUSER: P4-R2a-C, A1/A2);
-#   - versoes de vinculo obrigatorio (016): so "superuser" e SEMPRE com ambiente; o pre-voo oficial continua no runner.
+#   - versoes de vinculo obrigatorio (VINCULO_OBRIGATORIO abaixo: 016 e, desde a missao PLATFORM-API-V1-003, 017-020): so
+#     "superuser" e SEMPRE com ambiente; o pre-voo oficial (implantacao/preflight/<versao>.sql) continua no runner.
 # Erro de leitura ou de formato recusa; NUNCA equivale a "versao fora da lista".
 #
 #   lista_elevacao_normalizada <arquivo> "<versoes de vinculo obrigatorio>"
 #     codigo 0: uma linha por versao em stdout, "VVV SHA256 TIPO ALVO" (ALVO "-" sem vinculo)
 #     codigo 1: mensagem "FALHA: ..." em stderr, nada em stdout
+# Lista UNICA das versoes de vinculo obrigatorio, usada pelo runner, pelo criar e pelas validacoes (antes cada um repetia
+# " 016 "). 017-020: elevacao medida (mapa_privilegios.sh) e pre-voo oficial proprio; 021 nao tem elevacao.
+VINCULO_OBRIGATORIO=" 016 017 018 019 020 "
+
 lista_elevacao_normalizada() {
     local arq="$1" vinculo="${2:-}" conteudo
     [ -f "$arq" ] && [ -r "$arq" ] || { echo "FALHA: lista de elevacao ausente ou ilegivel ($arq)" >&2; return 1; }

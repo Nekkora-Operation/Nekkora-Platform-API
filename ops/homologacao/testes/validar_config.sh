@@ -61,15 +61,40 @@ cp "$TMP"/*.conf "$TMP/config/"
 export HOMOLOG_PROJETO=nekkora-homologacao-ensaio-validacao HOMOLOG_ID=ensaio-validacao HOMOLOG_SEGREDOS="$S" HOMOLOG_COMMIT=0000000 \
        HOMOLOG_PORTA=55999 HOMOLOG_MIGRACOES="$TMP/mig" HOMOLOG_SQL="$AQUI/sql" HOMOLOG_CONFIG="$TMP/config" \
        HOMOLOG_REDE_INTERNA=10.252.20 HOMOLOG_REDE_BORDA=10.252.21
-B="$AQUI/compose.homolog.yml"; O16="$AQUI/compose.016.yml"; CX="$AQUI/compose.caixa.yml"
+B="$AQUI/compose.homolog.yml"; O16="$AQUI/compose.016.yml"; CX="$AQUI/compose.caixa.yml"; O21="$AQUI/compose.021.yml"; M365="$AQUI/compose.m365.yml"
 render() { docker compose "$@" config 2>"$TMP/compose.err"; }
 if render -f "$B" > "$TMP/base.yml"; then ok "base renderiza"; else nok "base nao renderiza: $(head -3 "$TMP/compose.err")"; fi
 if render -f "$B" -f "$O16" --profile operacao > "$TMP/016.yml"; then ok "base + 016 renderiza"; else nok "016 nao renderiza: $(head -3 "$TMP/compose.err")"; fi
 if render -f "$B" -f "$O16" -f "$CX" --profile operacao --profile caixa > "$TMP/caixa.yml"; then ok "base + 016 + caixa renderiza"; else nok "caixa nao renderiza: $(head -3 "$TMP/compose.err")"; fi
+if render -f "$B" -f "$O16" -f "$CX" -f "$O21" --profile operacao --profile caixa > "$TMP/021.yml"; then ok "base + 016 + caixa + 021 renderiza"; else nok "021 nao renderiza: $(head -3 "$TMP/compose.err")"; fi
+# transporte real PREPARADO (missao 003, item 6): renderiza com valores de exemplo; a Platform continua so na interna e o
+# unico caminho de saida e o proxy-m365 (os dois nomes do Entra/Graph); nunca junto da caixa
+printf 'pkcs12-de-exemplo' > "$TMP/m365.p12"
+if env HOMOLOG_M365_CLIENT=00000000-0000-0000-0000-000000000000 HOMOLOG_M365_CERT="$TMP/m365.p12" docker compose -f "$B" -f "$O16" -f "$O21" -f "$M365" config > "$TMP/m365.yml" 2>"$TMP/compose.err"; then
+    ok "base + 016 + 021 + m365 (preparada) renderiza"
+else nok "m365 nao renderiza: $(head -3 "$TMP/compose.err")"; fi
+env HOMOLOG_M365_CLIENT=00000000-0000-0000-0000-000000000000 HOMOLOG_M365_CERT="$TMP/m365.p12" docker compose -f "$B" -f "$O16" -f "$O21" -f "$M365" config --format json > "$TMP/m365.json" 2>/dev/null
+confere "m365: Platform so na rede interna; proxy na interna e na saida propria; transporte m365 com o proxy e o tenant do Entra" "python - '$TMP/m365.json' <<'PY'
+import json, sys
+c = json.load(open(sys.argv[1], encoding='utf-8'))
+plat, prox = c['services']['platform'], c['services']['proxy-m365']
+env = plat.get('environment', {})
+ok = (set(plat['networks']) == {'interna'} and set(prox['networks']) == {'interna', 'saida_m365'} and prox.get('read_only') is True
+      and env.get('NEKKORA_MAIL_TRANSPORTE') == 'm365' and env.get('NEKKORA_M365_PROXY') == 'proxy-m365:3128'
+      and env.get('NEKKORA_M365_TENANT') == 'ae4ed48d-e7d8-4f24-83f2-443e997c5a65' and env.get('NEKKORA_MAIL_REMETENTE') == 'no-reply@nekkora.com'
+      and c['networks']['interna'].get('internal') is True and not c['networks']['saida_m365'].get('internal'))
+sys.exit(0 if ok else 1)
+PY"
+confere "m365: politica do proxy so CONNECT 443 para login.microsoftonline.com e graph.microsoft.com (tudo o mais negado)"     "grep -qx 'acl m365 dstdomain login.microsoftonline.com graph.microsoft.com' '$AQUI/proxy/squid.conf' && grep -qx 'http_access allow CONNECT m365' '$AQUI/proxy/squid.conf'      && grep -qx 'http_access deny all' '$AQUI/proxy/squid.conf' && grep -qx 'http_access deny CONNECT !porta_tls' '$AQUI/proxy/squid.conf' && [ \"\$(grep -c '^http_access allow' '$AQUI/proxy/squid.conf')\" = 1 ]"
+confere "m365: sobreposicao preparada NAO ligada ao runner (nenhuma referencia em homologacao.sh)" "! grep -q 'compose.m365.yml' '$AQUI/homologacao.sh'"
 confere "sub-redes pelo prefixo" "grep -q 'subnet: 10.252.20.0/24' '$TMP/base.yml' && grep -q 'subnet: 10.252.21.0/24' '$TMP/base.yml' && ! grep -q '10.252.10' '$TMP/base.yml'"
 confere "job operacao em .33, so no perfil" "grep -q 'ipv4_address: 10.252.20.33' '$TMP/016.yml' && ! grep -q 'operacao:' '$TMP/base.yml'"
 confere "chave da CA operacional montada so no job operacao" "[ \"\$(grep -c 'target: /tls/ops-ca.key' '$TMP/caixa.yml')\" = 1 ]"
 confere "postgres com ssl_ca_file e ident_file so com a 016" "grep -q 'ssl_ca_file=/tls/ops-ca.crt' '$TMP/016.yml' && grep -q 'ident_file=' '$TMP/016.yml' && ! grep -q 'ssl_ca_file' '$TMP/base.yml'"
+confere "021: chaves da identidade ligadas SO com a sobreposicao da 021, transporte continua o de homologacao" \
+    "grep -q 'NEKKORA_CADASTRO: \"true\"' '$TMP/021.yml' && grep -q 'NEKKORA_ENTRADA_GERAL: \"true\"' '$TMP/021.yml' && grep -q 'NEKKORA_VINCULACAO: \"true\"' '$TMP/021.yml' \
+     && grep -q 'NEKKORA_RECUPERACAO_SENHA: \"true\"' '$TMP/021.yml' && grep -q 'NEKKORA_CRIACAOORGANIZACAO_ENABLED: \"true\"' '$TMP/021.yml' && grep -q 'NEKKORA_MAIL_TRANSPORTE: homologacao' '$TMP/021.yml' \
+     && ! grep -qE 'NEKKORA_(CADASTRO|ENTRADA_GERAL|VINCULACAO|RECUPERACAO_SENHA|CRIACAOORGANIZACAO)' '$TMP/caixa.yml' && ! grep -qE 'NEKKORA_M365|m365' '$TMP/021.yml'"
 confere "transporte de homologacao so com a sobreposicao da caixa" "grep -q 'NEKKORA_MAIL_TRANSPORTE: homologacao' '$TMP/caixa.yml' && ! grep -q 'NEKKORA_MAIL_TRANSPORTE' '$TMP/016.yml'"
 confere "caixa e volume Docker rotulado (nao pasta do host)" "grep -A3 '^  caixa:' '$TMP/caixa.yml' | grep -q 'nekkora.homologacao: ensaio-validacao' && [ \"\$(grep -B3 'target: /caixa' '$TMP/caixa.yml' | grep -c 'type: volume')\" = 3 ] && ! grep -B3 'target: /caixa' '$TMP/caixa.yml' | grep -q 'type: bind'"
 confere "ferramenta da caixa sem rede e somente leitura" "python - '$TMP/caixa.yml' <<'PY'
@@ -102,20 +127,30 @@ echo "== 5. elevacao e migrations"
 #   7fd92fae... = operacional atual: 011-013, SEM a 016 (a linha da 016 depende da decisao D-ELEV);
 #   47bb9596... = proposta de P3 com "016 <sha256> ensaio-016a" (docs/relatorios/2026-09-29-p3it-anexos/elevacao-016-proposta.patch).
 # A proposta so e ACEITA como conteudo aprovado; esta validacao nao a ativa.
-LISTA_OPERACIONAL_SHA=7fd92faed3a8d66eb297d727806518a2983572d90eae0633bf4ddc5a7778370d
+#   d122d22a... = missao PLATFORM-API-V1-003 (PROPOSTA, para revisao): 011-013 legadas + 016-020 tipo=superuser vinculadas
+#   ao ensaio-api-v1-003 (na primeira versao do PR, 374c6620..., ao ensaio-api-v1-002). Enquanto o PR nao for aprovado, este
+#   e o conteudo do PR, nao uma autorizacao vigente.
+# Base fixada das proposta/adulteracoes abaixo: a lista 011-013 (7fd92fae...) no commit bf977d7 (main antes da missao 003),
+# e nao HEAD - com a lista operacional nova, acrescentar uma 016 a HEAD daria "versao repetida" e mudaria o caso testado.
+LISTA_011_013_SHA=7fd92faed3a8d66eb297d727806518a2983572d90eae0633bf4ddc5a7778370d
+LISTA_OPERACIONAL_SHA=d122d22adba926e3f98c435cfdffd84dac6b956aeba3480ff85980afc9626a25
 LISTA_PROPOSTA_016_SHA=47bb959662063868351a3f15b4248fb876d8f8cb2e14f9404bbb46f606eef1e3
-lista_aprovada() {   # $1 arquivo -> imprime "operacional" | "proposta-016"; codigo 1 se o conteudo nao for aprovado
+lista_aprovada() {   # $1 arquivo -> imprime "operacional" | "lista-011-013" | "proposta-016"; codigo 1 se nao aprovado
     local s; s="$(tr -d '\r' < "$1" | sha256sum | cut -c1-64)"
     case "$s" in
         "$LISTA_OPERACIONAL_SHA") echo operacional;;
+        "$LISTA_011_013_SHA") echo lista-011-013;;
         "$LISTA_PROPOSTA_016_SHA") echo proposta-016;;
         *) return 1;;
     esac
 }
-confere "elevacao.txt operacional com conteudo aprovado (011-013, sem a 016)" "[ \"\$(lista_aprovada '$AQUI/implantacao/elevacao.txt')\" = operacional ]"
+BASE_LISTA="$TMP/l_base_011_013.txt"
+git -C "$REPO" show bf977d7:ops/homologacao/implantacao/elevacao.txt > "$BASE_LISTA"
+confere "base fixada (bf977d7) com o conteudo 011-013 aprovado" "[ \"\$(lista_aprovada '$BASE_LISTA')\" = lista-011-013 ]"
+confere "elevacao.txt operacional com conteudo aprovado (011-013 + 016-020 vinculadas ao ensaio-api-v1-003)" "[ \"\$(lista_aprovada '$AQUI/implantacao/elevacao.txt')\" = operacional ]"
 PROP="$REPO/docs/relatorios/2026-09-29-p3it-anexos/elevacao-016-proposta.patch"
 mkdir -p "$TMP/lista/ops/homologacao/implantacao"
-git -C "$REPO" show HEAD:ops/homologacao/implantacao/elevacao.txt > "$TMP/lista/ops/homologacao/implantacao/elevacao.txt"
+cp "$BASE_LISTA" "$TMP/lista/ops/homologacao/implantacao/elevacao.txt"
 confere "copia proposta com a 016 vinculada (patch aplicado so na copia temporaria) reconhecida como aprovada" \
     "(cd '$TMP/lista' && git init -q . && git -c core.autocrlf=false apply '$PROP') && [ \"\$(lista_aprovada '$TMP/lista/ops/homologacao/implantacao/elevacao.txt')\" = proposta-016 ]"
 cp "$TMP/lista/ops/homologacao/implantacao/elevacao.txt" "$TMP/proposta.txt"
@@ -154,10 +189,14 @@ recusa "transporte sem a 016" ensaio-validacao-d HOMOLOG_ATE=015 HOMOLOG_TRANSPO
 recusa "transporte desconhecido" ensaio-validacao-e HOMOLOG_ATE=015 HOMOLOG_TRANSPORTE=smtp
 recusa "prefixo invalido" ensaio-validacao-f HOMOLOG_REDE_INTERNA=10.252.2000
 recusa "ultima migration invalida" ensaio-validacao-g HOMOLOG_ATE=017
+# missao PLATFORM-API-V1-003: 021 so em ensaio-*, com e-mail simulado e com 016-020 vinculadas ao id exato
+recusa "021 fora de ensaio-*" hml-validacao-q HOMOLOG_ATE=021 HOMOLOG_TRANSPORTE=homologacao
+recusa "021 sem o transporte de homologacao (e-mail simulado)" ensaio-validacao-r HOMOLOG_ATE=021
+recusa "021 com a lista operacional, vinculada a OUTRO id (ensaio-api-v1-003)" ensaio-validacao-s HOMOLOG_ATE=021 HOMOLOG_TRANSPORTE=homologacao
 # P3-IT (correcao): a 016 so com a linha VINCULADA ao id exato; lista alternativa so em ensaio-* e existente
 S016=25bef818a7d38c465fffcc5821c1bf9f924ef3cade0f29ec7b79f5b1711fbe61
-{ git -C "$REPO" show HEAD:ops/homologacao/implantacao/elevacao.txt; echo "016 $S016"; } > "$TMP/l016_sem_vinculo.txt"
-{ git -C "$REPO" show HEAD:ops/homologacao/implantacao/elevacao.txt; echo "016 $S016 ensaio-outro"; } > "$TMP/l016_outro_id.txt"
+{ cat "$BASE_LISTA"; echo "016 $S016"; } > "$TMP/l016_sem_vinculo.txt"
+{ cat "$BASE_LISTA"; echo "016 $S016 ensaio-outro"; } > "$TMP/l016_outro_id.txt"
 recusa "016 com linha SEM vinculo ao id" ensaio-validacao-h HOMOLOG_ATE=016 HOMOLOG_ELEVACAO_ARQ="$TMP/l016_sem_vinculo.txt"
 recusa "016 com linha vinculada a OUTRO id" ensaio-validacao-i HOMOLOG_ATE=016 HOMOLOG_ELEVACAO_ARQ="$TMP/l016_outro_id.txt"
 recusa "lista alternativa inexistente" ensaio-validacao-j HOMOLOG_ATE=016 HOMOLOG_ELEVACAO_ARQ="$TMP/nao_existe.txt"
@@ -172,14 +211,14 @@ lista_recusada() {   # $1 descricao, $2 lista, $3 trecho da mensagem
 }
 lista_recusada "lista inexistente" "$TMP/nao_existe.txt" "ausente ou ilegivel"
 lista_recusada "016 sem vinculo" "$TMP/l016_sem_vinculo.txt" "sem vinculo ao id"
-{ git -C "$REPO" show HEAD:ops/homologacao/implantacao/elevacao.txt; echo "016 abc ensaio-x"; } > "$TMP/l_formato.txt"
+{ cat "$BASE_LISTA"; echo "016 abc ensaio-x"; } > "$TMP/l_formato.txt"
 lista_recusada "linha fora do formato" "$TMP/l_formato.txt" "fora do formato"
-{ git -C "$REPO" show HEAD:ops/homologacao/implantacao/elevacao.txt; echo "011 $S016"; } > "$TMP/l_repetida.txt"
+{ cat "$BASE_LISTA"; echo "011 $S016"; } > "$TMP/l_repetida.txt"
 lista_recusada "versao repetida" "$TMP/l_repetida.txt" "versao repetida"
 # P4-R2a-C (A6): gramatica inequivoca da lista (lib/lista_elevacao.sh). Legado intacto; forma nova
 # "VVV <sha> tipo=superuser|bypassrls [ambiente=<id>]"; 014 so bypassrls; 016 so superuser e sempre vinculada.
 . "$AQUI/lib/lista_elevacao.sh"
-git -C "$REPO" show HEAD:ops/homologacao/implantacao/elevacao.txt > "$TMP/l_op.txt"
+cp "$BASE_LISTA" "$TMP/l_op.txt"
 SX=1111111111111111111111111111111111111111111111111111111111111111
 gram() {   # $1 descricao, $2 OK ou trecho da recusa, $3 linha acrescentada a lista operacional, $4 (OK) linha normalizada esperada
     local o rc; { cat "$TMP/l_op.txt"; printf '%s\n' "$3"; } > "$TMP/g.txt"
@@ -190,7 +229,7 @@ gram() {   # $1 descricao, $2 OK ou trecho da recusa, $3 linha acrescentada a li
         if [ $rc = 1 ] && echo "$o" | grep -q "$2" && ! echo "$o" | grep -qE '^[0-9]{3} '; then ok "lista: $1 recusada"; else nok "lista: $1 (rc=$rc: $(echo "$o" | head -1 | cut -c1-80))"; fi
     fi
 }
-confere "lista: operacional normalizada sem mudanca de significado (011-013 superuser, sem vinculo)" \
+confere "lista: base 011-013 normalizada sem mudanca de significado (011-013 superuser, sem vinculo)" \
     "[ \"\$(lista_elevacao_normalizada '$TMP/l_op.txt' ' 016 ' | awk '{print \$1, \$3, \$4}' | tr '\n' ' ')\" = '011 superuser - 012 superuser - 013 superuser - ' ]"
 gram "legado 016 vinculado" OK "016 $S016 ensaio-x" "016 $S016 superuser ensaio-x"
 gram "forma nova 014 bypassrls" OK "014 $SX tipo=bypassrls" "014 $SX bypassrls -"
@@ -212,6 +251,35 @@ lista_recusada "014 com tipo=superuser" "$TMP/l_014_su.txt" "so pode ter elevaca
 lista_recusada "tipo de elevacao desconhecido" "$TMP/l_tipo.txt" "tipo desconhecido"
 { cat "$TMP/l_op.txt"; echo "016 $S016 tipo=superuser ambiente=ensaio-outro"; } > "$TMP/l016_nova_outro_id.txt"
 recusa "016 em forma nova vinculada a OUTRO id" ensaio-validacao-p HOMOLOG_ATE=016 HOMOLOG_ELEVACAO_ARQ="$TMP/l016_nova_outro_id.txt"
+# 021 com lista alternativa (so ensaio-*): sem a 019, com a 018 sem vinculo, com a 017 de tipo errado
+l021() {   # $1 arquivo, $2 id, demais: versoes a omitir/alterar no formato "VVV=omitir|semvinculo|bypass"
+    local arq="$1" id="$2" v m sha; shift 2
+    cp "$BASE_LISTA" "$arq"
+    for v in 016 017 018 019 020; do
+        sha="$(sha256sum "$REPO"/db/migrations/${v}_*.sql | cut -c1-64)"; m=""
+        for x in "$@"; do [ "${x%%=*}" = "$v" ] && m="${x#*=}"; done
+        case "$m" in
+            omitir) ;;
+            semvinculo) echo "$v $sha tipo=superuser" >> "$arq" ;;
+            bypass) echo "$v $sha tipo=bypassrls ambiente=$id" >> "$arq" ;;
+            *) echo "$v $sha tipo=superuser ambiente=$id" >> "$arq" ;;
+        esac
+    done
+}
+l021 "$TMP/l021_sem_019.txt" ensaio-validacao-t 019=omitir
+recusa "021 com lista alternativa SEM a linha da 019" ensaio-validacao-t HOMOLOG_ATE=021 HOMOLOG_TRANSPORTE=homologacao HOMOLOG_ELEVACAO_ARQ="$TMP/l021_sem_019.txt"
+l021 "$TMP/l021_018_sem_vinculo.txt" ensaio-validacao-u 018=semvinculo
+recusa "021 com lista alternativa e a 018 SEM vinculo" ensaio-validacao-u HOMOLOG_ATE=021 HOMOLOG_TRANSPORTE=homologacao HOMOLOG_ELEVACAO_ARQ="$TMP/l021_018_sem_vinculo.txt"
+lista_recusada "018 sem vinculo (versao de vinculo obrigatorio)" "$TMP/l021_018_sem_vinculo.txt" "sem vinculo ao id"
+l021 "$TMP/l021_017_bypass.txt" ensaio-validacao-v 017=bypass
+lista_recusada "017 com tipo=bypassrls (vinculo obrigatorio so superuser)" "$TMP/l021_017_bypass.txt" "so pode ter elevacao do tipo superuser"
+confere "lista operacional normalizada: 011-013 legadas e 016-020 superuser vinculadas SO ao ensaio-api-v1-003" \
+    "[ \"\$(lista_elevacao_normalizada '$AQUI/implantacao/elevacao.txt' \"\$VINCULO_OBRIGATORIO\" | awk '{print \$1, \$3, \$4}' | tr '\n' ' ')\" = '011 superuser - 012 superuser - 013 superuser - 016 superuser ensaio-api-v1-003 017 superuser ensaio-api-v1-003 018 superuser ensaio-api-v1-003 019 superuser ensaio-api-v1-003 020 superuser ensaio-api-v1-003 ' ]"
+confere "lista operacional: sha256 de 016-020 = bytes LF de db/migrations; 021 sem linha" \
+    "( for v in 016 017 018 019 020; do lista_elevacao_normalizada '$AQUI/implantacao/elevacao.txt' \"\$VINCULO_OBRIGATORIO\" | grep -q \"^\$v \$(sha256sum '$REPO'/db/migrations/\${v}_*.sql | cut -c1-64) \" || exit 1; done ) && ! grep -q '^021 ' '$AQUI/implantacao/elevacao.txt'"
+confere "runner: versao de vinculo obrigatorio SEM linha recusada antes do Flyway; pre-voo oficial existente para 016-020" \
+    "grep -q 'exige elevacao vinculada e nao esta na lista de elevacao; nada aplicado' '$AQUI/implantacao/implantar.sh' \
+     && ( for v in 016 017 018 019 020; do [ -s '$AQUI/implantacao/preflight/'\$v.sql ] && grep -q PREFLIGHT_OK '$AQUI/implantacao/preflight/'\$v.sql || exit 1; done )"
 
 echo "== 7. classificacao e reconciliacao das fixtures (casos sinteticos, sem banco)"
 F="$AQUI/lib/fixture_conferencia.py"
@@ -325,8 +393,10 @@ confere "T2: semear-pre014 exige a pausa antes-de-elevar@014 do runner, a chegad
      && grep -q 'a pausa ja foi liberada' '$AQUI/homologacao.sh' && grep -q 'sem trava local da implantacao' '$AQUI/homologacao.sh'"
 confere "ganchos de pausa e largada do runner continuam recusados fora de ensaio-*" \
     "grep -q 'ganchos de ensaio so em ambiente descartavel (id ensaio-\\*)' '$AQUI/implantacao/implantar.sh'"
-confere "elevacao.txt operacional sem linha da 014 nem da 016 (ativacao operacional e decisao separada)" \
-    "lista_elevacao_normalizada '$AQUI/implantacao/elevacao.txt' ' 016 ' > '$TMP/lista_op.txt' 2>&1 && ! grep -qE '^(014|016) ' '$TMP/lista_op.txt'"
+confere "elevacao.txt operacional sem linha da 014; 016-020 SO vinculadas ao ensaio-api-v1-003 (nenhuma sem vinculo ou de outro id)" \
+    "lista_elevacao_normalizada '$AQUI/implantacao/elevacao.txt' \"\$VINCULO_OBRIGATORIO\" > '$TMP/lista_op.txt' 2>&1 && ! grep -qE '^014 ' '$TMP/lista_op.txt' \
+     && [ \"\$(grep -cE '^(016|017|018|019|020) [0-9a-f]{64} superuser ensaio-api-v1-003\$' '$TMP/lista_op.txt')\" = 5 ] \
+     && [ \"\$(grep -cE '^(016|017|018|019|020) ' '$TMP/lista_op.txt')\" = 5 ]"
 
 echo "== 13. H02: janela BYPASSRLS da 014 esperada pela lista de elevacao em vigor (R2b-0b; h02_esperadas do executar.sh)"
 EXE="$AQUI/testes/executar.sh"
@@ -419,8 +489,13 @@ echo "== 17. H02 pela lista HISTORICA da criacao (fotografia imutavel; missao H0
 EH="$AQUI/lib/elevacao_historica.sh"; H02F="$TMP/h02_funcao.sh"; EHL="$TMP/eh_lista_h02.sh"
 awk '/^h02\(\) \{/ {p = 1} p {print} p && /^}/ {exit}' "$AQUI/testes/executar.sh" > "$H02F"
 awk '/^eh_lista_h02\(\) \{/ {p = 1} p {print} p && /^}/ {exit}' "$EH" > "$EHL"
-confere "testes de lib/elevacao_historica.sh (fotografia, ancoras, adulteracao, legado explicito, falha fechada; registros reais)" \
-    "bash '$AQUI/testes/test_elevacao_historica.sh' > '$TMP/test_eh.txt' 2>&1"
+# Obrigatorios e portaveis (sem caminho de maquina): sinteticos, legado hml03 pelos registros versionados e legado ancorado
+# sintetico. O laboratorio legado (registros reais de ensaio-016a/016c, em clones de outra maquina) e OPCIONAL: so os casos
+# 9a0, 9a e 9b podem ser PULADOS, e sao listados abaixo; nenhum obrigatorio pode faltar (contagem minima de OK).
+confere "testes de lib/elevacao_historica.sh (fotografia, ancoras, adulteracao, legado explicito, falha fechada; legado hml03 versionado)" \
+    "bash '$AQUI/testes/test_elevacao_historica.sh' > '$TMP/test_eh.txt' 2>&1 && grep -qE '^RESULTADO: [0-9]+ OK, 0 FALHA, [0-3] PULADO' '$TMP/test_eh.txt' \
+     && [ \"\$(grep -c '^OK ' '$TMP/test_eh.txt')\" -ge 26 ] && ! grep '^PULADO' '$TMP/test_eh.txt' | grep -qvE '^PULADO (9a0|9a|9b) \\(laboratorio legado opcional ausente'"
+grep '^PULADO' "$TMP/test_eh.txt" 2>/dev/null | sed 's/^/   (laboratorio opcional, nao conta como OK) /'
 confere "H02 so pela lista historica (eh_lista_h02); nunca a lista vigente (HOMOLOG_ELEVACAO_ARQ ou implantacao/elevacao.txt)" \
     "[ -s '$H02F' ] && grep -q 'lista_h02=\"\$(eh_lista_h02 \"\$base\" \"\$HOMOLOG_ID\" \"\${HOMOLOG_ELEVACAO_CRIACAO_SHA256:-}\"' '$H02F' \
      && ! grep -qE 'HOMOLOG_ELEVACAO_ARQ:-|implantacao/elevacao\\.txt' '$H02F'"
@@ -430,7 +505,7 @@ confere "sem fallback silencioso: eh_lista_h02 nao le a lista vigente; ambiente 
 confere "integridade da fotografia: lista x proveniencia x ambiente.env x log de criacao do runner" \
     "grep -q 'lista da fotografia adulterada' '$EHL' && grep -q 'diverge do ambiente.env' '$EHL' && grep -q 'diverge do log de criacao do runner' '$EHL' \
      && grep -q 'fotografia de outro ambiente' '$EHL' && grep -q 'proveniencia malformada' '$EHL'"
-l_val="$(grep -n 'lista_elevacao_normalizada \"\$LISTA_CRIACAO\" \" 016 \"' "$H" | head -1 | cut -d: -f1)"
+l_val="$(grep -n 'lista_elevacao_normalizada \"\$LISTA_CRIACAO\" \"\$VINCULO_OBRIGATORIO\"' "$H" | head -1 | cut -d: -f1)"
 l_ev="$(grep -n '^    mkdir -p \"\$EVID\" \"\$SEG/tls\"' "$H" | head -1 | cut -d: -f1)"
 l_reg="$(grep -n 'SHA_LISTA_CRIACAO=\"\$(eh_registrar \"\$LISTA_CRIACAO\"' "$H" | head -1 | cut -d: -f1)"
 l_seg="$(grep -n '^    registro_fontes_imagens \"\$REPO\"' "$H" | head -1 | cut -d: -f1)"

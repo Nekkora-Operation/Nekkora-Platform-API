@@ -1,0 +1,52 @@
+# SOBREPOSICAO PREPARADA (missao PLATFORM-API-V1-003, item 6): transporte REAL de e-mail (Microsoft Graph, so de
+# aplicacao, certificado, RBAC para Aplicacoes restrito a no-reply@nekkora.com) num ambiente ensaio-* de homologacao.
+# NAO esta ligada ao runner e NAO deve ser usada antes da autorizacao especifica das acoes externas (Microsoft 365, DNS,
+# cofre e envio real): docs/relatorios/2026-10-23-api-v1-003-email-real-preparacao.md, sec. 3 e 4.
+#
+# Uso (depois da autorizacao), no lugar de compose.caixa.yml (os dois transportes sao exclusivos):
+#   HOMOLOG_M365_CLIENT=<Application (client) ID do aplicativo dedicado> HOMOLOG_M365_CERT=<caminho do PKCS#12 no cofre local>
+#   docker compose -f compose.homolog.yml -f compose.016.yml -f compose.021.yml -f compose.m365.yml up -d proxy-m365 platform
+# A senha do PKCS#12 vai no platform.env do ambiente (NEKKORA_M365_CERT_SENHA, diretorio de segredos, fora do Git).
+#
+# Rede: a Platform CONTINUA so na rede "interna" (internal: true, sem saida). O unico caminho para fora e o proxy-m365,
+# que esta na interna e numa rede de saida propria, e so abre tuneis CONNECT 443 para login.microsoftonline.com e
+# graph.microsoft.com (proxy/squid.conf; politica conferida: os dois nomes 200, qualquer outro destino ou porta 403).
+
+networks:
+  saida_m365:
+    labels:
+      nekkora.homologacao: ${HOMOLOG_ID:?defina HOMOLOG_ID}
+
+secrets:
+  m365_cert:
+    file: ${HOMOLOG_M365_CERT:?caminho do PKCS#12 do aplicativo (cofre local, fora do Git)}
+
+services:
+  proxy-m365:
+    image: ${HOMOLOG_IMG_PROXY:-ubuntu/squid:5.2-22.04_beta@sha256:723891b5bc74fe86d271589927c36c6b205fafca48b2bbe4932e3110c7d6bcc7}
+    labels:
+      nekkora.homologacao: ${HOMOLOG_ID:?}
+    read_only: true
+    tmpfs: [/var/log/squid, /var/spool/squid, /var/run, /run]
+    volumes:
+      - ./proxy/squid.conf:/etc/squid/squid.conf:ro
+    networks:
+      saida_m365: {}
+      interna:
+        ipv4_address: ${HOMOLOG_REDE_INTERNA:-10.252.10}.34
+    cpus: 0.5
+    mem_limit: 128m
+
+  platform:
+    environment:
+      NEKKORA_AMBIENTE: ${HOMOLOG_ID:?}
+      NEKKORA_MAIL_TRANSPORTE: m365
+      NEKKORA_MAIL_REMETENTE: no-reply@nekkora.com
+      # Tenant ID do Entra dono de nekkora.com (descoberta OpenID publica, 2026-10-23); NAO o GUID da organizacao do
+      # Exchange (facfe491-..., Get-OrganizationConfig.Guid). A confirmacao autenticada (R-2) fica na sec. 2 do relatorio.
+      NEKKORA_M365_TENANT: ae4ed48d-e7d8-4f24-83f2-443e997c5a65
+      NEKKORA_M365_CLIENT: ${HOMOLOG_M365_CLIENT:?Application (client) ID do aplicativo dedicado}
+      NEKKORA_M365_CERT: /run/secrets/m365_cert
+      NEKKORA_M365_PROXY: proxy-m365:3128
+    secrets: [m365_cert]
+    depends_on: [proxy-m365]

@@ -1,0 +1,69 @@
+== implantacao 2026-10-23T21:14:45.636Z (lista de elevacao: elevacao.txt sha256 374c6620766879bfc995fb50b38a50724b1715800a21ec759b8fc8333af96cc8)
+historico antes: 001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true
+pre-voo da 016: codigo 0 e PREFLIGHT_OK (preflight_016.txt)
+-- 016_recuperacao_emergencial_mfa.sql (executeInTransaction=false, ELEVADA)
+ Container nekkora-homologacao-ensaio-api-v1-002-flyway-run-be48ce5c6486 Creating 
+ Container nekkora-homologacao-ensaio-api-v1-002-flyway-run-be48ce5c6486 Created 
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 21 migrations (execution time 00:00.197s)
+Current version of schema "public": 015
+Migrating schema "public" to version "016 - recuperacao emergencial mfa" [non-transactional]
+Successfully applied 1 migration to schema "public", now at version v016 (execution time 00:01.092s)
+pre-voo da 017: codigo 0 e PREFLIGHT_OK (preflight_017.txt)
+-- 017_identidade_cadastro.sql (executeInTransaction=false, ELEVADA)
+ Container nekkora-homologacao-ensaio-api-v1-002-flyway-run-c9340779b003 Creating 
+ Container nekkora-homologacao-ensaio-api-v1-002-flyway-run-c9340779b003 Created 
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 21 migrations (execution time 00:00.181s)
+Current version of schema "public": 016
+Migrating schema "public" to version "017 - identidade cadastro" [non-transactional]
+Successfully applied 1 migration to schema "public", now at version v017 (execution time 00:00.528s)
+pre-voo da 018: codigo 0 e PREFLIGHT_OK (preflight_018.txt)
+-- 018_instantes_terminais_relogio.sql (executeInTransaction=false, ELEVADA)
+ Container nekkora-homologacao-ensaio-api-v1-002-flyway-run-f8d0fd5fd011 Creating 
+ Container nekkora-homologacao-ensaio-api-v1-002-flyway-run-f8d0fd5fd011 Created 
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 21 migrations (execution time 00:00.196s)
+Current version of schema "public": 017
+Migrating schema "public" to version "018 - instantes terminais relogio" [non-transactional]
+Successfully applied 1 migration to schema "public", now at version v018 (execution time 00:00.056s)
+pre-voo da 019: codigo 0 e PREFLIGHT_OK (preflight_019.txt)
+-- 019_identidade_regeneracao_codigos.sql (executeInTransaction=false, ELEVADA)
+ Container nekkora-homologacao-ensaio-api-v1-002-flyway-run-d8eafaa35b65 Creating 
+ Container nekkora-homologacao-ensaio-api-v1-002-flyway-run-d8eafaa35b65 Created 
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 21 migrations (execution time 00:00.324s)
+Current version of schema "public": 018
+Migrating schema "public" to version "019 - identidade regeneracao codigos" [non-transactional]
+Successfully applied 1 migration to schema "public", now at version v019 (execution time 00:00.114s)
+pre-voo da 020: codigo 0 e PREFLIGHT_OK (preflight_020.txt)
+-- 020_identidade_recuperacao_senha.sql (executeInTransaction=false, ELEVADA)
+ Container nekkora-homologacao-ensaio-api-v1-002-flyway-run-c9731a9d4c73 Creating 
+ Container nekkora-homologacao-ensaio-api-v1-002-flyway-run-c9731a9d4c73 Created 
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 21 migrations (execution time 00:00.196s)
+Current version of schema "public": 019
+Migrating schema "public" to version "020 - identidade recuperacao senha" [non-transactional]
+Successfully applied 1 migration to schema "public", now at version v020 (execution time 00:00.121s)
+-- 021_correio_fila.sql (executeInTransaction=false)
+ Container nekkora-homologacao-ensaio-api-v1-002-flyway-run-66836d66aa1d Creating 
+ Container nekkora-homologacao-ensaio-api-v1-002-flyway-run-66836d66aa1d Created 
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 21 migrations (execution time 00:00.151s)
+Current version of schema "public": 020
+Migrating schema "public" to version "021 - correio fila" [non-transactional]
+Successfully applied 1 migration to schema "public", now at version v021 (execution time 00:00.061s)
+ Container nekkora-homologacao-ensaio-api-v1-002-flyway-run-a3305ffec2f5 Creating 
+ Container nekkora-homologacao-ensaio-api-v1-002-flyway-run-a3305ffec2f5 Created 
+See release notes here: https://rd.gt/416ObMi
+Database: jdbc:postgresql://postgres:5432/nekkora?sslmode=verify-full&sslrootcert=/tls/ca.crt (PostgreSQL 16.15)
+Successfully validated 21 migrations (execution time 00:00.181s)
+estado final do migrador: 0 atributos elevados, 0 memberships, 0 sessoes
+historico depois: 001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true 016:true 017:true 018:true 019:true 020:true 021:true
+== implantacao OK
