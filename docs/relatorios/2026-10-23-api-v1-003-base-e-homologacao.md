@@ -341,3 +341,17 @@ Criado do zero com o candidato da revisão (021 revisão 3), sub-redes 10.252.92
 - **Avisos emergenciais (`testar-016`):** B5, B6, B7 e B8a OK; B10 e B11 PARCIAIS pelos motivos já registrados no ensaio-api-v1-002. B12 OK na segunda execução: na primeira, o inventário acusou um container e um volume novos fora do ambiente, identificados pelo rótulo como Testcontainers da regressão Maven que rodava em paralelo. B8a e B10 não se repetem no mesmo ambiente, porque a fixture recusa uma segunda solicitação sem alterar nada. Detalhe em evidencias/ensaio-api-v1-003/016/LEIA-ME.txt. Varredura das evidências versionadas: 279 valores secretos, nenhum achado.
 
 Evidências sanitizadas em `ops/homologacao/evidencias/ensaio-api-v1-003/`. A atualização desta base populada para a 022 e a jornada da ativação estão no relatório da ativação, §7.
+
+**Estado registrado neste PR:** o ambiente na 021, implantado do `b9b6619` (migrations e runner) com imagens do `a39f684`. Depois, o PR da ativação (#19) atualizou o mesmo ambiente para a 022. **O estado final do `ensaio-api-v1-003` é 001–022**, conferido contra o HEAD final de cada PR no relatório da ativação, §7.6.
+
+### 10.5 Resultados associados ao candidato deste PR (`a3e1469`)
+
+O candidato é o `a3e1469`. Os commits posteriores deste PR mudam só este relatório (`git diff a3e1469 HEAD -- . ':!docs'` vazio); o HEAD exato fica na descrição do PR.
+
+| Prova | Commit | Resultado |
+|---|---|---|
+| CI (`./mvnw -B -ntp test`) | `a3e1469` | success |
+| `validar-config` | `a3e1469` (worktree limpa, sem alteração rastreada) | `RESULTADO: validacao estatica OK`, código 0; `test_elevacao_historica`: 26 OK, 0 FALHA, 3 PULADO (laboratório opcional, listados) |
+| Regressão Maven completa | `aae9348` (#16) | **570 testes, 0 falhas, 0 erros, 0 ignorados**. Vale para `a3e1469`: `git diff aae9348 a3e1469 -- api db/migrations` é vazio |
+| Implantação e jornadas no `ensaio-api-v1-003` (021) | migrations e runner do `b9b6619`, imagens do `a39f684` | 016–021 LIBERADO; jornadas 96 casos, 0 falhas; `testar-016` como acima. De `b9b6619` para `a3e1469` mudam só documentos e evidências; `db/migrations`, `implantacao/`, `compose*` e o runner são idênticos, e as fontes das imagens também (`git diff a39f684 a3e1469 -- <FONTES_IMAGENS>` vazio) |
+| Lista de elevação | `a3e1469` | sha256 `d122d22a…`, a mesma registrada na criação do ambiente (`HOMOLOG_ELEVACAO_CRIACAO_SHA256`) |
