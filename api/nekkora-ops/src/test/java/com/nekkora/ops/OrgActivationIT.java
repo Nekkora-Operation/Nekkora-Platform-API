@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import com.nekkora.ops.cli.Credencial;
 import com.nekkora.ops.cli.ExecutorAtos;
 import com.nekkora.ops.cli.ExecutorAtos.Classe;
+import com.nekkora.ops.cli.ExecutorAtos.Limites;
 import com.nekkora.ops.cli.ExecutorAtos.ResultadoAtivacao;
 import com.nekkora.ops.testsupport.Cenarios;
 import com.nekkora.ops.testsupport.OpsBanco;
@@ -117,6 +118,7 @@ class OrgActivationIT {
                 GIB, MIB_256);
         assertThat(r.classe()).isEqualTo(Classe.OK);
         assertThat(r.evento()).isNotNull();
+        assertThat(r.aplicados()).isEqualTo(new Limites(2, 1, 10, GIB, MIB_256));
         assertThat(estado(o.id())).isEqualTo((short) 2);
         assertThat(limites(o.id())).isEqualTo("1:1/2 2:1/1 3:1/10 4:1/" + GIB + " 5:1/" + MIB_256);
         // auditoria: operador, papel da sessao, certificado lido pelo servidor, responsavel, motivo, valores e as 5 revisoes
@@ -150,6 +152,7 @@ class OrgActivationIT {
         long revAntes = revisoes(o.id());
         ResultadoAtivacao r = cli.revisarCapacidade(o.id(), a.responsavel(), "aditivo de contrato (ticket CS-2)", 4, 2, 40, GIB, null);
         assertThat(r.classe()).isEqualTo(Classe.OK);
+        assertThat(r.aplicados()).isEqualTo(new Limites(4, 2, 40, GIB, null));
         assertThat(limites(o.id())).isEqualTo("1:1/4 2:1/2 3:1/40 4:1/" + GIB + " 5:2/-");
         assertThat(revisoes(o.id())).isEqualTo(revAntes + 5);
         List<List<Object>> ev = DB.linhas("SELECT act, operator_id, session_role, cert_serial IS NOT NULL, responsible_user_id, motive, "
@@ -181,7 +184,10 @@ class OrgActivationIT {
         assertThat(cli.ativarOrganizacao(o.id(), a.responsavel(), "ativacao", 2, 1, 5, null, null).classe()).isEqualTo(Classe.OK);
         String antes = limites(o.id());
         long revAntes = revisoes(o.id());
-        assertThat(cli.revisarCapacidade(o.id(), a.responsavel(), "igual", 2, 1, 5, null, null).motivo()).isEqualTo("SEM_MUDANCA");
+        ResultadoAtivacao igual = cli.revisarCapacidade(o.id(), a.responsavel(), "igual", 2, 1, 5, null, null);
+        assertThat(igual.motivo()).isEqualTo("SEM_MUDANCA");
+        assertThat(igual.evento()).isNotNull();
+        assertThat(igual.aplicados()).isNull();
         assertThat(cli.revisarCapacidade(o.id(), a.responsavel(), "zero", 0, 1, 5, null, null).motivo()).isEqualTo("PARAMETRO_INVALIDO");
         assertThat(cli.revisarCapacidade(o.id(), a.responsavel(), "", 3, 1, 5, null, null).motivo()).isEqualTo("PARAMETRO_INVALIDO");
         assertThat(cli.revisarCapacidade(o.id(), o.admin(), "responsavel errado", 3, 1, 5, null, null).motivo()).isEqualTo("RESPONSAVEL_NAO_VINCULADO");
@@ -225,9 +231,10 @@ class OrgActivationIT {
     }
 
     /**
-     * Duas revisoes simultaneas com valores DIFERENTES: a organizacao serializa os atos (FOR UPDATE); cada revisao define os
-     * limites absolutos que pediu. A segunda espera, aplica os proprios valores depois do commit da primeira e vale como
-     * vigente. As duas ficam auditadas com autorizacao, valores e revisoes proprias, na ordem do lock, e o ultimo ato OK
+     * Duas revisoes simultaneas com valores DIFERENTES: a organizacao serializa os atos (FOR UPDATE); cada revisao substitui os
+     * cinco limites pelos que pediu. Vale a ultima revisao APLICADA COM SUCESSO na ordem de serializacao (nao necessariamente a
+     * ultima requisicao recebida): a segunda espera, aplica os proprios valores depois do commit da primeira e vale como
+     * vigente; o resultado devolvido a ela traz o identificador do ato e os limites aplicados. As duas ficam auditadas com autorizacao, valores e revisoes proprias, na ordem do lock, e o ultimo ato OK
      * auditado e exatamente o limite vigente.
      */
     @Test
@@ -261,6 +268,7 @@ class OrgActivationIT {
             rb = fb.get(60, TimeUnit.SECONDS);
             assertThat(rb.classe()).isEqualTo(Classe.OK);
             assertThat(rb.evento()).isNotEqualTo(UUID.fromString(eventoA));
+            assertThat(rb.aplicados()).isEqualTo(new Limites(5, 4, 50, GIB, null));
         }
         // vigente: os valores de B, aplicados depois de A
         assertThat(limites(o.id())).isEqualTo("1:1/5 2:1/4 3:1/50 4:1/" + GIB + " 5:2/-");

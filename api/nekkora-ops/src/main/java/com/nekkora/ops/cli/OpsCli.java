@@ -30,7 +30,10 @@ import java.util.UUID;
  * da linha).
  * Saida: {@code solicitacao=<uuid> resultado=... origem=... estado=... motivo=...}; em ABRIR, o UUID devolvido pelo
  * banco e o que o operador usa nos atos seguintes. Em ATIVAR-ORGANIZACAO e REVISAR-CAPACIDADE: {@code organizacao=<uuid> resultado=... evento=<uuid>
- * motivo=...} (evento = auditoria gravada pelo banco, OK ou RECUSA).
+ * motivo=... limites_aplicados=trabalhadores=N,simultaneas=N,pendentes=N,alerta_logs=N|-,alerta_eventos=N|-} (evento = identificador
+ * do ato, a auditoria gravada pelo banco, OK ou RECUSA; limites_aplicados = os cinco limites que o ato OK aplicou, {@code -} quando
+ * nada foi aplicado). Revisoes concorrentes da mesma organizacao sao serializadas pelo banco: vale a ultima revisao aplicada com
+ * sucesso na ordem de serializacao, nao necessariamente a ultima requisicao recebida.
  * Codigo de saida: 0 OK, 2 recusa, 3 falha confirmada, 4 desconhecido, 64 uso invalido.
  */
 public final class OpsCli {
@@ -40,6 +43,15 @@ public final class OpsCli {
 
     public static void main(String[] args) {
         System.exit(executar(args, System.getenv(), System.out, System.err));
+    }
+
+    static String saidaCapacidade(ExecutorAtos.ResultadoAtivacao ra) {
+        ExecutorAtos.Limites l = ra.aplicados();
+        return "organizacao=" + ra.organizacao() + " resultado=" + ra.classe() + " evento=" + (ra.evento() == null ? "-" : ra.evento())
+                + " motivo=" + LogLocal.codigo(ra.motivo()) + " limites_aplicados=" + (l == null ? "-"
+                : "trabalhadores=" + l.trabalhadores() + ",simultaneas=" + l.simultaneas() + ",pendentes=" + l.pendentes()
+                + ",alerta_logs=" + (l.alertaLogs() == null ? "-" : l.alertaLogs())
+                + ",alerta_eventos=" + (l.alertaEventos() == null ? "-" : l.alertaEventos()));
     }
 
     static int executar(String[] a, Map<String, String> env, PrintStream out, PrintStream err) {
@@ -100,8 +112,7 @@ public final class OpsCli {
                 err.println("uso invalido");
                 return 64;
             }
-            out.println("organizacao=" + ra.organizacao() + " resultado=" + ra.classe() + " evento=" + (ra.evento() == null ? "-" : ra.evento())
-                    + " motivo=" + LogLocal.codigo(ra.motivo()));
+            out.println(saidaCapacidade(ra));
             return codigo(ra.classe());
         }
         ExecutorAtos.Resultado r;

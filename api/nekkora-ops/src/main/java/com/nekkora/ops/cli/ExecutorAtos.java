@@ -223,7 +223,14 @@ public final class ExecutorAtos {
     }
 
     /** Desfecho da ativacao ou da revisao de capacidade (022): o evento de auditoria gravado pelo banco (OK ou RECUSA). */
-    public record ResultadoAtivacao(UUID organizacao, Classe classe, String motivo, UUID evento, String sqlstate) {
+    public record ResultadoAtivacao(UUID organizacao, Classe classe, String motivo, UUID evento, String sqlstate, Limites aplicados) {
+    }
+
+    /**
+     * Os cinco limites que um ato OK aplicou: as funcoes da 022 gravam exatamente os valores do ato (substituem os cinco, com
+     * as cinco revisoes e o evento de auditoria na mesma transacao). {@code null} nos alertas = sem limiar.
+     */
+    public record Limites(long trabalhadores, long simultaneas, long pendentes, Long alertaLogs, Long alertaEventos) {
     }
 
     /**
@@ -259,7 +266,7 @@ public final class ExecutorAtos {
             c = abrirConexao();
         } catch (SQLException e) {
             log.registrar(ato, organizacao, "FALHA_CONFIRMADA", "CONEXAO_NAO_ESTABELECIDA", e.getSQLState(), "CONEXAO");
-            return new ResultadoAtivacao(organizacao, Classe.FALHA_CONFIRMADA, "CONEXAO_NAO_ESTABELECIDA", null, e.getSQLState());
+            return new ResultadoAtivacao(organizacao, Classe.FALHA_CONFIRMADA, "CONEXAO_NAO_ESTABELECIDA", null, e.getSQLState(), null);
         }
         try (c) {
             String resultado;
@@ -293,7 +300,7 @@ public final class ExecutorAtos {
                 }
                 reverter(c);
                 log.registrar(ato, organizacao, "FALHA_CONFIRMADA", "FALHA_TECNICA", e.getSQLState(), "CHAMADA");
-                return new ResultadoAtivacao(organizacao, Classe.FALHA_CONFIRMADA, "FALHA_TECNICA", null, e.getSQLState());
+                return new ResultadoAtivacao(organizacao, Classe.FALHA_CONFIRMADA, "FALHA_TECNICA", null, e.getSQLState(), null);
             }
             try {
                 c.commit();
@@ -302,11 +309,13 @@ public final class ExecutorAtos {
                     return desconhecida(ato, organizacao, "COMMIT");
                 }
                 log.registrar(ato, organizacao, "FALHA_CONFIRMADA", "FALHA_TECNICA", e.getSQLState(), "COMMIT");
-                return new ResultadoAtivacao(organizacao, Classe.FALHA_CONFIRMADA, "FALHA_TECNICA", null, e.getSQLState());
+                return new ResultadoAtivacao(organizacao, Classe.FALHA_CONFIRMADA, "FALHA_TECNICA", null, e.getSQLState(), null);
             }
             Classe classe = "OK".equals(resultado) ? Classe.OK : Classe.RECUSA;
             log.registrar(ato, organizacao, classe.name(), recusa, null, null);
-            return new ResultadoAtivacao(organizacao, classe, recusa, evento, null);
+            // confirmado o OK, os limites aplicados sao os do ato; recusa nao aplica nada
+            Limites aplicados = classe == Classe.OK ? new Limites(workers, simultaneas, pendentes, alertaLogs, alertaEventos) : null;
+            return new ResultadoAtivacao(organizacao, classe, recusa, evento, null, aplicados);
         } catch (SQLException e) {
             return desconhecida(ato, organizacao, "CHAMADA");
         }
@@ -315,7 +324,7 @@ public final class ExecutorAtos {
     private ResultadoAtivacao desconhecida(String ato, UUID organizacao, String etapa) {
         log.registrar(ato, organizacao, "DESCONHECIDO", "RESULTADO_DESCONHECIDO", null, etapa);
         log.alerta(ato, organizacao, "RESULTADO_DESCONHECIDO");
-        return new ResultadoAtivacao(organizacao, Classe.DESCONHECIDO, "RESULTADO_DESCONHECIDO", null, null);
+        return new ResultadoAtivacao(organizacao, Classe.DESCONHECIDO, "RESULTADO_DESCONHECIDO", null, null, null);
     }
 
     /** Consulta com a trava da solicitacao (so leitura; tambem usada na reconciliacao). */

@@ -965,6 +965,27 @@ atualizar)
     [[ "$HOMOLOG_ID" =~ ^ensaio- ]] || falha "atualizar so em ambiente descartavel (id ensaio-*)"
     [ "$HOMOLOG_ATE" = 021 ] && [ "$ALVO" = 022 ] || falha "atualizacao suportada: 021 -> 022 com HOMOLOG_ATUALIZAR_ATE=022 (ambiente em $HOMOLOG_ATE, alvo '${ALVO}')"
     [ "${HOMOLOG_TRANSPORTE:-}" = homologacao ] || falha "atualizar exige o transporte de homologacao"
+    novas=""
+    for n in $(seq $((10#$HOMOLOG_ATE + 1)) $((10#$ALVO))); do
+        v="$(printf '%03d' "$n")"; f=("$REPO"/db/migrations/${v}_*.sql)
+        [ -f "${f[0]}" ] && [ ${#f[@]} -eq 1 ] || falha "migration $v ausente ou ambigua; nada alterado"
+        novas="$novas ${f[0]}"
+    done
+    . "$AQUI/lib/lista_elevacao.sh"
+    # a mesma lista que o "implantar" seguinte usara: a revisada ou, so em ensaio-* (ja exigido acima), a alternativa
+    # HOMOLOG_ELEVACAO_ARQ de um laboratorio (como no criar e no implantar). Conferencias SO DE ARQUIVO (versoes novas e
+    # lista) antes das que leem o banco e a copia do ambiente; todas antes de qualquer mudanca (testes/test_atualizar_lista.sh
+    # executa este trecho sem Docker)
+    LISTA_AT="${HOMOLOG_ELEVACAO_ARQ:-$AQUI/implantacao/elevacao.txt}"
+    [ -f "$LISTA_AT" ] || falha "lista de elevacao inexistente ($LISTA_AT); nada alterado"
+    LN="$(lista_elevacao_normalizada "$LISTA_AT" "$VINCULO_OBRIGATORIO" 2>/dev/null)" || falha "lista de elevacao recusada pela gramatica; nada alterado"
+    for f in $novas; do
+        v="$(basename "$f")"; v="${v%%_*}"
+        case "$VINCULO_OBRIGATORIO" in *" $v "*)
+            printf '%s\n' "$LN" | grep -qE "^$v $(sha256sum < "$f" | cut -c1-64) superuser $HOMOLOG_ID\$" \
+                || falha "a $v exige a linha de elevacao vinculada a este id ($HOMOLOG_ID) com o sha256 do arquivo; nada alterado";;
+        esac
+    done
     EVID="$AQUI/saidas/$HOMOLOG_ID"; INST="$(date -u +%Y%m%dT%H%M%SZ)"; AT="$EVID/atualizacao-$INST"
     confere_liberacao "$TRAVA" > /dev/null || falha "ambiente BLOQUEADO: nada alterado (homologacao.sh estado $HOMOLOG_ID)"
     div=""
@@ -976,25 +997,6 @@ atualizar)
         fi
     done
     [ -z "$div" ] || falha "copia de migrations do ambiente diferente do repositorio:$div. Revisao anterior aplicada nesta base: o Flyway recusaria por checksum e o runner nao repara (IMPLANTACAO.md, item 3). Nada alterado"
-    novas=""
-    for n in $(seq $((10#$HOMOLOG_ATE + 1)) $((10#$ALVO))); do
-        v="$(printf '%03d' "$n")"; f=("$REPO"/db/migrations/${v}_*.sql)
-        [ -f "${f[0]}" ] && [ ${#f[@]} -eq 1 ] || falha "migration $v ausente ou ambigua; nada alterado"
-        novas="$novas ${f[0]}"
-    done
-    . "$AQUI/lib/lista_elevacao.sh"
-    # a mesma lista que o "implantar" seguinte usara: a revisada ou, so em ensaio-* (ja exigido acima), a alternativa
-    # HOMOLOG_ELEVACAO_ARQ de um laboratorio (como no criar e no implantar)
-    LISTA_AT="${HOMOLOG_ELEVACAO_ARQ:-$AQUI/implantacao/elevacao.txt}"
-    [ -f "$LISTA_AT" ] || falha "lista de elevacao inexistente ($LISTA_AT); nada alterado"
-    LN="$(lista_elevacao_normalizada "$LISTA_AT" "$VINCULO_OBRIGATORIO" 2>/dev/null)" || falha "lista de elevacao recusada pela gramatica; nada alterado"
-    for f in $novas; do
-        v="$(basename "$f")"; v="${v%%_*}"
-        case "$VINCULO_OBRIGATORIO" in *" $v "*)
-            printf '%s\n' "$LN" | grep -qE "^$v $(sha256sum < "$f" | cut -c1-64) superuser $HOMOLOG_ID\$" \
-                || falha "a $v exige a linha de elevacao vinculada a este id ($HOMOLOG_ID) com o sha256 do arquivo; nada alterado";;
-        esac
-    done
     . "$AQUI/lib/fontes_imagens.sh"
     guarda_fontes_imagens "$REPO" >&2 || falha "entradas das imagens da API diferentes do commit; nada alterado"
     NOVO_COMMIT="$(commit_fontes_imagens "$REPO")"; [ -n "$NOVO_COMMIT" ] || falha "commit das imagens nao identificado; nada alterado"
