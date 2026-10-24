@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Janelas de elevacao 016-020 em FALHA e em SUCESSO, pelo runner real (missao PLATFORM-API-V1-003, item 4). SO em ambiente
 # de laboratorio ensaio-* criado com HOMOLOG_ATE=021 e lista alternativa (HOMOLOG_ELEVACAO_ARQ) com 016-020 vinculadas
-# AO PROPRIO id, parado antes da 016 (o "criar" ja faz essa parada). Nunca no ensaio-api-v1-002.
+# AO PROPRIO id, parado antes da 016 (o "criar" ja faz essa parada). Nunca nos ambientes de homologacao (ensaio-api-v1-002, ensaio-api-v1-003).
 #
 # Para cada versao v de 016 a 020, em ordem:
 #   F (falha DENTRO da janela): o banco recusa a migration depois de concedida a elevacao. Recusa real do servidor, sem
@@ -18,7 +18,7 @@
 set -uo pipefail
 AQUI="$(cd "$(dirname "$0")/.." && pwd)"
 ID="${1:?id do laboratorio}"; OUT="${2:?diretorio de saida}"
-[[ "$ID" =~ ^ensaio- ]] && [ "$ID" != ensaio-api-v1-002 ] || { echo "ERRO: so em laboratorio ensaio-* (nunca no ensaio-api-v1-002)" >&2; exit 3; }
+[[ "$ID" =~ ^ensaio- ]] && [ "$ID" != ensaio-api-v1-002 ] && [ "$ID" != ensaio-api-v1-003 ] || { echo "ERRO: so em laboratorio ensaio-* (nunca nos ambientes de homologacao ensaio-api-v1-002 e ensaio-api-v1-003)" >&2; exit 3; }
 [ ! -e "$OUT" ] || { echo "ERRO: $OUT ja existe" >&2; exit 3; }
 mkdir -p "$OUT"
 H="$AQUI/homologacao.sh"
