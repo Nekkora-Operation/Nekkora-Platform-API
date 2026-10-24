@@ -1,0 +1,5 @@
+atualizacao=20261024T043202Z de=021 para=022
+commit_antes=a39f684 commit_depois=6280314
+copia_anterior=migracoes-ate-021-20261024T043202Z (somente leitura; registro migracoes-ate-021-20261024T043202Z.sha256.txt)
+versoes_novas:
+b752c7aa6fcfa4e3271e0561851164d43ff4e7b2c9a8d40bf3ecc4f0582bd63d *022_ativacao_organizacoes.sql

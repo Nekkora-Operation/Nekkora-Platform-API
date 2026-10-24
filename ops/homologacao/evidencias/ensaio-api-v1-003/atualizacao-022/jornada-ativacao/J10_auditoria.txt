@@ -1,0 +1,9 @@
+d15a7cfc-962c-4a76-898f-b742e2ef25f2|1|RECUSA|RESPONSAVEL_NAO_VINCULADO|op_hml_atc|0
+d15a7cfc-962c-4a76-898f-b742e2ef25f2|1|RECUSA|PARAMETRO_INVALIDO|op_hml_atc|0
+d15a7cfc-962c-4a76-898f-b742e2ef25f2|2|RECUSA|NAO_ATIVADA|op_hml_atc|0
+d15a7cfc-962c-4a76-898f-b742e2ef25f2|1|OK|-|op_hml_atc|5
+d15a7cfc-962c-4a76-898f-b742e2ef25f2|1|RECUSA|JA_ATIVADA|op_hml_atc|0
+449c1f16-5747-44bc-bbd6-000e37552c6b|1|OK|-|op_hml_atc|5
+449c1f16-5747-44bc-bbd6-000e37552c6b|1|RECUSA|JA_ATIVADA|op_hml_atc|0
+d15a7cfc-962c-4a76-898f-b742e2ef25f2|2|OK|-|op_hml_atc|5
+d15a7cfc-962c-4a76-898f-b742e2ef25f2|2|RECUSA|SEM_MUDANCA|op_hml_atc|0

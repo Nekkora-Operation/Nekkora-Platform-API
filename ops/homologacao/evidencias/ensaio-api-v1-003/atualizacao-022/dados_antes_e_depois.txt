@@ -1,0 +1,12 @@
+== antes (021): organizations=3 users=6 memberships=6 user_sessions=8 identity_sessions=9 limit_revisions=5 mail_outbox=0 identities=3 identity_events=35 ops_requests=2 ops_operators=4
+digest_antes: identities:9d036e5b413269ae2ca1ff7ad4d3b5ed identity_events:6c593cc1fc52341c09ef3e2d13506d31 ops_mfa_recovery_requests:63756fec166bc849d5076cd5afeb5bef organization_memberships:649918cccb67da515006c2f26ff9f8e4 organization_resource_limit_revisions:3b94699075ccbf04d24ecdd2366bb23c organizations:6b5660369e23bc325708839fb6d6002e users:2f76a8bc1d9bb7f292b95d432a1078a7
+== depois de atualizar (base intacta): organizations=3 users=6 memberships=6 user_sessions=8 identity_sessions=9 limit_revisions=5 mail_outbox=0 identities=3 identity_events=35 ops_requests=2 ops_operators=4
+digest_atualizar: identities:9d036e5b413269ae2ca1ff7ad4d3b5ed identity_events:6c593cc1fc52341c09ef3e2d13506d31 ops_mfa_recovery_requests:63756fec166bc849d5076cd5afeb5bef organization_memberships:649918cccb67da515006c2f26ff9f8e4 organization_resource_limit_revisions:3b94699075ccbf04d24ecdd2366bb23c organizations:6b5660369e23bc325708839fb6d6002e users:2f76a8bc1d9bb7f292b95d432a1078a7
+== depois da 022: organizations=3 users=6 memberships=6 user_sessions=8 identity_sessions=9 limit_revisions=5 mail_outbox=0 identities=3 identity_events=35 ops_requests=2 ops_operators=4
+digest_022: identities:9d036e5b413269ae2ca1ff7ad4d3b5ed identity_events:6c593cc1fc52341c09ef3e2d13506d31 ops_mfa_recovery_requests:63756fec166bc849d5076cd5afeb5bef organization_memberships:649918cccb67da515006c2f26ff9f8e4 organization_resource_limit_revisions:3b94699075ccbf04d24ecdd2366bb23c organizations:6b5660369e23bc325708839fb6d6002e users:2f76a8bc1d9bb7f292b95d432a1078a7
+classificacao estado|origem|n:
+organizacoes sem estado: 0
+== depois das jornadas na 022: organizations=5 users=9 memberships=9 user_sessions=14 identity_sessions=18 limit_revisions=10 mail_outbox=0 identities=6 identity_events=70 ops_requests=2 ops_operators=4
+classificacao estado|origem|n:
+1|1|2
+1|2|3

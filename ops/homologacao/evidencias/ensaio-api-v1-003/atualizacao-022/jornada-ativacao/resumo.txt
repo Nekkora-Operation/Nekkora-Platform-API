@@ -1,0 +1,12 @@
+caso|resultado|detalhe
+J0|OK|022 no historico; 3 grupos estado|origem; 3 organizacoes AGUARDANDO escolhidas (A: ativacao e revisao, B: concorrencia, C: controle)
+J1|OK|op_hml_atc: papel pelo DBA em nekkora_ops_mfa, cadastrado pelo CADASTRAR, depois concedido nekkora_org_activation; credencial emitida
+J2|OK|codigo emitido pelo titular na propria sessao (gateway); vincular-conta OK; reuso recusado (PROVA_INVALIDA)
+J3|OK|fora do grupo sem EXECUTE; responsavel nao vinculado, parametro invalido e revisao antes da ativacao recusados e auditados; estado e limites intactos
+J4|OK|ATIVADA; limites 1:1/2 2:1/1 3:1/10 4:2/- 5:2/-; auditoria com operador, papel da sessao, certificado, responsavel, motivo e as 5 revisoes com a autoria do responsavel
+J5|OK|repeticao recusada com JA_ATIVADA; nenhuma revisao nova
+J6|OK|duas ativacoes em paralelo (dois processos da CLI no mesmo job): uma OK (Y) e uma JA_ATIVADA; limites e 5 revisoes so da vencedora (a espera pelo lock com intercalamento controlado e provada no OrgActivationIT)
+J7|OK|revisao auditada (act=2) com os limites novos; repeticao recusada com SEM_MUDANCA
+J8|OK|provisionamento direto pelo papel real recusado na organizacao ativada; limites intactos
+J9|OK|Platform le pela funcao da API: A e B ATIVADA, C AGUARDANDO_ATIVACAO
+J10|OK|auditoria das 3 organizacoes exportada (9 eventos); codigo de vinculo ausente da evidencia
