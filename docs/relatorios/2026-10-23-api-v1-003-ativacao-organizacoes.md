@@ -109,8 +109,53 @@ Regressão completa do candidato final: registrada no PR.
 ## 6. Limitações e decisões para a responsável
 
 - **Valores da ativação:** decisão de produto. O comando os exige explicitamente.
-- **Mudança de capacidade depois da ativação:** ato não criado. Hoje, depois de ATIVADA, o caminho de provisionamento existente (`nekkora_provisioning`) volta a poder alterar limites, sem o motivo e a autoria operacional desta trilha. Se a decisão for exigir o mesmo rigor, o próximo passo é um ato `org_activation_revise` com a mesma auditoria.
+- **Mudança de capacidade depois da ativação:** decidida na revisão (D-ATV-2) e implementada: só pela revisão autorizada e auditada (§7.1).
 - **Isenção do superusuário:** o INSERT direto por superusuário (fixtures declaradas de teste e administração do cluster) não é barrado. Um superusuário pode tudo de qualquer forma; a isenção não se estende a nenhuma função.
 - **Reuso do dono operacional da 016:** `nekkora_ops_mfa_owner` passa a ser também dono do ato de ativação, por ser o único papel com USAGE em `ops` (onde está a autenticação do operador). A alternativa, um dono próprio, exigiria mudar a §19 da 016, reexecutada em toda base.
-- **Homologação no ambiente:** a ativação foi demonstrada nas suítes e nos testes Java com papéis e certificados reais, não no `ensaio-api-v1-002` (001–021). Levá-la ao ambiente exige a linha de elevação da 022 vinculada ao id e um pré-voo, para revisão.
+- **Homologação no ambiente:** feita na revisão, no `ensaio-api-v1-003` atualizado de 021 para 022 pelo runner (§7.3). A linha de elevação da 022 e o pré-voo são propostas para revisão.
 - **Leitura da Platform:** `org_activation_states` devolve o estado de qualquer organização cujo id a Platform conheça. A API só pergunta pelas organizações já devolvidas pela função da identidade ou pela do contexto da sessão. O dado exposto é só o estado.
+
+## 7. Revisão de 2026-10-24
+
+### 7.1 Mudança de capacidade depois da ativação (D-ATV-2)
+
+Decisão da revisão: alterações posteriores também exigem autorização e auditoria.
+
+- **`public.org_activation_revise`:** mesmos controles da ativação (grupo `nekkora_org_activation`, certificado registrado, conta responsável provada e de outra organização, limites explícitos dos cinco recursos, motivo). Auditoria na mesma tabela, com `act = 2` (a ativação é `act = 1`).
+- **Recusas:** `NAO_ATIVADA` (a revisão não substitui a ativação); `SEM_MUDANCA` quando os limites pedidos são os do último ato OK auditado. Isso torna seguras a repetição de um resultado incerto e a concorrência: a segunda revisão igual espera a primeira e recebe `SEM_MUDANCA`.
+- **Gatilho dos limites:** com a organização ATIVADA, nenhuma revisão dos recursos 1 a 5 é aceita fora de um ato em curso. O ato grava em `ops_activation.open_acts` a organização e a transação corrente (`pg_current_xact_id`) e apaga a linha antes de terminar; nada fica confirmado, e a invariante confere a tabela vazia. Um GUC de sessão não serviria, porque qualquer papel pode defini-lo. Só o INSERT direto de superusuário continua isento.
+- **Sem ampliar privilégio:** a comparação do `SEM_MUDANCA` usa a auditoria, não `organization_resource_limit_revisions` (o dono das funções não tem acesso a ela; a primeira versão da revisão tentou ler e o teste a pegou).
+- **CLI:** `revisar-capacidade` (mesmos argumentos de `ativar-organizacao`) e `vincular-conta <código>`. A CLI não tinha como registrar o vínculo da conta, que a ativação exige; agora o operador vincula com o código que o titular emite na própria sessão (`POST /api/v1/o/{org}/me/operational-link-code`, da 016). Só o sha256 vai ao banco.
+
+### 7.2 Acesso efetivo também na 022
+
+A invariante da 022 conferia só a ACL de `ops_activation`, a mesma escolha da 021 revisão 2. Passou a conferir o **acesso efetivo** ao schema e às três tabelas (`has_schema_privilege`, `has_table_privilege`, `has_any_column_privilege`), com o mesmo critério da 021 revisão 3: participação em papel com acesso, e o backup como única exceção, só leitura e só por `pg_read_all_data`. A conferência da ACL continua, para nomear PUBLIC e o privilégio.
+
+### 7.3 Provas
+
+| Prova | Resultado |
+|---|---|
+| `OrgActivationIT` | **9/9**: os 6 anteriores (o da ativação agora confere que o provisionamento direto é recusado depois de ATIVADA) + revisão auditada, recusas da revisão sem efeito e revisão concorrente com espera observada. O vínculo da conta passa pela CLI, e o reuso do código é recusado |
+| `db/tests/ativacao-022` | **OK** (execução `2026-10-24T040432Z`): C2 com os cinco recursos recusados pelo provisionamento direto numa organização ATIVADA; C4 e C5 nos dois atos; **C7**, 7 contraprovas de acesso efetivo; diff de catálogo 021 → 022 com exatamente 21 linhas previstas |
+| Regressão Maven completa | **580 testes, 0 falhas, 0 erros, 0 ignorados** no `a24e181` (`regressao_maven.sh`, fontes estáveis): 570 da base, 9 do `OrgActivationIT` e 1 da API. O commit seguinte (`64b46ea`) só toca ferramentas de teste da homologação |
+| Recusa da atualização numa base com a 021 anterior | `homologacao.sh atualizar ensaio-api-v1-002` recusou antes de qualquer mudança: `copia de migrations do ambiente diferente do repositorio: 021(ambiente bf85b95bdc83... repositorio 153c595a7ef9...)`. O ambiente continuou LIBERADO, com a cópia e o `ambiente.env` byte a byte iguais |
+| **Atualização 021 → 022 de base populada, pelo runner** | `ensaio-api-v1-003`, populado com as jornadas e a 016. O `atualizar` preservou a cópia 001–021, gravou a nova com a 022 e reconstruiu as imagens do commit `6280314`. O `implantar` passou no pré-voo da 022 (`PREFLIGHT_OK`, 10 conferências); a janela SUPERUSER durou de 04:32:53 a 04:32:57 e foi retirada e conferida em 0\|0\|0; resultado **LIBERADO** (001–022, `flyway validate` OK). **Dados idênticos:** contagens e md5 do conteúdo de 8 tabelas iguais antes, depois do `atualizar` e depois da 022. Classificação: as 3 organizações anteriores ficaram AGUARDANDO_ATIVACAO, origem 2, todas com capacidade zero; nenhuma organização sem estado. O ramo de existentes com capacidade (ATIVADA, origem 2) é provado na suíte (B2) |
+| Jornadas pela API depois da 022 | **96 casos, 0 falhas**, em duas rodadas, com varredura sem achados. As organizações criadas depois nascem AGUARDANDO_ATIVACAO, origem 1 |
+| **Jornada da ativação** (`homologacao.sh jornada-ativacao`) | **11 OK, 0 falha** (`op_hml_atc`): J1 operador (DBA → CADASTRAR → grupo); J2 vínculo pela CLI com o código emitido pelo titular na sessão dele pelo gateway, reuso recusado; J3 recusas sem efeito (fora do grupo, responsável não vinculado, parâmetro inválido, revisão antes da ativação), auditadas; J4 ativação com auditoria completa e 5 revisões de autoria do responsável; J5 `JA_ATIVADA`; J6 duas ativações paralelas, uma OK e uma `JA_ATIVADA` 28 ms depois, limites só da vencedora; J7 revisão `act=2` e `SEM_MUDANCA`; J8 provisionamento direto recusado; J9 estados pela função da Platform; J10 9 eventos de auditoria, código fora da evidência. Duas tentativas anteriores, preservadas e explicadas: uma por erro de ordem no roteiro (o grupo antes do cadastro; a 016 só cadastra papel com participação exata em `nekkora_ops_mfa`) e outra porque dois jobs `operacao` não sobem juntos (IP fixo do job). Varredura das evidências: 777 valores, 0 achados |
+
+**Como a base foi populada:** jornadas pela API (96 casos), preparação e cenários da 016 no próprio ambiente, sem dados reais. As organizações criadas antes da 022 foram classificadas por ela; as criadas depois nascem AGUARDANDO_ATIVACAO.
+
+**Limite da prova de concorrência na homologação:** as duas ativações paralelas (J6) partem de dois jobs da CLI, sem controlar o intercalamento. O resultado (uma OK, uma `JA_ATIVADA`, limites só da vencedora) vale para qualquer ordem. A espera pelo lock, com intercalamento controlado, é provada no `OrgActivationIT`.
+
+### 7.4 Elevação da 022 (proposta)
+
+Linha `022 <sha256> tipo=superuser ambiente=ensaio-api-v1-003` em `implantacao/elevacao.txt`, com a 022 em `VINCULO_OBRIGATORIO` e o pré-voo oficial `implantacao/preflight/022.sql`, somente leitura, com 10 conferências:
+- histórico exatamente 001–021;
+- migrador sem atributo elevado e dono do banco;
+- 021 presente e objetos da ativação ausentes;
+- grupo ausente ou sem atributo;
+- dono das funções sem participação;
+- assinaturas de `provision_resource_limit` e `get_effective_resource_limit`;
+- backup só em `pg_read_all_data`.
+
+O `criar` com `HOMOLOG_ATE=021` exige só as linhas até a 021. A 022 entra pelo `atualizar`, que confere a linha antes de mudar qualquer coisa.
