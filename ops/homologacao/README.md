@@ -73,7 +73,7 @@ Para liberar: `homologacao.sh recuperar <id>`, que obtém a trava no banco (sen�
 Missão PLATFORM-API-V1-003. Relatório: `docs/relatorios/2026-10-23-api-v1-003-base-e-homologacao.md`. Só em ambiente descartável (`ensaio-*`), com o e-mail **simulado** na caixa do ensaio.
 
 ```sh
-HOMOLOG_ATE=021 HOMOLOG_TRANSPORTE=homologacao HOMOLOG_REDE_INTERNA=10.252.94 HOMOLOG_REDE_BORDA=10.252.95 HOMOLOG_PORTA=55763   ops/homologacao/homologacao.sh criar ensaio-api-v1-003            # 001-015 e PARADA antes da 016
+HOMOLOG_ATE=021 HOMOLOG_TRANSPORTE=homologacao HOMOLOG_REDE_INTERNA=10.252.92 HOMOLOG_REDE_BORDA=10.252.93 HOMOLOG_PORTA=55763   ops/homologacao/homologacao.sh criar ensaio-api-v1-003            # 001-015 e PARADA antes da 016
 HOMOLOG_AUTORIZA_ELEVACAO=1 ops/homologacao/homologacao.sh implantar ensaio-api-v1-003   # 016-020 com janela e pré-voo; 021 sem janela
 ops/homologacao/homologacao.sh concluir-criacao ensaio-api-v1-003  # senhas, volumes, Platform, Portal e gateway
 ops/homologacao/homologacao.sh preparar-016 ensaio-api-v1-003      # operadores, contatos e MFA da 016
