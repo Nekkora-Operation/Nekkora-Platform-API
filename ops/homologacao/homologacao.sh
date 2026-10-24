@@ -213,6 +213,7 @@ criar)
              LN="$(lista_elevacao_normalizada "${HOMOLOG_ELEVACAO_ARQ:-$AQUI/implantacao/elevacao.txt}" "$VINCULO_OBRIGATORIO" 2>/dev/null)" \
                  || falha "lista de elevacao recusada pela gramatica (lib/lista_elevacao.sh)"
              for v in $VINCULO_OBRIGATORIO; do
+                 [ "$((10#$v))" -le 21 ] || continue   # 022+: so pelo "atualizar" (linha conferida la)
                  printf '%s\n' "$LN" | grep -qE "^$v [0-9a-f]{64} superuser $HOMOLOG_ID\$" \
                      || falha "a $v exige a linha de elevacao autorizada e vinculada a este id ($HOMOLOG_ID) em implantacao/elevacao.txt"
              done;;
@@ -900,8 +901,8 @@ subir)
 jornadas-api)
     carrega_ambiente "${2:?id}"
     prepara_funcoes
-    [[ "$HOMOLOG_ID" =~ ^ensaio- ]] && [ "${HOMOLOG_ATE:-015}" = 021 ] && [ "${HOMOLOG_TRANSPORTE:-}" = homologacao ] \
-        || falha "jornadas-api so em ensaio-* criado com HOMOLOG_ATE=021 e o transporte de homologacao"
+    [[ "$HOMOLOG_ID" =~ ^ensaio- ]] && [[ "${HOMOLOG_ATE:-015}" =~ ^02[12]$ ]] && [ "${HOMOLOG_TRANSPORTE:-}" = homologacao ] \
+        || falha "jornadas-api so em ensaio-* com HOMOLOG_ATE=021 (ou atualizado para 022) e o transporte de homologacao"
     confere_liberacao "$TRAVA" > /dev/null || falha "ambiente BLOQUEADO (ver homologacao.sh estado $HOMOLOG_ID)"
     export HOMOLOG_BASH="${HOMOLOG_BASH:-$(mixed "$(command -v bash)")}"
     [ -f "C:/Program Files/Git/bin/bash.exe" ] && HOMOLOG_BASH="C:/Program Files/Git/bin/bash.exe"
@@ -940,6 +941,101 @@ jornadas-api)
         echo "controle_positivo=NAO_EXECUTADO (J6 fora da selecao)" | tee -a "$J/varredura.txt"
     fi
     exit "$rc"
+    ;;
+
+# ==================================================================================================== atualizar
+# Atualizacao de um ensaio-* LIBERADO para versoes posteriores das migrations e das imagens (missao PLATFORM-API-V1-003,
+# revisao: prova da atualizacao 021 -> 022 numa base populada pelo caminho real de implantacao). SO ensaio-*, SO 021 -> 022.
+# Nada e aplicado no banco aqui: o "implantar" seguinte aplica as versoes novas com os controles de sempre (linha
+# vinculada, pre-voo, janela, retirada conferida), e o "subir" sobe os servicos com as imagens novas.
+#   1. recusa, ANTES de qualquer mudanca: ambiente BLOQUEADO; versao alvo fora do suportado; copia de migrations do
+#      ambiente com QUALQUER arquivo de bytes diferentes do repositorio (revisao anterior aplicada nesta base: o Flyway
+#      recusaria por checksum e o runner nao repara, IMPLANTACAO.md item 3); versao nova de vinculo obrigatorio sem a linha
+#      vinculada a este id com o sha256 do arquivo; entradas das imagens diferentes do commit;
+#   2. preserva a copia e o registro anteriores (migracoes-ate-<versao>-<instante>, somente leitura) e grava a nova copia
+#      (a anterior byte a byte, conferida, mais as versoes novas) e o novo registro;
+#   3. build das imagens do commit atual (tag = commit; as anteriores ficam) e parada de Platform, Portal e gateway (banco
+#      e Redis continuam no ar);
+#   4. ambiente.env com HOMOLOG_ATE e HOMOLOG_COMMIT novos (o anterior fica em atualizacao-<instante>/ambiente.env.antes).
+atualizar)
+    carrega_ambiente "${2:?id}"
+    prepara_funcoes
+    ALVO="${HOMOLOG_ATUALIZAR_ATE:-}"
+    [[ "$HOMOLOG_ID" =~ ^ensaio- ]] || falha "atualizar so em ambiente descartavel (id ensaio-*)"
+    [ "$HOMOLOG_ATE" = 021 ] && [ "$ALVO" = 022 ] || falha "atualizacao suportada: 021 -> 022 com HOMOLOG_ATUALIZAR_ATE=022 (ambiente em $HOMOLOG_ATE, alvo '${ALVO}')"
+    [ "${HOMOLOG_TRANSPORTE:-}" = homologacao ] || falha "atualizar exige o transporte de homologacao"
+    EVID="$AQUI/saidas/$HOMOLOG_ID"; INST="$(date -u +%Y%m%dT%H%M%SZ)"; AT="$EVID/atualizacao-$INST"
+    confere_liberacao "$TRAVA" > /dev/null || falha "ambiente BLOQUEADO: nada alterado (homologacao.sh estado $HOMOLOG_ID)"
+    div=""
+    for f in "$EVID/migracoes"/*.sql; do
+        n="$(basename "$f")"; r="$REPO/db/migrations/$n"
+        if [ ! -f "$r" ]; then div="$div ${n%%_*}(ausente no repositorio)"
+        elif [ "$(sha256sum < "$f" | cut -c1-64)" != "$(sha256sum < "$r" | cut -c1-64)" ]; then
+            div="$div ${n%%_*}(ambiente $(sha256sum < "$f" | cut -c1-12)... repositorio $(sha256sum < "$r" | cut -c1-12)...)"
+        fi
+    done
+    [ -z "$div" ] || falha "copia de migrations do ambiente diferente do repositorio:$div. Revisao anterior aplicada nesta base: o Flyway recusaria por checksum e o runner nao repara (IMPLANTACAO.md, item 3). Nada alterado"
+    novas=""
+    for n in $(seq $((10#$HOMOLOG_ATE + 1)) $((10#$ALVO))); do
+        v="$(printf '%03d' "$n")"; f=("$REPO"/db/migrations/${v}_*.sql)
+        [ -f "${f[0]}" ] && [ ${#f[@]} -eq 1 ] || falha "migration $v ausente ou ambigua; nada alterado"
+        novas="$novas ${f[0]}"
+    done
+    . "$AQUI/lib/lista_elevacao.sh"
+    LN="$(lista_elevacao_normalizada "$AQUI/implantacao/elevacao.txt" "$VINCULO_OBRIGATORIO" 2>/dev/null)" || falha "lista de elevacao recusada pela gramatica; nada alterado"
+    for f in $novas; do
+        v="$(basename "$f")"; v="${v%%_*}"
+        case "$VINCULO_OBRIGATORIO" in *" $v "*)
+            printf '%s\n' "$LN" | grep -qE "^$v $(sha256sum < "$f" | cut -c1-64) superuser $HOMOLOG_ID\$" \
+                || falha "a $v exige a linha de elevacao vinculada a este id ($HOMOLOG_ID) com o sha256 do arquivo; nada alterado";;
+        esac
+    done
+    . "$AQUI/lib/fontes_imagens.sh"
+    guarda_fontes_imagens "$REPO" >&2 || falha "entradas das imagens da API diferentes do commit; nada alterado"
+    NOVO_COMMIT="$(commit_fontes_imagens "$REPO")"; [ -n "$NOVO_COMMIT" ] || falha "commit das imagens nao identificado; nada alterado"
+
+    echo "== copia nova das migrations (a anterior preservada, somente leitura)"
+    mkdir -p "$AT"
+    cp "$EVID/ambiente.env" "$AT/ambiente.env.antes"
+    ANT="$EVID/migracoes-ate-$HOMOLOG_ATE-$INST"
+    mv "$EVID/migracoes" "$ANT"; mv "$EVID/migracoes_sha256.txt" "$ANT.sha256.txt"
+    mkdir -p "$EVID/migracoes"; cp "$ANT"/*.sql "$EVID/migracoes/"
+    for f in $novas; do cp "$f" "$EVID/migracoes/"; done
+    chmod -R a-w "$ANT" "$ANT.sha256.txt" 2>/dev/null || true
+    (cd "$EVID/migracoes" && sha256sum *.sql) > "$EVID/migracoes_sha256.txt"
+    (cd "$EVID/migracoes" && sha256sum $(cd "$ANT" && ls *.sql)) | diff -q - "$ANT.sha256.txt" > /dev/null || falha "copia nova nao preserva a anterior byte a byte"
+    { echo "atualizacao=$INST de=$HOMOLOG_ATE para=$ALVO"
+      echo "commit_antes=$HOMOLOG_COMMIT commit_depois=$NOVO_COMMIT"
+      echo "copia_anterior=$(basename "$ANT") (somente leitura; registro $(basename "$ANT").sha256.txt)"
+      echo "versoes_novas:"; (cd "$EVID/migracoes" && for f in $novas; do sha256sum "$(basename "$f")"; done)
+    } > "$AT/registro.txt"
+
+    echo "== build (jars e imagens identificados por $NOVO_COMMIT)"
+    HOMOLOG_COMMIT="$NOVO_COMMIT"; export HOMOLOG_COMMIT
+    registro_fontes_imagens "$REPO" "$HOMOLOG_COMMIT" > "$AT/fontes_imagens.txt"
+    (cd "$REPO/api" && ./mvnw -q -DskipTests package && ./mvnw -q -DskipTests test-compile -pl nekkora-platform) > "$AT/build.txt" 2>&1 || falha "build (ver $AT/build.txt)"
+    compose build platform portal >> "$AT/build.txt" 2>&1 || falha "build das imagens"
+    (cd "$REPO/api" && ./mvnw -q -pl nekkora-ops dependency:copy-dependencies -DincludeScope=runtime -DoutputDirectory=target/dep-operacao \
+        && ./mvnw -q -pl nekkora-ops test-compile) >> "$AT/build.txt" 2>&1 || falha "build do job de operacao"
+    compose --profile operacao build operacao >> "$AT/build.txt" 2>&1 || falha "imagem do job de operacao"
+    compose stop platform portal gateway > "$AT/parada_servicos.txt" 2>&1 || falha "parada dos servicos"
+
+    sed -e "s/^HOMOLOG_ATE=.*/HOMOLOG_ATE=$ALVO/" -e "s/^HOMOLOG_COMMIT=.*/HOMOLOG_COMMIT=$NOVO_COMMIT/" "$AT/ambiente.env.antes" > "$EVID/ambiente.env"
+    echo "HOMOLOG_ATUALIZADO_EM=$INST" >> "$EVID/ambiente.env"
+    echo "ATUALIZADO: $HOMOLOG_ID copia e imagens de $HOMOLOG_ATE para $ALVO (commit $NOVO_COMMIT); servicos parados; base intacta ($AT). Proximos passos:"
+    echo "  HOMOLOG_AUTORIZA_ELEVACAO=1 homologacao.sh implantar $HOMOLOG_ID   (pre-voo e janela da $ALVO)"
+    echo "  homologacao.sh subir $HOMOLOG_ID"
+    ;;
+
+# ============================================================================================= jornada-ativacao
+# Jornada da ativacao e da revisao de capacidade numa base populada atualizada de 021 para 022 (testes/jornada_ativacao.sh):
+# SO ensaio-* com a 022 aplicada pelo runner, LIBERADO e com a 016 preparada.
+jornada-ativacao)
+    carrega_ambiente "${2:?id}"
+    prepara_funcoes
+    [[ "$HOMOLOG_ID" =~ ^ensaio- ]] && [ "${HOMOLOG_ATE:-015}" = 022 ] || falha "jornada-ativacao so em ensaio-* atualizado para a 022"
+    confere_liberacao "$TRAVA" > /dev/null || falha "ambiente BLOQUEADO (ver homologacao.sh estado $HOMOLOG_ID)"
+    exec bash "$AQUI/testes/jornada_ativacao.sh"
     ;;
 
 # =============================================================================================== validar-config
