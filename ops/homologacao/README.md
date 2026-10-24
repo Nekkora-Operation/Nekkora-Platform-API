@@ -68,18 +68,20 @@ O runner para na primeira falha: sem nova tentativa, sem `repair`, sem `baseline
 
 Para liberar: `homologacao.sh recuperar <id>`, que obtém a trava no banco (senão recusa sem alterar nada), revoga, encerra as sessões, confere `0|0|0` e só então remove a trava local. Isso recupera o **migrador**. Se a instalação ficou incompleta, o ambiente **continua BLOQUEADO** até `homologacao.sh implantar <id>` concluir as versões pendentes. Procedimento completo em [IMPLANTACAO.md](IMPLANTACAO.md), §5.
 
-## Identidade e e-mail: 016–021 (`ensaio-api-v1-002`)
+## Identidade e e-mail: 016–021 (`ensaio-api-v1-003`)
 
 Missão PLATFORM-API-V1-003. Relatório: `docs/relatorios/2026-10-23-api-v1-003-base-e-homologacao.md`. Só em ambiente descartável (`ensaio-*`), com o e-mail **simulado** na caixa do ensaio.
 
 ```sh
-HOMOLOG_ATE=021 HOMOLOG_TRANSPORTE=homologacao HOMOLOG_REDE_INTERNA=10.252.98 HOMOLOG_REDE_BORDA=10.252.99 HOMOLOG_PORTA=55761   ops/homologacao/homologacao.sh criar ensaio-api-v1-002            # 001-015 e PARADA antes da 016
-HOMOLOG_AUTORIZA_ELEVACAO=1 ops/homologacao/homologacao.sh implantar ensaio-api-v1-002   # 016-020 com janela e pré-voo; 021 sem janela
-ops/homologacao/homologacao.sh concluir-criacao ensaio-api-v1-002  # senhas, volumes, Platform, Portal e gateway
-ops/homologacao/homologacao.sh preparar-016 ensaio-api-v1-002      # operadores, contatos e MFA da 016
-ops/homologacao/homologacao.sh jornadas-api ensaio-api-v1-002 [--somente J1,J2]   # jornadas pela API + varredura de segredos
-ops/homologacao/homologacao.sh testar-016 ensaio-api-v1-002        # avisos emergenciais (B5-B12)
+HOMOLOG_ATE=021 HOMOLOG_TRANSPORTE=homologacao HOMOLOG_REDE_INTERNA=10.252.94 HOMOLOG_REDE_BORDA=10.252.95 HOMOLOG_PORTA=55763   ops/homologacao/homologacao.sh criar ensaio-api-v1-003            # 001-015 e PARADA antes da 016
+HOMOLOG_AUTORIZA_ELEVACAO=1 ops/homologacao/homologacao.sh implantar ensaio-api-v1-003   # 016-020 com janela e pré-voo; 021 sem janela
+ops/homologacao/homologacao.sh concluir-criacao ensaio-api-v1-003  # senhas, volumes, Platform, Portal e gateway
+ops/homologacao/homologacao.sh preparar-016 ensaio-api-v1-003      # operadores, contatos e MFA da 016
+ops/homologacao/homologacao.sh jornadas-api ensaio-api-v1-003 [--somente J1,J2]   # jornadas pela API + varredura de segredos
+ops/homologacao/homologacao.sh testar-016 ensaio-api-v1-003        # avisos emergenciais (B5-B12)
 ```
+
+- **`ensaio-api-v1-002` (preservado):** foi criado com a 021 **revisão 2**, que a revisão 3 substitui. A cópia de migrations dele (`saidas/ensaio-api-v1-002/migracoes`) é imutável, e a base continua coerente com ela. Ele não avança: a lista aceita uma linha por versão, e as linhas de 016–020 agora são do `ensaio-api-v1-003`. Além disso, levar a 021 revisão 3 até ele exigiria trocar o checksum registrado, o que o runner não faz (`IMPLANTACAO.md`, item 3; suíte `db/tests/correio-021`, caso D).
 
 - **Elevação:** 016–020 têm vínculo obrigatório (`VINCULO_OBRIGATORIO` em `lib/lista_elevacao.sh`). A linha tem de ser `tipo=superuser ambiente=<id exato>` e o pré-voo vem só de `implantacao/preflight/<versão>.sql`. Sem a linha, o `criar` recusa antes de criar qualquer recurso, e o runner recusa antes do Flyway. A 021 não tem janela.
 - **Sobreposições:** `compose.016.yml`, `compose.caixa.yml` e `compose.021.yml`. A última liga, só no ensaio, as chaves de cadastro, entrada geral, criação de organização, vinculação e recuperação de senha.

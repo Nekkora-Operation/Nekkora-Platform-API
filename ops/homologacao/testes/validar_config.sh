@@ -127,12 +127,13 @@ echo "== 5. elevacao e migrations"
 #   7fd92fae... = operacional atual: 011-013, SEM a 016 (a linha da 016 depende da decisao D-ELEV);
 #   47bb9596... = proposta de P3 com "016 <sha256> ensaio-016a" (docs/relatorios/2026-09-29-p3it-anexos/elevacao-016-proposta.patch).
 # A proposta so e ACEITA como conteudo aprovado; esta validacao nao a ativa.
-#   374c6620... = missao PLATFORM-API-V1-003 (PROPOSTA, para revisao): 011-013 legadas + 016-020 tipo=superuser vinculadas
-#   ao ensaio-api-v1-002. Enquanto o PR nao for aprovado, este e o conteudo do PR, nao uma autorizacao vigente.
+#   d122d22a... = missao PLATFORM-API-V1-003 (PROPOSTA, para revisao): 011-013 legadas + 016-020 tipo=superuser vinculadas
+#   ao ensaio-api-v1-003 (na primeira versao do PR, 374c6620..., ao ensaio-api-v1-002). Enquanto o PR nao for aprovado, este
+#   e o conteudo do PR, nao uma autorizacao vigente.
 # Base fixada das proposta/adulteracoes abaixo: a lista 011-013 (7fd92fae...) no commit bf977d7 (main antes da missao 003),
 # e nao HEAD - com a lista operacional nova, acrescentar uma 016 a HEAD daria "versao repetida" e mudaria o caso testado.
 LISTA_011_013_SHA=7fd92faed3a8d66eb297d727806518a2983572d90eae0633bf4ddc5a7778370d
-LISTA_OPERACIONAL_SHA=374c6620766879bfc995fb50b38a50724b1715800a21ec759b8fc8333af96cc8
+LISTA_OPERACIONAL_SHA=d122d22adba926e3f98c435cfdffd84dac6b956aeba3480ff85980afc9626a25
 LISTA_PROPOSTA_016_SHA=47bb959662063868351a3f15b4248fb876d8f8cb2e14f9404bbb46f606eef1e3
 lista_aprovada() {   # $1 arquivo -> imprime "operacional" | "lista-011-013" | "proposta-016"; codigo 1 se nao aprovado
     local s; s="$(tr -d '\r' < "$1" | sha256sum | cut -c1-64)"
@@ -146,7 +147,7 @@ lista_aprovada() {   # $1 arquivo -> imprime "operacional" | "lista-011-013" | "
 BASE_LISTA="$TMP/l_base_011_013.txt"
 git -C "$REPO" show bf977d7:ops/homologacao/implantacao/elevacao.txt > "$BASE_LISTA"
 confere "base fixada (bf977d7) com o conteudo 011-013 aprovado" "[ \"\$(lista_aprovada '$BASE_LISTA')\" = lista-011-013 ]"
-confere "elevacao.txt operacional com conteudo aprovado (011-013 + 016-020 vinculadas ao ensaio-api-v1-002)" "[ \"\$(lista_aprovada '$AQUI/implantacao/elevacao.txt')\" = operacional ]"
+confere "elevacao.txt operacional com conteudo aprovado (011-013 + 016-020 vinculadas ao ensaio-api-v1-003)" "[ \"\$(lista_aprovada '$AQUI/implantacao/elevacao.txt')\" = operacional ]"
 PROP="$REPO/docs/relatorios/2026-09-29-p3it-anexos/elevacao-016-proposta.patch"
 mkdir -p "$TMP/lista/ops/homologacao/implantacao"
 cp "$BASE_LISTA" "$TMP/lista/ops/homologacao/implantacao/elevacao.txt"
@@ -191,7 +192,7 @@ recusa "ultima migration invalida" ensaio-validacao-g HOMOLOG_ATE=017
 # missao PLATFORM-API-V1-003: 021 so em ensaio-*, com e-mail simulado e com 016-020 vinculadas ao id exato
 recusa "021 fora de ensaio-*" hml-validacao-q HOMOLOG_ATE=021 HOMOLOG_TRANSPORTE=homologacao
 recusa "021 sem o transporte de homologacao (e-mail simulado)" ensaio-validacao-r HOMOLOG_ATE=021
-recusa "021 com a lista operacional, vinculada a OUTRO id (ensaio-api-v1-002)" ensaio-validacao-s HOMOLOG_ATE=021 HOMOLOG_TRANSPORTE=homologacao
+recusa "021 com a lista operacional, vinculada a OUTRO id (ensaio-api-v1-003)" ensaio-validacao-s HOMOLOG_ATE=021 HOMOLOG_TRANSPORTE=homologacao
 # P3-IT (correcao): a 016 so com a linha VINCULADA ao id exato; lista alternativa so em ensaio-* e existente
 S016=25bef818a7d38c465fffcc5821c1bf9f924ef3cade0f29ec7b79f5b1711fbe61
 { cat "$BASE_LISTA"; echo "016 $S016"; } > "$TMP/l016_sem_vinculo.txt"
@@ -272,8 +273,8 @@ recusa "021 com lista alternativa e a 018 SEM vinculo" ensaio-validacao-u HOMOLO
 lista_recusada "018 sem vinculo (versao de vinculo obrigatorio)" "$TMP/l021_018_sem_vinculo.txt" "sem vinculo ao id"
 l021 "$TMP/l021_017_bypass.txt" ensaio-validacao-v 017=bypass
 lista_recusada "017 com tipo=bypassrls (vinculo obrigatorio so superuser)" "$TMP/l021_017_bypass.txt" "so pode ter elevacao do tipo superuser"
-confere "lista operacional normalizada: 011-013 legadas e 016-020 superuser vinculadas SO ao ensaio-api-v1-002" \
-    "[ \"\$(lista_elevacao_normalizada '$AQUI/implantacao/elevacao.txt' \"\$VINCULO_OBRIGATORIO\" | awk '{print \$1, \$3, \$4}' | tr '\n' ' ')\" = '011 superuser - 012 superuser - 013 superuser - 016 superuser ensaio-api-v1-002 017 superuser ensaio-api-v1-002 018 superuser ensaio-api-v1-002 019 superuser ensaio-api-v1-002 020 superuser ensaio-api-v1-002 ' ]"
+confere "lista operacional normalizada: 011-013 legadas e 016-020 superuser vinculadas SO ao ensaio-api-v1-003" \
+    "[ \"\$(lista_elevacao_normalizada '$AQUI/implantacao/elevacao.txt' \"\$VINCULO_OBRIGATORIO\" | awk '{print \$1, \$3, \$4}' | tr '\n' ' ')\" = '011 superuser - 012 superuser - 013 superuser - 016 superuser ensaio-api-v1-003 017 superuser ensaio-api-v1-003 018 superuser ensaio-api-v1-003 019 superuser ensaio-api-v1-003 020 superuser ensaio-api-v1-003 ' ]"
 confere "lista operacional: sha256 de 016-020 = bytes LF de db/migrations; 021 sem linha" \
     "( for v in 016 017 018 019 020; do lista_elevacao_normalizada '$AQUI/implantacao/elevacao.txt' \"\$VINCULO_OBRIGATORIO\" | grep -q \"^\$v \$(sha256sum '$REPO'/db/migrations/\${v}_*.sql | cut -c1-64) \" || exit 1; done ) && ! grep -q '^021 ' '$AQUI/implantacao/elevacao.txt'"
 confere "runner: versao de vinculo obrigatorio SEM linha recusada antes do Flyway; pre-voo oficial existente para 016-020" \
@@ -392,9 +393,9 @@ confere "T2: semear-pre014 exige a pausa antes-de-elevar@014 do runner, a chegad
      && grep -q 'a pausa ja foi liberada' '$AQUI/homologacao.sh' && grep -q 'sem trava local da implantacao' '$AQUI/homologacao.sh'"
 confere "ganchos de pausa e largada do runner continuam recusados fora de ensaio-*" \
     "grep -q 'ganchos de ensaio so em ambiente descartavel (id ensaio-\\*)' '$AQUI/implantacao/implantar.sh'"
-confere "elevacao.txt operacional sem linha da 014; 016-020 SO vinculadas ao ensaio-api-v1-002 (nenhuma sem vinculo ou de outro id)" \
+confere "elevacao.txt operacional sem linha da 014; 016-020 SO vinculadas ao ensaio-api-v1-003 (nenhuma sem vinculo ou de outro id)" \
     "lista_elevacao_normalizada '$AQUI/implantacao/elevacao.txt' \"\$VINCULO_OBRIGATORIO\" > '$TMP/lista_op.txt' 2>&1 && ! grep -qE '^014 ' '$TMP/lista_op.txt' \
-     && [ \"\$(grep -cE '^(016|017|018|019|020) [0-9a-f]{64} superuser ensaio-api-v1-002\$' '$TMP/lista_op.txt')\" = 5 ] \
+     && [ \"\$(grep -cE '^(016|017|018|019|020) [0-9a-f]{64} superuser ensaio-api-v1-003\$' '$TMP/lista_op.txt')\" = 5 ] \
      && [ \"\$(grep -cE '^(016|017|018|019|020) ' '$TMP/lista_op.txt')\" = 5 ]"
 
 echo "== 13. H02: janela BYPASSRLS da 014 esperada pela lista de elevacao em vigor (R2b-0b; h02_esperadas do executar.sh)"
@@ -488,8 +489,13 @@ echo "== 17. H02 pela lista HISTORICA da criacao (fotografia imutavel; missao H0
 EH="$AQUI/lib/elevacao_historica.sh"; H02F="$TMP/h02_funcao.sh"; EHL="$TMP/eh_lista_h02.sh"
 awk '/^h02\(\) \{/ {p = 1} p {print} p && /^}/ {exit}' "$AQUI/testes/executar.sh" > "$H02F"
 awk '/^eh_lista_h02\(\) \{/ {p = 1} p {print} p && /^}/ {exit}' "$EH" > "$EHL"
-confere "testes de lib/elevacao_historica.sh (fotografia, ancoras, adulteracao, legado explicito, falha fechada; registros reais)" \
-    "bash '$AQUI/testes/test_elevacao_historica.sh' > '$TMP/test_eh.txt' 2>&1"
+# Obrigatorios e portaveis (sem caminho de maquina): sinteticos, legado hml03 pelos registros versionados e legado ancorado
+# sintetico. O laboratorio legado (registros reais de ensaio-016a/016c, em clones de outra maquina) e OPCIONAL: so os casos
+# 9a0, 9a e 9b podem ser PULADOS, e sao listados abaixo; nenhum obrigatorio pode faltar (contagem minima de OK).
+confere "testes de lib/elevacao_historica.sh (fotografia, ancoras, adulteracao, legado explicito, falha fechada; legado hml03 versionado)" \
+    "bash '$AQUI/testes/test_elevacao_historica.sh' > '$TMP/test_eh.txt' 2>&1 && grep -qE '^RESULTADO: [0-9]+ OK, 0 FALHA, [0-3] PULADO' '$TMP/test_eh.txt' \
+     && [ \"\$(grep -c '^OK ' '$TMP/test_eh.txt')\" -ge 26 ] && ! grep '^PULADO' '$TMP/test_eh.txt' | grep -qvE '^PULADO (9a0|9a|9b) \\(laboratorio legado opcional ausente'"
+grep '^PULADO' "$TMP/test_eh.txt" 2>/dev/null | sed 's/^/   (laboratorio opcional, nao conta como OK) /'
 confere "H02 so pela lista historica (eh_lista_h02); nunca a lista vigente (HOMOLOG_ELEVACAO_ARQ ou implantacao/elevacao.txt)" \
     "[ -s '$H02F' ] && grep -q 'lista_h02=\"\$(eh_lista_h02 \"\$base\" \"\$HOMOLOG_ID\" \"\${HOMOLOG_ELEVACAO_CRIACAO_SHA256:-}\"' '$H02F' \
      && ! grep -qE 'HOMOLOG_ELEVACAO_ARQ:-|implantacao/elevacao\\.txt' '$H02F'"
