@@ -591,8 +591,9 @@ recusa_fe "lib ligada: copia de trabalho com alteracoes" "lib com alteracao" ens
 # par correto: o frontend e aceito e a criacao segue ate a recusa SEGUINTE (lista da 016 sem a linha), sem criar nada
 recusa "par web/lib conferido passa e a criacao para na lista da 016" ensaio-validacao-fj HOMOLOG_ATE=016 HOMOLOG_FRONTEND_WEB="$W" HOMOLOG_FRONTEND_COMMIT="$CW" HOMOLOG_FRONTEND_LIB_COMMIT="$CL"
 confere "  (a recusa acima foi a da lista da 016, nao a do par)" "grep -q 'a 016 exige a linha de elevacao' '$TMP/recusa.txt'"
+# primeira ocorrencia de registro_fontes_imagens = a do criar (o atualizar, mais abaixo, tambem registra as fontes)
 confere "criar compila e copia o build DEPOIS da fotografia da lista e ANTES dos segredos" \
-    "awk '/registro_fontes_imagens \"\\\$REPO\"/ {a=NR} /frontend_preparar \"\\\$FRONTEND_WEB\"/ {b=NR} /segredos.py\" gerar/ && !c {c=NR} END {exit !(a && b && c && a < b && b < c)}' '$AQUI/homologacao.sh'"
+    "awk '/registro_fontes_imagens \"\\\$REPO\"/ && !a {a=NR} /frontend_preparar \"\\\$FRONTEND_WEB\"/ {b=NR} /segredos.py\" gerar/ && !c {c=NR} END {exit !(a && b && c && a < b && b < c)}' '$AQUI/homologacao.sh'"
 
 echo "== 20. semeadura, jornadas e sessao do ensaio-frontend (F1.5 P-A; banco real: testes/test_semear_frontend_banco.sh)"
 H="$AQUI/homologacao.sh"; SQLS="$AQUI/sql/semear_frontend.sql"; SQLX="$AQUI/sql/sessao_frontend.sql"; ORQ="$AQUI/lib/semear_frontend.py"
