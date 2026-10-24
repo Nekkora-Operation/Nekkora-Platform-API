@@ -1,6 +1,6 @@
 # Missão PLATFORM-API-V1-003: base, consolidação e homologação na nova máquina
 
-**Data:** 2026-10-23. **Máquina:** nova (Windows 11, Docker 29.7.2, Java 21.0.12 da Microsoft, Git 2.55 com `core.autocrlf=true` no sistema). **Clone:** `C:\Users\nicol\nekkora\Nekkora-Platform-API`, novo, com `core.autocrlf=false` local (§4.6).
+**Data:** 2026-10-23; **revisão:** 2026-10-24 (§10). **Máquina:** nova (Windows 11, Docker 29.7.2, Java 21.0.12 da Microsoft, Git 2.55 com `core.autocrlf=true` no sistema). **Clone:** `C:\Users\nicol\nekkora\Nekkora-Platform-API`, novo, com `core.autocrlf=false` local (§4.6).
 
 Este relatório cobre os itens 1 a 4 e 7 da missão. A ativação das organizações (item 5) tem relatório próprio (`2026-10-23-api-v1-003-ativacao-organizacoes.md`). O inventário da V1 e a preparação do e-mail real (itens 6 e 8) estão em `2026-10-23-api-v1-003-inventario-v1.md` e `2026-10-23-api-v1-003-email-real-preparacao.md`.
 
@@ -217,7 +217,7 @@ A mensagem do commit `4908544` ("revisão 5 aprovada") está **amparada** pelas 
 
 ## 6. Defeito da 021 (PR 1)
 
-Reproduzido no ambiente (tentativa 1) e na suíte (`db/tests/correio-021`, caso C0). A invariante 1 da §5 usava `has_table_privilege`, que conta o SELECT herdado de `pg_read_all_data`, e a topologia de implantação tem `backup_nekkora` nesse papel por desenho (backup lógico, IMPLANTACAO.md §1). A revisão 2 confere as concessões (ACL da tabela e das colunas, inclusive PUBLIC) e a participação no dono e na Platform. Contraprovas (C2) mostram que ela continua recusando todo acesso real além da Platform. A 021 nunca foi aplicada em base persistente; sha256 da revisão 2: `bf85b95b…`. Detalhes no PR 1.
+Reproduzido no ambiente (tentativa 1) e na suíte (`db/tests/correio-021`, caso C0). A invariante 1 da §5 usava `has_table_privilege`, que conta o SELECT herdado de `pg_read_all_data`, e a topologia de implantação tem `backup_nekkora` nesse papel por desenho (backup lógico, IMPLANTACAO.md §1). A revisão 2 (`bf85b95b…`) passou a conferir as concessões e a participação no dono e na Platform. A revisão da missão mostrou que isso deixava de ver a herança por outros papéis; a **revisão 3** (`153c595a…`, §10.1) volta ao acesso efetivo, com o backup como única exceção declarada. Detalhes no PR 1.
 
 ## 7. Semeaduras no contexto exigido
 
@@ -267,7 +267,77 @@ Cada caso é marcado como **API** (ação e resultado pela API), **CAIXA** (mens
 
 ## 9. Testes e limitações
 
-- **Validação estática** (`validar-config`) no candidato: todas as conferências novas passam. Resta **1 falha, preexistente e ambiental**: `testes/test_elevacao_historica.sh` reconstrói bytes de ambientes da máquina antiga a partir de diretórios de laboratório (`lab-p4-20260929T192708Z`, `lab-r2b1c-20261001T233433Z`) que não existem nesta máquina. A mesma falha ocorre na `main` com LF.
+- **Validação estática** (`validar-config`): `RESULTADO: validacao estatica OK`, sem falhas, nesta máquina (§10.3). A falha ambiental da primeira versão deste relatório foi corrigida.
 - **Regressão Maven completa:** a PR 2 não muda código Java. Vale a regressão do candidato da PR 1 (mesmo conteúdo Java e de banco), registrada no PR.
 - **E-mail real:** fora desta PR. O ambiente usa só o transporte simulado (relatório de preparação).
 - **Web:** fora da missão. Os caminhos de página continuam como contrato (`/cadastro/confirmar`, `/recuperar-senha`).
+
+## 10. Revisão de 2026-10-24
+
+Três pontos pedidos na revisão, sem reiniciar a missão.
+
+### 10.1 A 021 preserva a verificação de acesso efetivo (revisão 3)
+
+A revisão 2 trocava o acesso efetivo pela ACL e pela participação no dono e na Platform. Com isso, um papel qualquer membro de `pg_read_all_data`, ou de uma cadeia até ele, passava despercebido. A revisão 3:
+- confere `has_table_privilege` e `has_any_column_privilege`, que contam concessão direta, PUBLIC e qualquer herança, inclusive a de papéis predefinidos;
+- recusa todo papel não superusuário que participa (MEMBER: herda ou pode `SET ROLE`) de um papel com acesso, fora o dono e a Platform;
+- tem **uma** exceção, declarada no próprio arquivo como a 016 já declara: `backup_nekkora`, só leitura e só por `pg_read_all_data`. Quem participa do backup é recusado, e o backup também é recusado se ganhar escrita, outra participação ou concessão própria.
+
+Provas (`db/tests/correio-021`, execução `2026-10-24T035234Z`, todas OK):
+- **C2:** 16 contraprovas. Entre elas, sete heranças não autorizadas **sem nenhuma entrada nova na ACL da tabela**: membro de `pg_read_all_data`, membro de `pg_write_all_data`, membro do backup, cadeia até papel predefinido, cadeia até concessão de coluna, `SET ROLE` sem herança na Platform e membro do dono. Também três casos da exceção estreita do backup, além das concessões diretas.
+- **C3:** a invariante da revisão 2, na mesma base, **aceita** um papel membro de `pg_read_all_data`. É a lacuna que a revisão 3 fecha.
+- **C0 e C1:** a revisão 1 continua recusando o backup, e a revisão 3 aplica com ele.
+
+A mesma regra foi levada à invariante da 022 (relatório da ativação, §7).
+
+### 10.2 Bases onde uma revisão anterior da 021 já foi aplicada
+
+**Checksum.** O Flyway registra o checksum do arquivo aplicado. Uma base com a 021 revisão 1 ou 2 no histórico é recusada com `checksum mismatch` por qualquer `migrate` ou `validate` com a revisão 3, **antes** de aplicar qualquer coisa. O runner tem `validateOnMigrate=true` e nunca faz `repair` (IMPLANTACAO.md, item 3). Caso D da suíte, com o Flyway real e o migrador como usuário: histórico e catálogo intactos depois da recusa.
+
+**Compatibilidade.** As três revisões criam os mesmos objetos e só diferem na verificação:
+- D2: o esquema de uma base com a revisão 1 é idêntico ao da revisão 3;
+- D4: a base satisfaz as invariantes da revisão 3, sem e com o backup na topologia.
+
+A revisão 1 só aplica numa base **sem** a identidade de backup (D1). Na topologia suportada, que cria `backup_nekkora` em `pg_read_all_data` no bootstrap, ela sempre foi recusada (tentativa 1, §4.4).
+
+**Onde há revisão anterior aplicada.** Conferido nesta máquina:
+
+| Base | Situação |
+|---|---|
+| `ensaio-api-v1-002` | revisão 2 aplicada (sha `bf85b95b…` na cópia da criação) |
+| `ensaio-api-v1-002-janelas` | revisão 2 aplicada (laboratório das janelas) |
+| bases das suítes e dos testes Java | descartáveis, recriadas a cada execução |
+| ambientes antigos (`hml03`, `ensaio-016a/b/c`, `ensaio-consol-016`, `ensaio-frontend`, stacks locais) | volumes criados entre 25/09 e 08/10, antes de existir a 021; nenhuma ferramenta os leva além da versão da criação. **Não foram iniciados** para conferir (preservação); a afirmação vem das datas e dos caminhos de aplicação |
+
+Fora desta máquina, não há como conferir. A detecção é a recusa por checksum, sem efeito.
+
+**Atualização.** Cada ambiente de homologação usa a cópia imutável das migrations feita na criação. Por isso, o `ensaio-api-v1-002` continua coerente com a revisão 2 e não quebra. O que muda é que ele **não avança**:
+- a lista de elevação aceita uma linha por versão, e 016–020 agora estão vinculadas ao `ensaio-api-v1-003`;
+- a ação `atualizar` (PR da ativação) recusa, antes de qualquer mudança, uma cópia com arquivo diferente do repositório. Prova real contra o `ensaio-api-v1-002` no relatório da ativação, §7.
+
+Caminhos possíveis para uma base com revisão anterior:
+
+| Caminho | Quando |
+|---|---|
+| **Recriar** com outro id e preservar a antiga | ambiente descartável (adotado: `ensaio-api-v1-003`) |
+| **Realinhamento revisado:** `flyway repair` depois de provar D2 e D4 naquela base | base que precise ser mantida. Exige decisão da responsável e fica fora do runner. Demonstrado só na base descartável do caso D (D5: só o checksum da 021 muda, esquema intacto) |
+
+### 10.3 Validação estática portável
+
+O único requisito de máquina era o `test_elevacao_historica.sh`, que lia registros de ambientes e commits de dois clones de laboratório da máquina antiga. Agora:
+- **obrigatórios e portáveis:** os casos sintéticos; o legado `hml03`, pelos registros **versionados** em `evidencias/hml03/criacao` (antes lidos de `saidas/` da árvore antiga); e um legado ancorado sintético, que cobre a regra que antes só os registros do `ensaio-016a` exercitavam (fonte histórica = sha do log de criação; fonte errada, ausente ou inexistente recusadas);
+- **laboratório opcional:** os casos 9a0, 9a e 9b, com os registros reais de `ensaio-016a` e `ensaio-016c`, só rodam com `HOMOLOG_LAB_LEGADO_P4` e `HOMOLOG_LAB_LEGADO_R2B1C`. Sem eles, aparecem como PULADO, fora da contagem de OK;
+- o `validar-config` exige 0 falha, um mínimo de 26 OK obrigatórios e só esses três casos como puláveis, e lista os pulados na saída.
+
+Resultado nesta máquina: `RESULTADO: 26 OK, 0 FALHA, 3 PULADO(S)` no teste e `RESULTADO: validacao estatica OK` no `validar-config`.
+
+### 10.4 Homologação do candidato no `ensaio-api-v1-003`
+
+Criado do zero com o candidato da revisão (021 revisão 3), sub-redes 10.252.92/93, porta 127.0.0.1:55763:
+- **Criação:** a primeira tentativa foi recusada antes de criar qualquer recurso, porque as sub-redes 10.252.94/95 eram do `ensaio-frontend` preservado. A segunda parou antes da 016.
+- **Implantação:** pré-voos 016–020 com `PREFLIGHT_OK`. Cada janela foi retirada e conferida em 0|0|0. A 021 revisão 3 aplicou sem janela, com `backup_nekkora` em `pg_read_all_data`, e o ambiente ficou LIBERADO.
+- **Preparação da 016:** organização sintética, operadores, contatos e MFA OK; nenhum dos 36 valores secretos nas evidências.
+- **Jornadas pela API:** 96 casos, 0 falhas; 238 valores secretos varridos nos logs da Platform, do Portal e do gateway e na evidência, sem achados; controle positivo OK.
+- **Avisos emergenciais (`testar-016`):** B5, B6, B7 e B8a OK; B10 e B11 PARCIAIS pelos motivos já registrados no ensaio-api-v1-002. B12 OK na segunda execução: na primeira, o inventário acusou um container e um volume novos fora do ambiente, identificados pelo rótulo como Testcontainers da regressão Maven que rodava em paralelo. B8a e B10 não se repetem no mesmo ambiente, porque a fixture recusa uma segunda solicitação sem alterar nada. Detalhe em evidencias/ensaio-api-v1-003/016/LEIA-ME.txt. Varredura das evidências versionadas: 279 valores secretos, nenhum achado.
+
+Evidências sanitizadas em `ops/homologacao/evidencias/ensaio-api-v1-003/`. A atualização desta base populada para a 022 e a jornada da ativação estão no relatório da ativação, §7.

@@ -1,0 +1,4 @@
+== PARADA ANTES DA 016 (2026-10-24T04:13:18Z)
+migrador recuperado: sem trava local, trava no banco livre, migrador 0|0|0
+BLOQUEIO: instalacao incompleta ou divergente (faltam: 016 017 018 019 020 021; nao esperadas: nenhuma)
+BLOQUEADO
