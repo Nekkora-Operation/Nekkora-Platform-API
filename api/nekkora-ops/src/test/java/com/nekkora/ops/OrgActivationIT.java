@@ -224,6 +224,68 @@ class OrgActivationIT {
         assertThat(eventosDoAto(o.id(), 2, "OK", null)).isEqualTo(1);
     }
 
+    /**
+     * Duas revisoes simultaneas com valores DIFERENTES: a organizacao serializa os atos (FOR UPDATE); cada revisao define os
+     * limites absolutos que pediu. A segunda espera, aplica os proprios valores depois do commit da primeira e vale como
+     * vigente. As duas ficam auditadas com autorizacao, valores e revisoes proprias, na ordem do lock, e o ultimo ato OK
+     * auditado e exatamente o limite vigente.
+     */
+    @Test
+    void revisaoConcorrenteDiferenteSerializaNaOrdemDoLockEAuditaAsDuas() throws Exception {
+        Ativador a = ativador("rvd");
+        Ativador b = ativador("rve");
+        OpsBanco.Org o = DB.organizacao();
+        assertThat(DB.cli(a.op()).ativarOrganizacao(o.id(), a.responsavel(), "ativacao", 1, 1, 2, null, null).classe()).isEqualTo(Classe.OK);
+        long revAntes = revisoes(o.id());
+        ExecutorAtos cliB = DB.cli(b.op());
+        String eventoA;
+        ResultadoAtivacao rb;
+        try (Credencial cred = DB.credencial(a.op()); Connection ca = DB.conectar(cred)) {
+            ca.setAutoCommit(false);
+            try (PreparedStatement ps = ca.prepareStatement("SELECT r_resultado, r_evento FROM org_activation_revise(?, ?, 'concorrente A', 3, 2, 20, NULL, NULL)")) {
+                ps.setObject(1, o.id());
+                ps.setObject(2, a.responsavel());
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertThat(rs.getString(1)).isEqualTo("OK");
+                    eventoA = rs.getString(2);
+                }
+            }
+            CompletableFuture<ResultadoAtivacao> fb = CompletableFuture.supplyAsync(
+                    () -> cliB.revisarCapacidade(o.id(), b.responsavel(), "concorrente B", 5, 4, 50, GIB, null));
+            esperarBloqueio("org_activation_revise");
+            assertThat(fb).isNotDone();
+            // enquanto A nao confirma, nada de A nem de B e visivel
+            assertThat(limites(o.id())).isEqualTo("1:1/1 2:1/1 3:1/2 4:2/- 5:2/-");
+            ca.commit();
+            rb = fb.get(60, TimeUnit.SECONDS);
+            assertThat(rb.classe()).isEqualTo(Classe.OK);
+            assertThat(rb.evento()).isNotEqualTo(UUID.fromString(eventoA));
+        }
+        // vigente: os valores de B, aplicados depois de A
+        assertThat(limites(o.id())).isEqualTo("1:1/5 2:1/4 3:1/50 4:1/" + GIB + " 5:2/-");
+        assertThat(revisoes(o.id())).isEqualTo(revAntes + 10);
+        // auditoria: dois atos OK, cada um com o proprio operador, responsavel, valores e 5 revisoes, na ordem do lock
+        List<List<Object>> ev = DB.linhas("SELECT operator_id, responsible_user_id, motive, workers_registered, concurrent_executions, "
+                + "pending_executions, log_bytes_daily_alert, cardinality(limit_revision_ids) FROM ops_activation.activation_events "
+                + "WHERE organization_id = ? AND act = 2 AND result = 'OK' ORDER BY created_at, event_id", o.id());
+        assertThat(ev).hasSize(2);
+        assertThat(ev.get(0)).containsExactly(a.op().id(), a.responsavel(), "concorrente A", 3L, 2L, 20L, null, 5);
+        assertThat(ev.get(1)).containsExactly(b.op().id(), b.responsavel(), "concorrente B", 5L, 4L, 50L, GIB, 5);
+        assertThat(eventosDoAto(o.id(), 2, "RECUSA", null)).isZero();
+        assertThat(DB.valor(Long.class, "SELECT count(*) FROM ops_activation.activation_events WHERE organization_id = ? AND result = 'RECUSA'",
+                o.id())).isZero();
+        // as revisoes de limite vigentes (mesma ordem de get_effective_resource_limit) sao exatamente as do ultimo ato auditado (B)
+        assertThat(DB.valor(Long.class, "SELECT count(*) FROM (SELECT DISTINCT ON (resource_code) revision_id FROM organization_resource_limit_revisions "
+                + "WHERE organization_id = ? AND resource_code BETWEEN 1 AND 5 ORDER BY resource_code, effective_from DESC, revision_number DESC) v "
+                + "JOIN ops_activation.activation_events e ON e.event_id = ? AND v.revision_id = ANY (e.limit_revision_ids)",
+                o.id(), rb.evento())).isEqualTo(5);
+        // repetir os valores de A agora nao e SEM_MUDANCA (a referencia e o ultimo ato, de B): aplica e volta a A
+        assertThat(DB.cli(a.op()).revisarCapacidade(o.id(), a.responsavel(), "volta a A", 3, 2, 20, null, null).classe()).isEqualTo(Classe.OK);
+        assertThat(limites(o.id())).isEqualTo("1:1/3 2:1/2 3:1/20 4:2/- 5:2/-");
+        assertThat(DB.valor(Long.class, "SELECT count(*) FROM ops_activation.open_acts")).isZero();
+    }
+
     @Test
     void repeticaoERecusadaComJaAtivadaSemNovoEfeito() {
         Ativador a = ativador("rep");
