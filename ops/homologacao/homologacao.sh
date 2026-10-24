@@ -951,7 +951,8 @@ jornadas-api)
 #   1. recusa, ANTES de qualquer mudanca: ambiente BLOQUEADO; versao alvo fora do suportado; copia de migrations do
 #      ambiente com QUALQUER arquivo de bytes diferentes do repositorio (revisao anterior aplicada nesta base: o Flyway
 #      recusaria por checksum e o runner nao repara, IMPLANTACAO.md item 3); versao nova de vinculo obrigatorio sem a linha
-#      vinculada a este id com o sha256 do arquivo; entradas das imagens diferentes do commit;
+#      vinculada a este id com o sha256 do arquivo (na lista revisada ou, num laboratorio ensaio-*, na alternativa
+#      HOMOLOG_ELEVACAO_ARQ, a mesma que o "implantar" usara); entradas das imagens diferentes do commit;
 #   2. preserva a copia e o registro anteriores (migracoes-ate-<versao>-<instante>, somente leitura) e grava a nova copia
 #      (a anterior byte a byte, conferida, mais as versoes novas) e o novo registro;
 #   3. build das imagens do commit atual (tag = commit; as anteriores ficam) e parada de Platform, Portal e gateway (banco
@@ -982,7 +983,11 @@ atualizar)
         novas="$novas ${f[0]}"
     done
     . "$AQUI/lib/lista_elevacao.sh"
-    LN="$(lista_elevacao_normalizada "$AQUI/implantacao/elevacao.txt" "$VINCULO_OBRIGATORIO" 2>/dev/null)" || falha "lista de elevacao recusada pela gramatica; nada alterado"
+    # a mesma lista que o "implantar" seguinte usara: a revisada ou, so em ensaio-* (ja exigido acima), a alternativa
+    # HOMOLOG_ELEVACAO_ARQ de um laboratorio (como no criar e no implantar)
+    LISTA_AT="${HOMOLOG_ELEVACAO_ARQ:-$AQUI/implantacao/elevacao.txt}"
+    [ -f "$LISTA_AT" ] || falha "lista de elevacao inexistente ($LISTA_AT); nada alterado"
+    LN="$(lista_elevacao_normalizada "$LISTA_AT" "$VINCULO_OBRIGATORIO" 2>/dev/null)" || falha "lista de elevacao recusada pela gramatica; nada alterado"
     for f in $novas; do
         v="$(basename "$f")"; v="${v%%_*}"
         case "$VINCULO_OBRIGATORIO" in *" $v "*)
@@ -1006,6 +1011,7 @@ atualizar)
     (cd "$EVID/migracoes" && sha256sum $(cd "$ANT" && ls *.sql)) | diff -q - "$ANT.sha256.txt" > /dev/null || falha "copia nova nao preserva a anterior byte a byte"
     { echo "atualizacao=$INST de=$HOMOLOG_ATE para=$ALVO"
       echo "commit_antes=$HOMOLOG_COMMIT commit_depois=$NOVO_COMMIT"
+      echo "lista_de_elevacao=$(basename "$LISTA_AT")${HOMOLOG_ELEVACAO_ARQ:+ (ALTERNATIVA DE ENSAIO)} sha256 $(sha256sum < "$LISTA_AT" | cut -c1-64)"
       echo "copia_anterior=$(basename "$ANT") (somente leitura; registro $(basename "$ANT").sha256.txt)"
       echo "versoes_novas:"; (cd "$EVID/migracoes" && for f in $novas; do sha256sum "$(basename "$f")"; done)
     } > "$AT/registro.txt"
