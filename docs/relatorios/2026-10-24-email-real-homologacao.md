@@ -141,7 +141,8 @@ Esta branch parte de `ops/api-v1-003-homologacao`, que contém o #17 e o #19. Ab
 | `IdentityIntentFinalChecksIT`, `CaixaHomologacaoConfigIT`, `CaixaHomologacaoMailSenderIT`, `MailOutboxIT` | **34/34** |
 | Regressão do módulo `nekkora-platform` no candidato | ver §3.4 |
 | `testes/test_email_real.py` (credenciais, lista, chave da fila, montagem do segredo, cabeçalhos do Exchange Online e do Gmail, caixa real) | **36/36** |
-| `validar-config` | **285 OK, 0 falhas** |
+| `validar-config` | **285 OK, 0 falhas**. Em 2026-10-25, com a prova do `m365-aws.sh`: **287 OK, 0 falhas** |
+| `testes/test_m365_aws.sh` (W1–W3 e certificado contra uma AWS CLI falsa: recusas sem alterar nada, nenhum segredo na linha de comando, chave apagada no sucesso e na falha) | **26/26** |
 | Proxy isolado (`docker run`, a política) | `login.microsoftonline.com`, `graph.microsoft.com` e `secretsmanager.sa-east-1.amazonaws.com` → **200**; `secretsmanager.us-east-1`, `sts.amazonaws.com`, `example.com` e a porta 80 → **403** |
 | Proxy pela **composição do runner** (`testes/prova_proxy_m365.sh`) | sobe com os `tmpfs` corrigidos; os três nomes **200**; outra região e outro destino **403**; saída direta pela rede interna **impossível** (`000`); projeto removido |
 
