@@ -128,6 +128,7 @@ ok = ('^ensaio-' in b[:b.index('case \"\$sub\"')] and 'credenciais \"\$M/aws.env
 sys.exit(0 if ok else 1)
 PY"
 confere "m365: testes/test_email_real.py (credenciais temporarias, lista, chave da fila, cabecalhos recebidos)" "python '$AQUI/testes/test_email_real.py' > '$TMP/er.txt' 2>&1 && grep -q '^RESULTADO: email_real OK' '$TMP/er.txt'"
+confere "m365: aws/m365-aws.sh (W1-W3 e certificado) contra AWS CLI falsa: nada secreto na linha de comando, chave apagada" "bash '$AQUI/testes/test_m365_aws.sh' > '$TMP/maws.txt' 2>&1 && grep -q '^RESULTADO: m365_aws OK' '$TMP/maws.txt'"
 confere "m365: politicas da AWS so GetSecretValue no segredo da homologacao, funcao so com MFA" "python - '$AQUI/aws' <<'PY'
 import json, os, sys
 d = sys.argv[1]

@@ -9,7 +9,7 @@
 | Etapa da missão | Situação |
 |---|---|
 | 1. Conferir a implementação | **Feita** (§2). Achados: a fila usa a chave do MFA; não havia lista de destinatários; não havia leitura de segredo da AWS. Os três foram corrigidos (§3). |
-| 2. Preparar a configuração externa | **Preparada, não executada.** Alterações concretas, custos e destinatários no §4. **Depende da sua autorização e de 4 decisões (§4.8).** |
+| 2. Preparar a configuração externa | **Preparada, não executada.** Dados definidos pela titular em 2026-10-25. Políticas finais, comandos (`aws/m365-aws.sh`), certificado, custos e o plano de até 20 mensagens no §4. **Depende da autorização do §4.8.** |
 | 3. Preparar o ambiente de ensaio | Commit, migrations e fila conferidos (§5). A troca de imagens e de transporte fica para depois da autorização. |
 | 4. Homologação real | **Não iniciada.** Roteiro pronto (§6). |
 | 5. Entrega | PR aberto (sem merge). Este relatório será completado com as evidências da execução real. |
@@ -126,7 +126,8 @@ Esta branch parte de `ops/api-v1-003-homologacao`, que contém o #17 e o #19. Ab
   - nenhum arquivo de chave privada no host;
   - **correção:** o proxy não subia, porque os `tmpfs` eram do root e a raiz é somente leitura. Agora os `tmpfs` usam uid/gid 13 (§3.3).
 - **`proxy/squid.conf`:** acrescentei `secretsmanager.sa-east-1.amazonaws.com`.
-- **`aws/`:** política de leitura só desse segredo, confiança da função só com MFA e política de recurso do segredo.
+- **`aws/`:** política de leitura só desse segredo, confiança da função só com MFA, política de recurso do segredo e modelo dos perfis da CLI (`perfil-cli.ini`). Todos levam `${CONTA_AWS}`, `${USUARIO_IAM}` e `${MFA_SERIAL}`.
+- **`aws/m365-aws.sh`** (2026-10-25): `renderizar`, `conferir` (R-6), `funcao` (W1), `gerar` (D2), `publicar` (W2), `apagar` e `credenciais` (W3), §4.3 e §4.4. Prova estática: `testes/test_m365_aws.sh`, contra uma AWS CLI falsa que registra as chamadas.
 - **`lib/email_real.py`, `testes/jornada_email_real.py`, `testes/test_email_real.py`, `testes/prova_proxy_m365.sh`.**
 
 ### 3.3 Provas desta etapa (sem nada externo)
@@ -159,97 +160,148 @@ Esta branch parte de `ops/api-v1-003-homologacao`, que contém o #17 e o #19. Ab
 
 ## 4. Configuração externa a autorizar (item 2)
 
-Nenhuma ação foi executada. Ordem obrigatória. Cada linha é uma alteração externa e publicável, que exige a sua autorização explícita.
+Nenhuma ação foi executada. A ordem é obrigatória. Cada linha marcada como **externa** altera algo fora desta máquina e exige a sua autorização explícita.
 
-### 4.1 Leituras antes de qualquer alteração (R-1 a R-5)
+**Dados definidos pela titular (2026-10-25)**, sem os identificadores, porque este repositório é **público**:
+- conta AWS da titular, região `sa-east-1`;
+- usuário IAM administrador com MFA;
+- caixa externa de destino (Gmail, com `+marcador`);
+- segunda caixa do tenant para o F2;
+- `dmarc@nekkora.com` existe e é acompanhada pela titular.
 
-São só leituras, com o seu login interativo. Os comandos estão em `2026-10-23-api-v1-003-email-real-preparacao.md` §1.2. Resultado exigido:
-- Tenant `ae4ed48d…` em R-1 e R-2.
-- `nekkora.com` verificado e Authoritative.
-- `no-reply@nekkora.com` existe.
-- DKIM `Enabled: True`.
+Os valores ficam só em `<segredos>/m365/aws-local.env` e `<segredos>/m365/destinatarios.txt`, fora do Git. Os modelos versionados levam `${CONTA_AWS}`, `${USUARIO_IAM}` e `${MFA_SERIAL}`. `aws/m365-aws.sh renderizar` gera as cópias concretas em `<segredos>/m365/aws/`, e são essas cópias que vão para a AWS.
 
-**Leitura pública repetida hoje:**
-- `MX` e SPF continuam como antes.
-- `_dmarc.nekkora.com` continua **NXDOMAIN**: sem DMARC, o teste F3 não passa, porque exige `dmarc=pass`.
+### 4.1 Leituras antes de qualquer alteração (R-1 a R-6)
+
+São só leituras.
+- **R-1 a R-5:** com o seu login interativo no Microsoft 365. Os comandos estão em `2026-10-22-identidade-002-email-real.md` §0. Resultado exigido:
+  - tenant `ae4ed48d…` em R-1 e R-2;
+  - `nekkora.com` verificado e Authoritative;
+  - `no-reply@nekkora.com` existe;
+  - DKIM `Enabled: True`.
+- **R-6 (AWS):** `aws/m365-aws.sh conferir`. Exige:
+  - a sessão `nekkora-login` é a do usuário e da conta de `aws-local.env`;
+  - o `MFA_SERIAL` é um dispositivo **de código** desse usuário;
+  - a função e o segredo ainda não existem.
+
+  O script imprime só o resultado das conferências.
+
+**Leitura pública de DNS (2026-10-25):**
+
+| Registro | Valor |
+|---|---|
+| SPF | `v=spf1 include:spf.protection.outlook.com ~all` |
+| DKIM | `selector1` e `selector2` publicados, com CNAME para o Microsoft 365 |
+| DMARC | **publicado** pela titular: `v=DMARC1; p=none; rua=mailto:dmarc@nekkora.com`. A ação B está feita, e não há nada a alterar no DNS |
 
 ### 4.2 Microsoft 365 (tenant `ae4ed48d…`)
 
+A caixa `dmarc@nekkora.com` já existe e é acompanhada pela titular. **A ação A sai do pedido.**
+
 | # | Ação | Comando | Impacto |
 |---|---|---|---|
-| A | Caixa compartilhada `dmarc@nekkora.com` (relatórios) | `New-Mailbox -Shared -Name dmarc -DisplayName "Relatorios DMARC" -PrimarySmtpAddress dmarc@nekkora.com`; `Add-MailboxPermission dmarc@nekkora.com -User <responsável> -AccessRights FullAccess` | nenhum no envio |
-| C | Apresentação e respostas da no-reply | `Set-Mailbox no-reply@nekkora.com -DisplayName "Nekkora"`; `Set-Mailbox no-reply@nekkora.com -AcceptMessagesOnlyFromSendersOrMembers no-reply@nekkora.com` | destinatário vê `Nekkora <no-reply@nekkora.com>`; respostas recusadas |
-| D1 | Aplicativo `nekkora-platform-mail` (um tenant, **sem** permissão de API) | Entra → Registros de aplicativo → Novo; anotar App ID e Object ID da Enterprise application | identidade sem permissão |
-| D3 | Só o certificado **público** no aplicativo | upload do `.cer` (§4.3); **nenhum** segredo de cliente | o aplicativo passa a obter token |
-| D4–D6 | RBAC para Aplicações **restrito à no-reply** | `New-ServicePrincipal -AppId <App ID> -ObjectId <Object ID>`; `New-ManagementScope -Name "Somente no-reply" -RecipientRestrictionFilter "PrimarySmtpAddress -eq 'no-reply@nekkora.com'"`; `New-ManagementRoleAssignment -App <Object ID> -Role "Application Mail.Send" -CustomResourceScope "Somente no-reply"` | envio **somente** como no-reply |
-| D7–D8 | Conferência do caminho único | `Get-ManagementRoleAssignment -App <Object ID>` (exatamente uma); nenhuma permissão de aplicação do Graph consentida; `Get-ApplicationAccessPolicy` sem linha do aplicativo; `Test-ServicePrincipalAuthorization -Identity <Object ID> -Resource no-reply@nekkora.com` → `InScope=True`; `-Resource <outra caixa>` → `InScope=False` | prova de configuração (o RBAC pode levar de 30 min a 2 h para valer no envio) |
+| C | **externa**: apresentação e respostas da no-reply | `Set-Mailbox no-reply@nekkora.com -DisplayName "Nekkora"`; `Set-Mailbox no-reply@nekkora.com -AcceptMessagesOnlyFromSendersOrMembers no-reply@nekkora.com` | o destinatário vê `Nekkora <no-reply@nekkora.com>`; respostas recusadas |
+| D1 | **externa**: aplicativo `nekkora-platform-mail` (um tenant, **sem** permissão de API) | Entra → Registros de aplicativo → Novo; anotar o App ID e o Object ID da Enterprise application | identidade sem permissão |
+| D2 | local: certificado | §4.3, **depois** do D1, porque o SecretString leva o App ID | — |
+| D3 | **externa**: só o certificado **público** no aplicativo | upload de `<segredos>/m365/certificado/nekkora-platform-mail.cer`; conferir que a impressão mostrada no Entra é a de `impressao.txt`; **nenhum** segredo de cliente | o aplicativo passa a obter token |
+| D4–D6 | **externa**: RBAC para Aplicações **restrito à no-reply** | `New-ServicePrincipal -AppId <App ID> -ObjectId <Object ID>`; `New-ManagementScope -Name "Somente no-reply" -RecipientRestrictionFilter "PrimarySmtpAddress -eq 'no-reply@nekkora.com'"`; `New-ManagementRoleAssignment -App <Object ID> -Role "Application Mail.Send" -CustomResourceScope "Somente no-reply"` | envio **somente** como no-reply |
+| D7–D8 | leitura: conferência do caminho único | `Get-ManagementRoleAssignment -App <Object ID>`: exatamente uma atribuição; nenhuma permissão de aplicação do Graph consentida; `Get-ApplicationAccessPolicy` sem linha do aplicativo; `Test-ServicePrincipalAuthorization -Identity <Object ID> -Resource no-reply@nekkora.com` → `InScope=True`; `-Resource <caixa do F2>` → `InScope=False` | prova de configuração (o RBAC pode levar de 30 min a 2 h para valer no envio) |
 
 ### 4.3 Certificado (D2), na máquina da homologação
 
-1. **Gerar** o par de chaves e o certificado com o `keytool` do JDK 21, num diretório temporário do diretório de segredos:
-   ```
-   keytool -genkeypair -alias nekkora-platform-mail -keyalg RSA -keysize 2048 -validity 365 -dname "CN=nekkora-platform-mail-homologacao" -storetype PKCS12 -keystore m365.p12
-   ```
-   A senha é digitada no prompt e gravada só em `senha.txt` (permissão 600).
-2. **Exportar** o certificado público:
-   ```
-   keytool -exportcert -rfc -alias nekkora-platform-mail -keystore m365.p12 -storetype PKCS12 -file nekkora-platform-mail.cer
-   ```
-   O `.cer` vai para o D3, e a impressão SHA-256 vai para o registro.
-3. **Montar** o segredo:
-   ```
-   python lib/email_real.py montar-segredo --p12 m365.p12 --senha-arquivo senha.txt --tenant ae4ed48d-e7d8-4f24-83f2-443e997c5a65 --client <App ID> --saida segredo.json
-   ```
-4. **Criar** o segredo (W2).
-5. **Apagar** `m365.p12`, `senha.txt` e `segredo.json`. A chave privada passa a existir só no Secrets Manager e na memória da Platform.
+```
+bash ops/homologacao/aws/m365-aws.sh gerar --client <App ID do D1>
+```
 
-**Limite:** entre a geração e a remoção, a chave fica em disco, no diretório de segredos (fora do Git) e por poucos minutos.
+O script faz, em `<segredos>/m365/certificado/`:
+1. uma senha aleatória de 256 bits em `senha.txt`, que **nunca é digitada nem impressa**;
+2. o par RSA 2048 e o certificado de 1 ano, com `CN=nekkora-platform-mail-homologacao`. Usa o `keytool` do JDK 21 com `-storepass:file`, então a senha não aparece em linha de comando;
+3. a conferência de **exatamente uma** chave privada no PKCS#12, a mesma exigência da Platform;
+4. a exportação de `nekkora-platform-mail.cer` (público, para o D3) e de `impressao.txt` (validade e SHA-256);
+5. a montagem do SecretString `nekkora-m365/1` em `segredo.json`, por `lib/email_real.py montar-segredo`.
 
-### 4.4 AWS (região `sa-east-1`, a decidir; §4.8)
+A chave sai do disco no `publicar` (W2), **em qualquer desfecho**, ou com `m365-aws.sh apagar`. Um segundo `gerar` com uma chave não publicada é recusado.
+
+**Limites:**
+- entre o `gerar` e o `publicar`, a chave fica no disco, no diretório de segredos do perfil do usuário e fora do Git. O tempo é o do D3;
+- `rm` não sobrescreve o conteúdo em SSD;
+- a permissão de arquivo `600` não tem efeito no NTFS: vale a ACL do perfil do usuário.
+
+### 4.4 AWS (conta da titular, `sa-east-1`)
+
+Acesso **sem chave de acesso de longo prazo**:
+- as ações de administração (W1, W2) usam a sessão do console aberta por `aws login`, já com o MFA do usuário;
+- a Platform só recebe credenciais de 1 h da função de leitura, obtidas com o **código do MFA** a cada sessão.
+
+| # | Ação | Comando | Impacto |
+|---|---|---|---|
+| L1 | local: AWS CLI v2 ≥ 2.32 (exigida para `aws login`) | `msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi`; `aws --version` | instalação nesta máquina |
+| L2 | local: perfis da CLI | `aws-local.env` com `CONTA_AWS`, `USUARIO_IAM` e `MFA_SERIAL` (IAM → usuário → Credenciais de segurança → MFA → Identificador); `m365-aws.sh renderizar`; acrescentar `<segredos>/m365/aws/perfil-cli.ini` a `~/.aws/config`; `aws login --profile nekkora-login` | sessão local do console, sem chave gravada |
+| R-6 | leitura | `m365-aws.sh conferir` | — |
+| W1 | **externa**: função `nekkora-homologacao-platform-m365-leitura` | `m365-aws.sh funcao`. Confiança `aws/confianca-funcao-leitura.json`: **só** o usuário, **com MFA**. Política inline `aws/politica-leitura-segredo.json`: **só** `secretsmanager:GetSecretValue` nesse segredo. Nenhuma política anexada. `MaxSessionDuration` 3600 s. O script confere depois: 1 inline e 0 anexadas | nenhuma outra permissão |
+| W2 | **externa**: segredo `nekkora/homologacao/platform/m365` | `m365-aws.sh publicar`. Executa `create-secret --secret-string file://…`, sem o valor na linha de comando, cifrado com `aws/secretsmanager`. Depois executa `validate-resource-policy` e `put-resource-policy --block-public-policy` com `aws/politica-recurso-segredo.json`, que **nega a leitura a qualquer principal que não seja a W1**, inclusive o administrador. Em seguida apaga a chave do disco | o segredo passa a existir; custo §4.6 |
+| W3 | **externa** (emite credencial): credenciais de 1 h | `m365-aws.sh credenciais`. A CLI pede o **código do MFA** e grava direto em `<segredos>/m365/aws.env`. O script confere `ASIA…` e a expiração, e recusa e apaga chaves `AKIA…` | credenciais apagadas no `desligar` |
+
+**Mudanças nas políticas em relação à versão anterior deste PR:**
+- **Leitura:** removida a condição `secretsmanager:VersionStage = AWSCURRENT`. A Platform não envia `VersionStage` no `GetSecretValue`, e a condição negaria a própria leitura. Sem ela, a leitura continua restrita a esse segredo; o segredo só tem uma versão.
+- **Confiança:**
+  - removida a condição `aws:MultiFactorAuthAge`: no `AssumeRole` feito com o código do MFA, a presença dessa chave no contexto não é garantida, e a ausência negaria a entrada. A sessão já é limitada a 1 h pela própria função;
+  - o principal passa a ser o **usuário** (`arn:aws:iam::${CONTA_AWS}:user/${USUARIO_IAM}`).
+
+**Condições a confirmar na primeira execução:**
+- **MFA de código:** a CLI só envia **código** (aplicativo autenticador ou TOTP de hardware) no `AssumeRole`. Se o único MFA do usuário for chave de segurança ou passkey (FIDO), o W3 não funciona. Seria preciso acrescentar um MFA virtual ao usuário, que é outra alteração externa a autorizar. O `renderizar` e o `conferir` recusam um `MFA_SERIAL` que não seja `…:mfa/…`.
+- **Perfil `nekkora-login` como origem do `AssumeRole`:** se a CLI instalada não aceitar a sessão do `aws login` como `source_profile`, a alternativa local é um perfil intermediário com `credential_process = aws configure export-credentials --profile nekkora-login --format process`, usado como origem. A confiança e o MFA não mudam.
+
+### 4.5 DNS e rede
 
 | # | Ação | Detalhe | Impacto |
 |---|---|---|---|
-| W1 | Função `nekkora-homologacao-platform-m365-leitura` | confiança `aws/confianca-funcao-leitura.json` (só a sua identidade, **com MFA**, MFA de até 1 h); política inline `aws/politica-leitura-segredo.json` (**só** `secretsmanager:GetSecretValue` nesse segredo, `AWSCURRENT`); `MaxSessionDuration` 3600 s | nenhuma outra permissão |
-| W2 | Segredo `nekkora/homologacao/platform/m365` | `aws secretsmanager create-secret --region sa-east-1 --name nekkora/homologacao/platform/m365 --secret-string file://segredo.json`; política de recurso `aws/politica-recurso-segredo.json` (nega a leitura a qualquer principal que não seja a W1) | o segredo passa a existir |
-| W3 | Credenciais temporárias locais | AWS CLI v2 (não instalada nesta máquina); perfil `nekkora-hml-m365` com `role_arn` = W1, `mfa_serial` e `duration_seconds = 3600`; antes de cada `ligar`: `aws configure export-credentials --profile nekkora-hml-m365 --format env-no-export > <segredos>/m365/aws.env` | credenciais de 1 h, apagadas no `desligar` |
-
-**Variante a decidir:** se a sua conta usa o **IAM Identity Center**, a confiança aponta para a função do conjunto de permissões, e o MFA é exigido no login do Identity Center. A condição `aws:MultiFactorAuthPresent` não vale nas sessões do Identity Center.
-
-### 4.5 DNS (Cloudflare, zona `nekkora.com`) e rede
-
-| # | Ação | Detalhe | Impacto |
-|---|---|---|---|
-| B | DMARC em observação | `_dmarc TXT "v=DMARC1; p=none; rua=mailto:dmarc@nekkora.com; fo=1; pct=100"` | nada é recusado; habilita `dmarc=pass` nas mensagens alinhadas |
-| E | Saída de rede | `proxy-m365` (§3.3), só os três nomes; a Platform continua sem saída direta | só no `ensaio-api-v1-003`, enquanto o transporte real estiver ligado |
+| B | DMARC em observação | **já publicado pela titular** (§4.1). Nada a alterar | habilita `dmarc=pass` nas mensagens alinhadas |
+| E | **externa**: saída de rede | `proxy-m365` (§3.3), só os três nomes; a Platform continua sem saída direta | só no `ensaio-api-v1-003`, enquanto o transporte real estiver ligado |
 
 ### 4.6 Custos previstos
 
 | Item | Custo |
 |---|---|
-| Secrets Manager | **US$ 0,40 por segredo por mês** (proporcional), mais US$ 0,05 por 10 mil chamadas: uma chamada por partida da Platform, praticamente zero |
-| KMS `aws/secretsmanager`, IAM e STS | sem custo |
-| Microsoft 365 | caixas **compartilhadas** (`no-reply`, `dmarc`) sem licença; aplicativo e RBAC sem custo; envio pelo Graph dentro da licença existente |
-| Cloudflare (registro TXT) | sem custo |
+| Secrets Manager | **US$ 0,40 por segredo por mês** (proporcional), mais US$ 0,05 por 10 mil chamadas. É uma chamada por partida da Platform, praticamente zero |
+| KMS `aws/secretsmanager`, IAM, STS e `aws login` | sem custo |
+| Microsoft 365 | caixas **compartilhadas** sem licença; aplicativo e RBAC sem custo; envio pelo Graph dentro da licença existente |
 | Saída de rede | desprezível (poucos KB por mensagem) |
 | **Total** | **cerca de US$ 0,40 por mês** enquanto o segredo existir. Apagar o segredo depois da homologação encerra o custo; a AWS mantém uma janela de recuperação de 7 a 30 dias |
 
-### 4.7 Destinatários dos testes e volume
+### 4.7 Destinatários e plano de até 20 mensagens
 
-- **Proposta:** uma caixa externa controlada por você, com suporte a `+marcador` (Gmail e Outlook.com suportam).
-  - A lista fechada leva `local+*@domínio`, e cada execução usa `local+r1-<execução>@domínio` e assim por diante, todos na mesma caixa.
-  - Opcional: uma segunda caixa controlada **dentro do tenant**, para F6.
-- **Outra caixa no F2:** o F2 precisa de uma **segunda caixa do tenant como remetente**, por exemplo `contato@nekkora.com`. Essa caixa não recebe nada: a recusa acontece no Graph.
-- **Volume:**
-  - uma execução completa envia até **7 mensagens**: F1 1, R1 1, R3 2, R4 1, R5 1 e F6 1. O F2 não envia;
-  - o limite é de **20 mensagens** no total da homologação, contando repetições;
-  - todas para a caixa controlada.
+- **Lista fechada** (`<segredos>/m365/destinatarios.txt`): uma linha `local+*@gmail.com` da caixa da titular.
+  - Aceita só essa caixa e as variações `+marcador` dela. Qualquer outro endereço é RECUSADO pela Platform sem rede.
+  - Cada mensagem usa `local+<caso>-<execução>@gmail.com`.
+- **F2:** a segunda caixa do tenant é o **remetente** tentado; não recebe nada.
+- **F6:** o destinatário é externo e o domínio está em `p=none`. O `.eml` do F1 já mostra o veredito do Gmail, sem mensagem adicional.
 
-### 4.8 Decisões necessárias
+| Caso | Mensagens | O que comprova |
+|---|---|---|
+| F1 prova como no-reply | 1 | 202 (aceite) e `.eml` recebido; F3 e F6 nos cabeçalhos |
+| F2 prova como a outra caixa | 0 esperada (403). Se for aceita, conta como 1, e a homologação **para** com `desligar` | recusa pelo RBAC com a mesma credencial |
+| R1 cadastro | 1 | recebida; confirmação 204; reuso recusado |
+| R2 primeira entrada com o fator | 0 | — |
+| R3 recuperação de senha | 2 (link e aviso de senha alterada) | consumo único; sessões revogadas; MFA preservado |
+| R4 código de recuperação | 1 (aviso) | aviso recebido; reuso recusado |
+| R5 falha de rede e reinício locais | 1 | PENDENTE sem saída; ACEITA depois do reinício; recebida |
+| **Execução completa** | **6** | |
+| Reserva | até 14 | repetição do F1 enquanto o RBAC se propaga (até 3 tentativas) e **uma** segunda execução completa (6) se algum caso falhar por causa externa |
+| **Teto** | **20** chamadas de envio | |
 
-1. **Destinatários:** o endereço da caixa externa controlada e a outra caixa do tenant para o F2.
-2. **AWS:** a conta, a região (`sa-east-1` proposta, que muda uma linha do proxy e uma do compose) e o tipo de identidade (usuário IAM com MFA ou Identity Center).
-3. **DMARC:** quem acompanha `dmarc@nekkora.com`.
-4. **Autorização explícita**, nesta ordem: R-1 a R-5 (leitura); A, B e C; D1 a D8; W1 a W3; E; e os envios de teste do §6, dentro do volume do §4.7.
+**Contagem do teto:** são contadas todas as chamadas de envio feitas ao Graph, aceitas ou recusadas. A conta vem das linhas da `mail_outbox` (`email-real … fila`) e dos registros de `prova` em `saidas/<id>/email-real/`. Ao chegar a 20, `desligar`, mesmo com um caso pendente.
+
+### 4.8 Pedido de autorização
+
+Na ordem, uma autorização para cada bloco (ou uma única, citando os blocos):
+1. **L1 e L2** (locais: AWS CLI e perfis) e as leituras **R-1 a R-6**.
+2. **C, D1, D3 a D6** no Microsoft 365, mais as leituras D7 e D8. O D2 é local, entre o D1 e o D3.
+3. **W1 e W2** na AWS (função e segredo; custo de cerca de US$ 0,40 por mês).
+4. **E e W3**: saída de rede pelo proxy e credenciais de 1 h, no momento do `ligar`.
+5. **Até 20 mensagens** do §4.7, todas para a caixa da titular.
+
+Depois da homologação, apagar o segredo (W2) e a função (W1) é outra decisão. A proposta está no §7.
 
 ## 5. Ambiente de ensaio (item 3)
 
@@ -267,7 +319,7 @@ O ambiente foi deixado como estava (parado).
 ## 6. Roteiro da homologação real (item 4, depois da autorização)
 
 1. **Imagens:** `email-real ensaio-api-v1-003 imagens`, depois `subir ensaio-api-v1-003`.
-2. **Credenciais:** `aws.env` exportado (W3) e `destinatarios.txt` (§4.7) em `<segredos>/m365/`.
+2. **Credenciais:** `aws/m365-aws.sh credenciais` (W3, pede o código do MFA) e `destinatarios.txt` (§4.7) em `<segredos>/m365/`. Repetir o W3 antes de cada `ligar` ou `platform subir`: as credenciais valem 1 h.
 3. **Ligar:** `email-real ensaio-api-v1-003 ligar`. Registra a fila antes e os eventos `mail.segredo_carregado`, `mail.fila_cifra`, `mail.destinatarios_restritos` e `mail.certificado_vence_em`.
 4. **F1:** `email-real … prova no-reply@nekkora.com <caixa controlada>` → código 0 (202, **aceite**). Você salva a mensagem como `.eml`, e `email-real … conferir-eml <arquivo>` confere o **recebimento**, o remetente e um destinatário.
 5. **F2:** `email-real … prova <outra caixa do tenant> <caixa controlada>` → código 2 (403, recusa pelo RBAC). É a mesma credencial do aplicativo, e nada chega.
@@ -298,7 +350,12 @@ Em ordem de rapidez:
 1. **Na hora, sem perder a fila:** `homologacao.sh email-real ensaio-api-v1-003 saida cortar`. O proxy para, e nada mais sai para o Entra, o Graph ou a AWS. As mensagens ficam PENDENTES e expiram no prazo.
 2. **Encerrar o transporte real:** `homologacao.sh email-real ensaio-api-v1-003 desligar`. Proxy parado e removido, transporte simulado de volta e credenciais temporárias apagadas.
 3. **No tenant, para qualquer cópia da credencial:** `Remove-ManagementRoleAssignment` da atribuição D6, ou remover o certificado do aplicativo (D3). Sem token, nada sai.
-4. **Na AWS:** revogar as sessões da função W1 (`Revoke older sessions`) e, se for o caso, apagar o segredo W2.
+4. **Na AWS:** revogar as sessões da função W1 (IAM → Funções → `nekkora-homologacao-platform-m365-leitura` → Revogar sessões ativas) e, se for o caso, apagar o segredo W2.
+5. **Ao encerrar a homologação** (decisão à parte):
+   - `aws secretsmanager delete-secret --profile nekkora-login --region sa-east-1 --secret-id nekkora/homologacao/platform/m365 --recovery-window-in-days 7`;
+   - `aws iam delete-role-policy --profile nekkora-login --role-name nekkora-homologacao-platform-m365-leitura --policy-name ler-segredo-m365`;
+   - `aws iam delete-role --profile nekkora-login --role-name nekkora-homologacao-platform-m365-leitura`;
+   - remover o certificado do aplicativo (D3).
 
 ## 8. Limitações conhecidas
 

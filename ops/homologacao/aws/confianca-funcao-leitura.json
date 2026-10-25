@@ -4,11 +4,10 @@
     {
       "Sid": "SoAOperadoraComMfa",
       "Effect": "Allow",
-      "Principal": { "AWS": "${ARN_OPERADORA}" },
+      "Principal": { "AWS": "arn:aws:iam::${CONTA_AWS}:user/${USUARIO_IAM}" },
       "Action": "sts:AssumeRole",
       "Condition": {
-        "Bool": { "aws:MultiFactorAuthPresent": "true" },
-        "NumericLessThan": { "aws:MultiFactorAuthAge": "3600" }
+        "Bool": { "aws:MultiFactorAuthPresent": "true" }
       }
     }
   ]
