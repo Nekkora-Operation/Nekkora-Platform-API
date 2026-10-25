@@ -144,9 +144,18 @@ Esta branch parte de `ops/api-v1-003-homologacao`, que contém o #17 e o #19. Ab
 | Proxy isolado (`docker run`, a política) | `login.microsoftonline.com`, `graph.microsoft.com` e `secretsmanager.sa-east-1.amazonaws.com` → **200**; `secretsmanager.us-east-1`, `sts.amazonaws.com`, `example.com` e a porta 80 → **403** |
 | Proxy pela **composição do runner** (`testes/prova_proxy_m365.sh`) | sobe com os `tmpfs` corrigidos; os três nomes **200**; outra região e outro destino **403**; saída direta pela rede interna **impossível** (`000`); projeto removido |
 
-### 3.4 Regressão
+### 3.4 Regressão (local, candidato `5cae2c8`, `./mvnw -pl nekkora-platform -am test`)
 
-O resultado da regressão do módulo fica registrado no PR. O CI roda a regressão inteira no HEAD.
+| Módulo | Resultado |
+|---|---|
+| `nekkora-core` | 21/21 |
+| `nekkora-platform` (o alterado) | **394/394**: os 374 de antes e os 20 novos |
+| `nekkora-ops` (não alterado) | 175/177: **2 falhas que já existiam e dependem da data**, `Revisao4PrazosEImpedimentosIT.item1CarenciaDe720HorasNosLimitesEEmQualquerFuso` e `item1JanelasDe168E720HorasNosLimites` |
+
+**As 2 falhas do `nekkora-ops` não vêm deste PR:**
+- falham **igualmente no commit-base `8dd22fc`**, sem nenhuma mudança deste PR. No CI de 24/10, o mesmo código passou (584/0);
+- causa provável, pela leitura do teste: a fixture cria o canal "agora", e o teste afirma, como controle, que `agora + 30 dias` atravessa uma mudança de horário em `Europe/Berlin` (`(… + interval '30 days') <> (… + interval '720 hours')`). A Europa saiu do horário de verão em 2026-10-25 01:00 UTC. A partir daí, os 30 dias seguintes não cruzam nenhuma mudança, e a afirmação de controle falha. É um defeito de desenho do teste (depende da data de execução), não do produto;
+- **o CI deste PR e o de qualquer PR devem falhar nesses dois casos até a correção do teste.** A correção, fixar o instante da fixture antes de uma mudança de horário, fica fora do escopo desta missão e vai como pendência separada.
 
 ## 4. Configuração externa a autorizar (item 2)
 
