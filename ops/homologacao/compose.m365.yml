@@ -9,6 +9,9 @@
 #   m365/aws.env   credenciais TEMPORARIAS da AWS (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN), da funcao
 #                  de leitura do segredo; a Platform le o segredo uma vez, na partida, e recusa credencial sem token de sessao
 #   m365/fila.env  chave PROPRIA da fila (NEKKORA_FILA_CHAVE_ID, NEKKORA_FILA_CHAVES), gerada pelo runner
+#   m365/tentativas/  teto GLOBAL de tentativas de envio ao Graph (TentativasEnvio): uma vaga por arquivo, reservada ANTES
+#                  de cada sendMail pela fila e pela ProvaEnvioM365 (mesmo container, mesmo diretorio); sobrevive a
+#                  desligar, ligar e reinicio. Sem vaga, nada sai. Nao e segredo (instante, origem, correlacao, desfecho)
 # O cliente (App ID) e o certificado PKCS#12 ficam SO no segredo nekkora/homologacao/platform/m365 do AWS Secrets Manager
 # (formato nekkora-m365/1): nenhum arquivo de chave privada no host.
 #
@@ -59,4 +62,9 @@ services:
       # lista fechada de destinatarios (enderecos controlados; m365/destinatarios.txt, fora do Git), obrigatoria em ensaio-*
       NEKKORA_MAIL_DESTINATARIOS_PERMITIDOS: ${HOMOLOG_M365_DESTINATARIOS:?lista de destinatarios controlados}
       NEKKORA_AVISOS_EMERGENCIA: "true"
+      # teto global de tentativas da homologacao inteira (relatorio, secao 4.7): fila e prova contam juntas
+      NEKKORA_MAIL_TENTATIVAS_DIR: /tentativas
+      NEKKORA_MAIL_TENTATIVAS_MAXIMO: "20"
+    volumes:
+      - ${HOMOLOG_SEGREDOS:?}/m365/tentativas:/tentativas
     depends_on: [proxy-m365]

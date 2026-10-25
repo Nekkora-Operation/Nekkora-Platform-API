@@ -81,6 +81,7 @@ public final class GraphMailTransport implements MailTransport {
     private final String thumbprintS256;
     private volatile String accessToken;
     private volatile Instant accessTokenRenewAt = Instant.EPOCH;
+    private volatile TentativasEnvio tentativas = TentativasEnvio.SEM_TETO;
 
     public GraphMailTransport(Config cfg) {
         this(cfg, readCertificate(cfg), client(cfg.timeout(), cfg.proxy()), Clock.systemUTC());
@@ -169,6 +170,60 @@ public final class GraphMailTransport implements MailTransport {
         return thumbprintS256;
     }
 
+    /** SHA-256 do DER do certificado em hexadecimal com dois-pontos (o formato do {@code keytool -printcert}). */
+    public String certificateSha256Hex() {
+        byte[] d = Base64.getUrlDecoder().decode(thumbprintS256);
+        StringBuilder b = new StringBuilder();
+        for (int i = 0; i < d.length; i++) {
+            b.append(i == 0 ? "" : ":").append(String.format("%02X", d[i]));
+        }
+        return b.toString();
+    }
+
+    /**
+     * Teto global de tentativas de envio ({@link TentativasEnvio}), definido UMA vez na partida (Platform ou prova). Toda
+     * chamada {@code sendMail} reserva uma vaga antes; sem vaga, RECUSADO sem rede.
+     */
+    public synchronized void limitarTentativas(TentativasEnvio t) {
+        if (tentativas.limitado()) {
+            throw new IllegalStateException("teto de tentativas ja definido");
+        }
+        tentativas = t;
+    }
+
+    public TentativasEnvio tentativas() {
+        return tentativas;
+    }
+
+    /** Reivindicacoes de um token de aplicacao, para a prova do caminho de autenticacao (nunca o token). */
+    public record TokenInfo(String tid, String appid, String aud, int roles, long expiraEmSegundos, boolean legivel) {
+    }
+
+    /**
+     * Prova do caminho de autenticacao real: obtem o token pela assercao de certificado (o mesmo pedido do envio) e devolve
+     * so as reivindicacoes de controle: tenant, aplicativo, audiencia, QUANTIDADE de papeis de aplicacao (com o RBAC para
+     * Aplicacoes do Exchange, nenhum papel do Graph e esperado) e validade. Nao envia mensagem e nao conta tentativa.
+     * {@code null} se o Entra recusar ou nao houver conexao; o status fica em {@code falha[0]}.
+     */
+    public TokenInfo inspecionarToken(Integer[] falha) {
+        String t;
+        try {
+            t = token();
+        } catch (TokenFailure f) {
+            falha[0] = f.status;
+            return null;
+        }
+        String[] partes = t.split("\\.");
+        try {
+            JsonNode c = JSON.readTree(Base64.getUrlDecoder().decode(partes[1]));
+            String appid = c.path("appid").asString(c.path("azp").asString(""));
+            return new TokenInfo(c.path("tid").asString(""), appid, c.path("aud").asString(""), c.path("roles").size(),
+                    c.path("exp").asLong(0) - clock.instant().getEpochSecond(), true);
+        } catch (RuntimeException e) {
+            return new TokenInfo("", "", "", -1, 0, false);
+        }
+    }
+
     @Override
     public Delivery deliver(Message m) {
         String token;
@@ -197,6 +252,16 @@ public final class GraphMailTransport implements MailTransport {
     }
 
     private Delivery send(Message m, String token, String sender) {
+        TentativasEnvio.Reserva vaga = tentativas.reservar(m.correlation());
+        if (!vaga.concedida()) {
+            return new Delivery(Result.RECUSADO, null, null);
+        }
+        Delivery d = sendReserved(m, token, sender);
+        tentativas.registrar(vaga, d.result(), d.status());
+        return d;
+    }
+
+    private Delivery sendReserved(Message m, String token, String sender) {
         Map<String, Object> message = new LinkedHashMap<>();
         message.put("subject", m.subject());
         message.put("body", Map.of("contentType", "Text", "content", m.body()));

@@ -1059,7 +1059,13 @@ jornada-ativacao)
 #                  envio (nada antigo sai). Sobe o proxy-m365 e recria a Platform; se ela nao subir, desliga sozinho
 #   desligar       INTERRUPCAO: para o proxy-m365 primeiro (corta toda a saida), volta ao transporte de homologacao, apaga
 #                  as credenciais temporarias; a fila fica como esta (relatada)
-#   prova <remetente> <destinatario>   ProvaEnvioM365 na Platform (F1 aceito pela no-reply, F2 recusado por outra caixa)
+#   tentativas     SOMENTE LEITURA: teto global de tentativas de envio (m365/tentativas): usadas, maximo, por origem e
+#                  por desfecho
+#   autenticacao   ProvaAutenticacaoM365 --token na Platform (pelo proxy): segredo lido, certificado carregado, token do
+#                  Entra pela assercao de certificado, tenant e aplicativo conferidos, nenhum papel de aplicacao. Nao envia
+#                  e nao conta tentativa
+#   prova <remetente> <destinatario>   ProvaEnvioM365 na Platform (F1 aceito pela no-reply, F2 recusado por outra caixa);
+#                  conta no teto global (recusada antes de tentar se o teto ja foi atingido)
 #   conferir-eml <arquivo>             cabecalhos de uma mensagem recebida (remetente, destinatario, SPF, DKIM, DMARC)
 #   jornada [--somente R1,...]         testes/jornada_email_real.py, com a varredura de logs das jornadas da API
 #   saida cortar|religar               para / sobe so o proxy-m365 (falha de rede LOCAL; o tenant nao e tocado)
@@ -1067,7 +1073,7 @@ jornada-ativacao)
 email-real)
     carrega_ambiente "${2:?id}"
     prepara_funcoes
-    sub="${3:?fila|imagens|ligar|desligar|prova|conferir-eml|jornada|saida|platform}"
+    sub="${3:?fila|tentativas|imagens|ligar|autenticacao|desligar|prova|conferir-eml|jornada|saida|platform}"
     [[ "$HOMOLOG_ID" =~ ^ensaio- ]] || falha "email-real so em ambiente descartavel (id ensaio-*)"
     [[ "${HOMOLOG_ATE:-015}" =~ ^02[12]$ ]] || falha "email-real exige ambiente com 021 ou 022 (fila de e-mail)"
     M="$HOMOLOG_SEGREDOS_HOST/m365"; EVM="$AQUI/saidas/$HOMOLOG_ID/email-real"
@@ -1081,6 +1087,9 @@ SELECT CASE state WHEN 1 THEN 'PENDENTE' WHEN 2 THEN 'ENVIANDO' WHEN 3 THEN 'ACE
 SQL
     }
     fila_ativas() { admin_sql nekkora -c "SELECT count(*) FROM public.mail_outbox WHERE state IN (1, 2)"; }
+    # teto global de tentativas: o maximo vem da sobreposicao versionada (nao do ambiente), as vagas do registro em disco
+    TETO_MAX="$(sed -n 's/^ *NEKKORA_MAIL_TENTATIVAS_MAXIMO: "\([0-9]*\)"$/\1/p' "$AQUI/compose.m365.yml")"
+    tentativas_usadas() { ls "$M/tentativas" 2>/dev/null | grep -c '^tentativa-[0-9][0-9][0-9]$' || true; }
     troca_extra() { local de="$1" para="$2"; printf '%s\n' "$HOMOLOG_COMPOSE_EXTRA" | sed -e "s#$de#$para#"; }
     grava_ambiente() {   # transporte e lista de sobreposicoes novos; o anterior fica em email-real/ambiente.env.<instante>
         cp "$ESTADO" "$EVM/ambiente.env.$INST"
@@ -1096,6 +1105,21 @@ SQL
         return 1
     }
     case "$sub" in
+    tentativas)
+        { echo "tentativas_em=$INST usadas=$(tentativas_usadas) maximo=$TETO_MAX"
+          echo "por_origem: platform=$(cat "$M"/tentativas/tentativa-* 2>/dev/null | grep -c 'origem=platform' || true) prova=$(cat "$M"/tentativas/tentativa-* 2>/dev/null | grep -c 'origem=prova' || true)"
+          echo "por_desfecho: $(cat "$M"/tentativas/tentativa-* 2>/dev/null | sed -n 's/^desfecho=\([A-Z]*\) status=\(.*\)$/\1:\2/p' | sort | uniq -c | awk '{printf "%s=%s ", $2, $1}')"
+          echo "sem_desfecho_registrado=$(for f in "$M"/tentativas/tentativa-*; do [ -f "$f" ] && ! grep -q '^desfecho=' "$f" && echo x; done | grep -c x || true)"; } | tee "$EVM/tentativas-$INST.txt"
+        ;;
+    autenticacao)
+        [ "${HOMOLOG_TRANSPORTE:-}" = m365 ] || falha "autenticacao exige o transporte real ligado (email-real $HOMOLOG_ID ligar)"
+        rc=0
+        out="$(compose exec -T platform java -Dloader.main=com.nekkora.platform.mail.ProvaAutenticacaoM365 -cp /app/app.jar \
+            org.springframework.boot.loader.launch.PropertiesLauncher --token 2>&1)" || rc=$?
+        printf '%s\n' "$out" | tr -d '\r' | grep -E '^autenticacao_|^uso:|obrigatorios' | tee "$EVM/autenticacao-$INST.txt" || true
+        echo "codigo=$rc tentativas_usadas=$(tentativas_usadas) (a prova de autenticacao nao envia nem conta)" | tee -a "$EVM/autenticacao-$INST.txt"
+        exit "$rc"
+        ;;
     fila)
         compose up -d --wait postgres > /dev/null 2>&1 || falha "postgres nao subiu"
         { echo "fila_em=$INST transporte=${HOMOLOG_TRANSPORTE:-} commit=$HOMOLOG_COMMIT versoes_ate=$HOMOLOG_ATE"
@@ -1144,6 +1168,10 @@ SQL
         [ -f "$M/destinatarios.txt" ] || falha "lista de destinatarios ausente ($M/destinatarios.txt); nada alterado"
         HOMOLOG_M365_DESTINATARIOS="$(python "$AQUI/lib/email_real.py" destinatarios "$M/destinatarios.txt")" || falha "lista de destinatarios recusada; nada alterado"
         export HOMOLOG_M365_DESTINATARIOS
+        [[ "$TETO_MAX" =~ ^[1-9][0-9]*$ ]] || falha "teto de tentativas ausente em compose.m365.yml; nada alterado"
+        (umask 077; mkdir -p "$M/tentativas")
+        [ "$(tentativas_usadas)" -lt "$TETO_MAX" ] || falha "teto global de tentativas atingido ($(tentativas_usadas)/$TETO_MAX): nada alterado, nada enviado"
+        echo "tentativas_antes_de_ligar=$(tentativas_usadas)/$TETO_MAX" | tee "$EVM/tentativas-antes-de-ligar-$INST.txt"
         compose up -d --wait postgres redis > /dev/null 2>&1 || falha "postgres/redis nao subiram"
         confere_liberacao "$TRAVA" > /dev/null || falha "ambiente BLOQUEADO: nada alterado (homologacao.sh estado $HOMOLOG_ID)"
         { echo "fila_antes_de_ligar=$INST"; echo "estado|tipo|quantidade|mais_antiga"; fila_estado; } | tee "$EVM/fila-antes-de-ligar-$INST.txt"
@@ -1162,10 +1190,11 @@ SQL
             bash "$0" email-real "$HOMOLOG_ID" desligar
             falha "Platform nao subiu com o transporte real (eventos em $EVM/ligar-falhou-$INST.txt); desligado de novo"
         fi
-        compose logs --no-color --since "$INI" platform 2>&1 | grep -oE 'evento=mail\.(segredo_carregado|fila_cifra|destinatarios_restritos|certificado_vence_em)[^"]*' \
+        compose logs --no-color --since "$INI" platform 2>&1 | grep -oE 'evento=mail\.(segredo_carregado|fila_cifra|destinatarios_restritos|teto_tentativas_configurado|certificado_vence_em)[^"]*' \
             | sort -u | tee "$EVM/ligar-$INST.txt"
         grep -q 'evento=mail.segredo_carregado origem=aws-secrets-manager' "$EVM/ligar-$INST.txt" && grep -q 'evento=mail.destinatarios_restritos' "$EVM/ligar-$INST.txt" \
-            || { bash "$0" email-real "$HOMOLOG_ID" desligar; falha "partida sem os eventos esperados (segredo, destinatarios); desligado de novo"; }
+            && grep -q "evento=mail.teto_tentativas_configurado maximo=$TETO_MAX " "$EVM/ligar-$INST.txt" \
+            || { bash "$0" email-real "$HOMOLOG_ID" desligar; falha "partida sem os eventos esperados (segredo, destinatarios, teto de tentativas); desligado de novo"; }
         echo "TRANSPORTE REAL LIGADO em $HOMOLOG_ID (proxy-m365 e Platform recriada). Interromper: homologacao.sh email-real $HOMOLOG_ID desligar"
         ;;
     desligar)
@@ -1185,11 +1214,15 @@ SQL
     prova)
         [ "${HOMOLOG_TRANSPORTE:-}" = m365 ] || falha "prova exige o transporte real ligado (email-real $HOMOLOG_ID ligar)"
         rem="${4:?remetente}"; para="${5:?destinatario controlado}"
+        if [ "$(tentativas_usadas)" -ge "$TETO_MAX" ]; then
+            echo "prova_envio teto_atingido usadas=$(tentativas_usadas) maximo=$TETO_MAX (nada enviado)" | tee -a "$EVM/prova-$INST.txt"
+            exit 65
+        fi
         rc=0
         out="$(compose exec -T platform java -Dloader.main=com.nekkora.platform.mail.ProvaEnvioM365 -cp /app/app.jar \
             org.springframework.boot.loader.launch.PropertiesLauncher --remetente "$rem" --para "$para" 2>&1)" || rc=$?
         # so as linhas da propria prova (desfecho, status, identificador): nada de pilha nem de ambiente
-        printf '%s\n' "$out" | tr -d '\r' | grep -E '^prova_envio |fora de NEKKORA|ensaio-\* exige|^uso:' | tee -a "$EVM/prova-$INST.txt" || true
+        printf '%s\n' "$out" | tr -d '\r' | grep -E '^prova_envio |fora de NEKKORA|ensaio-\* exige|^uso:|teto de tentativas' | tee -a "$EVM/prova-$INST.txt" || true
         echo "remetente=$( [ "$rem" = no-reply@nekkora.com ] && echo no-reply@nekkora.com || echo outra-caixa) codigo=$rc" | tee -a "$EVM/prova-$INST.txt"
         exit "$rc"
         ;;

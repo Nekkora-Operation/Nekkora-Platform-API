@@ -107,6 +107,19 @@ c = json.load(open(sys.argv[1], encoding='utf-8'))
 t = c['services']['proxy-m365'].get('tmpfs') or []
 sys.exit(0 if len(t) == 4 and all('uid=13' in x and 'gid=13' in x for x in t) else 1)
 PY"
+confere "m365: teto global de tentativas na Platform (20, diretorio montado de m365/tentativas; fila e prova no mesmo container)" "python - '$TMP/m365.json' <<'PY'
+import json, sys
+c = json.load(open(sys.argv[1]))
+plat = c['services']['platform']
+env = plat.get('environment') or {}
+vols = [v for v in plat.get('volumes') or [] if v.get('target') == '/tentativas']
+ok = (env.get('NEKKORA_MAIL_TENTATIVAS_DIR') == '/tentativas' and env.get('NEKKORA_MAIL_TENTATIVAS_MAXIMO') == '20'
+      and len(vols) == 1 and vols[0]['type'] == 'bind' and vols[0]['source'].replace('\\\\', '/').endswith('/m365/tentativas')
+      and not vols[0].get('read_only') and any(v.get('target') == '/tls/ca.crt' for v in plat.get('volumes') or []))
+sys.exit(0 if ok else 1)
+PY"
+confere "m365: runner confere o teto antes de ligar e de cada prova, exige o evento de teto na partida e tem tentativas/autenticacao" "grep -q 'teto global de tentativas atingido' '$AQUI/homologacao.sh' && grep -q 'prova_envio teto_atingido' '$AQUI/homologacao.sh' && grep -q 'evento=mail.teto_tentativas_configurado maximo=\$TETO_MAX ' '$AQUI/homologacao.sh' && grep -q '^    tentativas)$' '$AQUI/homologacao.sh' && grep -q '^    autenticacao)$' '$AQUI/homologacao.sh' && grep -q 'ProvaAutenticacaoM365' '$AQUI/homologacao.sh'"
+confere "m365: m365-aws.sh so apaga a chave no confirmar (publicar sem trap de remocao)" "! grep -q \"trap 'apagar'\" '$AQUI/aws/m365-aws.sh' && grep -q '^confirmar()' '$AQUI/aws/m365-aws.sh' && grep -q 'chave_privada_no_disco=MANTIDA' '$AQUI/aws/m365-aws.sh'"
 confere "m365: regiao do segredo igual no compose e no proxy" "grep -q 'NEKKORA_M365_AWS_REGIAO: sa-east-1' '$M365' && grep -q 'secretsmanager.sa-east-1.amazonaws.com' '$AQUI/proxy/squid.conf'"
 confere "m365: sobreposicao usada SO pela acao email-real do runner (troca com a caixa)" "python - '$AQUI/homologacao.sh' <<'PY'
 import re, sys
@@ -128,7 +141,7 @@ ok = ('^ensaio-' in b[:b.index('case \"\$sub\"')] and 'credenciais \"\$M/aws.env
 sys.exit(0 if ok else 1)
 PY"
 confere "m365: testes/test_email_real.py (credenciais temporarias, lista, chave da fila, cabecalhos recebidos)" "python '$AQUI/testes/test_email_real.py' > '$TMP/er.txt' 2>&1 && grep -q '^RESULTADO: email_real OK' '$TMP/er.txt'"
-confere "m365: aws/m365-aws.sh (W1-W3 e certificado) contra AWS CLI falsa: nada secreto na linha de comando, chave apagada" "bash '$AQUI/testes/test_m365_aws.sh' > '$TMP/maws.txt' 2>&1 && grep -q '^RESULTADO: m365_aws OK' '$TMP/maws.txt'"
+confere "m365: aws/m365-aws.sh (W1-W3, certificado e confirmar) contra AWS CLI falsa: nada secreto na linha de comando, chave so sai depois da leitura utilizavel" "bash '$AQUI/testes/test_m365_aws.sh' > '$TMP/maws.txt' 2>&1 && grep -q '^RESULTADO: m365_aws OK' '$TMP/maws.txt'"
 confere "m365: politicas da AWS so GetSecretValue no segredo da homologacao, funcao so com MFA" "python - '$AQUI/aws' <<'PY'
 import json, os, sys
 d = sys.argv[1]

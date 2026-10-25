@@ -35,6 +35,7 @@ import com.nekkora.platform.mail.MailIntents;
 import com.nekkora.platform.mail.MailSender;
 import com.nekkora.platform.mail.MailTemplates;
 import com.nekkora.platform.mail.OutboxMailIntents;
+import com.nekkora.platform.mail.TentativasEnvio;
 
 /**
  * Transporte real de e-mail (missao 002, PR 5; desenho de 2026-10-11): so com {@code nekkora.mail.transport=m365}. Sem
@@ -66,7 +67,12 @@ public class MailConfig {
                                           @Value("${nekkora.mail.m365.graph-url:https://graph.microsoft.com}") String graph,
                                           @Value("${nekkora.mail.m365.proxy:}") String proxy,
                                           @Value("${nekkora.mail.m365.segredo-aws:}") String awsSecret,
-                                          @Value("${nekkora.mail.m365.aws-regiao:}") String awsRegion) {
+                                          @Value("${nekkora.mail.m365.aws-regiao:}") String awsRegion,
+                                          @Value("${nekkora.environment:}") String environment,
+                                          @Value("${nekkora.mail.tentativas.diretorio:}") String attemptsDir,
+                                          @Value("${nekkora.mail.tentativas.maximo:}") String attemptsMax) {
+        // teto global de tentativas ANTES do segredo: em ensaio-* sem teto, a partida recusa sem ler nada da AWS
+        TentativasEnvio teto = TentativasEnvio.daConfiguracao(environment, attemptsDir, attemptsMax, "platform");
         GraphMailTransport t;
         if (!awsSecret.isBlank()) {
             // cliente e certificado SO do segredo: uma unica origem, sem mistura com arquivo ou variavel
@@ -89,6 +95,10 @@ public class MailConfig {
             }
             t = new GraphMailTransport(new GraphMailTransport.Config(tenant, client, sender, Path.of(certificate),
                     certificatePassword.toCharArray(), timeout, login, graph, proxy));
+        }
+        if (teto.limitado()) {
+            t.limitarTentativas(teto);
+            LOG.info("evento=mail.teto_tentativas_configurado maximo={} usadas={}", teto.maximo(), teto.usadas());
         }
         logCertificate(t);
         return t;

@@ -37,6 +37,8 @@ public final class FakeGraph implements AutoCloseable {
     final ConcurrentLinkedDeque<Reply> script = new ConcurrentLinkedDeque<>();
     final AtomicInteger tokenCounter = new AtomicInteger();
     volatile int tokenStatus = 200;
+    /** Token de acesso devolvido (nulo: "falso-N"); para a prova de autenticacao, um JWT com as reivindicacoes de controle. */
+    volatile String accessToken;
     private final HttpServer server;
 
     public FakeGraph() throws IOException {
@@ -67,7 +69,7 @@ public final class FakeGraph implements AutoCloseable {
                 respond(x, tokenStatus, "{\"error\":\"invalid_client\"}", null);
                 return;
             }
-            respond(x, 200, "{\"token_type\":\"Bearer\",\"expires_in\":3600,\"access_token\":\"falso-" + tokenCounter.incrementAndGet() + "\"}", null);
+            respond(x, 200, "{\"token_type\":\"Bearer\",\"expires_in\":3600,\"access_token\":\"" + (accessToken != null ? accessToken : "falso-" + tokenCounter.incrementAndGet()) + "\"}", null);
             return;
         }
         if (path.startsWith("/v1.0/users/") && path.endsWith("/sendMail")) {

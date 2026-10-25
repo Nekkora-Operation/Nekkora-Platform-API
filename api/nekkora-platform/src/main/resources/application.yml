@@ -54,6 +54,11 @@ nekkora:
       aws-regiao: ${NEKKORA_M365_AWS_REGIAO:}
     # destinatarios do transporte real: lista fechada de enderecos exatos, OBRIGATORIA em ensaio-* (homologacao)
     destinatarios-permitidos: ${NEKKORA_MAIL_DESTINATARIOS_PERMITIDOS:}
+    # teto GLOBAL de tentativas de envio ao Graph (fila e prova contam juntas; TentativasEnvio): diretorio montado e
+    # maximo, OBRIGATORIO em ensaio-* com o transporte m365
+    tentativas:
+      diretorio: ${NEKKORA_MAIL_TENTATIVAS_DIR:}
+      maximo: ${NEKKORA_MAIL_TENTATIVAS_MAXIMO:}
     # chave PROPRIA da fila (021), separada da do MFA; vazia = a fila usa a do MFA. Com ela, a fila ainda decifra o que foi
     # cifrado com a do MFA
     fila:
