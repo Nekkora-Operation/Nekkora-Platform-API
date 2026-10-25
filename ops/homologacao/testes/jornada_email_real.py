@@ -15,7 +15,10 @@ Tres estados de cada mensagem, sempre separados (nunca "entregue exatamente uma 
 
 Casos: R1 cadastro (pedido, mensagem, confirmacao, token de uso unico); R2 primeira entrada com o fator; R3 recuperacao de
 senha (mensagem, troca, token de uso unico, sessoes revogadas, MFA preservado) e o aviso de senha alterada; R4 entrada com
-codigo de recuperacao e o aviso de codigo usado. Saida como a das jornadas da API (jornadas.txt, resumo.txt, --vistos).
+codigo de recuperacao e o aviso de codigo usado; R5 falha de rede LOCAL e reinicio (o tenant nao e tocado): saida cortada
+(proxy parado), pedido de recuperacao, tentativa sem conexao (PENDENTE, nada saiu), Platform parada com a mensagem na fila,
+saida religada, Platform de volta (le o segredo de novo), mensagem aceita depois do reinicio e recebida. Saida como a das
+jornadas da API (jornadas.txt, resumo.txt, --vistos).
 """
 import argparse
 import datetime
@@ -23,6 +26,7 @@ import email
 import email.policy
 import os
 import re
+import subprocess
 import sys
 import time
 
@@ -136,6 +140,18 @@ class JornadaEmailReal(ja.Jornadas):
                 return
             time.sleep(3)
 
+    def controle(self, *args):
+        r = subprocess.run([self.a.bash, '-c', f'{self.a.controle} {" ".join(args)}'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=300)
+        saida = r.stdout.decode('utf-8', 'replace').strip().splitlines()
+        self.rel.nota(f'controle {" ".join(args)}: codigo {r.returncode} {saida[-1] if saida else ""}')
+        return r.returncode == 0
+
+    def linha_fila(self, tipo):
+        out = self.banco.q("SELECT state || '|' || attempts || '|' || coalesce(last_status::text, '-') FROM public.mail_outbox "
+                           "WHERE kind = :'tipo' AND created_at >= :'desde'::timestamptz ORDER BY created_at DESC LIMIT 1",
+                           ('tipo', tipo), ('desde', self.desde))
+        return out.strip()
+
     def r1(self):
         email_, senha = self.cria_identidade('r1')
         self.espera_aceite('IDENTITY_SIGNUP_CONFIRMATION')
@@ -194,10 +210,43 @@ class JornadaEmailReal(ja.Jornadas):
         self.espera_aceite('NOTICE_RECOVERY_CODE_USED')
         self.fila('NOTICE_RECOVERY_CODE_USED')
 
+    def r5(self):
+        r, s = self.rel, self.estado['r1']
+        self.desde = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S+00')
+        try:
+            r.confere('falha local: saida cortada (proxy parado)', 'CONTROLE', self.controle('saida', 'cortar'), 'cortada', '-')
+            n = self.nav('r5')
+            st, _, _ = n.req('POST', '/api/v1/auth/password-reset/request', {'email': s['email']}, csrf=self.pre(n))
+            r.confere('falha local: pedido de recuperacao 202 (ENFILEIRADA)', 'API', st == 202, 202, st)
+            linha, fim = '', time.time() + 60
+            while time.time() < fim:
+                linha = self.linha_fila('PASSWORD_RECOVERY')
+                if linha.startswith('1|') and not linha.startswith('1|0|'):
+                    break
+                time.sleep(2)
+            r.confere('falha local: tentativa sem conexao, mensagem PENDENTE (nada saiu)', 'BANCO', linha.startswith('1|') and linha.endswith('|-')
+                      and not linha.startswith('1|0|'), '1|>=1|-', linha or 'nenhuma')
+            r.confere('reinicio: Platform parada com a mensagem na fila', 'CONTROLE', self.controle('platform', 'parar'), 'parada', '-')
+            r.confere('falha local: saida religada', 'CONTROLE', self.controle('saida', 'religar'), 'religada', '-')
+        finally:
+            self.controle('saida', 'religar')
+            self.controle('platform', 'subir')
+        linha, fim = '', time.time() + 180
+        while time.time() < fim:
+            linha = self.linha_fila('PASSWORD_RECOVERY')
+            if not linha.startswith(('1|', '2|')):
+                break
+            time.sleep(3)
+        r.confere('reinicio: mensagem ACEITA pelo Graph depois do reinicio (estado 3, 202, mais de uma tentativa)', 'BANCO',
+                  linha.startswith('3|') and linha.endswith('|202') and not linha.startswith('3|1|'), '3|>=2|202', linha or 'nenhuma')
+        m = self.caixa.espera('PASSWORD_RECOVERY', s['email'])
+        r.confere('reinicio: mensagem RECEBIDA (uma; repeticao exatamente uma vez nao e afirmada)', 'RECEBIDA', bool(m and m.get('token')), 'recebida',
+                  'sim' if m else 'nao')
+
 
 def main():
     ap = argparse.ArgumentParser()
-    for x in ('--alvo', '--ca', '--evid', '--vistos', '--psql', '--entrada', '--destinatarios'):
+    for x in ('--alvo', '--ca', '--evid', '--vistos', '--psql', '--entrada', '--destinatarios', '--controle'):
         ap.add_argument(x, required=True)
     ap.add_argument('--bash', default=os.environ.get('HOMOLOG_BASH') or r'C:\Program Files\Git\bin\bash.exe')
     ap.add_argument('--prazo', type=int, default=15, help='minutos de espera por mensagem recebida')
@@ -205,12 +254,13 @@ def main():
     a = ap.parse_args()
     # campos que a classe base exige e que a jornada real nao usa (sem caixa simulada, sem PHC, sem semente)
     a.caixa, a.phc, a.sql_semente = 'true', 'true', ''
-    nomes = [x for x in a.somente.split(',') if x] or ['R1', 'R2', 'R3', 'R4']
+    todos = ['R1', 'R2', 'R3', 'R4', 'R5']
+    nomes = [x for x in a.somente.split(',') if x] or todos
     for x in nomes:
-        if x not in ('R1', 'R2', 'R3', 'R4'):
+        if x not in todos:
             raise SystemExit(f'caso desconhecido: {x}')
-    if nomes != ['R1', 'R2', 'R3', 'R4'][:len(nomes)]:
-        raise SystemExit('os casos dependem do anterior: R1, R1+R2, R1+R2+R3 ou todos')
+    if nomes != todos[:len(nomes)]:
+        raise SystemExit('os casos dependem do anterior: R1, R1+R2, ... ou todos')
     sys.exit(JornadaEmailReal(a).executa(nomes))
 
 

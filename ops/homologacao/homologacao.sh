@@ -1062,10 +1062,12 @@ jornada-ativacao)
 #   prova <remetente> <destinatario>   ProvaEnvioM365 na Platform (F1 aceito pela no-reply, F2 recusado por outra caixa)
 #   conferir-eml <arquivo>             cabecalhos de uma mensagem recebida (remetente, destinatario, SPF, DKIM, DMARC)
 #   jornada [--somente R1,...]         testes/jornada_email_real.py, com a varredura de logs das jornadas da API
+#   saida cortar|religar               para / sobe so o proxy-m365 (falha de rede LOCAL; o tenant nao e tocado)
+#   platform parar|subir               para / sobe so a Platform (reinicio com mensagem pendente na fila)
 email-real)
     carrega_ambiente "${2:?id}"
     prepara_funcoes
-    sub="${3:?fila|imagens|ligar|desligar|prova|conferir-eml|jornada}"
+    sub="${3:?fila|imagens|ligar|desligar|prova|conferir-eml|jornada|saida|platform}"
     [[ "$HOMOLOG_ID" =~ ^ensaio- ]] || falha "email-real so em ambiente descartavel (id ensaio-*)"
     [[ "${HOMOLOG_ATE:-015}" =~ ^02[12]$ ]] || falha "email-real exige ambiente com 021 ou 022 (fila de e-mail)"
     M="$HOMOLOG_SEGREDOS_HOST/m365"; EVM="$AQUI/saidas/$HOMOLOG_ID/email-real"
@@ -1209,7 +1211,7 @@ SQL
         rc=0
         python "$AQUI/testes/jornada_email_real.py" --alvo "https://$HOMOLOG_HOST:$HOMOLOG_PORTA" --ca "$(mixed "$HOMOLOG_SEGREDOS_HOST/tls/ca.crt")" \
             --evid "$(mixed "$J")" --vistos "$(mixed "$SJ/vistos.txt")" --psql "admin_sql nekkora" --entrada "$(mixed "$M/entrada")" \
-            --destinatarios "$(mixed "$M/destinatarios.txt")" "${@:4}" || rc=$?
+            --destinatarios "$(mixed "$M/destinatarios.txt")" --controle "bash '$(mixed "$AQUI/homologacao.sh")' email-real $HOMOLOG_ID" "${@:4}" || rc=$?
         # varredura (como em jornadas-api): nenhum valor visto (senha, token, codigo, endereco) nos logs nem na evidencia, e
         # nenhum valor das credenciais temporarias e da chave da fila
         compose logs --no-color --since "$INICIO" platform portal gateway proxy-m365 > "$SJ/logs_servicos.txt" 2>&1 || falha "logs dos servicos nao coletados (varredura impossivel)"
@@ -1240,6 +1242,26 @@ PY
         if grep -q 'evento=mail.graph status=202' "$SJ/logs_servicos.txt"; then echo "controle_positivo=OK (evento de aceite do Graph no log da Platform)" | tee -a "$J/varredura.txt"
         else echo "controle_positivo=FALHOU" | tee -a "$J/varredura.txt"; rc=1; fi
         exit "$rc"
+        ;;
+    saida)
+        [ "${HOMOLOG_TRANSPORTE:-}" = m365 ] || falha "saida so com o transporte real ligado"
+        case "${4:?cortar|religar}" in
+            cortar) compose stop proxy-m365 > /dev/null 2>&1 || falha "proxy-m365 nao parou"; echo "saida=CORTADA (proxy-m365 parado)" ;;
+            religar) compose up -d --no-deps proxy-m365 > /dev/null 2>&1 || falha "proxy-m365 nao subiu"; echo "saida=RELIGADA (proxy-m365 no ar)" ;;
+            *) falha "use cortar ou religar" ;;
+        esac
+        ;;
+    platform)
+        [ "${HOMOLOG_TRANSPORTE:-}" = m365 ] || falha "platform so com o transporte real ligado"
+        case "${4:?parar|subir}" in
+            parar) compose stop platform > /dev/null 2>&1 || falha "Platform nao parou"; echo "platform=PARADA" ;;
+            subir)
+                python "$AQUI/lib/email_real.py" credenciais "$M/aws.env" --minimo 5 > /dev/null || falha "credenciais temporarias vencidas: a Platform nao leria o segredo"
+                compose up -d --no-deps platform > /dev/null 2>&1 || falha "Platform nao subiu"
+                espera_gateway || falha "Platform nao respondeu pelo gateway"
+                echo "platform=NO_AR" ;;
+            *) falha "use parar ou subir" ;;
+        esac
         ;;
     *) falha "subcomando invalido";;
     esac

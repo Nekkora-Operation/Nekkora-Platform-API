@@ -114,6 +114,38 @@ with tempfile.TemporaryDirectory() as d:
                                                                       dkim_d='radiantsai.onmicrosoft.com')), '--destinatarios', lst)
     caso('DKIM so do dominio inicial (onmicrosoft) reprovado', rc != 0 and 'dkim|FALHA' in out)
 
+# caixa real da jornada (testes/jornada_email_real.py): escolhe pelo tipo (assunto) e pelo destinatario, ignora o que ja
+# estava na pasta, tira o token so em memoria e o anota em --vistos
+sys.path.insert(0, AQUI)
+import jornada_email_real as jr  # noqa: E402
+
+
+class RelFalso:
+    def __init__(self):
+        self.vistos, self.linhas = [], []
+
+    def segredo(self, *v):
+        self.vistos += list(v)
+
+    def confere(self, caso, tipo, ok, esperado, obtido):
+        self.linhas.append((caso, ok, str(obtido)))
+
+
+with tempfile.TemporaryDirectory() as d:
+    escreve(d, 'antiga.eml', eml('Nekkora <no-reply@nekkora.com>', 'controle+r1-x@exemplo.test', EXO))
+    rel = RelFalso()
+    cx = jr.CaixaReal(d, ['controle+*@exemplo.test'], rel, 1)
+    escreve(d, 'outro.eml', eml('Nekkora <no-reply@nekkora.com>', 'controle+r9-x@exemplo.test', EXO))
+    escreve(d, 'nova.eml', eml('Nekkora <no-reply@nekkora.com>', 'controle+r1-x@exemplo.test', EXO))
+    m = cx.espera('IDENTITY_SIGNUP_CONFIRMATION', 'controle+r1-x@exemplo.test', prazo=0)
+    caso('caixa real: acha a mensagem NOVA do tipo e do destinatario', bool(m) and m['arquivo'] == 'nova.eml')
+    caso('caixa real: token tirado do link e anotado em vistos', bool(m) and m['token'] == 'TOKENDETESTE1234567890' and 'TOKENDETESTE1234567890' in rel.vistos)
+    caso('caixa real: cabecalhos conferidos (SPF, DKIM, DMARC, remetente) sem levar o token', len(rel.linhas) == 4 and all(ok for _, ok, _ in rel.linhas)
+         and not any('TOKENDETESTE' in o for _, _, o in rel.linhas))
+    cx.prazo = 0
+    caso('caixa real: arquivo ja usado nao volta', cx.espera('IDENTITY_SIGNUP_CONFIRMATION', 'controle+r1-x@exemplo.test', prazo=0) is None)
+    caso('caixa real: outro tipo nao e confundido', cx.espera('PASSWORD_RECOVERY', 'controle+r9-x@exemplo.test', prazo=0) is None)
+
 print(f'casos={total} falhas={falhas}')
 print('RESULTADO: email_real OK' if falhas == 0 else 'RESULTADO: email_real FALHOU')
 sys.exit(1 if falhas else 0)
