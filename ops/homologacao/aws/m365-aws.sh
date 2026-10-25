@@ -31,6 +31,9 @@ FUNCAO="nekkora-homologacao-platform-m365-leitura"
 REGIAO="sa-east-1"
 TENANT="ae4ed48d-e7d8-4f24-83f2-443e997c5a65"
 export AWS_PAGER=""
+# Git Bash: um valor de ambiente que comeca com "/" (a chave secreta da AWS pode comecar assim) seria reescrito como caminho
+# do Windows ao chamar aws.exe e java.exe, e a assinatura falharia (SignatureDoesNotMatch); sem efeito fora do MSYS
+export MSYS2_ENV_CONV_EXCL='*'
 umask 077
 
 falha() { echo "ERRO: $*" >&2; exit 1; }

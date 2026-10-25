@@ -146,5 +146,12 @@ confere "credenciais de longo prazo (AKIA) recusadas e apagadas" "[ \$? -ne 0 ] 
 # ---------------------------------------------------------------------------------------------------- linha de comando
 confere "nenhuma chamada da AWS CLI nem da Platform leva senha, PKCS#12 ou chave" "! grep -qF -- '$SENHA' '$LOG' '$FAKE/java.log' && ! grep -qF -- '$P12B64' '$LOG' '$FAKE/java.log' && ! grep -q 'certificado_senha' '$LOG' '$FAKE/java.log'"
 
+# ---------------------------------------------------------------------------------------------------- Git Bash
+confere "o script desliga a conversao de caminho do MSYS nas variaveis de ambiente" "grep -qx \"export MSYS2_ENV_CONV_EXCL='\\*'\" '$S'"
+if command -v cmd.exe > /dev/null 2>&1; then
+    confere "Windows (controle): sem a exclusao, um valor que comeca com / chega alterado a um programa nativo" "[ \"\$(V=/abc+def cmd.exe //c 'echo %V%' | tr -d '\\r')\" != /abc+def ]"
+    confere "Windows: com a exclusao do script, o valor chega intacto a um programa nativo" "[ \"\$(MSYS2_ENV_CONV_EXCL='*' V=/abc+def cmd.exe //c 'echo %V%' | tr -d '\\r')\" = /abc+def ]"
+fi
+
 echo
 [ "$falhas" = 0 ] && { echo "RESULTADO: m365_aws OK"; exit 0; } || { echo "RESULTADO: m365_aws $falhas FALHA(S)"; exit 1; }

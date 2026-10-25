@@ -9,8 +9,8 @@
 | Etapa da missão | Situação |
 |---|---|
 | 1. Conferir a implementação | **Feita** (§2). Achados: a fila usa a chave do MFA; não havia lista de destinatários; não havia leitura de segredo da AWS. Os três foram corrigidos (§3). |
-| 2. Preparar a configuração externa | **Preparada, não executada.** Dados definidos pela titular em 2026-10-25. Políticas finais, comandos (`aws/m365-aws.sh`), certificado, prova do caminho de autenticação, custos e teto global de 20 tentativas no §4. **Autorização em três etapas (§4.8).** |
-| 3. Preparar o ambiente de ensaio | Commit, migrations, fila e teto conferidos (§5). A troca de imagens é a L4 (etapa 1); a de transporte, a etapa 3. |
+| 2. Preparar a configuração externa | **Etapas 1 e 2 executadas em 2026-10-25, com autorização (§4.9).** Recursos do Microsoft 365 e da AWS criados e conferidos; `confirmado=OK`. **A etapa 3 (transporte e envios) depende de nova autorização.** |
+| 3. Preparar o ambiente de ensaio | Imagens trocadas para `364848f` na L4 (§4.9), migrations iguais, fila 0, tentativas 0 de 20. O transporte continua o simulado até a etapa 3. |
 | 4. Homologação real | **Não iniciada.** Roteiro pronto (§6). |
 | 5. Entrega | PR aberto (sem merge). Este relatório será completado com as evidências da execução real. |
 
@@ -342,6 +342,42 @@ O caminho tem dois trechos. A tabela diz o que já está provado e o que cada et
 
 Depois da homologação, apagar o segredo (W2), a função (W1) e o certificado do aplicativo (D3) é outra decisão (§7).
 
+### 4.9 Execução das etapas 1 e 2 (2026-10-25)
+
+Os identificadores da conta, do usuário, dos aplicativos e dos destinatários ficam nas evidências locais (`ops/homologacao/saidas/ensaio-api-v1-003/email-real/`, fora do Git). Varredura das evidências: nenhuma credencial, chave, senha ou SecretString.
+
+**Etapa 1 (preparação e leituras)**
+
+| # | Resultado |
+|---|---|
+| Antes de tudo | fila total=0; tentativas 0 de 20, sem registro existente; função e segredo inexistentes |
+| L1 | AWS CLI 2.38.5 (instalador assinado pela Amazon Web Services, Inc.) |
+| L2 | `MFA_SERIAL`: o único MFA do usuário, virtual (de código); perfis `nekkora-login` e `nekkora-hml-m365` em `~/.aws/config` |
+| L3 | `aws login` → sessão do usuário administrador da conta definida. **Armadilha:** com o relógio do Windows 77 s adiantado, a troca final falhava com `TOKEN_EXPIRED`; acertado o relógio, passou |
+| L4 | imagens `364848f`, migrations 001–022 iguais, ambiente `LIBERADO`; evento `mail.transporte transporte=homologacao simulado=sim` |
+| R-1/R-2 | o tenant do domínio (descoberta pública da Microsoft) é o mesmo da sessão do Exchange, `ae4ed48d…`. Não usei `Connect-MgGraph`: o primeiro login do aplicativo do Graph pode criar consentimento no tenant |
+| R-3 a R-5 | `nekkora.com` Authoritative; `no-reply@nekkora.com` existe (SharedMailbox); DKIM `Enabled: True` |
+| R-6 | sessão, MFA de código; função e segredo inexistentes |
+| R-7 | fila 0; tentativas 0 de 20 (antes e depois da troca de imagens) |
+
+**Etapa 2 (recursos externos; nenhuma mensagem)**
+
+| # | Resultado |
+|---|---|
+| Conferência prévia | não havia aplicativo `nekkora-platform-mail`. Havia dois outros: um vazio criado em 24/10 (sem credencial nem permissão; **mantido**, decisão da titular) e um antigo, com segredo de cliente e o papel `Application SMTP.SendAsApp` num escopo por grupo (a `no-reply` não estava no grupo; SMTP AUTH desligado na organização). **O antigo foi apagado por decisão da titular**: registro no Entra (lixeira por 30 dias), atribuição e escopo no Exchange. O grupo de e-mail ficou |
+| C | o nome de exibição já era "Nekkora"; `AcceptMessagesOnlyFromSendersOrMembers` = a própria no-reply |
+| D1 | `nekkora-platform-mail`, um tenant, **nenhuma** permissão de API, nenhum segredo de cliente, com principal de serviço (feito pela Azure CLI, cliente da Microsoft já pré-autorizado: nenhum consentimento novo) |
+| D2 | RSA 2048, validade até 2027-10-25, SHA-256 `FA:50:19:6B:…:B6:C9` |
+| D3 | só o certificado público (uso `Verify`); SHA-1 no Entra igual ao local |
+| D4–D6 | principal no Exchange; escopo "Somente no-reply" (`PrimarySmtpAddress -eq 'no-reply@nekkora.com'`); `Application Mail.Send` nesse escopo |
+| D7 | exatamente **uma** atribuição do aplicativo; nenhuma Application Access Policy; nenhuma permissão do Graph; é a única atribuição a aplicativos do tenant |
+| D8 | `InScope=True` para a no-reply; `InScope=False` para a caixa do F2 |
+| W1 | função criada; confiança: só o usuário, com `aws:MultiFactorAuthPresent`; uma política inline, nenhuma anexada, 3600 s |
+| W2 | segredo criado, cifra `aws/secretsmanager`, uma versão, sem rotação; política de recurso nega `GetSecretValue` a quem não é a função |
+| W3a + W2c (1ª) | **`confirmado=NAO`, chave mantida**: a sessão da função e a leitura pela Platform falharam (`InvalidSignatureException`). Causa: a chave secreta sorteada começava com `/`, e o Git Bash a reescrevia como caminho do Windows ao passar o ambiente para `aws.exe` e `java.exe`. Pelo perfil da CLI a mesma credencial funcionava. Corrigido no `m365-aws.sh` (`MSYS2_ENV_CONV_EXCL='*'`), com teste e controle (`test_m365_aws.sh` 37/37). O `ligar` não é afetado: o Docker lê o `aws.env` como `env_file` |
+| W3a + W2c (2ª) | `sessao_da_funcao=OK`; `administrador_le=NAO (AccessDenied)`; leitura pela Platform `formato=OK chave_privada=1 conteudo=IGUAL`, certificado = `.cer` do D3, 364 dias; **`confirmado=OK`**: chave, senha e SecretString apagados do disco (ficam o `.cer` e a impressão); credenciais da função apagadas, inclusive do cache da CLI |
+| Depois | tentativas 0 de 20; fila 0; transporte simulado |
+
 ## 5. Ambiente de ensaio (item 3)
 
 | Conferência | Resultado (2026-10-25T01:50Z) |
@@ -412,6 +448,7 @@ Em ordem de rapidez:
   - a vaga é reservada **antes** do pedido. Uma vaga com `desfecho` ausente indica que o processo parou no meio, e a contagem é conservadora;
   - com o teto atingido, as mensagens que ainda estiverem na fila terminam RECUSADAS, sem rede.
 - **`confirmar`:**
+  - no Windows, roda pelo Git Bash: sem `MSYS2_ENV_CONV_EXCL`, um valor de ambiente que começa com `/` chega alterado a programas nativos (§4.9);
   - roda no host, com saída direta para a AWS, não pelo proxy do ensaio. O caminho pelo proxy é provado na etapa 3 (`ligar`);
   - a comparação usa o SHA-256 do arquivo publicado e o do SecretString lido. Nenhum dos dois é impresso.
 - **Reivindicações do token:** são lidas do JWT sem conferir a assinatura (a Microsoft não garante o formato do token de acesso para o cliente). Se o formato mudar, a prova responde `reivindicacoes=ILEGIVEIS` (código 8) e não passa. A conferência de autorização continua com o F1 e o F2.
