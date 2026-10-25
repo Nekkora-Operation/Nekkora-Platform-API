@@ -92,6 +92,22 @@ with tempfile.TemporaryDirectory() as d:
     rc, out, _ = roda('chave-fila', fila)
     caso('chave da fila existente nunca sobrescrita', rc == 0 and 'EXISTENTE' in out and open(fila, encoding='utf-8').read() == conteudo)
 
+    p12 = escreve(d, 'teste.p12', 'pkcs12-de-exemplo')
+    sf = escreve(d, 'senha.txt', 'senhaDoPkcs12NaoPodeAparecer\n')
+    alvo = os.path.join(d, 'segredo.json')
+    rc, out, err = roda('montar-segredo', '--p12', p12, '--senha-arquivo', sf, '--tenant', 'ae4ed48d-e7d8-4f24-83f2-443e997c5a65',
+                        '--client', '00000000-0000-0000-0000-00000000bbbb', '--saida', alvo)
+    import json as _json
+    seg = _json.load(open(alvo, encoding='utf-8')) if os.path.exists(alvo) else {}
+    caso('segredo montado no formato nekkora-m365/1 com os cinco campos', rc == 0 and sorted(seg) == ['certificado_pkcs12', 'certificado_senha', 'client_id', 'formato', 'tenant_id']
+         and seg.get('formato') == 'nekkora-m365/1' and seg.get('certificado_senha') == 'senhaDoPkcs12NaoPodeAparecer')
+    caso('saida do montar-segredo sem a senha nem o PKCS#12', 'senhaDoPkcs12' not in out + err and 'cGtjczEy' not in out + err)
+    rc, _, _ = roda('montar-segredo', '--p12', p12, '--senha-arquivo', sf, '--tenant', 'ae4ed48d-e7d8-4f24-83f2-443e997c5a65',
+                    '--client', '00000000-0000-0000-0000-00000000bbbb', '--saida', alvo)
+    caso('montar-segredo nunca sobrescreve', rc != 0)
+    rc, _, _ = roda('montar-segredo', '--p12', p12, '--senha-arquivo', sf, '--tenant', 'TENANT', '--client', 'x', '--saida', alvo + '2')
+    caso('montar-segredo recusa tenant/client que nao sao GUID', rc != 0)
+
     de = 'Nekkora <no-reply@nekkora.com>'
     rc, out, _ = roda('conferir-eml', escreve(d, 'exo.eml', eml(de, 'controle+r1-x@exemplo.test', EXO)), '--destinatarios', lst)
     caso('Exchange Online: SPF, DKIM d=nekkora.com e DMARC pass', rc == 0 and 'spf|OK|pass' in out and 'dkim|OK|pass d=nekkora.com' in out and 'dmarc|OK' in out)

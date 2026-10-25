@@ -9,6 +9,10 @@ Subcomandos:
                                variavel do compose; contagem no stderr.
   chave-fila <fila.env>        cria a chave PROPRIA da fila (AES-256, id fila-<data>) se o arquivo nao existir; nunca
                                sobrescreve (a chave decifra as mensagens ja enfileiradas).
+  montar-segredo --p12 <arquivo> --senha-arquivo <arquivo> --tenant <guid> --client <guid> --saida <segredo.json>
+                               monta o SecretString do formato nekkora-m365/1 (o mesmo que a Platform le, M365Segredo) num
+                               arquivo novo 600, para "aws secretsmanager create-secret --secret-string file://..."; a senha
+                               vem de arquivo (nunca da linha de comando). Saida: so o tamanho do PKCS#12. Apagar depois.
   conferir-eml <arquivo.eml> [--destinatarios <arquivo>]
                                cabecalhos de uma mensagem RECEBIDA: remetente, um destinatario (na lista), SPF, DKIM
                                (d=nekkora.com) e DMARC pelo Authentication-Results da caixa que recebeu. Saida: uma linha por
@@ -114,6 +118,27 @@ def chave_fila(a):
     print(f'chave_fila=CRIADA id={kid}')
 
 
+GUID = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+
+
+def montar_segredo(a):
+    import json
+    if not GUID.match(a.tenant) or not GUID.match(a.client):
+        raise SystemExit('tenant e client devem ser GUID em minusculas')
+    with open(a.p12, 'rb') as h:
+        p12 = h.read()
+    with open(a.senha_arquivo, encoding='utf-8') as h:
+        senha = h.read().strip()
+    if not p12 or not senha:
+        raise SystemExit('PKCS#12 ou senha vazios')
+    corpo = json.dumps({'formato': 'nekkora-m365/1', 'tenant_id': a.tenant, 'client_id': a.client,
+                        'certificado_pkcs12': base64.b64encode(p12).decode(), 'certificado_senha': senha}, separators=(',', ':'))
+    fd = os.open(a.saida, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, 'w', encoding='utf-8', newline='') as h:
+        h.write(corpo)
+    print(f'segredo=MONTADO formato=nekkora-m365/1 pkcs12_bytes={len(p12)} (apague {os.path.basename(a.saida)} depois do create-secret)')
+
+
 def resultados_autenticacao(msg):
     """Metodos do Authentication-Results da caixa que recebeu (o PRIMEIRO cabecalho: o mais recente, do receptor)."""
     ar = msg.get_all('Authentication-Results') or []
@@ -182,6 +207,10 @@ def main():
     k = sp.add_parser('chave-fila')
     k.add_argument('arquivo')
     k.set_defaults(f=chave_fila)
+    ms = sp.add_parser('montar-segredo')
+    for x in ('--p12', '--senha-arquivo', '--tenant', '--client', '--saida'):
+        ms.add_argument(x, required=True)
+    ms.set_defaults(f=montar_segredo)
     e = sp.add_parser('conferir-eml')
     e.add_argument('arquivo')
     e.add_argument('--destinatarios')
