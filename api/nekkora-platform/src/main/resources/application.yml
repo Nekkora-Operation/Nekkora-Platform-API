@@ -47,6 +47,18 @@ nekkora:
       timeout: 5s
       # saida por proxy (host:porta) quando a rede da Platform nao tem saida direta; vazio = conexao direta
       proxy: ${NEKKORA_M365_PROXY:}
+      # cliente e certificado no AWS Secrets Manager (formato nekkora-m365/1, M365Segredo), lidos uma vez na partida com
+      # credenciais TEMPORARIAS do ambiente (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN). Com ele, client-id,
+      # certificado e certificado-senha ficam vazios
+      segredo-aws: ${NEKKORA_M365_SEGREDO_AWS:}
+      aws-regiao: ${NEKKORA_M365_AWS_REGIAO:}
+    # destinatarios do transporte real: lista fechada de enderecos exatos, OBRIGATORIA em ensaio-* (homologacao)
+    destinatarios-permitidos: ${NEKKORA_MAIL_DESTINATARIOS_PERMITIDOS:}
+    # chave PROPRIA da fila (021), separada da do MFA; vazia = a fila usa a do MFA. Com ela, a fila ainda decifra o que foi
+    # cifrado com a do MFA
+    fila:
+      chave-id: ${NEKKORA_FILA_CHAVE_ID:}
+      chaves: ${NEKKORA_FILA_CHAVES:}
   emergency-notices:
     enabled: ${NEKKORA_AVISOS_EMERGENCIA:false}
   # cadastro web da identidade (Missao 1, DC-17.7): DESLIGADO por padrao; desligado, as rotas de cadastro respondem 404

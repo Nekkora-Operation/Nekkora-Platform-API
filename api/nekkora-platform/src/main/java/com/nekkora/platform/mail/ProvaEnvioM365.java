@@ -4,6 +4,8 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.UUID;
 
+import com.nekkora.platform.secrets.AwsSecretsManager;
+
 /**
  * Prova de homologacao do transporte real (missao 002, PR 5; desenho de 2026-10-11, §3.3.1 e §8): UMA mensagem de teste
  * por execucao, com o aplicativo e o certificado do ambiente, pelo remetente INFORMADO.
@@ -11,8 +13,11 @@ import java.util.UUID;
  * <li>{@code --remetente no-reply@nekkora.com}: exigido 202 (aceite; a entrega e conferida na caixa controlada);</li>
  * <li>{@code --remetente <outra caixa do tenant>}: exigida a RECUSA (o RBAC para Aplicacoes so autoriza a no-reply).</li>
  * </ul>
- * Uso, no container da Platform, com as variaveis {@code NEKKORA_M365_TENANT}, {@code NEKKORA_M365_CLIENT},
- * {@code NEKKORA_M365_CERT} e {@code NEKKORA_M365_CERT_SENHA} (e {@code NEKKORA_M365_PROXY}, se a saida for por proxy):
+ * Uso, no container da Platform, com as variaveis do ambiente: {@code NEKKORA_M365_TENANT} e, para cliente e certificado,
+ * {@code NEKKORA_M365_SEGREDO_AWS} e {@code NEKKORA_M365_AWS_REGIAO} (com as credenciais temporarias da AWS) ou
+ * {@code NEKKORA_M365_CLIENT}, {@code NEKKORA_M365_CERT} e {@code NEKKORA_M365_CERT_SENHA}; {@code NEKKORA_M365_PROXY}, se a
+ * saida for por proxy. Com {@code NEKKORA_MAIL_DESTINATARIOS_PERMITIDOS} definida (obrigatoria em {@code ensaio-*}), o
+ * {@code --para} tem de estar na lista; fora dela, nada e enviado (codigo 64):
  * <pre>
  * java -cp app.jar -Dloader.main=com.nekkora.platform.mail.ProvaEnvioM365 org.springframework.boot.loader.launch.PropertiesLauncher \
  *      --remetente no-reply@nekkora.com --para &lt;caixa controlada&gt;
@@ -38,12 +43,17 @@ public final class ProvaEnvioM365 {
             err.println("uso: --remetente <caixa> --para <caixa controlada>");
             return 64;
         }
-        String cert = env.get("NEKKORA_M365_CERT");
-        String pass = env.get("NEKKORA_M365_CERT_SENHA");
-        GraphMailTransport t = new GraphMailTransport(new GraphMailTransport.Config(env.get("NEKKORA_M365_TENANT"), env.get("NEKKORA_M365_CLIENT"),
-                sender, cert == null ? null : Path.of(cert), pass == null ? new char[0] : pass.toCharArray(), Duration.ofSeconds(10),
-                envOr(env, "NEKKORA_M365_LOGIN_URL", "https://login.microsoftonline.com"), envOr(env, "NEKKORA_M365_GRAPH_URL", "https://graph.microsoft.com"),
-                env.get("NEKKORA_M365_PROXY")));
+        java.util.Set<String> allowed = DestinatariosPermitidos.ler(env.get("NEKKORA_MAIL_DESTINATARIOS_PERMITIDOS"));
+        String environment = env.get("NEKKORA_AMBIENTE");
+        if (allowed.isEmpty() && environment != null && CaixaHomologacaoMailSender.AMBIENTE.matcher(environment).matches()) {
+            err.println("ensaio-* exige NEKKORA_MAIL_DESTINATARIOS_PERMITIDOS");
+            return 64;
+        }
+        if (!allowed.isEmpty() && !DestinatariosPermitidos.permitido(allowed, to)) {
+            err.println("--para fora de NEKKORA_MAIL_DESTINATARIOS_PERMITIDOS: nada enviado");
+            return 64;
+        }
+        GraphMailTransport t = transport(env, sender);
         UUID id = UUID.randomUUID();
         MailTransport.Delivery d = t.deliverAs(sender, new MailTransport.Message(id, to, "Prova de homologacao do e-mail da Nekkora",
                 "Mensagem de prova do transporte de e-mail da Nekkora (homologacao). Identificador: " + id
@@ -56,6 +66,31 @@ public final class ProvaEnvioM365 {
             case RETENTAVEL -> 3;
             case INCERTO -> 4;
         };
+    }
+
+    /** Cliente e certificado do segredo da AWS (se configurado) ou do arquivo PKCS#12; a mesma regra da partida da Platform. */
+    private static GraphMailTransport transport(java.util.Map<String, String> env, String sender) {
+        String tenant = env.get("NEKKORA_M365_TENANT");
+        String proxy = env.get("NEKKORA_M365_PROXY");
+        Duration timeout = Duration.ofSeconds(10);
+        String login = envOr(env, "NEKKORA_M365_LOGIN_URL", "https://login.microsoftonline.com");
+        String graph = envOr(env, "NEKKORA_M365_GRAPH_URL", "https://graph.microsoft.com");
+        String secretId = env.get("NEKKORA_M365_SEGREDO_AWS");
+        if (secretId != null && !secretId.isBlank()) {
+            AwsSecretsManager.Secret secret = new AwsSecretsManager(env.get("NEKKORA_M365_AWS_REGIAO"), AwsSecretsManager.Credentials.fromEnvironment(env),
+                    GraphMailTransport.client(timeout, proxy), timeout).getSecretString(secretId);
+            M365Segredo m = M365Segredo.ler(secret.value(), tenant);
+            try {
+                return new GraphMailTransport(new GraphMailTransport.Config(tenant, m.clientId(), sender, null, m.senha(), timeout, login, graph, proxy),
+                        m.pkcs12());
+            } finally {
+                m.apagar();
+            }
+        }
+        String cert = env.get("NEKKORA_M365_CERT");
+        String pass = env.get("NEKKORA_M365_CERT_SENHA");
+        return new GraphMailTransport(new GraphMailTransport.Config(tenant, env.get("NEKKORA_M365_CLIENT"), sender, cert == null ? null : Path.of(cert),
+                pass == null ? new char[0] : pass.toCharArray(), timeout, login, graph, proxy));
     }
 
     private static String arg(String[] args, String name) {

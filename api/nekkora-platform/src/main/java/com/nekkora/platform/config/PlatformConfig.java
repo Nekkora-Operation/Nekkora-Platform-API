@@ -4,8 +4,6 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.Base64;
-import java.util.HashMap;
-import java.util.Map;
 
 import javax.sql.DataSource;
 
@@ -138,12 +136,7 @@ public class PlatformConfig {
 
     @Bean
     SecretCipher secretCipher(PlatformProperties p) {
-        Map<String, byte[]> keys = new HashMap<>();
-        for (String pair : p.keys().aesById().split(",")) {
-            String[] kv = pair.trim().split(":", 2);
-            keys.put(kv[0], Base64.getDecoder().decode(kv[1]));
-        }
-        return new SecretCipher(p.keys().aesCurrent(), keys);
+        return new SecretCipher(p.keys().aesCurrent(), SecretCipher.parseKeys(p.keys().aesById()));
     }
 
     @Bean

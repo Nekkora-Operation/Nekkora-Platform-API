@@ -226,6 +226,57 @@ class GraphMailTransportTest {
                 .doesNotContain("falso-").doesNotContain(SENHA);
     }
 
+    /**
+     * Cliente e certificado do segredo da AWS (formato nekkora-m365/1): o PKCS#12 em base64 do segredo monta o mesmo transporte
+     * que o arquivo, a mesma assercao confere, e o segredo e apagado da memoria depois da partida.
+     */
+    @Test
+    void transportePeloSegredoNoFormatoNekkoraM365() throws Exception {
+        String secret = JSON.writeValueAsString(Map.of("formato", "nekkora-m365/1", "tenant_id", TENANT, "client_id", CLIENT,
+                "certificado_pkcs12", Base64.getEncoder().encodeToString(Files.readAllBytes(p12)), "certificado_senha", SENHA));
+        String tenant = TENANT;
+        M365Segredo m = M365Segredo.ler(secret, tenant);
+        GraphMailTransport t;
+        try {
+            t = new GraphMailTransport(new GraphMailTransport.Config(tenant, m.clientId(), "no-reply@exemplo.test", null, m.senha(), Duration.ofSeconds(5),
+                    fake.base(), fake.base()), m.pkcs12());
+        } finally {
+            m.apagar();
+        }
+        assertThat(m.pkcs12()).containsOnly(0);
+        assertThat(t.deliver(message()).result()).isEqualTo(MailTransport.Result.ACEITO);
+        assertThat(form(fake.tokenRequests.get(0).body())).containsEntry("client_id", CLIENT);
+        assertThat(t.certificateThumbprint())
+                .isEqualTo(Base64.getUrlEncoder().withoutPadding().encodeToString(MessageDigest.getInstance("SHA-256").digest(cert.getEncoded())));
+        assertThatThrownBy(() -> new GraphMailTransport(new GraphMailTransport.Config(TENANT, CLIENT, "r@x", null, SENHA.toCharArray(), Duration.ofSeconds(1),
+                fake.base(), fake.base()), new byte[0])).hasMessageContaining("certificado");
+    }
+
+    /**
+     * Comando de prova com a lista fechada de destinatarios: fora da lista, nada e enviado (64, nenhum pedido ao Graph); em
+     * ensaio-* sem lista, tambem 64. Na lista, o envio segue.
+     */
+    @Test
+    void comandoDeProvaRespeitaAListaDeDestinatarios() {
+        Map<String, String> base = Map.of("NEKKORA_M365_TENANT", TENANT, "NEKKORA_M365_CLIENT", CLIENT, "NEKKORA_M365_CERT", p12.toString(),
+                "NEKKORA_M365_CERT_SENHA", SENHA, "NEKKORA_M365_LOGIN_URL", fake.base(), "NEKKORA_M365_GRAPH_URL", fake.base());
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        java.io.PrintStream ps = new java.io.PrintStream(out, true, StandardCharsets.UTF_8);
+        Map<String, String> ensaioSemLista = new HashMap<>(base);
+        ensaioSemLista.put("NEKKORA_AMBIENTE", "ensaio-api-v1-003");
+        assertThat(ProvaEnvioM365.run(new String[] {"--remetente", "no-reply@exemplo.test", "--para", "controle@exemplo.test"}, ensaioSemLista, ps, ps))
+                .isEqualTo(64);
+        Map<String, String> comLista = new HashMap<>(ensaioSemLista);
+        comLista.put("NEKKORA_MAIL_DESTINATARIOS_PERMITIDOS", "controle@exemplo.test");
+        assertThat(ProvaEnvioM365.run(new String[] {"--remetente", "no-reply@exemplo.test", "--para", "outro@exemplo.test"}, comLista, ps, ps))
+                .isEqualTo(64);
+        assertThat(fake.tokenRequests).as("nada saiu").isEmpty();
+        assertThat(fake.sendRequests).isEmpty();
+        assertThat(ProvaEnvioM365.run(new String[] {"--remetente", "no-reply@exemplo.test", "--para", "Controle@exemplo.test"}, comLista, ps, ps)).isZero();
+        assertThat(fake.sendRequests).hasSize(1);
+        assertThat(out.toString(StandardCharsets.UTF_8)).contains("fora de NEKKORA_MAIL_DESTINATARIOS_PERMITIDOS").contains("ensaio-* exige");
+    }
+
     private static Map<String, String> form(String body) {
         Map<String, String> m = new HashMap<>();
         for (String kv : body.split("&")) {
