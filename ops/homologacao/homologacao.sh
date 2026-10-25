@@ -1046,6 +1046,205 @@ jornada-ativacao)
     exec bash "$AQUI/testes/jornada_ativacao.sh"
     ;;
 
+# ==================================================================================================== email-real
+# Transporte REAL de e-mail num ensaio-* LIBERADO com 021/022 (missao do e-mail real em homologacao; relatorio
+# docs/relatorios/2026-10-24-email-real-homologacao.md). Pre-condicoes conferidas ANTES de qualquer mudanca. Segredos no
+# diretorio de segredos do ambiente, subpasta m365/ (fora do Git): aws.env (credenciais TEMPORARIAS), destinatarios.txt
+# (lista fechada), fila.env (chave propria da fila, gerada aqui), entrada/ (mensagens recebidas salvas como .eml).
+#   fila           SOMENTE LEITURA: mensagens da mail_outbox por estado e tipo (nunca destinatario nem conteudo)
+#   imagens        imagens da Platform/Portal/operacao do commit atual SEM mudar migrations (copia do ambiente igual ao
+#                  repositorio e nenhuma versao nova); servicos parados; depois "subir"
+#   ligar          troca compose.caixa.yml por compose.m365.yml: exige imagens com a leitura do segredo da AWS, credenciais
+#                  temporarias validas por >= 20 min, lista de destinatarios valida e a fila SEM mensagens pendentes ou em
+#                  envio (nada antigo sai). Sobe o proxy-m365 e recria a Platform; se ela nao subir, desliga sozinho
+#   desligar       INTERRUPCAO: para o proxy-m365 primeiro (corta toda a saida), volta ao transporte de homologacao, apaga
+#                  as credenciais temporarias; a fila fica como esta (relatada)
+#   prova <remetente> <destinatario>   ProvaEnvioM365 na Platform (F1 aceito pela no-reply, F2 recusado por outra caixa)
+#   conferir-eml <arquivo>             cabecalhos de uma mensagem recebida (remetente, destinatario, SPF, DKIM, DMARC)
+#   jornada [--somente R1,...]         testes/jornada_email_real.py, com a varredura de logs das jornadas da API
+email-real)
+    carrega_ambiente "${2:?id}"
+    prepara_funcoes
+    sub="${3:?fila|imagens|ligar|desligar|prova|conferir-eml|jornada}"
+    [[ "$HOMOLOG_ID" =~ ^ensaio- ]] || falha "email-real so em ambiente descartavel (id ensaio-*)"
+    [[ "${HOMOLOG_ATE:-015}" =~ ^02[12]$ ]] || falha "email-real exige ambiente com 021 ou 022 (fila de e-mail)"
+    M="$HOMOLOG_SEGREDOS_HOST/m365"; EVM="$AQUI/saidas/$HOMOLOG_ID/email-real"
+    mkdir -p "$EVM"; (umask 077; mkdir -p "$M/entrada")
+    INST="$(date -u +%Y%m%dT%H%M%SZ)"
+    fila_estado() {
+        admin_sql nekkora <<'SQL'
+SELECT CASE state WHEN 1 THEN 'PENDENTE' WHEN 2 THEN 'ENVIANDO' WHEN 3 THEN 'ACEITO' WHEN 4 THEN 'RECUSADO' WHEN 5 THEN 'INCERTO' WHEN 6 THEN 'EXPIRADO' END
+       || '|' || kind || '|' || count(*) || '|' || to_char(min(created_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+  FROM public.mail_outbox GROUP BY state, kind ORDER BY state, kind;
+SQL
+    }
+    fila_ativas() { admin_sql nekkora -c "SELECT count(*) FROM public.mail_outbox WHERE state IN (1, 2)"; }
+    troca_extra() { local de="$1" para="$2"; printf '%s\n' "$HOMOLOG_COMPOSE_EXTRA" | sed -e "s#$de#$para#"; }
+    grava_ambiente() {   # transporte e lista de sobreposicoes novos; o anterior fica em email-real/ambiente.env.<instante>
+        cp "$ESTADO" "$EVM/ambiente.env.$INST"
+        sed -e "s#^HOMOLOG_TRANSPORTE=.*#HOMOLOG_TRANSPORTE=$1#" -e "s#^HOMOLOG_COMPOSE_EXTRA=.*#HOMOLOG_COMPOSE_EXTRA=\"$2\"#" "$EVM/ambiente.env.$INST" > "$ESTADO"
+    }
+    espera_gateway() {
+        local CA="$HOMOLOG_SEGREDOS_HOST/tls/ca.crt" a=""
+        for i in $(seq 1 60); do
+            a="$(curl -s --ssl-no-revoke -o /dev/null -w '%{http_code}' --cacert "$CA" --resolve "$HOMOLOG_HOST:$HOMOLOG_PORTA:127.0.0.1" "https://$HOMOLOG_HOST:$HOMOLOG_PORTA/api/v1/csrf" || true)"
+            [ "$a" = 200 ] && return 0
+            sleep 2
+        done
+        return 1
+    }
+    case "$sub" in
+    fila)
+        compose up -d --wait postgres > /dev/null 2>&1 || falha "postgres nao subiu"
+        { echo "fila_em=$INST transporte=${HOMOLOG_TRANSPORTE:-} commit=$HOMOLOG_COMMIT versoes_ate=$HOMOLOG_ATE"
+          echo "total=$(admin_sql nekkora -c 'SELECT count(*) FROM public.mail_outbox') pendentes_ou_enviando=$(fila_ativas)"
+          echo "estado|tipo|quantidade|mais_antiga"; fila_estado; } | tee "$EVM/fila-$INST.txt"
+        ;;
+    imagens)
+        [ "${HOMOLOG_TRANSPORTE:-}" = homologacao ] || falha "imagens so com o transporte de homologacao (desligue o real antes)"
+        compose up -d --wait postgres redis > /dev/null 2>&1 || falha "postgres/redis nao subiram"
+        confere_liberacao "$TRAVA" > /dev/null || falha "ambiente BLOQUEADO: nada alterado (homologacao.sh estado $HOMOLOG_ID)"
+        EVID="$AQUI/saidas/$HOMOLOG_ID"
+        div=""
+        for f in "$EVID/migracoes"/*.sql; do
+            n="$(basename "$f")"; r="$REPO/db/migrations/$n"
+            [ -f "$r" ] && [ "$(sha256sum < "$f" | cut -c1-64)" = "$(sha256sum < "$r" | cut -c1-64)" ] || div="$div ${n%%_*}"
+        done
+        [ -z "$div" ] || falha "copia de migrations do ambiente diferente do repositorio:$div; nada alterado"
+        for r in "$REPO"/db/migrations/[0-9][0-9][0-9]_*.sql; do
+            v="$(basename "$r")"; v="${v%%_*}"
+            [ "$((10#$v))" -le "$((10#$HOMOLOG_ATE))" ] || falha "o repositorio tem a $v, posterior ao ambiente ($HOMOLOG_ATE): use atualizar; nada alterado"
+        done
+        . "$AQUI/lib/fontes_imagens.sh"
+        guarda_fontes_imagens "$REPO" >&2 || falha "entradas das imagens da API diferentes do commit; nada alterado"
+        NOVO_COMMIT="$(commit_fontes_imagens "$REPO")"; [ -n "$NOVO_COMMIT" ] || falha "commit das imagens nao identificado; nada alterado"
+        AT="$EVM/imagens-$INST"; mkdir -p "$AT"
+        cp "$ESTADO" "$AT/ambiente.env.antes"
+        echo "imagens=$INST commit_antes=$HOMOLOG_COMMIT commit_depois=$NOVO_COMMIT migracoes=iguais (ate $HOMOLOG_ATE)" > "$AT/registro.txt"
+        HOMOLOG_COMMIT="$NOVO_COMMIT"; export HOMOLOG_COMMIT
+        registro_fontes_imagens "$REPO" "$HOMOLOG_COMMIT" > "$AT/fontes_imagens.txt"
+        (cd "$REPO/api" && ./mvnw -q -DskipTests package && ./mvnw -q -DskipTests test-compile -pl nekkora-platform) > "$AT/build.txt" 2>&1 || falha "build (ver $AT/build.txt)"
+        compose build platform portal >> "$AT/build.txt" 2>&1 || falha "build das imagens"
+        (cd "$REPO/api" && ./mvnw -q -pl nekkora-ops dependency:copy-dependencies -DincludeScope=runtime -DoutputDirectory=target/dep-operacao \
+            && ./mvnw -q -pl nekkora-ops test-compile) >> "$AT/build.txt" 2>&1 || falha "build do job de operacao"
+        compose --profile operacao build operacao >> "$AT/build.txt" 2>&1 || falha "imagem do job de operacao"
+        compose stop platform portal gateway > "$AT/parada_servicos.txt" 2>&1 || falha "parada dos servicos"
+        sed -e "s/^HOMOLOG_COMMIT=.*/HOMOLOG_COMMIT=$NOVO_COMMIT/" "$AT/ambiente.env.antes" > "$ESTADO"
+        echo "IMAGENS: $HOMOLOG_ID com o commit $NOVO_COMMIT (migrations iguais); servicos parados. Proximo: homologacao.sh subir $HOMOLOG_ID"
+        ;;
+    ligar)
+        [ "${HOMOLOG_TRANSPORTE:-}" = homologacao ] || falha "o transporte atual nao e o de homologacao (${HOMOLOG_TRANSPORTE:-}); nada alterado"
+        case " $HOMOLOG_COMPOSE_EXTRA " in *" compose.caixa.yml "*) ;; *) falha "ambiente sem compose.caixa.yml; nada alterado";; esac
+        git -C "$REPO" cat-file -e "$HOMOLOG_COMMIT:api/nekkora-platform/src/main/java/com/nekkora/platform/secrets/AwsSecretsManager.java" 2>/dev/null \
+            || falha "imagens do ambiente ($HOMOLOG_COMMIT) sem a leitura do segredo da AWS: rode email-real $HOMOLOG_ID imagens e subir; nada alterado"
+        [ -f "$M/aws.env" ] || falha "credenciais temporarias ausentes ($M/aws.env); nada alterado"
+        python "$AQUI/lib/email_real.py" credenciais "$M/aws.env" --minimo 20 || falha "credenciais temporarias recusadas; nada alterado"
+        [ -f "$M/destinatarios.txt" ] || falha "lista de destinatarios ausente ($M/destinatarios.txt); nada alterado"
+        HOMOLOG_M365_DESTINATARIOS="$(python "$AQUI/lib/email_real.py" destinatarios "$M/destinatarios.txt")" || falha "lista de destinatarios recusada; nada alterado"
+        export HOMOLOG_M365_DESTINATARIOS
+        compose up -d --wait postgres redis > /dev/null 2>&1 || falha "postgres/redis nao subiram"
+        confere_liberacao "$TRAVA" > /dev/null || falha "ambiente BLOQUEADO: nada alterado (homologacao.sh estado $HOMOLOG_ID)"
+        { echo "fila_antes_de_ligar=$INST"; echo "estado|tipo|quantidade|mais_antiga"; fila_estado; } | tee "$EVM/fila-antes-de-ligar-$INST.txt"
+        [ "$(fila_ativas)" = 0 ] || falha "fila com mensagens PENDENTES ou ENVIANDO (testes anteriores): nada alterado, nada enviado"
+        python "$AQUI/lib/email_real.py" chave-fila "$M/fila.env" || falha "chave da fila"
+        EXTRA_M365="$(troca_extra compose.caixa.yml compose.m365.yml)"
+        CF="-f $COMPOSE_ARQ"; for x in $EXTRA_M365; do CF="$CF -f $(mixed "$AQUI/$x")"; done
+        docker compose $CF config -q 2>/dev/null || falha "sobreposicao m365 nao renderiza; nada alterado"
+        grava_ambiente m365 "$EXTRA_M365"
+        COMPOSE_F="$CF"; export COMPOSE_F
+        INI="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        compose up -d proxy-m365 > /dev/null 2>&1 || { bash "$0" email-real "$HOMOLOG_ID" desligar; falha "proxy-m365 nao subiu (desligado de novo)"; }
+        compose up -d --force-recreate --no-deps platform > /dev/null 2>&1 || true
+        if ! espera_gateway; then
+            compose logs --no-color --since "$INI" platform 2>&1 | grep -oE 'evento=mail\.[a-z_]+[^"]*|IllegalStateException: [^"]{0,200}|Failure: [^"]{0,200}' | sort -u > "$EVM/ligar-falhou-$INST.txt" || true
+            bash "$0" email-real "$HOMOLOG_ID" desligar
+            falha "Platform nao subiu com o transporte real (eventos em $EVM/ligar-falhou-$INST.txt); desligado de novo"
+        fi
+        compose logs --no-color --since "$INI" platform 2>&1 | grep -oE 'evento=mail\.(segredo_carregado|fila_cifra|destinatarios_restritos|certificado_vence_em)[^"]*' \
+            | sort -u | tee "$EVM/ligar-$INST.txt"
+        grep -q 'evento=mail.segredo_carregado origem=aws-secrets-manager' "$EVM/ligar-$INST.txt" && grep -q 'evento=mail.destinatarios_restritos' "$EVM/ligar-$INST.txt" \
+            || { bash "$0" email-real "$HOMOLOG_ID" desligar; falha "partida sem os eventos esperados (segredo, destinatarios); desligado de novo"; }
+        echo "TRANSPORTE REAL LIGADO em $HOMOLOG_ID (proxy-m365 e Platform recriada). Interromper: homologacao.sh email-real $HOMOLOG_ID desligar"
+        ;;
+    desligar)
+        INI="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        compose stop proxy-m365 > /dev/null 2>&1 || true   # 1o: corta toda a saida (Entra, Graph, Secrets Manager)
+        compose rm -f proxy-m365 > /dev/null 2>&1 || true
+        if [ "${HOMOLOG_TRANSPORTE:-}" = m365 ]; then
+            EXTRA_CX="$(troca_extra compose.m365.yml compose.caixa.yml)"
+            grava_ambiente homologacao "$EXTRA_CX"
+            COMPOSE_F="-f $COMPOSE_ARQ"; for x in $EXTRA_CX; do COMPOSE_F="$COMPOSE_F -f $(mixed "$AQUI/$x")"; done; export COMPOSE_F
+            compose up -d --force-recreate --no-deps platform > /dev/null 2>&1 || echo "AVISO: Platform nao recriada com o transporte de homologacao (homologacao.sh subir $HOMOLOG_ID)" >&2
+        fi
+        rm -f "$M/aws.env"
+        { echo "desligado_em=$INST (proxy-m365 parado e removido; credenciais temporarias apagadas; transporte de homologacao)"
+          echo "estado|tipo|quantidade|mais_antiga"; fila_estado; } | tee "$EVM/desligar-$INST.txt"
+        ;;
+    prova)
+        [ "${HOMOLOG_TRANSPORTE:-}" = m365 ] || falha "prova exige o transporte real ligado (email-real $HOMOLOG_ID ligar)"
+        rem="${4:?remetente}"; para="${5:?destinatario controlado}"
+        rc=0
+        out="$(compose exec -T platform java -Dloader.main=com.nekkora.platform.mail.ProvaEnvioM365 -cp /app/app.jar \
+            org.springframework.boot.loader.launch.PropertiesLauncher --remetente "$rem" --para "$para" 2>&1)" || rc=$?
+        # so as linhas da propria prova (desfecho, status, identificador): nada de pilha nem de ambiente
+        printf '%s\n' "$out" | tr -d '\r' | grep -E '^prova_envio |fora de NEKKORA|ensaio-\* exige|^uso:' | tee -a "$EVM/prova-$INST.txt" || true
+        echo "remetente=$( [ "$rem" = no-reply@nekkora.com ] && echo no-reply@nekkora.com || echo outra-caixa) codigo=$rc" | tee -a "$EVM/prova-$INST.txt"
+        exit "$rc"
+        ;;
+    conferir-eml)
+        arq="${4:?arquivo .eml}"
+        rc=0
+        python "$AQUI/lib/email_real.py" conferir-eml "$arq" --destinatarios "$M/destinatarios.txt" > "$EVM/eml-$INST.txt" || rc=$?
+        cat "$EVM/eml-$INST.txt"
+        exit "$rc"
+        ;;
+    jornada)
+        [ "${HOMOLOG_TRANSPORTE:-}" = m365 ] || falha "jornada exige o transporte real ligado (email-real $HOMOLOG_ID ligar)"
+        confere_liberacao "$TRAVA" > /dev/null || falha "ambiente BLOQUEADO (homologacao.sh estado $HOMOLOG_ID)"
+        export HOMOLOG_BASH="${HOMOLOG_BASH:-$(mixed "$(command -v bash)")}"
+        [ -f "C:/Program Files/Git/bin/bash.exe" ] && HOMOLOG_BASH="C:/Program Files/Git/bin/bash.exe"
+        INICIO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        J="$EVM/jornada-$INST"; mkdir -p "$J"
+        SJ="$M/jornada-$INST"; (umask 077; mkdir -p "$SJ")
+        rc=0
+        python "$AQUI/testes/jornada_email_real.py" --alvo "https://$HOMOLOG_HOST:$HOMOLOG_PORTA" --ca "$(mixed "$HOMOLOG_SEGREDOS_HOST/tls/ca.crt")" \
+            --evid "$(mixed "$J")" --vistos "$(mixed "$SJ/vistos.txt")" --psql "admin_sql nekkora" --entrada "$(mixed "$M/entrada")" \
+            --destinatarios "$(mixed "$M/destinatarios.txt")" "${@:4}" || rc=$?
+        # varredura (como em jornadas-api): nenhum valor visto (senha, token, codigo, endereco) nos logs nem na evidencia, e
+        # nenhum valor das credenciais temporarias e da chave da fila
+        compose logs --no-color --since "$INICIO" platform portal gateway proxy-m365 > "$SJ/logs_servicos.txt" 2>&1 || falha "logs dos servicos nao coletados (varredura impossivel)"
+        python - "$M/aws.env" "$M/fila.env" >> "$SJ/vistos.txt" <<'PY' || true
+import sys
+for p in sys.argv[1:]:
+    try:
+        for l in open(p, encoding='utf-8'):
+            if '=' in l:
+                v = l.split('=', 1)[1].strip()
+                for x in [v] + v.split(':')[1:]:
+                    if len(x) >= 12:
+                        print(x)
+    except OSError:
+        pass
+PY
+        n_vistos=0; achados=0
+        while IFS= read -r v; do
+            [ -n "$v" ] || continue
+            n_vistos=$((n_vistos + 1))
+            if grep -qF -- "$v" "$SJ/logs_servicos.txt" || grep -rqF -- "$v" "$J" "$EVM"/*.txt 2>/dev/null; then achados=$((achados + 1)); fi
+        done < <(sort -u "$SJ/vistos.txt" 2>/dev/null)
+        { echo "valores_vistos=$n_vistos (senhas, tokens, codigos, enderecos, credenciais temporarias, chave da fila)"
+          echo "linhas_de_log_varridas=$(wc -l < "$SJ/logs_servicos.txt" | tr -d ' ') (platform, portal, gateway, proxy-m365 desde $INICIO)"
+          echo "achados=$achados"
+          [ "$achados" = 0 ] && echo "VARREDURA_OK" || echo "VARREDURA_FALHOU"; } | tee "$J/varredura.txt"
+        [ "$achados" = 0 ] || rc=1
+        if grep -q 'evento=mail.graph status=202' "$SJ/logs_servicos.txt"; then echo "controle_positivo=OK (evento de aceite do Graph no log da Platform)" | tee -a "$J/varredura.txt"
+        else echo "controle_positivo=FALHOU" | tee -a "$J/varredura.txt"; rc=1; fi
+        exit "$rc"
+        ;;
+    *) falha "subcomando invalido";;
+    esac
+    ;;
+
 # =============================================================================================== validar-config
 # Validacao ESTATICA (P1b): nao cria container, rede, volume nem imagem. Gera a configuracao num diretorio temporario
 # e confere com "docker compose config" (so renderiza) usando valores de exemplo, sem segredo.

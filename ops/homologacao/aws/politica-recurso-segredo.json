@@ -1,0 +1,16 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "LeituraSoPelaFuncaoDaHomologacao",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "secretsmanager:GetSecretValue",
+      "Resource": "*",
+      "Condition": {
+        "StringNotEquals": { "aws:PrincipalArn": "arn:aws:iam::${CONTA_AWS}:role/nekkora-homologacao-platform-m365-leitura" },
+        "Null": { "aws:PrincipalServiceName": "true" }
+      }
+    }
+  ]
+}
