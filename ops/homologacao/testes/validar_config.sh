@@ -120,6 +120,9 @@ sys.exit(0 if ok else 1)
 PY"
 confere "m365: runner confere o teto antes de ligar e de cada prova, exige o evento de teto na partida e tem tentativas/autenticacao" "grep -q 'teto global de tentativas atingido' '$AQUI/homologacao.sh' && grep -q 'prova_envio teto_atingido' '$AQUI/homologacao.sh' && grep -q 'evento=mail.teto_tentativas_configurado maximo=\$TETO_MAX ' '$AQUI/homologacao.sh' && grep -q '^    tentativas)$' '$AQUI/homologacao.sh' && grep -q '^    autenticacao)$' '$AQUI/homologacao.sh' && grep -q 'ProvaAutenticacaoM365' '$AQUI/homologacao.sh'"
 confere "m365: m365-aws.sh so apaga a chave no confirmar (publicar sem trap de remocao)" "! grep -q \"trap 'apagar'\" '$AQUI/aws/m365-aws.sh' && grep -q '^confirmar()' '$AQUI/aws/m365-aws.sh' && grep -q 'chave_privada_no_disco=MANTIDA' '$AQUI/aws/m365-aws.sh'"
+confere "m365: com o transporte real, a lista de destinatarios vale para todo comando compose (prova, autenticacao, desligar)" "grep -q 'compose.m365.yml interpola a lista em TODO comando compose' '$AQUI/homologacao.sh' && grep -q 'HOMOLOG_M365_DESTINATARIOS=\"\$(python \"\$AQUI/lib/email_real.py\" destinatarios' '$AQUI/homologacao.sh'"
+confere "m365: desligar confere pelo Docker que o proxy parou e para pelo rotulo se o compose falhar" "grep -q 'proxy-m365 CONTINUA no ar' '$AQUI/homologacao.sh' && grep -q '^    proxy_no_ar()' '$AQUI/homologacao.sh'"
+confere "m365: prova e autenticacao sem conversao de caminho do Git Bash no docker exec" "[ \"\$(grep -c 'out=\"\$(MSYS_NO_PATHCONV=1 compose exec -T platform java' '$AQUI/homologacao.sh')\" = 2 ]"
 confere "m365: regiao do segredo igual no compose e no proxy" "grep -q 'NEKKORA_M365_AWS_REGIAO: sa-east-1' '$M365' && grep -q 'secretsmanager.sa-east-1.amazonaws.com' '$AQUI/proxy/squid.conf'"
 confere "m365: sobreposicao usada SO pela acao email-real do runner (troca com a caixa)" "python - '$AQUI/homologacao.sh' <<'PY'
 import re, sys

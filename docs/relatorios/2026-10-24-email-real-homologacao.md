@@ -9,9 +9,9 @@
 | Etapa da missão | Situação |
 |---|---|
 | 1. Conferir a implementação | **Feita** (§2). Achados: a fila usa a chave do MFA; não havia lista de destinatários; não havia leitura de segredo da AWS. Os três foram corrigidos (§3). |
-| 2. Preparar a configuração externa | **Etapas 1 e 2 executadas em 2026-10-25, com autorização (§4.9).** Recursos do Microsoft 365 e da AWS criados e conferidos; `confirmado=OK`. **A etapa 3 (transporte e envios) depende de nova autorização.** |
+| 2. Preparar a configuração externa | **Etapas 1 e 2 executadas em 2026-10-25, com autorização (§4.9).** Recursos do Microsoft 365 e da AWS criados e conferidos; `confirmado=OK`. |
 | 3. Preparar o ambiente de ensaio | Imagens trocadas para `364848f` na L4 (§4.9), migrations iguais, fila 0, tentativas 0 de 20. O transporte continua o simulado até a etapa 3. |
-| 4. Homologação real | **Não iniciada.** Roteiro pronto (§6). |
+| 4. Homologação real | **Etapa 3 executada em 2026-10-25, com autorização (§6.1):** A1, F1, F2 (403), F3, F6 e R1–R5 aprovados; **8 de 20 tentativas**; transporte real desligado no fim. |
 | 5. Entrega | PR aberto (sem merge). Este relatório será completado com as evidências da execução real. |
 
 ## 1. Base dos PRs: #17 e #19 não chegaram à `main`
@@ -419,6 +419,30 @@ O ambiente foi deixado como estava (parado).
 
    Opcionalmente, o `Get-MessageTrace` do Exchange Online. Não afirmo entrega **exatamente uma vez**: um INCERTO nunca é repetido sozinho, e um aceite não é entrega.
 12. **Desligar:** `email-real ensaio-api-v1-003 desligar`. O registro de tentativas fica: ele é da homologação inteira.
+
+### 6.1 Execução da etapa 3 (2026-10-25, 13:21–13:46 UTC)
+
+Evidências sanitizadas em `ops/homologacao/saidas/ensaio-api-v1-003/email-real/` (fora do Git); os `.eml` originais ficam só em `<segredos>/m365/entrada/`. Varredura das evidências: nenhum endereço pessoal, token ou credencial.
+
+| Passo | Resultado |
+|---|---|
+| Antes | tentativas 0 de 20; fila sem pendentes; lista fechada com um item `local+*@gmail.com` da titular |
+| W3b + E (`ligar`) | eventos `segredo_carregado origem=aws-secrets-manager`, `destinatarios_restritos quantidade=1`, `teto_tentativas_configurado maximo=20 usadas=0`, `fila_cifra chave=propria`, `certificado_vence_em dias=364` |
+| A1 | `token=OBTIDO tid=OK aplicativo=OK aud=https://graph.microsoft.com papeis_de_aplicacao=0`; segredo lido pela função através do proxy; 0 tentativas |
+| F1 | `ACEITO status=202` como no-reply (tentativa 1) |
+| F2 | `RECUSADO status=403` como a outra caixa do tenant (tentativa 2): recusa pelo RBAC com a mesma credencial |
+| F1 recebido (F3, F6) | remetente `Nekkora <no-reply@nekkora.com>`, um destinatário da lista, sem cópia; `spf=pass`, `dkim=pass d=nekkora.com`, `dmarc=pass` no receptor externo (`p=none`) |
+| R1–R5 (`jornada`) | **49 casos, 0 falhas**. Cada mensagem nos três estados: ENFILEIRADA, ACEITA (estado 3, 202) e RECEBIDA (SPF, DKIM e DMARC pass). R1: confirmação 204 sem sessão, reuso recusado (400). R2: entrada com o fator. R3: troca 204, reuso recusado, sessões revogadas, MFA preservado, aviso recebido sem link. R4: entrada com código, aviso recebido, reuso recusado. R5: saída cortada, mensagem PENDENTE sem saída, Platform parada e religada, ACEITA depois do reinício (2 tentativas) e recebida |
+| Varredura da jornada | 63 valores vistos (senhas, tokens, códigos, endereços, credenciais, chave da fila) contra 100 linhas de log e as evidências: **0 achados**; controle positivo OK |
+| Tentativas | **8 de 20**: prova 2 (ACEITO 202, RECUSADO 403), Platform 6 (ACEITO 202 ×5, RETENTÁVEL sem conexão ×1); nenhuma sem desfecho; registro preservado |
+| `desligar` | proxy parado e removido (conferido pelo Docker); transporte simulado de volta; credenciais temporárias apagadas (arquivo e cache da CLI) |
+| Fila no fim | ACEITO: cadastro 1, recuperação 2, aviso de senha 1, aviso de código 1; nenhuma PENDENTE, ENVIANDO ou INCERTA |
+
+**Correções do runner encontradas na execução** (a primeira A1 retornou 1 sem enviar e sem contar tentativa):
+- com o transporte real, `compose.m365.yml` exige a lista de destinatários em **todo** comando compose, mas o runner só a definia no `ligar`. A `prova`, a `autenticacao` e **a parada do proxy no `desligar`** falhariam (esta em silêncio, pelo `|| true`). Agora a lista é definida sempre que o transporte é o real, e o `desligar` confere pelo Docker que o proxy parou, parando-o pelo rótulo se o compose falhar;
+- no Git Bash, o argumento `/app/app.jar` do `docker exec` era reescrito como caminho do Windows (`MSYS_NO_PATHCONV=1` na `prova` e na `autenticacao`).
+
+Verificações estáticas novas no `validar-config`. A segunda chamada de credenciais devolveu as do cache da CLI (mesmo vencimento); apagar o cache da função antes do W3b força credenciais novas.
 
 ## 7. Procedimento para interromper os envios
 

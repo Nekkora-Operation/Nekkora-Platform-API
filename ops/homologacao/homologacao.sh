@@ -1090,6 +1090,12 @@ SQL
     # teto global de tentativas: o maximo vem da sobreposicao versionada (nao do ambiente), as vagas do registro em disco
     TETO_MAX="$(sed -n 's/^ *NEKKORA_MAIL_TENTATIVAS_MAXIMO: "\([0-9]*\)"$/\1/p' "$AQUI/compose.m365.yml")"
     tentativas_usadas() { ls "$M/tentativas" 2>/dev/null | grep -c '^tentativa-[0-9][0-9][0-9]$' || true; }
+    # compose.m365.yml interpola a lista em TODO comando compose (exec, stop, logs), nao so no ligar: sem ela a prova, a
+    # autenticacao e ate a parada do proxy no desligar falhariam
+    if [ "${HOMOLOG_TRANSPORTE:-}" = m365 ] && [ -f "$M/destinatarios.txt" ]; then
+        HOMOLOG_M365_DESTINATARIOS="$(python "$AQUI/lib/email_real.py" destinatarios "$M/destinatarios.txt" 2>/dev/null)" && export HOMOLOG_M365_DESTINATARIOS
+    fi
+    proxy_no_ar() { docker ps -q --filter "label=nekkora.homologacao=$HOMOLOG_ID" --filter "label=com.docker.compose.service=proxy-m365" | grep -c . || true; }
     troca_extra() { local de="$1" para="$2"; printf '%s\n' "$HOMOLOG_COMPOSE_EXTRA" | sed -e "s#$de#$para#"; }
     grava_ambiente() {   # transporte e lista de sobreposicoes novos; o anterior fica em email-real/ambiente.env.<instante>
         cp "$ESTADO" "$EVM/ambiente.env.$INST"
@@ -1114,7 +1120,7 @@ SQL
     autenticacao)
         [ "${HOMOLOG_TRANSPORTE:-}" = m365 ] || falha "autenticacao exige o transporte real ligado (email-real $HOMOLOG_ID ligar)"
         rc=0
-        out="$(compose exec -T platform java -Dloader.main=com.nekkora.platform.mail.ProvaAutenticacaoM365 -cp /app/app.jar \
+        out="$(MSYS_NO_PATHCONV=1 compose exec -T platform java -Dloader.main=com.nekkora.platform.mail.ProvaAutenticacaoM365 -cp /app/app.jar \
             org.springframework.boot.loader.launch.PropertiesLauncher --token 2>&1)" || rc=$?
         printf '%s\n' "$out" | tr -d '\r' | grep -E '^autenticacao_|^uso:|obrigatorios' | tee "$EVM/autenticacao-$INST.txt" || true
         echo "codigo=$rc tentativas_usadas=$(tentativas_usadas) (a prova de autenticacao nao envia nem conta)" | tee -a "$EVM/autenticacao-$INST.txt"
@@ -1201,6 +1207,11 @@ SQL
         INI="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
         compose stop proxy-m365 > /dev/null 2>&1 || true   # 1o: corta toda a saida (Entra, Graph, Secrets Manager)
         compose rm -f proxy-m365 > /dev/null 2>&1 || true
+        # conferido pelo Docker, nao pelo compose: se o compose falhar, o proxy para pelo rotulo do ambiente
+        if [ "$(proxy_no_ar)" != 0 ]; then
+            docker ps -q --filter "label=nekkora.homologacao=$HOMOLOG_ID" --filter "label=com.docker.compose.service=proxy-m365" | xargs -r docker rm -f > /dev/null
+        fi
+        [ "$(proxy_no_ar)" = 0 ] || falha "proxy-m365 CONTINUA no ar: pare o container a mano (docker ps) antes de qualquer outra acao"
         if [ "${HOMOLOG_TRANSPORTE:-}" = m365 ]; then
             EXTRA_CX="$(troca_extra compose.m365.yml compose.caixa.yml)"
             grava_ambiente homologacao "$EXTRA_CX"
@@ -1219,7 +1230,7 @@ SQL
             exit 65
         fi
         rc=0
-        out="$(compose exec -T platform java -Dloader.main=com.nekkora.platform.mail.ProvaEnvioM365 -cp /app/app.jar \
+        out="$(MSYS_NO_PATHCONV=1 compose exec -T platform java -Dloader.main=com.nekkora.platform.mail.ProvaEnvioM365 -cp /app/app.jar \
             org.springframework.boot.loader.launch.PropertiesLauncher --remetente "$rem" --para "$para" 2>&1)" || rc=$?
         # so as linhas da propria prova (desfecho, status, identificador): nada de pilha nem de ambiente
         printf '%s\n' "$out" | tr -d '\r' | grep -E '^prova_envio |fora de NEKKORA|ensaio-\* exige|^uso:|teto de tentativas' | tee -a "$EVM/prova-$INST.txt" || true
