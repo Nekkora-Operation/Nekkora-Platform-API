@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # E2E entre processos da API v1: nginx (origem unica, TLS, limit_req) -> Platform (nekkora_platform) e Portal
-# (processo e papel nekkora_portal proprios) -> PostgreSQL 16 (001-021, instalacao limpa) e Redis.
+# (processo e papel nekkora_portal proprios) -> PostgreSQL 16 (001-023, instalacao limpa) e Redis.
 #
 # Migrations pelo MODELO DO MIGRADOR suportado pela 016 (revisao 5), como RealDatabase: nao vao direto para o
 # initdb.d (seriam aplicadas pelo superusuario); db/bootstrap/aplicar_como_migrador.sh as aplica como
@@ -49,9 +49,9 @@ done
 docker network inspect "${E2E_PROJETO}_e2e" >/dev/null 2>&1 && falha "rede ${E2E_PROJETO}_e2e ja existe"
 
 mkdir -p "$SAIDA/migracoes_montadas/migracoes" "$SAIDA/migracoes_montadas/bootstrap" "$SAIDA/tls"
-# Migrations: 001-021 escolhidas explicitamente (instalacao limpa), numa subpasta (o entrypoint so executa o primeiro
+# Migrations: 001-023 escolhidas explicitamente (instalacao limpa), numa subpasta (o entrypoint so executa o primeiro
 # nivel do initdb.d); o involucro 000_ chama o script do migrador apontando para ela.
-for n in $(seq -w 1 21); do
+for n in $(seq -w 1 23); do
     f=("$REPO"/db/migrations/0${n}_*.sql)
     [ -f "${f[0]}" ] && [ ${#f[@]} -eq 1 ] || falha "migration 0$n ausente ou ambigua"
     cp "${f[0]}" "$SAIDA/migracoes_montadas/migracoes/"
@@ -122,14 +122,14 @@ export E2E_PG_URL="jdbc:postgresql://127.0.0.1:$E2E_PG_PORTA/nekkora"
 export E2E_COMPOSE="$(cygpath -w "$AQUI/compose.e2e.yml" 2>/dev/null || echo "$AQUI/compose.e2e.yml")"
 set +e
 # CrossProcessE2E primeiro (ordem alfabetica): IdentityCredentialsE2E (credenciais da identidade, missao 002) e
-# LinkedAccountsE2E (contas vinculadas, P3/P4) depois da rajada da borda
-(cd "$API" && sh ./mvnw -q -pl nekkora-platform -am test -Dtest='CrossProcessE2E,IdentityCredentialsE2E,LinkedAccountsE2E' -Dsurefire.runOrder=alphabetical \
+# LinkedAccountsE2E (contas vinculadas, P3/P4) e AccessInvitationsE2E (acessos, 023) depois da rajada da borda
+(cd "$API" && sh ./mvnw -q -pl nekkora-platform -am test -Dtest='AccessInvitationsE2E,CrossProcessE2E,IdentityCredentialsE2E,LinkedAccountsE2E' -Dsurefire.runOrder=alphabetical \
     -Dsurefire.failIfNoSpecifiedTests=false) > "$SAIDA/cliente_e2e.txt" 2>&1
 rc=$?
 set -e
-cp "$API"/nekkora-platform/target/surefire-reports/*CrossProcessE2E.txt "$API"/nekkora-platform/target/surefire-reports/*IdentityCredentialsE2E.txt "$API"/nekkora-platform/target/surefire-reports/*LinkedAccountsE2E.txt "$SAIDA/" 2>/dev/null || true
+cp "$API"/nekkora-platform/target/surefire-reports/*AccessInvitationsE2E.txt "$API"/nekkora-platform/target/surefire-reports/*CrossProcessE2E.txt "$API"/nekkora-platform/target/surefire-reports/*IdentityCredentialsE2E.txt "$API"/nekkora-platform/target/surefire-reports/*LinkedAccountsE2E.txt "$SAIDA/" 2>/dev/null || true
 compose logs --no-color > "$SAIDA/logs_stack.txt"
-grep -E "Tests run" "$SAIDA"/*CrossProcessE2E.txt "$SAIDA"/*IdentityCredentialsE2E.txt "$SAIDA"/*LinkedAccountsE2E.txt || true
+grep -E "Tests run" "$SAIDA"/*AccessInvitationsE2E.txt "$SAIDA"/*CrossProcessE2E.txt "$SAIDA"/*IdentityCredentialsE2E.txt "$SAIDA"/*LinkedAccountsE2E.txt || true
 echo "saidas: $SAIDA"
 echo "remocao: docker compose -f \"$AQUI/compose.e2e.yml\" down   (com as mesmas variaveis E2E_*; ou: docker compose -p $E2E_PROJETO down)"
 [ "$rc" -eq 0 ] || falha "cliente E2E falhou (rc=$rc) - veja $SAIDA/cliente_e2e.txt"
