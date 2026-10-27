@@ -17,11 +17,11 @@
 #   * servidor no ar: docker exec <c> env NEKKORA_DB=... NEKKORA_DESDE=... sh /nekkora/aplicar_como_migrador.sh
 # Variaveis: NEKKORA_MIGRACOES (padrao /nekkora/migracoes), NEKKORA_DB (padrao $POSTGRES_DB ou nekkora),
 #   NEKKORA_ADMIN (padrao $POSTGRES_USER ou nekkora), NEKKORA_DESDE/NEKKORA_ATE (versoes, inclusive; padrao todas),
-#   NEKKORA_ELEVAR (SUPERUSER; padrao "011 012 013 016 017 018 019 020 022": as tres de ops/homologacao/implantacao/elevacao.txt,
-#   a 016 e as candidatas 017-020 e 022, cujos cabecalhos exigem superusuario - a 018 substitui funcoes dos donos da 016 e da
-#   017; a 019 e a 020 criam funcoes do dono da 017; a 022 cria papel e transfere funcoes ao dono operacional da 016. A 021
-#   nao tem janela. 016-020 tem linha vinculada ao ensaio-api-v1-002 em elevacao.txt (missao PLATFORM-API-V1-003); a 022
-#   ainda nao), NEKKORA_BYPASS (BYPASSRLS; padrao "014": a 014 so precisa atravessar a RLS
+#   NEKKORA_ELEVAR (SUPERUSER; padrao "011 012 013 016 017 018 019 020 022 023": as tres de ops/homologacao/implantacao/elevacao.txt,
+#   a 016 e as candidatas 017-020, 022 e 023, cujos cabecalhos exigem superusuario - a 018 substitui funcoes dos donos da 016 e
+#   da 017; a 019, a 020 e a 023 criam funcoes do dono da 017; a 022 cria papel e transfere funcoes ao dono operacional da 016.
+#   A 021 nao tem janela. 016-020 tem linha vinculada ao ensaio-api-v1-002 em elevacao.txt (missao PLATFORM-API-V1-003); a 022
+#   e a 023 ainda nao), NEKKORA_BYPASS (BYPASSRLS; padrao "014": a 014 so precisa atravessar a RLS
 #   forcada de user_sessions), NEKKORA_REGISTRO (padrao /tmp/nekkora_janelas.txt). Uma versao nao pode estar nas duas.
 # MARCADOR de inicializacao completa (P4-R2a-C, C4): no inicio o comentario do banco e APAGADO; so no fim do sucesso, se
 # esta execucao aplicou ate a ULTIMA migration disponivel no diretorio, grava "nekkora-inicializacao-completa versao=NNN".
@@ -38,7 +38,7 @@ N_DB="${NEKKORA_DB:-${POSTGRES_DB:-nekkora}}"
 N_ADMIN="${NEKKORA_ADMIN:-${POSTGRES_USER:-nekkora}}"
 N_DESDE="${NEKKORA_DESDE:-000}"
 N_ATE="${NEKKORA_ATE:-999}"
-N_ELEVAR="${NEKKORA_ELEVAR:-011 012 013 016 017 018 019 020 022}"
+N_ELEVAR="${NEKKORA_ELEVAR:-011 012 013 016 017 018 019 020 022 023}"
 N_BYPASS="${NEKKORA_BYPASS-014}"   # sem ":": NEKKORA_BYPASS="" (definida e vazia) = nenhuma janela BYPASSRLS
 N_REG="${NEKKORA_REGISTRO:-/tmp/nekkora_janelas.txt}"
 
