@@ -8,6 +8,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -27,7 +29,9 @@ import com.nekkora.ops.testsupport.OpsBanco;
  *
  * <p>Limites exatos por {@code p_agora} explicito nas funcoes internas (superusuario, so nesta base de teste), em
  * {@code limite - 1 us}, {@code limite} e {@code limite + 1 s}, repetidos com TimeZone de sessao que atravessa a mudanca
- * de horario de verao (Europe/Berlin, 25/10/2026, dentro das janelas contadas a partir de hoje).
+ * de horario de verao. A fixture e deslocada para tras ate que a janela de 720 h comece 10 dias antes da ultima mudanca de
+ * horario de Europe/Berlin ({@link #recuoAteAntesDaMudancaDeHorario}): a travessia vale em qualquer data de execucao (antes,
+ * as janelas eram contadas a partir de hoje e so atravessavam a mudanca de 25/10/2026).
  */
 class Revisao4PrazosEImpedimentosIT {
 
@@ -35,6 +39,16 @@ class Revisao4PrazosEImpedimentosIT {
     static final Cenarios C = new Cenarios(DB);
 
     private static final List<String> FUSOS = List.of("UTC", "Europe/Berlin", "America/Sao_Paulo", "America/New_York");
+
+    /**
+     * Recuo que leva um instante de agora para 10 dias antes da ultima mudanca de horario de Europe/Berlin: a janela de
+     * 720 h (30 dias) a partir dele atravessa a mudanca, qualquer que seja a data de execucao.
+     */
+    private static Duration recuoAteAntesDaMudancaDeHorario() {
+        Instant agora = Instant.now();
+        Instant mudanca = ZoneId.of("Europe/Berlin").getRules().previousTransition(agora).getInstant();
+        return Duration.between(mudanca.minus(Duration.ofDays(10)), agora);
+    }
 
     /** Consulta sob um TimeZone de sessao. */
     private static String sob(String fuso, String sql, Object... params) {
@@ -62,6 +76,10 @@ class Revisao4PrazosEImpedimentosIT {
     void item1CarenciaDe720HorasNosLimitesEEmQualquerFuso() {
         Cenarios.Alvo al = C.alvo();
         UUID c = DB.contatoNovo(al.org(), DB.membro(al.org()));
+        // todos os contatos da organizacao recuam juntos: as idades relativas (os dois do cenario 31 dias mais velhos) ficam
+        Duration recuo = recuoAteAntesDaMudancaDeHorario();
+        DB.semTriggers("UPDATE ops.org_authorized_contacts SET created_at = created_at - interval '" + recuo.toSeconds() + " seconds'"
+                + ", channel_set_at = channel_set_at - interval '" + recuo.toSeconds() + " seconds' WHERE organization_id = '" + al.org().id() + "'");
         String base = "(SELECT channel_set_at FROM ops.org_authorized_contacts WHERE contact_id = ?)";
         for (String fuso : FUSOS) {
             assertThat(sob(fuso, "SELECT coalesce(ops.contato_inelegivel(?, ?, " + base + " + interval '720 hours' - interval '1 microsecond'), 'ELEGIVEL')",
@@ -96,6 +114,11 @@ class Revisao4PrazosEImpedimentosIT {
             Cenarios.exigirOk(eq.e().executar(s), "executar " + i);
             DB.fatorConfirmado(org.id(), alvos.get(i));
             solicitacoes.add(s);
+        }
+        // as tres execucoes recuam juntas (intervalos entre elas preservados)
+        Duration recuo = recuoAteAntesDaMudancaDeHorario();
+        for (UUID s : solicitacoes) {
+            DB.recuarSolicitacao(s, recuo);
         }
         UUID s0 = solicitacoes.get(0);
         String e0 = "(SELECT executed_at FROM ops.ops_mfa_recovery_requests WHERE request_id = ?)";
