@@ -576,7 +576,8 @@ caixa)
             cx cat "/caixa/$arq" ;;
         controle)
             regra="${*:4}"
-            [[ "$regra" =~ ^(proximo\ (ACEITO|ENFILEIRADO|RECUSADO|INCERTO|EXCECAO)|destinatario\ [0-9a-f]{64}\ (ACEITO|ENFILEIRADO|RECUSADO|INCERTO|EXCECAO))$ ]] \
+            # SEGURAR (so como "proximo"): retem a proxima entrega sem publicar (B10, varredura com espera real)
+            [[ "$regra" =~ ^(proximo\ (ACEITO|ENFILEIRADO|RECUSADO|INCERTO|EXCECAO|SEGURAR)|destinatario\ [0-9a-f]{64}\ (ACEITO|ENFILEIRADO|RECUSADO|INCERTO|EXCECAO))$ ]] \
                 || falha "regra invalida"
             # mesma trava do transporte (diretorio criado atomicamente); anexa a regra e libera
             # umask 077: o controle criado aqui nasce 600, como os demais arquivos da caixa (achado do P1c)

@@ -41,6 +41,11 @@ import org.slf4j.LoggerFactory;
  * <DESFECHO>} (consumida UMA vez) e {@code destinatario <sha256> <DESFECHO>}; padrao ACEITO. A leitura e o consumo
  * acontecem sob a trava {@code controle.trava} (diretorio criado atomicamente; a ferramenta do runner usa a mesma
  * trava), dentro de um monitor da JVM: dois envios concorrentes nunca consomem a mesma regra.
+ *
+ * <p><b>SEGURAR</b> (B10, varredura com espera real): o aviso NAO e publicado e a entrega fica retida, como um transporte
+ * que nao responde, por ate {@link #RETENCAO_PADRAO} (a tentativa continua ENTREGANDO no banco). Serve para o runner derrubar
+ * a Platform no meio da entrega e deixar a tentativa parada de verdade. Se o processo nao cair, o desfecho e INCERTO
+ * (a tentativa vai a DESCONHECIDO), nunca aceite.
  */
 public final class CaixaHomologacaoMailSender implements MailSender {
 
@@ -49,13 +54,23 @@ public final class CaixaHomologacaoMailSender implements MailSender {
     private static final DateTimeFormatter INSTANTE = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmssSSS'Z'").withZone(java.time.ZoneOffset.UTC);
     private static final long ESPERA_TRAVA_MS = 5_000;
 
-    enum Desfecho { ACEITO, ENFILEIRADO, RECUSADO, INCERTO, EXCECAO }
+    enum Desfecho { ACEITO, ENFILEIRADO, RECUSADO, INCERTO, EXCECAO, SEGURAR }
+
+    /** Retencao maxima do SEGURAR (o runner derruba a Platform muito antes). */
+    public static final java.time.Duration RETENCAO_PADRAO = java.time.Duration.ofMinutes(3);
 
     private final Path caixa;
     private final String ambiente;
     private final Object monitor = new Object();
+    private final java.time.Duration retencao;
 
     public CaixaHomologacaoMailSender(Path caixa, String ambiente) {
+        this(caixa, ambiente, RETENCAO_PADRAO);
+    }
+
+    /** Retencao do SEGURAR configuravel so para o teste do transporte. */
+    CaixaHomologacaoMailSender(Path caixa, String ambiente, java.time.Duration retencao) {
+        this.retencao = retencao;
         if (ambiente == null || !AMBIENTE.matcher(ambiente).matches()) {
             throw new IllegalStateException("transporte de homologacao exige nekkora.environment=ensaio-*");
         }
@@ -96,6 +111,17 @@ public final class CaixaHomologacaoMailSender implements MailSender {
     public Outcome sendEmergencyNotice(Kind kind, UUID organization, String recipient, String confirmTokenOrNull, String contestTokenOrNull,
                                        UUID attemptId) {
         Desfecho d = desfecho(sha256(recipient));
+        if (d == Desfecho.SEGURAR) {
+            // retida sem publicar nada: o runner derruba o processo agora (a tentativa fica ENTREGANDO, parada de verdade)
+            LOG.warn("evento=mail.caixa.segurando tipo={} org={} simulado=sim", kind, organization);
+            try {
+                Thread.sleep(retencao.toMillis());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            // nada entregue: nada na caixa nem no indice (o indice so lista mensagens publicadas)
+            return Outcome.INCERTO;
+        }
         String json = json(kind, organization, recipient, null, confirmTokenOrNull, contestTokenOrNull, attemptId);
         String nome = "avisos/" + attemptId + ".json";
         boolean repeticao = false;
@@ -118,6 +144,7 @@ public final class CaixaHomologacaoMailSender implements MailSender {
             case RECUSADO -> Outcome.RECUSADO_DEFINITIVO;
             case INCERTO -> Outcome.INCERTO;
             case EXCECAO -> throw new IllegalStateException("excecao simulada do transporte de homologacao");
+            case SEGURAR -> throw new IllegalStateException("SEGURAR tratado antes da publicacao");
         };
     }
 
