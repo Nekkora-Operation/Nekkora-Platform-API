@@ -83,29 +83,6 @@ public final class AdminService {
         });
     }
 
-    /** Revoga a concessao externa (permissao external_access.manage). Idempotente se ja revogada. */
-    public void revokeGrant(UUID org, ValidSession actor, String actorToken, UUID grant) {
-        runAdminAction(org, j -> {
-            Failure f = authorize(j, org, actor, actorToken, "external_access.manage", null);
-            if (f != null) {
-                return f;
-            }
-            Integer status = j.sql("SELECT status FROM public.client_workspace_grants WHERE organization_id = ? AND grant_id = ? FOR UPDATE")
-                    .param(org).param(grant).query(Integer.class).optional().orElse(null);
-            if (status == null) {
-                return Failure.TARGET_NOT_FOUND;
-            }
-            if (status != 4) {
-                // revoked_at ajustado ao created_at se o relogio do banco recuou (CHECK da 003), como nas sessoes
-                j.sql("""
-                        UPDATE public.client_workspace_grants SET status = 4, revoked_at = greatest(clock_timestamp(), created_at), revoked_by_membership_id = ?
-                         WHERE organization_id = ? AND grant_id = ?
-                        """).param(actor.membershipId()).param(org).param(grant).update();
-            }
-            return null;
-        });
-    }
-
     /** Motivo codificado e obrigatorio do reset administrativo (016, D5). Codigos permanentes de mfa_events.reason_code. */
     public enum ResetReason {
         DISPOSITIVO_PERDIDO(1), DISPOSITIVO_TROCADO(2), SUSPEITA_COMPROMETIMENTO(3), OUTRO(4);

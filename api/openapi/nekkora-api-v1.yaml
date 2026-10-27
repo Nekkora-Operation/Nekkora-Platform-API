@@ -6,7 +6,7 @@ info:
     Contrato HTTP DEFINITIVO da API v1 (DC-14, decisao da responsavel em 2026-10-03: este arquivo e a fonte; o anexo da
     proposta GAP-02/03/06 deixa de ser a fonte). Cobre todas as rotas publicadas: identidade, sessao e MFA (contrato 8.7),
     administracao minima, recuperacao emergencial de MFA (016), permissoes (GAP-02), administracao de leitura (GAP-03),
-    leitura interna do produto (GAP-06) e o portal externo (013). Conferido contra o codigo (mapeamentos dos controladores)
+    leitura interna do produto (GAP-06), acessos (convites, papeis, vinculo, concessoes e auditoria; 023) e o portal externo (013). Conferido contra o codigo (mapeamentos dos controladores)
     e contra os testes HTTP (D-INV-06). x-decisoes: decisoes da responsavel (DC-xx do contrato GAP-02/03/06) que fundamentam a
     operacao; nenhuma esta pendente. Corpo de erro sempre {"error":"<codigo>"} (contrato 8.7 §5.2). Rotas internas de
     leitura: ordem 401 -> 400 -> 403 -> 404; paginacao keyset sobre o estado atual com cursor assinado (secoes 1.4-1.5 do
@@ -27,6 +27,8 @@ tags:
   - name: GAP-02 permissoes
   - name: GAP-03 administracao
   - name: GAP-06 leitura interna
+  - name: Acessos
+    description: 'Convites, papeis, retirada de vinculo, concessoes e auditoria (contrato de 2026-10-27; 023)'
   - name: Portal externo
 
 paths:
@@ -673,6 +675,35 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /api/v1/invitations/accept:
+    post:
+      tags: [Entrada geral (identidade)]
+      operationId: acceptInvitation
+      summary: 'Aceita convite pela identidade (step-up de ate 5 min); nenhuma vinculacao por igualdade de e-mail'
+      description: >
+        Contrato de 2026-10-27, secao 4.3. Sessao de identidade nao restrita COM step-up (/api/v1/auth/step-up) e CSRF
+        dela. A organizacao vai no corpo e chega antes do token: o hash so e procurado dentro dela. Uma transacao que chama so
+        identity_accept_invitation (023): identidade -> sessao -> organizacao (ATIVA) -> convite -> contas; hora medida depois
+        dos locks; reconfere step-up, prazo, e-mail do convite = e-mail da identidade e a AUTORIDADE DO EMISSOR no instante do
+        aceite. Sem conta na organizacao: cria conta interna ativa (e-mail verificado da identidade), vinculo, o papel do
+        convite (atribuido pelo emissor) e a ligacao (link_channel convite). Conta ligada com vinculo retirado: readmissao.
+        Destinataria sem identidade: conclui antes o cadastro (/api/v1/signup); o convite nao cadastra. Convite inexistente,
+        vencido, revogado, ja aceito, de outro e-mail, de emissor sem autoridade ou organizacao nao ativa: 404 unico, sem efeito.
+        409: already_member (ja membro ativo), account_exists (conta da organizacao com o e-mail, nao ligada a esta identidade:
+        use /api/v1/links/*), account_unavailable (conta ligada suspensa ou vinculo inativo nao retirado). Depois, a troca
+        (/api/v1/sessions/organization). Chaves nekkora.convites.enabled e nekkora.entrada-geral.enabled: desligada, 404.
+      security: [ { identitySessionCookie: [], csrfHeader: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/InvitationAcceptRequest' } } } }
+      responses:
+        '200': { description: 'Aceito', content: { application/json: { schema: { $ref: '#/components/schemas/InvitationAccepted' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { description: 'Origin/CSRF da sessao de identidade invalido, ou sessao restrita a recuperacao (DC-17.13)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
+        '404': { description: 'Convite invalido para esta identidade (resposta unica), ou convites desligados', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: not_found } } } }
+        '409': { description: 'already_member, account_exists ou account_unavailable', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: account_exists } } } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /api/v1/o/{org}/me:
     get:
       tags: [Identidade e sessao]
@@ -744,6 +775,9 @@ paths:
       tags: [Administracao]
       operationId: revokeClientGrant
       summary: 'Revoga a concessao externa (external_access.manage); idempotente'
+      description: >
+        Desde a 023: trava a organizacao antes da concessao, audita (access_events 13, so quando muda) e aceita concessao
+        PENDENTE (cancelada antes da aprovacao; antes da 023 o CHECK da 003 fazia esta rota responder 500 para pendente).
       security: [ { sessionCookie: [], csrfHeader: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' }, { name: grant, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
       responses:
@@ -752,6 +786,289 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/invitations:
+    post:
+      tags: [Acessos]
+      operationId: issueInvitation
+      summary: 'Emite convite para a organizacao (org.manage e autoridade sobre o papel; step-up)'
+      description: >
+        Contrato de 2026-10-27, secao 4 (023). Corpo: email e, opcional, um papel: ORG_ADMIN (sem workspaceId) ou
+        WORKSPACE_ADMIN/OPERATOR/VIEWER com workspaceId de workspace ativo da organizacao. Exige org.manage, a permissao de
+        atribuir o papel (role.assign_admin_roles ou role.assign_operator_viewer) e step-up de ate 5 min na mesma sessao,
+        reconferidos depois do lock da organizacao. Prazo de 7 dias; token de 32 bytes so no e-mail (fila cifrada, link
+        /o/{org}/convite#token=), o banco guarda o SHA-256. Um convite aberto por organizacao e e-mail: outro aberto e no prazo
+        -> 409 (use o reenvio); um aberto vencido e fechado (motivo EXPIRADO) no mesmo ato. Destinataria ja cadastrada na
+        organizacao -> 409, exceto a readmissao (conta ligada a identidade, ativa, com vinculo retirado). Auditoria
+        (access_events 1). Chave nekkora.convites.enabled com a entrada geral: desligada, 404.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/InvitationRequest' } } } }
+      responses:
+        '201': { description: 'Convite emitido (sem token na resposta)', content: { application/json: { schema: { $ref: '#/components/schemas/InvitationCreated' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: 'Convite inexistente ou de outra organizacao, ou convites desligados (nekkora.convites.enabled e nekkora.entrada-geral.enabled)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: not_found } } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    get:
+      tags: [Acessos]
+      operationId: listInvitations
+      summary: 'Convites da organizacao (org.manage), sem token nem hash; ate 200, os mais recentes'
+      description: >
+        state=pending (padrao): abertos no prazo; state=all: todos, com o estado derivado (PENDENTE, EXPIRADO, ACEITO, REVOGADO).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: state, in: query, required: false, schema: { type: string, enum: [pending, all], default: pending }, description: 'outro valor -> 400' } ]
+      responses:
+        '200': { description: 'Lista', content: { application/json: { schema: { $ref: '#/components/schemas/InvitationList' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: 'Convite inexistente ou de outra organizacao, ou convites desligados (nekkora.convites.enabled e nekkora.entrada-geral.enabled)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: not_found } } } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/invitations/{invitation}/revoke:
+    post:
+      tags: [Acessos]
+      operationId: revokeInvitation
+      summary: 'Revoga convite (org.manage, sem step-up); idempotente'
+      description: >
+        Ja revogado: 204 sem efeito novo. Aceito: 409. Auditoria (access_events 2).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: invitation, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      responses:
+        '204': { description: 'Revogado' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: 'Convite inexistente ou de outra organizacao, ou convites desligados (nekkora.convites.enabled e nekkora.entrada-geral.enabled)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: not_found } } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/invitations/{invitation}/resend:
+    post:
+      tags: [Acessos]
+      operationId: resendInvitation
+      summary: 'Reenvia: revoga o convite aberto (motivo REENVIADO) e emite um novo com token e prazo novos (como a emissao; step-up)'
+      description: >
+        So convite aberto (no prazo ou vencido); aceito, revogado ou ja substituido: 409. O token anterior deixa de valer no mesmo ato. Auditoria (access_events 3).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: invitation, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      responses:
+        '201': { description: 'Convite novo', content: { application/json: { schema: { $ref: '#/components/schemas/InvitationCreated' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: 'Convite inexistente ou de outra organizacao, ou convites desligados (nekkora.convites.enabled e nekkora.entrada-geral.enabled)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: not_found } } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/users/{user}/roles:
+    get:
+      tags: [Acessos]
+      operationId: listMemberRoles
+      summary: 'Papeis ativos do membro (org.manage)'
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: user, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      responses:
+        '200': { description: 'Papeis de organizacao e de workspace', content: { application/json: { schema: { $ref: '#/components/schemas/MemberRoles' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    post:
+      tags: [Acessos]
+      operationId: assignRole
+      summary: 'Atribui papel (autoridade sobre o papel; step-up); repeticao devolve a existente'
+      description: >
+        Contrato, secao 5. ORG_ADMIN e WORKSPACE_ADMIN: role.assign_admin_roles organizacional. OPERATOR e VIEWER:
+        role.assign_operator_viewer organizacional ou de WORKSPACE_ADMIN no MESMO workspace. Nunca o proprio ator (403). Alvo
+        com vinculo e conta ativos (senao 409); de outra organizacao ou workspace inexistente: 404. A 023 confere a mesma regra
+        no banco (42501 -> 403). Auditoria (access_events 5) e aviso ao alvo.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: user, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RoleRequest' } } } }
+      responses:
+        '200': { description: 'Atribuicao (nova ou ja existente)', content: { application/json: { schema: { $ref: '#/components/schemas/RoleAssignment' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/role-assignments/{assignment}/replace:
+    post:
+      tags: [Acessos]
+      operationId: replaceRole
+      summary: 'Altera o papel no mesmo escopo (revoga e cria numa transacao; step-up)'
+      description: >
+        Autoridade sobre o papel atual e o novo. Mesmo papel: sem efeito. Novo papel ja ativo: 409. Escopo diferente: 400. Auditoria (access_events 7, com o papel anterior).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: assignment, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RoleRequest' } } } }
+      responses:
+        '200': { description: 'Atribuicao nova', content: { application/json: { schema: { $ref: '#/components/schemas/RoleAssignment' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/role-assignments/{assignment}/revoke:
+    post:
+      tags: [Acessos]
+      operationId: revokeRole
+      summary: 'Revoga papel (autoridade sobre o papel, sem step-up); idempotente'
+      description: >
+        Ja revogada: 204 sem efeito. Nunca o proprio ator (403). Ultimo ORG_ADMIN efetivo: 403 (003). A permissao e relida
+        a cada requisicao: o papel deixa de valer na proxima, sem revogar sessoes. Auditoria (access_events 6) e aviso.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: assignment, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      responses:
+        '204': { description: 'Revogada' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/users/{user}/membership/revoke:
+    post:
+      tags: [Acessos]
+      operationId: revokeMembership
+      summary: 'Retira o vinculo (org.manage, sem step-up); idempotente'
+      description: >
+        Contrato, secao 6. Na mesma transacao: papeis ativos revogados, vinculo REVOKED, sessoes da organizacao da conta
+        revogadas e desafios invalidados. A conta e a ligacao com a identidade continuam (historico); sessoes, fator e codigos
+        da identidade NAO mudam. Nunca o proprio ator (403); ultimo ORG_ADMIN: 403. Auditoria (access_events 8) e aviso.
+        Readmissao: so por convite novo.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: user, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      responses:
+        '204': { description: 'Retirado' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/client-grants:
+    post:
+      tags: [Acessos]
+      operationId: createClientGrant
+      summary: 'Cria concessao PENDENTE (external_access.manage)'
+      description: >
+        Contrato, secao 7. Vinculo de cliente e cliente ativos, conta externa ativa e workspace ativo do MESMO cliente
+        (senao 404). Uma concessao nao revogada por vinculo e workspace: 409. Sem acesso ate a aprovacao. Auditoria (access_events 9).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GrantCreateRequest' } } } }
+      responses:
+        '201': { description: 'Concessao pendente', content: { application/json: { schema: { $ref: '#/components/schemas/GrantState' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    get:
+      tags: [GAP-03 administracao]
+      operationId: listClientGrants
+      x-estado: implementado (GAP-03; AdminReadController; AdminReadRoutesIT)
+      summary: Lista concessoes de acesso externo (exige external_access.manage)
+      description: >
+        EXCECAO documentada a regra geral do 404: clientId/workspaceId sao filtros de rota organizacional. Inexistente ou
+        de outra organizacao -> 200 com items vazio (nao revela existencia). UUID malformado -> 400.
+      x-ordenacao: createdAt desc, grantId desc
+      x-decisoes: [DC-05]
+      parameters:
+        - $ref: '#/components/parameters/Org'
+        - { name: status, in: query, schema: { type: array, maxItems: 4, uniqueItems: true, items: { $ref: '#/components/schemas/GrantStatus' } }, style: form, explode: true }
+        - { name: clientId, in: query, schema: { type: string, format: uuid }, description: 'inexistente ou de outra organizacao -> lista vazia; malformado -> 400' }
+        - { name: workspaceId, in: query, schema: { type: string, format: uuid }, description: 'inexistente ou de outra organizacao -> lista vazia; malformado -> 400' }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: Pagina de concessoes, content: { application/json: { schema: { $ref: '#/components/schemas/GrantPage' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/CatalogInconsistent' }
+
+  /api/v1/o/{org}/client-grants/{grant}/approve:
+    post:
+      tags: [Acessos]
+      operationId: approveClientGrant
+      summary: 'Aprova: PENDENTE -> ATIVA, aprovacao INITIAL (step-up)'
+      description: >
+        nextReviewAt futuro obrigatorio; expiresAt opcional, depois do inicio. Fora de PENDENTE: 409. A 023 confere a permissao do aprovador no banco. Auditoria (access_events 10).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: grant, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GrantApprovalRequest' } } } }
+      responses:
+        '200': { description: 'Concessao ativa', content: { application/json: { schema: { $ref: '#/components/schemas/GrantState' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/client-grants/{grant}/renew:
+    post:
+      tags: [Acessos]
+      operationId: renewClientGrant
+      summary: 'Renova: ATIVA ou SUSPENSA -> ATIVA, aprovacao RENEWAL (step-up)'
+      description: >
+        justification obrigatoria; os valores anteriores e novos ficam na aprovacao. Outros estados: 409. Auditoria (access_events 11).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: grant, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GrantApprovalRequest' } } } }
+      responses:
+        '200': { description: 'Concessao ativa', content: { application/json: { schema: { $ref: '#/components/schemas/GrantState' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/client-grants/{grant}/review:
+    post:
+      tags: [Acessos]
+      operationId: reviewClientGrant
+      summary: 'Revisao periodica: KEEP (step-up, nova data), SUSPEND ou REVOKE'
+      description: >
+        KEEP e SUSPEND so em ATIVA; REVOKE em ATIVA ou SUSPENSA; outros: 409. A revisao fica na tabela propria da 003. Auditoria (access_events 12, com a decisao).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: grant, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GrantReviewRequest' } } } }
+      responses:
+        '200': { description: 'Concessao depois da revisao', content: { application/json: { schema: { $ref: '#/components/schemas/GrantState' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
@@ -867,32 +1184,6 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/CatalogInconsistent' }
 
-  /api/v1/o/{org}/client-grants:
-    get:
-      tags: [GAP-03 administracao]
-      operationId: listClientGrants
-      x-estado: implementado (GAP-03; AdminReadController; AdminReadRoutesIT)
-      summary: Lista concessoes de acesso externo (exige external_access.manage)
-      description: >
-        EXCECAO documentada a regra geral do 404: clientId/workspaceId sao filtros de rota organizacional. Inexistente ou
-        de outra organizacao -> 200 com items vazio (nao revela existencia). UUID malformado -> 400.
-      x-ordenacao: createdAt desc, grantId desc
-      x-decisoes: [DC-05]
-      parameters:
-        - $ref: '#/components/parameters/Org'
-        - { name: status, in: query, schema: { type: array, maxItems: 4, uniqueItems: true, items: { $ref: '#/components/schemas/GrantStatus' } }, style: form, explode: true }
-        - { name: clientId, in: query, schema: { type: string, format: uuid }, description: 'inexistente ou de outra organizacao -> lista vazia; malformado -> 400' }
-        - { name: workspaceId, in: query, schema: { type: string, format: uuid }, description: 'inexistente ou de outra organizacao -> lista vazia; malformado -> 400' }
-        - $ref: '#/components/parameters/Cursor'
-        - $ref: '#/components/parameters/Limit'
-      responses:
-        '200': { description: Pagina de concessoes, content: { application/json: { schema: { $ref: '#/components/schemas/GrantPage' } } } }
-        '400': { $ref: '#/components/responses/InvalidRequest' }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '429': { $ref: '#/components/responses/RateLimited' }
-        '500': { $ref: '#/components/responses/CatalogInconsistent' }
-
   /api/v1/o/{org}/clients:
     get:
       tags: [GAP-03 administracao]
@@ -913,6 +1204,23 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/CatalogInconsistent' }
+
+  /api/v1/o/{org}/access-events:
+    get:
+      tags: [Acessos]
+      operationId: listAccessEvents
+      summary: 'Auditoria dos atos de acesso (org.manage), do mais recente ao mais antigo'
+      description: >
+        So identificadores e codigos (sem e-mail nem token). Paginacao keyset com cursor assinado, como as demais listas internas.
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/Limit' } ]
+      responses:
+        '200': { description: 'Pagina', content: { application/json: { schema: { $ref: '#/components/schemas/AccessEventPage' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   /api/v1/o/{org}/workspaces:
     get:
@@ -1198,7 +1506,7 @@ components:
     NoContent: { description: Sucesso sem corpo }
     ListLimitExceeded: { description: 'Lista acima do limite do portal, sem truncar (log evento=portal.list_limit_exceeded)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: internal_error } } } }
     Accepted: { description: Pedido aceito (sem enumeracao de contas) }
-    SignupDisabled: { description: 'Rota de identidade desligada pela sua chave (cadastro: nekkora.cadastro.enabled; login, MFA, organizacoes da identidade e troca: nekkora.entrada-geral.enabled; criacao de organizacao: nekkora.criacao-organizacao.enabled; vinculacao: nekkora.vinculacao.enabled - estas duas so abrem com a entrada geral ligada; todas desligadas por padrao): a rota nao existe', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: not_found } } } }
+    SignupDisabled: { description: 'Rota de identidade desligada pela sua chave (cadastro: nekkora.cadastro.enabled; login, MFA, organizacoes da identidade e troca: nekkora.entrada-geral.enabled; criacao de organizacao: nekkora.criacao-organizacao.enabled; vinculacao: nekkora.vinculacao.enabled; convites: nekkora.convites.enabled - estas tres so abrem com a entrada geral ligada; todas desligadas por padrao): a rota nao existe', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: not_found } } } }
     RestrictedIdentitySession: { description: 'Sessao de identidade restrita a recuperacao (DC-17.13): so cadastrar e confirmar o fator novo, e logout', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
     CsrfForbidden: { description: 'Origin diferente da origem publica ou X-CSRF-Token do contexto ausente/invalido', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
     ServiceUnavailable:
@@ -1210,6 +1518,7 @@ components:
     Forbidden: { description: 'Conta externa, sem a permissao exigida, ou Origin/CSRF invalido', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
     NotFound: { description: 'Inexistente, de outra organizacao ou sem acesso ao workspace (resposta identica)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: not_found } } } }
     CatalogInconsistent: { description: 'Codigo de papel, permissao ou rotulo de status desconhecido, ou permissao organizacional em papel de workspace (nunca omitido silenciosamente)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: internal_error } } } }
+    Conflict: { description: 'O estado atual impede o ato (convite pendente, destinataria ja cadastrada, concessao duplicada ou fora do estado, papel ja ativo, vinculo inativo)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: conflict } } } }
     RateLimited:
       description: Limite R7
       headers: { Retry-After: { schema: { type: integer } } }
@@ -1218,7 +1527,7 @@ components:
     Error:
       type: object
       required: [error]
-      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, rate_limited, internal_error, service_unavailable] } }
+      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable] } }
     WorkspacePermissionCode:
       description: 'Permissoes de workspace (13): podem aparecer em allWorkspaces e em atribuicoes de workspace.'
       type: string
@@ -1490,6 +1799,132 @@ components:
         status: { type: string, enum: [sessao_criada, sem_acesso] }
         csrfToken: { type: string, description: 'so em sessao_criada: CSRF da sessao de organizacao' }
     SignupResendRequest: { type: object, required: [email], properties: { email: { type: string } } }
+    InvitationRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, maxLength: 254, description: 'normalizado em minusculas; forma invalida -> 400' }
+        role: { $ref: '#/components/schemas/RoleCode' }
+        workspaceId: { type: string, format: uuid, description: 'obrigatorio com papel de workspace; proibido com ORG_ADMIN ou sem papel' }
+    InvitationCreated:
+      type: object
+      required: [invitationId, email, role, workspaceId, expiresAt]
+      properties:
+        invitationId: { type: string, format: uuid }
+        email: { type: string }
+        role: { type: [string, 'null'], enum: [ORG_ADMIN, WORKSPACE_ADMIN, OPERATOR, VIEWER, null] }
+        workspaceId: { type: [string, 'null'], format: uuid }
+        expiresAt: { type: string, format: date-time }
+    InvitationList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 200
+          items:
+            type: object
+            required: [invitationId, email, role, workspaceId, state, createdAt, expiresAt, acceptedAt, revokedAt, revokeReason, issuedBy, replacesInvitationId]
+            properties:
+              invitationId: { type: string, format: uuid }
+              email: { type: string }
+              role: { type: [string, 'null'] }
+              workspaceId: { type: [string, 'null'], format: uuid }
+              state: { type: string, enum: [PENDENTE, EXPIRADO, ACEITO, REVOGADO] }
+              createdAt: { type: string, format: date-time }
+              expiresAt: { type: string, format: date-time }
+              acceptedAt: { type: [string, 'null'], format: date-time }
+              revokedAt: { type: [string, 'null'], format: date-time }
+              revokeReason: { type: [string, 'null'], enum: [REVOGADO, REENVIADO, EXPIRADO, null] }
+              issuedBy: { type: string, format: uuid, description: 'conta (user_id) do emissor' }
+              replacesInvitationId: { type: [string, 'null'], format: uuid }
+    InvitationAcceptRequest:
+      type: object
+      required: [organizationId, token]
+      properties:
+        organizationId: { type: string, format: uuid, description: 'UUID canonico; malformado ou ausente -> 400' }
+        token: { type: string, description: 'token do link do convite (fragmento #token=); nunca vai a log' }
+    InvitationAccepted: { type: object, required: [organizationId], properties: { organizationId: { type: string, format: uuid } } }
+    RoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role: { $ref: '#/components/schemas/RoleCode' }
+        workspaceId: { type: string, format: uuid, description: 'na atribuicao: obrigatorio com papel de workspace; na alteracao: proibido (o escopo e o da atribuicao atual)' }
+    RoleAssignment:
+      type: object
+      required: [assignmentId, role, workspaceId]
+      properties:
+        assignmentId: { type: string, format: uuid }
+        role: { $ref: '#/components/schemas/RoleCode' }
+        workspaceId: { type: [string, 'null'], format: uuid }
+    MemberRoles:
+      type: object
+      required: [userId, membershipId, membershipState, organizationRoles, workspaceRoles]
+      properties:
+        userId: { type: string, format: uuid }
+        membershipId: { type: string, format: uuid }
+        membershipState: { type: string, enum: [PENDENTE, ATIVO, SUSPENSO, RETIRADO] }
+        organizationRoles: { type: array, items: { $ref: '#/components/schemas/RoleAssignment' } }
+        workspaceRoles: { type: array, items: { $ref: '#/components/schemas/RoleAssignment' } }
+    GrantCreateRequest:
+      type: object
+      required: [clientMembershipId, workspaceId]
+      properties:
+        clientMembershipId: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        startsAt: { type: string, format: date-time, description: 'padrao: agora' }
+        expiresAt: { type: string, format: date-time, description: 'depois de startsAt' }
+    GrantApprovalRequest:
+      type: object
+      required: [nextReviewAt]
+      properties:
+        nextReviewAt: { type: string, format: date-time, description: 'futuro' }
+        expiresAt: { type: string, format: date-time }
+        justification: { type: string, maxLength: 2000, description: 'obrigatoria na renovacao' }
+    GrantReviewRequest:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [KEEP, SUSPEND, REVOKE] }
+        notes: { type: string, maxLength: 2000 }
+        nextReviewAt: { type: string, format: date-time, description: 'obrigatorio e futuro em KEEP' }
+    GrantState:
+      type: object
+      required: [grantId, clientMembershipId, workspaceId, status, startsAt, expiresAt, nextReviewAt]
+      properties:
+        grantId: { type: string, format: uuid }
+        clientMembershipId: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        status: { type: string, enum: [PENDENTE, ATIVA, SUSPENSA, REVOGADA] }
+        startsAt: { type: string, format: date-time }
+        expiresAt: { type: [string, 'null'], format: date-time }
+        nextReviewAt: { type: [string, 'null'], format: date-time }
+    AccessEventPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        nextCursor: { type: [string, 'null'] }
+        items:
+          type: array
+          items:
+            type: object
+            required: [eventId, type, actorUserId, byInvitee, targetUserId, role, previousRole, workspaceId, invitationId, assignmentId, grantId, decision, correlationId, createdAt]
+            properties:
+              eventId: { type: string, format: uuid }
+              type: { type: string, enum: [CONVITE_EMITIDO, CONVITE_REVOGADO, CONVITE_REENVIADO, CONVITE_ACEITO, PAPEL_ATRIBUIDO, PAPEL_REVOGADO, PAPEL_ALTERADO, VINCULO_RETIRADO, CONCESSAO_CRIADA, CONCESSAO_APROVADA, CONCESSAO_RENOVADA, CONCESSAO_REVISADA, CONCESSAO_REVOGADA] }
+              actorUserId: { type: [string, 'null'], format: uuid, description: 'nulo no aceite (o autor e a identidade convidada)' }
+              byInvitee: { type: boolean }
+              targetUserId: { type: [string, 'null'], format: uuid }
+              role: { type: [string, 'null'] }
+              previousRole: { type: [string, 'null'] }
+              workspaceId: { type: [string, 'null'], format: uuid }
+              invitationId: { type: [string, 'null'], format: uuid }
+              assignmentId: { type: [string, 'null'], format: uuid }
+              grantId: { type: [string, 'null'], format: uuid }
+              decision: { type: [string, 'null'], enum: [KEEP, SUSPEND, REVOKE, null] }
+              correlationId: { type: string, format: uuid }
+              createdAt: { type: string, format: date-time }
     Me:
       type: object
       required: [accountType, displayName, email, organizationId, organizationActivationState]

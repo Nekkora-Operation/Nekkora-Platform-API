@@ -11,8 +11,8 @@ import java.util.UUID;
  * <li>sem segredo alem do token do proprio ato, sem codigo TOTP, sem dado de outra organizacao.</li>
  * </ul>
  * Os caminhos das paginas sao contrato com a interface web (fora desta missao): {@code /cadastro/confirmar},
- * {@code /recuperar-senha}, {@code /o/{org}/recuperar-senha}, {@code /o/{org}/mfa-emergencia/confirmar} e
- * {@code /o/{org}/mfa-emergencia/contestar}.
+ * {@code /recuperar-senha}, {@code /o/{org}/recuperar-senha}, {@code /o/{org}/mfa-emergencia/confirmar},
+ * {@code /o/{org}/mfa-emergencia/contestar} e {@code /o/{org}/convite} (023).
  */
 public final class MailTemplates {
 
@@ -64,6 +64,16 @@ public final class MailTemplates {
                     "O fator de autenticacao de outro administrador da sua organizacao foi redefinido.");
             case NOTICE_MFA_EMERGENCY_EXECUTED -> notice("Recuperacao emergencial de acesso executada",
                     "A recuperacao emergencial de acesso foi executada na sua organizacao. Os fatores de autenticacao afetados foram redefinidos.");
+            case ORG_INVITATION -> new Rendered("Convite para uma organizacao na Nekkora",
+                    "Voce foi convidada ou convidado para entrar numa organizacao na Nekkora. Para aceitar, abra o link abaixo:\n\n"
+                            + link("/o/" + organization + "/convite", token)
+                            + "\n\nSe ainda nao tem cadastro na Nekkora, a pagina leva ao cadastro com este mesmo e-mail; o convite so vale"
+                            + " para ele. O link vale por 7 dias e so pode ser usado uma vez. Se nao esperava este convite, ignore esta mensagem." + RODAPE);
+            case NOTICE_ORG_ACCESS_CHANGED -> new Rendered("Seu acesso numa organizacao mudou",
+                    "Um administrador alterou os papeis da sua conta numa organizacao na Nekkora. Entre para ver o acesso atual." + RODAPE);
+            case NOTICE_ORG_MEMBERSHIP_REVOKED -> new Rendered("Seu acesso a uma organizacao foi retirado",
+                    "Um administrador retirou o seu vinculo com uma organizacao na Nekkora. As sessoes abertas nessa organizacao foram encerradas."
+                            + " A sua identidade Nekkora, a senha e o fator de autenticacao nao mudaram." + RODAPE);
             case NOTICE_MFA_EMERGENCY_HOLDER, NOTICE_MFA_EMERGENCY_ADMIN ->
                     throw new IllegalArgumentException("aviso de recuperacao emergencial usa renderEmergency");
         };

@@ -27,6 +27,8 @@ import com.nekkora.core.web.ErrorResponses;
  * para toda conta vinculada, inclusive as do cadastro;</li>
  * <li>{@code nekkora.recuperacao-senha.enabled} (missao 002): pedido e confirmacao da recuperacao de senha da identidade
  * por e-mail. So abre com a entrada geral tambem ligada;</li>
+ * <li>{@code nekkora.convites.enabled} (023): aceite de convite pela identidade (as rotas de administracao dos convites, por
+ * organizacao, recusam no controller com a mesma regra). So abre com a entrada geral tambem ligada;</li>
  * <li>o LOGOUT de identidade nao tem chave: encerrar sessao nunca depende de configuracao.</li>
  * </ul>
  * Desligada, a rota responde 404 {@code not_found} em qualquer metodo, ANTES da cadeia de seguranca: sem CSRF, sem
@@ -43,23 +45,31 @@ public final class IdentityRoutesGate extends OncePerRequestFilter {
     static final Set<String> CREATION_ROUTES = Set.of(IdentityOrganizationsController.ORGANIZATIONS);
     static final Set<String> LINK_ROUTES = Set.of(AccountLinkController.START, AccountLinkController.CONFIRM);
     static final Set<String> RECOVERY_ROUTES = Set.of(IdentityAuthController.PASSWORD_RESET_REQUEST, IdentityAuthController.PASSWORD_RESET_CONFIRM);
+    static final Set<String> INVITATION_ROUTES = Set.of(InvitationAcceptController.ACCEPT);
 
     private final boolean signupEnabled;
     private final boolean entryEnabled;
     private final boolean creationEnabled;
     private final boolean linkEnabled;
     private final boolean recoveryEnabled;
+    private final boolean invitationsEnabled;
 
     public IdentityRoutesGate(boolean signupEnabled, boolean entryEnabled, boolean creationEnabled, boolean linkEnabled) {
         this(signupEnabled, entryEnabled, creationEnabled, linkEnabled, false);
     }
 
     public IdentityRoutesGate(boolean signupEnabled, boolean entryEnabled, boolean creationEnabled, boolean linkEnabled, boolean recoveryEnabled) {
+        this(signupEnabled, entryEnabled, creationEnabled, linkEnabled, recoveryEnabled, false);
+    }
+
+    public IdentityRoutesGate(boolean signupEnabled, boolean entryEnabled, boolean creationEnabled, boolean linkEnabled, boolean recoveryEnabled,
+                              boolean invitationsEnabled) {
         this.signupEnabled = signupEnabled;
         this.entryEnabled = entryEnabled;
         this.creationEnabled = creationEnabled;
         this.linkEnabled = linkEnabled;
         this.recoveryEnabled = recoveryEnabled;
+        this.invitationsEnabled = invitationsEnabled;
     }
 
     @Override
@@ -72,7 +82,8 @@ public final class IdentityRoutesGate extends OncePerRequestFilter {
         return (!signupEnabled && SIGNUP_ROUTES.contains(path)) || (!entryEnabled && ENTRY_ROUTES.contains(path))
                 || (!(entryEnabled && creationEnabled) && CREATION_ROUTES.contains(path))
                 || (!(entryEnabled && linkEnabled) && LINK_ROUTES.contains(path))
-                || (!(entryEnabled && recoveryEnabled) && RECOVERY_ROUTES.contains(path));
+                || (!(entryEnabled && recoveryEnabled) && RECOVERY_ROUTES.contains(path))
+                || (!(entryEnabled && invitationsEnabled) && INVITATION_ROUTES.contains(path));
     }
 
     @Override
