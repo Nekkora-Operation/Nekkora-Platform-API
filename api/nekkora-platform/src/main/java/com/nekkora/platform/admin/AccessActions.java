@@ -29,7 +29,7 @@ public final class AccessActions {
 
     private static final Logger LOG = LoggerFactory.getLogger(AccessActions.class);
 
-    enum Failure { SESSION, PERMISSION, OWN_ACCOUNT, TARGET_NOT_FOUND, STEP_UP, CONFLICT, INVALID }
+    enum Failure { SESSION, PERMISSION, OWN_ACCOUNT, TARGET_NOT_FOUND, STEP_UP, CONFLICT, INVALID, SECOND_PERSON }
 
     /** Recusa de um ato: desfaz a transacao e responde pela falha. {@code rule}: so para o log. */
     static final class Refusal extends RuntimeException {

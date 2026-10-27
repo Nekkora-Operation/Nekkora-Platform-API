@@ -186,6 +186,8 @@ class AccessInvitationsIT extends IdentityTestBase {
     /**
      * Convite vencido (fixture declarada: inserido ja vencido pelo superusuario), revogado, de organizacao suspensa e de
      * emissor que perdeu a autoridade: 404 unico, nenhum efeito. A organizacao reativada volta a aceitar o pendente.
+     * D-CONV-4 (024): a perda de autoridade REVOGA o convite no mesmo ato (motivo EMISSOR_SEM_AUTORIDADE); devolver o papel
+     * ao emissor, ou reativar a conta suspensa dele, nao o faz valer de novo. Convites de outro emissor nao mudam.
      */
     @Test
     void vencidoRevogadoOrganizacaoSuspensaEEmissorSemAutoridadeRecusam() throws Exception {
@@ -216,9 +218,30 @@ class AccessInvitationsIT extends IdentityTestBase {
         String tokenB = lastInvitationToken(g.email());
         exec("UPDATE organization_role_assignments SET status = 2, revoked_at = now(), revoked_by_membership_id = '" + a.org().adminMembership()
                 + "' WHERE membership_id = (SELECT membership_id FROM organization_memberships WHERE user_id = '" + b.user().id() + "') AND status = 1");
+        assertThat(value("SELECT revoke_reason || '|' || (revoked_by_membership_id IS NULL) FROM identity_invitations WHERE token_hash = '"
+                + Tokens.sha256Hex(tokenB) + "'")).as("revogado no mesmo ato, sem revogador").isEqualTo("4|true");
+        assertThat(value("SELECT revoked_at IS NULL FROM identity_invitations WHERE token_hash = '" + Tokens.sha256Hex(token) + "'"))
+                .as("convite de outro emissor continua aberto").isEqualTo("t");
+        // o papel volta ao emissor (atribuicao nova): o convite antigo continua revogado
+        exec("INSERT INTO organization_role_assignments (organization_id, membership_id, role_id, scope, status, assigned_by_membership_id) SELECT '"
+                + org + "', m.membership_id, r.role_id, 1, 1, '" + a.org().adminMembership() + "' FROM organization_memberships m, roles r WHERE m.user_id = '"
+                + b.user().id() + "' AND r.code = 'ORG_ADMIN'");
         identityStepUp(g);
-        assertThat(accept(g, org, tokenB).body()).as("emissor sem autoridade no aceite").isEqualTo(NOT_FOUND);
+        assertThat(accept(g, org, tokenB).body()).as("emissor com o papel de volta: convite antigo nao ressuscita").isEqualTo(NOT_FOUND);
         assertThat(accounts(org, g.email())).isZero();
+        assertThat(a.browser().get("/api/v1/o/" + org + "/invitations?state=all").body()).contains("EMISSOR_SEM_AUTORIDADE");
+
+        // conta do emissor suspensa e reativada: o convite dele tambem nao volta
+        Admin c = segundoAdmin(a);
+        ComFator h = comFator();
+        assertThat(invite(c, h.email(), null, null).status()).isEqualTo(201);
+        String tokenC = lastInvitationToken(h.email());
+        exec("UPDATE users SET status = 3 WHERE user_id = '" + c.user().id() + "'");
+        exec("UPDATE users SET status = 2 WHERE user_id = '" + c.user().id() + "'");
+        assertThat(value("SELECT revoke_reason FROM identity_invitations WHERE token_hash = '" + Tokens.sha256Hex(tokenC) + "'")).isEqualTo("4");
+        identityStepUp(h);
+        assertThat(accept(h, org, tokenC).body()).as("conta do emissor reativada: convite antigo nao ressuscita").isEqualTo(NOT_FOUND);
+        assertThat(accounts(org, h.email())).isZero();
 
         String revogado = token;
         assertThat(a.browser().post("/api/v1/o/" + org + "/invitations/" + invitationOf(revogado) + "/revoke", null).status()).isEqualTo(204);

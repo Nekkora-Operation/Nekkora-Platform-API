@@ -33,6 +33,8 @@ public final class InvitationService {
     private static final short REVOGADO = 1;
     private static final short REENVIADO = 2;
     private static final short EXPIRADO = 3;
+    /** 024: o emissor perdeu a autoridade (fechado pelo banco no mesmo ato; nunca volta a valer). */
+    private static final short EMISSOR_SEM_AUTORIDADE = 4;
 
     public record Created(UUID invitationId, String email, String role, UUID workspaceId, OffsetDateTime expiresAt) {
     }
@@ -231,6 +233,7 @@ public final class InvitationService {
             case REVOGADO -> "REVOGADO";
             case REENVIADO -> "REENVIADO";
             case EXPIRADO -> "EXPIRADO";
+            case EMISSOR_SEM_AUTORIDADE -> "EMISSOR_SEM_AUTORIDADE";
             default -> throw new IllegalStateException("motivo de revogacao fora do catalogo: " + code);
         };
     }

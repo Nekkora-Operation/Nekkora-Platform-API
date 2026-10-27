@@ -17,7 +17,8 @@ import static com.nekkora.platform.admin.AccessActions.refuse;
  * cliente, lido pelo Portal (013) a cada requisicao. Permissao {@code external_access.manage} (a 023 confere de novo em
  * aprovacoes, revisoes, aprovador e revogador). Organizacao {@code FOR UPDATE} -> conta do ator {@code FOR KEY SHARE} ->
  * concessao; reconferencias depois dos locks. Step-up so nos atos que ampliam o acesso (aprovar, renovar, revisar com KEEP).
- * Auditoria em {@code access_events} e, nas aprovacoes e revisoes, tambem nas tabelas proprias da 003.
+ * Auditoria em {@code access_events} e, nas aprovacoes e revisoes, tambem nas tabelas proprias da 003. Segunda pessoa
+ * (D-GRANT-1, 024): a concessao grava o solicitante e a aprovacao INITIAL exige outra pessoa (o banco confere de novo).
  */
 public final class GrantAdminService {
 
@@ -83,10 +84,11 @@ public final class GrantAdminService {
             Grant g;
             try {
                 g = j.sql("""
-                        INSERT INTO public.client_workspace_grants (organization_id, client_id, client_membership_id, workspace_id, status, starts_at, expires_at)
-                        VALUES (?, ?, ?, ?, 1, coalesce(?, now()), ?)
+                        INSERT INTO public.client_workspace_grants (organization_id, client_id, client_membership_id, workspace_id, status, starts_at, expires_at,
+                            requested_by_membership_id)
+                        VALUES (?, ?, ?, ?, 1, coalesce(?, now()), ?, ?)
                         RETURNING grant_id, client_membership_id, workspace_id, status, starts_at, expires_at, next_review_at
-                        """).param(org).param(client).param(clientMembership).param(workspace).param(startsAt).param(expiresAt)
+                        """).param(org).param(client).param(clientMembership).param(workspace).param(startsAt).param(expiresAt).param(actor.membershipId())
                         .query(GrantAdminService::map).single();
             } catch (RuntimeException e) {
                 if ("23505".equals(DbErrors.sqlState(e))) {
@@ -99,7 +101,7 @@ public final class GrantAdminService {
         });
     }
 
-    /** PENDENTE -> ATIVA, com a aprovacao INITIAL. */
+    /** PENDENTE -> ATIVA, com a aprovacao INITIAL, por pessoa diferente do solicitante (sem solicitante gravado: 409). */
     public Grant approve(UUID org, ValidSession actor, String actorToken, UUID grant, OffsetDateTime nextReviewAt, OffsetDateTime expiresAt,
                          String justification) {
         return actions.write(org, j -> {
@@ -108,6 +110,14 @@ public final class GrantAdminService {
             Grant g = lock(j, org, grant);
             if (!"PENDENTE".equals(g.status())) {
                 throw refuse(Failure.CONFLICT, "concessao_nao_pendente");
+            }
+            UUID requester = j.sql("SELECT requested_by_membership_id FROM public.client_workspace_grants WHERE organization_id = ? AND grant_id = ?")
+                    .param(org).param(grant).query(UUID.class).optional().orElse(null);
+            if (requester == null) {
+                throw refuse(Failure.CONFLICT, "concessao_sem_solicitante");
+            }
+            if (requester.equals(actor.membershipId())) {
+                throw refuse(Failure.SECOND_PERSON, "aprovador_igual_solicitante");
             }
             return approveOrRenew(j, org, actor, g, (short) 1, nextReviewAt, expiresAt, justification, AccessEvents.Type.CONCESSAO_APROVADA);
         });

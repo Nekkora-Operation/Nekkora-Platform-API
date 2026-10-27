@@ -974,7 +974,7 @@ paths:
       summary: 'Cria concessao PENDENTE (external_access.manage)'
       description: >
         Contrato, secao 7. Vinculo de cliente e cliente ativos, conta externa ativa e workspace ativo do MESMO cliente
-        (senao 404). Uma concessao nao revogada por vinculo e workspace: 409. Sem acesso ate a aprovacao. Auditoria (access_events 9).
+        (senao 404). Uma concessao nao revogada por vinculo e workspace: 409. Sem acesso ate a aprovacao. Quem cria fica gravado como solicitante (024). Auditoria (access_events 9).
       security: [ { sessionCookie: [], csrfHeader: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GrantCreateRequest' } } } }
@@ -1018,7 +1018,7 @@ paths:
       operationId: approveClientGrant
       summary: 'Aprova: PENDENTE -> ATIVA, aprovacao INITIAL (step-up)'
       description: >
-        nextReviewAt futuro obrigatorio; expiresAt opcional, depois do inicio. Fora de PENDENTE: 409. A 023 confere a permissao do aprovador no banco. Auditoria (access_events 10).
+        nextReviewAt futuro obrigatorio; expiresAt opcional, depois do inicio. Fora de PENDENTE: 409. Segunda pessoa (D-GRANT-1, 024): aprovador igual ao solicitante: 403; concessao sem solicitante gravado (anterior a 024): 409 (revogue e crie de novo). A 023 e a 024 conferem a permissao do aprovador e a separacao no banco. Auditoria (access_events 10).
       security: [ { sessionCookie: [], csrfHeader: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' }, { name: grant, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GrantApprovalRequest' } } } }
@@ -1835,7 +1835,7 @@ components:
               expiresAt: { type: string, format: date-time }
               acceptedAt: { type: [string, 'null'], format: date-time }
               revokedAt: { type: [string, 'null'], format: date-time }
-              revokeReason: { type: [string, 'null'], enum: [REVOGADO, REENVIADO, EXPIRADO, null] }
+              revokeReason: { type: [string, 'null'], enum: [REVOGADO, REENVIADO, EXPIRADO, EMISSOR_SEM_AUTORIDADE, null], description: 'EMISSOR_SEM_AUTORIDADE (024): fechado pelo banco quando o emissor perdeu a autoridade; nunca volta a valer' }
               issuedBy: { type: string, format: uuid, description: 'conta (user_id) do emissor' }
               replacesInvitationId: { type: [string, 'null'], format: uuid }
     InvitationAcceptRequest:

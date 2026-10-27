@@ -2,13 +2,15 @@
 
 **Data:** 2026-10-23. **Base:** relatório do transporte (`2026-10-22-identidade-002-email-real.md`, §5) e desenho aprovado (`2026-10-11-email-transacional-m365-desenho.md`). **Nenhuma alteração** foi feita no Microsoft 365, no DNS ou em cofre, e **nenhuma mensagem real** foi enviada. Tudo abaixo depende da autorização específica já combinada.
 
+**Revisão de 2026-10-27:** este documento registra a **preparação** (23/10). As ações externas autorizadas foram executadas em 2026-10-25, nas etapas 1 a 3. A validação externa foi feita: A1, F1, F2 (403), F3, F6 e R1–R5 aprovados, 8 de 20 tentativas, transporte real desligado no fim. O registro vigente é `2026-10-24-email-real-homologacao.md`, §4.9 e §6.1. A tabela abaixo foi atualizada só na linha da validação externa.
+
 ## 0. Estado em três camadas (revisão de 2026-10-24)
 
 | Camada | Situação | O que prova e o que não prova |
 |---|---|---|
 | **Preparação** (código e configuração) | **Concluída.** Transporte Microsoft Graph com testes (relatório de 22/10), configuração do ambiente (`compose.m365.yml`), saída de rede restrita (`proxy/squid.conf`, política conferida, §3) e ações A–E redigidas | Prova que o código e a configuração estão prontos. Não prova nada no tenant real |
 | **Homologação local** | **Concluída só com o e-mail SIMULADO**: a caixa do ensaio grava a mensagem e o desfecho `ACEITE_SIMULADO`, sem envio externo (`ensaio-api-v1-003`, jornadas pela API) | Prova a fila, o cadastro, a recuperação e os avisos ponta a ponta dentro do ambiente. Não prova aceite pelo Microsoft 365, entrega, SPF, DKIM nem DMARC |
-| **Validação externa** (tenant, DNS, envio a caixa controlada) | **Não feita. Bloqueada** pela leitura autenticada R-1 a R-5 (§1.2), pelas decisões do §5 e pela autorização específica das ações A–E | Plano F1–F6 no §4. O aceite pelo transporte continua separado da entrega |
+| **Validação externa** (tenant, DNS, envio a caixa controlada) | **Feita em 2026-10-25** (revisão de 2026-10-27), com autorização: etapa 3 do relatório de 24/10, §6.1 | O aceite pelo transporte continua separado da entrega. O plano F1–F6 do §4 ficou como registro do que foi executado |
 
 A identificação do tenant (`ae4ed48d…`, §1.1) é coerente com a captura do Entra enviada na revisão. Mesmo assim, a conferência **autenticada** (R-1 a R-5) vem antes de qualquer alteração.
 

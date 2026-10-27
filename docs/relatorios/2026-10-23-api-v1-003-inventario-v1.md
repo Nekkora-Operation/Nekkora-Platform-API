@@ -6,6 +6,12 @@
 
 **Revisão de 2026-10-24:** a 021 voltou a conferir o acesso efetivo (revisão 3); a ativação ganhou a revisão de capacidade auditada (D-ATV-2 decidida); a homologação passou para o `ensaio-api-v1-003`, com a atualização 021 → 022 de uma base populada e a jornada da ativação; a validação estática não depende mais da máquina antiga. As linhas abaixo já refletem isso. A ordem de merge recomendada continua #16 → #17 → #19, com esta PR à parte. Mesclar as quatro **não** encerra a V1.
 
+**Revisão de 2026-10-27:** o inventário vigente é o §7 de `2026-10-27-missao-consolidacao-acessos-recuperacao.md`. Esta lista foi atualizada só nas linhas que mudaram:
+- convites, papéis e concessões passaram a ter rotas (PRs #23 e #24, sem merge);
+- o e-mail real foi homologado com o tenant real em 2026-10-25 (#21, sem merge; `2026-10-24-email-real-homologacao.md`, §6.1).
+
+**A V1 continua incompleta.**
+
 Legenda do estado: **feito** (código e evidência na `main`); **PR** (feito numa PR desta missão, sem merge); **parcial**; **aberto**; **decisão** (falta decisão de produto antes de implementar).
 
 ## 1. Lista única
@@ -25,10 +31,10 @@ Legenda do estado: **feito** (código e evidência na `main`); **PR** (feito num
 | Capacidade inicial zero e estado "aguardando ativação" | §5 do plano da 002; missão 003 item 5 | 022, `activationState` | `db/tests/ativacao-022`; `OrgActivationIT`; `IdentityOrganizationJourneysIT` | **PR** | merge da PR; valores comerciais (decisão de produto) | merge; decisão dos valores padrão da ativação (se houver) |
 | Ativação operacional auditada | idem | `org_activation_activate`, CLI `ativar-organizacao` e `vincular-conta` | `OrgActivationIT`; `db/tests/ativacao-022`; jornada da homologação (`jornada_ativacao.sh`) no `ensaio-api-v1-003` atualizado de 021 para 022 | **PR** | merge; aprovar a linha de elevação da 022 (vinculada ao `ensaio-api-v1-003`) | merge |
 | Mudança de capacidade depois da ativação | decorrente do item 5; **D-ATV-2 decidida na revisão**: exige autorização e auditoria | `org_activation_revise`, CLI `revisar-capacidade`; o provisionamento direto em organização ativada é recusado | `OrgActivationIT`; `db/tests/ativacao-022` (C2, C4, C5); jornada da homologação (J7, J8) | **PR** | merge | merge |
-| **Convite e onboarding de contas na organização** (D-INV-02) | inventário §6; F6b | **nenhuma rota**: contas novas só por provisionamento ou pela própria identidade (cadastro) | as jornadas J7/J8 precisaram de PREP (`semear_api_v1.sql`) | **decisão** | D-INV-02/03; GAP-10 | decisão; se (b), rotas de convite com e-mail real |
+| **Convite e onboarding de contas na organização** (D-INV-02) | inventário §6; F6b | **Revisão 2026-10-27: PR #23/#24.** Convite interno completo: emitir, listar, revogar, reenviar e aceitar pela identidade global, com readmissão e sem vinculação por e-mail. Contrato em `2026-10-27-acessos-convites-papeis-concessoes-contrato.md` | `AccessInvitationsIT`, suíte `acessos-023`, `AccessInvitationsE2E` | **PR** (convite externo: D-EXT) | D-EXT; e-mail real ligado fora do ensaio | merge; contrato da entrada externa |
 | **Emissão do token de verificação de e-mail da conta** (GAP-04, D-INV-03) | inventário | só a confirmação (`/o/{org}/auth/email-verification/confirm`); nenhum emissor na Platform | `EmailVerificationRouteIT` (token semeado) | **decisão** | D-INV-02/03 | decisão; se mantida, emissão com testes e OpenAPI |
-| **Atribuição e remoção de papéis** (GAP-14, D-INV-09, F6b) | inventário; consolidação §2 | **nenhuma rota** (só leitura de membros e permissões) | OpenAPI | **decisão** (recomendado: V1 completa) | D-INV-09 | rotas com step-up, regra de "último ORG_ADMIN" da 003, testes e OpenAPI |
-| **Clientes e concessões** (GAP-15, D-INV-10, F6b) | idem | leitura (`/clients`, `/client-grants`) e **revogação** (`/client-grants/{grant}/revoke`); sem criação de cliente, conta externa, concessão, aprovação ou revisão | `AdminReadRoutesIT`, `ClientGrantRevokeRouteIT` (GAP-01) | **decisão** (recomendado: V1 completa) | D-INV-10; convite; GAP-10 | rotas do ciclo de acesso externo em mini-missões |
+| **Atribuição e remoção de papéis** (GAP-14, D-INV-09, F6b) | inventário; consolidação §2 | **Revisão 2026-10-27: PR #24.** Consultar, atribuir, alterar e revogar papel e retirar vínculo, com step-up para ampliar, autoridade no banco (023) e último ORG_ADMIN (003) | `RoleAdministrationIT`, suíte `acessos-023` | **PR** | — | merge |
+| **Clientes e concessões** (GAP-15, D-INV-10, F6b) | idem | **Revisão 2026-10-27: PR #24.** Criar, aprovar (com segunda pessoa, 024), renovar, revisar e revogar concessão, **sobre cliente e conta externa já existentes**. **Ainda sem** criação de cliente, entrada da pessoa externa e convite externo | `GrantLifecycleIT`, `AdminReadRoutesIT`, `ClientGrantRevokeRouteIT` | **parcial** | D-EXT | contrato da entrada externa e mini-missão do ciclo externo |
 | Suspensão e reativação de conta | contrato 8.7 | `/o/{org}/users/{user}/suspend` e `/reactivate` | ITs; J8 (pela API) | **feito** | — | — |
 | Retirada de vínculo e suspensão de organização | — | **sem rota** (só banco/provisionamento) | J8 (PREP) e `IdentityOrganizationJourneysIT` (reação) | **decisão** | F6b; operação | decidir se entram na V1 como rota administrativa ou operacional |
 | Sessões individuais (GAP-13, D-INV-08) | inventário | revoke-all existe | — | **decisão** (recomendado: fora da V1) | — | decisão registrada |
@@ -46,7 +52,7 @@ Legenda do estado: **feito** (código e evidência na `main`); **PR** (feito num
 
 | Requisito | Origem | Situação atual | Pendência | Critério de conclusão |
 |---|---|---|---|---|
-| **E-mail real** (GAP-10) | inventário; missão 002 PR 5 | transporte Graph e fila persistente **feitos** (021, revisão 3 na PR desta missão). Homologação local só com o e-mail simulado; validação externa **não** feita | ações externas autorizadas (`2026-10-23-api-v1-003-email-real-preparacao.md`) | F1–F6 do relatório do e-mail com evidência real |
+| **E-mail real** (GAP-10) | inventário; missão 002 PR 5 | transporte Graph e fila persistente **feitos** (021, revisão 3). **Revisão 2026-10-27:** homologado com o tenant real em 2026-10-25 (etapa 3: A1, F1, F2, F3, F6 e R1–R5; 8 de 20 tentativas; transporte real desligado no fim), PR #21 sem merge | ligar fora do ensaio (decisão de liberação) | merge do #21 e decisão de liberação |
 | **Portões da 016** (5b/hml03 → P5 → ativação operacional da 014/016) | consolidação §6 | a 016 roda nas suítes e em ensaios. No `ensaio-api-v1-003`, 016–020 e 022 com elevação vinculada e pré-voo (PR; o `ensaio-api-v1-002`, da 021 revisão 2, fica preservado). **Nenhum portão operacional executado**; produção sem 014/016 ativadas | executar na ordem, cada um com autorização própria; aprovar a proposta de elevação 016–020 e 022 (PR) | portões executados com evidência; decisão da topologia de produção (016 rev. 5: só o modelo do migrador declarado é suportado) |
 | **Origem do cliente atrás do proxy** (B10) | levantamento B10 | `ClientIpResolver` aceita `X-Forwarded-For` **só** de `NEKKORA_PROXIES_CONFIAVEIS`, e o gateway de homologação sobrescreve o cabeçalho com `$remote_addr`. **Confirmado de novo no ensaio:** no Docker Desktop, todo cliente chega como o IP da ponte (`10.252.99.0/24` nos logs, truncado) e divide os limites por IP (R1, R7, R12…) | depende da **topologia de borda de produção** (CDN/balanceador → nginx → Platform), ainda não decidida | nginx com `set_real_ip_from` restrito aos endereços do balanceador e `real_ip_header`, a Platform confiando só no nginx, e prova com dois clientes de IPs distintos |
 | **L06** (lista de execuções sem filtro, ≈ 886/814 ms contra 200/500 ms) | GAP-06 (DC-07) | índice recomendado, **não aplicado** | **decisão D-L06**: critério de desempenho da V1 ou não | (a) migration de índice com portão e nova medição; ou (b) aceitação documentada com o padrão de 30 dias |
@@ -67,9 +73,9 @@ Sem alteração de estado por esta missão, conforme a consolidação de 2026-10
 
 | Item | Conferência |
 |---|---|
-| **F6b** | Continua não iniciada no backend. A API tem só leitura e a revogação de concessão. Depende de D-INV-09/10 (recomendação registrada: V1 completa) e, para o convite, de D-INV-02/03 e do e-mail real |
-| **Convites** | Sem rota. Mudou o contexto: com a entrada geral (017), uma pessoa cria a própria identidade e organização. **Adicionar alguém a uma organização existente continua só por provisionamento.** Isso apareceu concretamente nesta missão: as jornadas J7 e J8 precisaram de semeadura declarada |
-| **Papéis** | Sem atribuição nem remoção pela API (GAP-14) |
+| **F6b** | **Revisão 2026-10-27:** iniciada no backend (PRs #23/#24): convites internos, papéis e ciclo de concessões sobre registros existentes. Falta o ciclo externo (D-EXT) |
+| **Convites** | **Revisão 2026-10-27:** rotas de convite interno nos PRs #23/#24 (sem merge). Adicionar alguém a uma organização existente deixa de depender de provisionamento depois do merge |
+| **Papéis** | **Revisão 2026-10-27:** atribuição, alteração e remoção pela API no PR #24 (GAP-14) |
 | **Concessões** | Só leitura e revogação (GAP-15 aberto) |
 | **Gates operacionais da 016** | Nenhum portão executado. Esta missão preparou a elevação 016–020 vinculada a um ambiente descartável, com pré-voo por versão e prova de retirada em sucesso e falha (PR da homologação). Não é a ativação operacional |
 | **Origem do cliente atrás do proxy** | Aberto; reconfirmado no ensaio (IP da ponte do Docker para todos os clientes). Depende da topologia de borda |

@@ -10,9 +10,9 @@
 |---|---|
 | 1. Conferir a implementação | **Feita** (§2). Achados: a fila usa a chave do MFA; não havia lista de destinatários; não havia leitura de segredo da AWS. Os três foram corrigidos (§3). |
 | 2. Preparar a configuração externa | **Etapas 1 e 2 executadas em 2026-10-25, com autorização (§4.9).** Recursos do Microsoft 365 e da AWS criados e conferidos; `confirmado=OK`. |
-| 3. Preparar o ambiente de ensaio | Imagens trocadas para `364848f` na L4 (§4.9), migrations iguais, fila 0, tentativas 0 de 20. O transporte continua o simulado até a etapa 3. |
+| 3. Preparar o ambiente de ensaio | Imagens trocadas para `364848f` na L4 (§4.9), migrations iguais, fila 0, tentativas 0 de 20. Na etapa 3 o transporte real foi ligado só durante a homologação e desligado no fim. |
 | 4. Homologação real | **Etapa 3 executada em 2026-10-25, com autorização (§6.1):** A1, F1, F2 (403), F3, F6 e R1–R5 aprovados; **8 de 20 tentativas**; transporte real desligado no fim. |
-| 5. Entrega | PR aberto (sem merge). Este relatório será completado com as evidências da execução real. |
+| 5. Entrega | PR #21 aberto, sem merge, com as evidências da execução real (§6.1). Revisão de 2026-10-27: CI do HEAD `75640b1` com 618 testes, 0 falhas e 0 ignorados; nova homologação real não pedida. |
 
 ## 1. Base dos PRs: #17 e #19 não chegaram à `main`
 
