@@ -355,11 +355,20 @@ b11_restauracao() {
         echo "papeis_aplicados_erros=$(grep -c 'ERROR' "$T/b11_papeis_saida.txt")"
         grep 'ERROR' "$T/b11_papeis_saida.txt" | sed -E 's/"[^"]*"/"..."/g' | sort | uniq -c | head -5
         MSYS_NO_PATHCONV=1 docker cp "$(cygpath -w "$T/backup016.dump" 2>/dev/null || echo "$T/backup016.dump")" "$c:/tmp/backup016.dump" > /dev/null
-        # a restauracao roda como migrador_nekkora (SET ROLE pelo --role) numa janela de SUPERUSER, como no modelo do migrador:
-        # a extensao sslinfo (o pg_dump nao emite o dono dela) nasce do migrador, como na origem; janela retirada e conferida
+        # banco do migrador, como na origem; pgcrypto e extensao CONFIAVEL: criada pelo migrador SEM a janela (como na 001), os
+        # membros pertencem ao superusuario de bootstrap do cluster. Dentro da janela, o migrador seria dono das 36 funcoes da
+        # pgcrypto e continuaria dono delas depois da retirada (privilegio que a origem nao tem; achado da comparacao de
+        # privilegios em 2026-10-27). O pg_dump emite CREATE EXTENSION IF NOT EXISTS: a restauracao a encontra pronta.
         ini="$(date +%s)"
+        docker exec -i "$c" psql -X -q -v ON_ERROR_STOP=1 -U "$su" -d postgres -c "CREATE DATABASE nekkora OWNER migrador_nekkora" > /dev/null \
+            && echo "banco=CRIADO dono=migrador_nekkora"
+        docker exec -i "$c" psql -X -q -v ON_ERROR_STOP=1 -U "$su" -d nekkora -c "SET ROLE migrador_nekkora; CREATE EXTENSION pgcrypto WITH SCHEMA public" > /dev/null \
+            && echo "pgcrypto=CRIADA_PELO_MIGRADOR_SEM_JANELA"
+        # o resto roda como migrador_nekkora (SET ROLE pelo --role) numa janela de SUPERUSER, como no modelo do migrador:
+        # a extensao sslinfo (nao confiavel; o pg_dump nao emite o dono dela) nasce do migrador, como na 016; janela retirada
+        # e conferida
         docker exec -i "$c" psql -X -q -U "$su" -d postgres -c "ALTER ROLE migrador_nekkora SUPERUSER" > /dev/null && echo "janela_superuser_migrador=ABERTA"
-        MSYS_NO_PATHCONV=1 docker exec "$c" pg_restore -U "$su" --role=migrador_nekkora -d postgres --create --exit-on-error /tmp/backup016.dump > "$T/b11_restore_saida.txt" 2>&1 \
+        MSYS_NO_PATHCONV=1 docker exec "$c" pg_restore -U "$su" --role=migrador_nekkora -d nekkora --exit-on-error /tmp/backup016.dump > "$T/b11_restore_saida.txt" 2>&1 \
             && echo "pg_restore=OK" || echo "pg_restore=FALHA"
         docker exec -i "$c" psql -X -q -U "$su" -d postgres -c "ALTER ROLE migrador_nekkora NOSUPERUSER" > /dev/null
         echo "janela_superuser_migrador=RETIRADA atributos=$(docker exec -i "$c" psql -X -At -U "$su" -d postgres -c "SELECT rolsuper::int + rolcreaterole::int + rolcreatedb::int + rolbypassrls::int + rolreplication::int FROM pg_roles WHERE rolname = 'migrador_nekkora'")"
@@ -381,10 +390,39 @@ b11_restauracao() {
         awk '/^-- === 19\. /{f=1} f && /^COMMIT;/{exit} f' "$REPO/db/migrations/016_recuperacao_emergencial_mfa.sql" > "$T/b11_inv016.sql"
         { echo "BEGIN;"; cat "$T/b11_inv016.sql"; echo "ROLLBACK;"; } | docker exec -i "$c" psql -X -q -At -v ON_ERROR_STOP=1 -U "$su" -d nekkora > "$T/b11_inv016_saida.txt" 2>&1 \
             && echo "invariantes_016_restaurada=OK" || echo "invariantes_016_restaurada=FALHA motivo=$(grep -m1 -oE 'ERROR: .*' "$T/b11_inv016_saida.txt" | cut -c1-160)"
+        echo "== privilegios (catalogo: papeis, pertinencias sem o concedente, donos, ACL, RLS, politicas, funcoes, extensoes, padroes)"
+        # o superusuario de bootstrap de cada cluster (admin_cluster na origem, o descartavel no destino) vira o mesmo marcador:
+        # dono do plpgsql e dos membros da pgcrypto nos dois lados
+        admin_sql nekkora < "$REPO/ops/homologacao/testes/b11_privilegios.sql" 2>&1 | tr -d '\r' \
+            | sed -E 's/(^|[^A-Za-z0-9_])admin_cluster([^A-Za-z0-9_]|$)/\1<superusuario-do-cluster>\2/g' > "$T/b11_priv_origem.txt"
+        docker exec -i "$c" psql -X -q -At -v ON_ERROR_STOP=1 -U "$su" -d nekkora < "$REPO/ops/homologacao/testes/b11_privilegios.sql" 2>&1 \
+            | tr -d '\r' | sed -E "s/(^|[^A-Za-z0-9_])$su([^A-Za-z0-9_]|\$)/\1<superusuario-do-cluster>\2/g" > "$T/b11_priv_destino.txt"
+        echo "itens_origem=$(wc -l < "$T/b11_priv_origem.txt" | tr -d ' ') itens_destino=$(wc -l < "$T/b11_priv_destino.txt" | tr -d ' ')"
+        for k in PAPEL PERTINENCIA BANCO ESQUEMA RELACAO COLUNA POLITICA FUNCAO EXTENSAO PADRAO; do
+            printf '%s=%s ' "$k" "$(grep -c "^$k " "$T/b11_priv_origem.txt")"
+        done; echo
+        # fotografias na evidencia: so catalogo (nenhum dado, nenhuma senha)
+        cp "$T/b11_priv_origem.txt" "$EV/b11_privilegios_origem.txt"; cp "$T/b11_priv_destino.txt" "$EV/b11_privilegios_restaurada.txt"
+        if diff "$T/b11_priv_origem.txt" "$T/b11_priv_destino.txt" > "$T/b11_priv_diff.txt"; then
+            echo "privilegios=IGUAIS"
+        else
+            echo "privilegios=DIFERENTES ($(grep -c '^[<>]' "$T/b11_priv_diff.txt") linhas)"; head -20 "$T/b11_priv_diff.txt"
+        fi
+        # o que a restauracao NAO preserva, declarado: o concedente das pertinencias (origem x destino)
+        local qg="SELECT pg_get_userbyid(roleid) || ' -> ' || pg_get_userbyid(member) || ' concedente=' || pg_get_userbyid(grantor) FROM pg_auth_members m JOIN pg_roles a ON a.oid = m.roleid JOIN pg_roles b ON b.oid = m.member WHERE NOT a.rolsuper AND NOT b.rolsuper AND b.rolname !~ '^pg_' ORDER BY 1"
+        echo "concedentes_origem: $(admin_sql nekkora -c "$qg" | tr -d '\r' | paste -sd ';' -)"
+        echo "concedentes_destino: $(docker exec -i "$c" psql -X -q -At -U "$su" -d nekkora -c "$qg" | tr -d '\r' | paste -sd ';' - | sed "s/concedente=$su/concedente=<superusuario-da-restauracao>/g")"
+        local e
+        for e in sslinfo pgcrypto plpgsql; do
+            echo "extensao $e: origem $(grep "^EXTENSAO $e " "$T/b11_priv_origem.txt" | cut -d' ' -f3-) | destino $(grep "^EXTENSAO $e " "$T/b11_priv_destino.txt" | cut -d' ' -f3-)"
+        done
+        echo "donos_das_funcoes_origem: $(grep '^FUNCAO ' "$T/b11_priv_origem.txt" | grep -oE ' dono=[^ ]+' | sort | uniq -c | tr -s ' ' | paste -sd ';' -)"
+        echo "donos_das_funcoes_destino: $(grep '^FUNCAO ' "$T/b11_priv_destino.txt" | grep -oE ' dono=[^ ]+' | sort | uniq -c | tr -s ' ' | paste -sd ';' -)"
         docker rm -f -v "$c" > /dev/null && echo "cluster_descartavel=REMOVIDO"
         rm -f "$T/b11_papeis.sql"
     } > "$f" 2>&1
     grep -q '^pg_restore=OK$' "$f" || ok=1
+    grep -q '^pgcrypto=CRIADA_PELO_MIGRADOR_SEM_JANELA$' "$f" || ok=1
     grep -q '^contagens=IGUAIS$' "$f" || ok=1
     grep -qE '^tabelas_comparadas=[1-9][0-9]+$' "$f" || ok=1
     grep -q '^papeis_aplicados_erros=0$' "$f" || ok=1
@@ -392,6 +430,8 @@ b11_restauracao() {
     grep -q '(sem senhas: 0 linhas com PASSWORD) pertinencias=[0-9]* com_granted_by=0$' "$f" || ok=1
     grep -q '^janela_superuser_migrador=RETIRADA atributos=0$' "$f" || ok=1
     grep -q '^invariantes_016_restaurada=OK$' "$f" || ok=1
+    grep -q '^privilegios=IGUAIS$' "$f" || ok=1
+    grep -qE '^itens_origem=[1-9][0-9]+ itens_destino=[1-9][0-9]+$' "$f" || ok=1
     return $ok
 }
 

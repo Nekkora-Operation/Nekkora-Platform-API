@@ -4,3 +4,12 @@ execucao1 (2026-10-27T17:15Z, runner 9afd1a1): B5, B6, B7, B8a, B10 (com a VARRE
   B11 FALHA no procedimento de restauracao (5 pertinencias recusadas por GRANTED BY; dono da sslinfo) -> procedimento corrigido.
 execucao2-b11 (2026-10-27T17:31Z, H016_SOMENTE=B11, runner com a correcao): B11, B12 e SEGREDOS OK.
 B8a e B10 nao se repetem no mesmo ambiente; o B10 da execucao1 vale para o codigo do B10, que nao mudou depois.
+execucao3-b11-privilegios (2026-10-27T22:37Z, H016_SOMENTE=B11, runner com a COMPARACAO DE PRIVILEGIOS do catalogo): B11 FALHA
+  por achado real: os 36 membros da pgcrypto (extensao confiavel) pertencem ao superusuario do cluster na origem e ao
+  migrador_nekkora na restaurada (criada dentro da janela de SUPERUSER) -> procedimento corrigido (banco e pgcrypto criados
+  antes da janela, pgcrypto pelo migrador sem atributos; so o pg_restore na janela). Contagens e invariantes ja eram OK.
+  Uma execucao intermediaria (22:43Z) passou com 741 itens, mas o filtro ainda deixava de fora a pertinencia
+  pg_read_all_data -> backup_nekkora; corrigido o filtro, nao arquivada.
+execucao4-b11 (2026-10-27T22:44Z, H016_SOMENTE=B11, runner final): B11, B12 e SEGREDOS OK; 742 itens de catalogo IGUAIS
+  (papeis, 5 pertinencias sem o concedente, banco, esquemas, 82 relacoes, 204 ACL de coluna, 135 politicas, 253 funcoes,
+  3 extensoes, padroes); fotografias completas em b11_privilegios_origem.txt e b11_privilegios_restaurada.txt.
