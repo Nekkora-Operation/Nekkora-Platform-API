@@ -1,0 +1,16 @@
+solicitacao=21f66883-75e0-43cd-af14-d9966fcd28f5 resultado=OK origem=BANCO estado=PRE_APROVADA motivo=-
+tentativa=b6bcebd9-f45c-4962-aa99-d6e4d204ef2f estado_inicial=2 (2 = ENTREGANDO, entrega segurada pela caixa)
+platform=DERRUBADA sinal=SIGKILL instante=2026-10-27T17:17:33Z
+platform=SUBIU
+estado_depois_da_queda=2
+== varredura 1 (antes dos 10 min: controle)
+varredura_avisos executada recuperadas=0
+estado_apos_varredura_1=2
+parada_ha_s=8 espera_real_ate_s=630
+parada_ha_s=641 (espera REAL, sem fixture)
+== varredura 2 (depois dos 10 min)
+varredura_avisos executada recuperadas=1
+estado_apos_varredura_2=6:QUEDA_DURANTE_ENTREGA
+publicado_na_caixa=0
+fixtures_desta_tentativa=0
+0

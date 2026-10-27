@@ -1,0 +1,14 @@
+cluster_descartavel=nekkora-b11-restauracao-20261027172824 rede=none porta=nenhuma
+papeis_no_arquivo=23 (sem senhas: 0 linhas com PASSWORD)
+papeis_aplicados_erros=5
+      5 ERROR:  permission denied to grant privileges as role "..."
+pg_restore=OK
+duracao_restauracao_s=3
+== contagens (origem pelo admin_cluster; destino pelo superusuario do cluster descartavel)
+tabelas_comparadas=82
+linhas_origem=82 linhas_destino=82
+contagens=IGUAIS
+ops_linhas_origem=119
+== invariantes da 016 (sec. 19) na base restaurada (registro)
+invariantes_016_restaurada=FALHA motivo=ERROR:  dono divergente em ops: extensao sslinfo[dono b11_restaurador], membro de sslinfo ops.ssl_cipher()[dono b11_restaurador], membro de sslinfo ops.ssl_clie
+cluster_descartavel=REMOVIDO
