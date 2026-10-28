@@ -1,0 +1,742 @@
+BANCO nekkora dono=migrador_nekkora acl=-
+COLUNA public.agent_credentials.revocation_reason acl={nekkora_platform=w/migrador_nekkora}
+COLUNA public.agent_credentials.revoked_at acl={nekkora_platform=w/migrador_nekkora}
+COLUNA public.agent_credentials.revoked_by_membership_id acl={nekkora_platform=w/migrador_nekkora}
+COLUNA public.auth_challenges.consumed_at acl={nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.auth_challenges.credential_hash acl={nekkora_ops_mfa_owner=w/migrador_nekkora,nekkora_identity_owner=w/migrador_nekkora}
+COLUNA public.auth_challenges.invalidated_at acl={nekkora_ops_mfa_owner=rw/migrador_nekkora,nekkora_identity_owner=rw/migrador_nekkora}
+COLUNA public.auth_challenges.organization_id acl={nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.auth_challenges.pending_password_hash acl={nekkora_ops_mfa_owner=w/migrador_nekkora,nekkora_identity_owner=w/migrador_nekkora}
+COLUNA public.auth_challenges.user_id acl={nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.automation_schedules.name acl={nekkora_platform=w/migrador_nekkora}
+COLUNA public.automation_version_parameter_bindings.parameter_id acl={nekkora_platform=w/migrador_nekkora}
+COLUNA public.automation_version_parameter_bindings.parameter_value_id acl={nekkora_platform=w/migrador_nekkora}
+COLUNA public.automation_version_secret_bindings.secret_id acl={nekkora_platform=w/migrador_nekkora}
+COLUNA public.automations.automation_id acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.automations.name acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.automations.organization_id acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.automations.workspace_id acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.client_memberships.client_id acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.client_memberships.client_membership_id acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.client_memberships.organization_id acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.client_memberships.status acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.client_memberships.user_id acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.client_workspace_grants.approved_at acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.client_workspace_grants.client_id acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.client_workspace_grants.client_membership_id acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.client_workspace_grants.expires_at acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.client_workspace_grants.grant_id acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.client_workspace_grants.next_review_at acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.client_workspace_grants.organization_id acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.client_workspace_grants.revoked_at acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.client_workspace_grants.starts_at acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.client_workspace_grants.status acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.client_workspace_grants.workspace_id acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.clients.client_id acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.clients.organization_id acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.clients.status acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.email_verification_tokens.consumed_at acl={nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.email_verification_tokens.created_at acl={nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.email_verification_tokens.revoked_at acl={nekkora_identity_owner=rw/migrador_nekkora}
+COLUNA public.email_verification_tokens.user_id acl={nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.execution_events.event_type acl={nekkora_portal_owner=r/nekkora_retention_tables_owner}
+COLUNA public.execution_events.execution_id acl={nekkora_portal_owner=r/nekkora_retention_tables_owner}
+COLUNA public.execution_events.organization_id acl={nekkora_portal_owner=r/nekkora_retention_tables_owner}
+COLUNA public.execution_events.payload acl={nekkora_retention_owner=w/nekkora_retention_tables_owner}
+COLUNA public.execution_events.purge_run_id acl={nekkora_retention_owner=w/nekkora_retention_tables_owner}
+COLUNA public.execution_events.purged_at acl={nekkora_retention_owner=w/nekkora_retention_tables_owner}
+COLUNA public.execution_events.purged_by_user_id acl={nekkora_retention_owner=w/nekkora_retention_tables_owner}
+COLUNA public.execution_events.received_at acl={nekkora_portal_owner=r/nekkora_retention_tables_owner}
+COLUNA public.execution_events.sequence acl={nekkora_portal_owner=r/nekkora_retention_tables_owner}
+COLUNA public.execution_events.workspace_id acl={nekkora_portal_owner=r/nekkora_retention_tables_owner}
+COLUNA public.executions.automation_id acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.executions.created_at acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.executions.execution_id acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.executions.finished_at acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.executions.organization_id acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.executions.started_at acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.executions.status acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.executions.status_reason acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.executions.workspace_id acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.identities.display_name acl={nekkora_identity_owner=r/migrador_nekkora,nekkora_platform=aw/migrador_nekkora}
+COLUNA public.identities.email acl={nekkora_identity_owner=r/migrador_nekkora,nekkora_platform=a/migrador_nekkora}
+COLUNA public.identities.email_normalized acl={nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.identities.email_verified_at acl={nekkora_identity_owner=r/migrador_nekkora,nekkora_platform=w/migrador_nekkora}
+COLUNA public.identities.identity_id acl={nekkora_identity_owner=r/migrador_nekkora,nekkora_platform=a/migrador_nekkora}
+COLUNA public.identities.status acl={nekkora_identity_owner=r/migrador_nekkora,nekkora_platform=aw/migrador_nekkora}
+COLUNA public.identities.updated_at acl={nekkora_identity_owner=w/migrador_nekkora}
+COLUNA public.identity_auth_challenges.attempts acl={nekkora_platform=w/migrador_nekkora}
+COLUNA public.identity_auth_challenges.challenge_id acl={nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.identity_auth_challenges.consumed_at acl={nekkora_identity_owner=rw/migrador_nekkora}
+COLUNA public.identity_auth_challenges.credential_hash acl={nekkora_identity_owner=rw/migrador_nekkora,nekkora_platform=aw/migrador_nekkora}
+COLUNA public.identity_auth_challenges.csrf_token acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.identity_auth_challenges.expires_at acl={nekkora_identity_owner=r/migrador_nekkora,nekkora_platform=a/migrador_nekkora}
+COLUNA public.identity_auth_challenges.identity_id acl={nekkora_identity_owner=r/migrador_nekkora,nekkora_platform=a/migrador_nekkora}
+COLUNA public.identity_auth_challenges.invalidated_at acl={nekkora_identity_owner=rw/migrador_nekkora,nekkora_platform=w/migrador_nekkora}
+COLUNA public.identity_auth_challenges.pending_password_hash acl={nekkora_identity_owner=rw/migrador_nekkora,nekkora_platform=aw/migrador_nekkora}
+COLUNA public.identity_auth_challenges.purpose acl={nekkora_identity_owner=r/migrador_nekkora,nekkora_platform=a/migrador_nekkora}
+COLUNA public.identity_auth_challenges.token_hash acl={nekkora_identity_owner=r/migrador_nekkora,nekkora_platform=a/migrador_nekkora}
+COLUNA public.identity_credentials.identity_id acl={nekkora_identity_owner=r/migrador_nekkora,nekkora_platform=a/migrador_nekkora}
+COLUNA public.identity_credentials.password_changed_at acl={nekkora_identity_owner=w/migrador_nekkora}
+COLUNA public.identity_credentials.password_hash acl={nekkora_identity_owner=rw/migrador_nekkora,nekkora_platform=a/migrador_nekkora}
+COLUNA public.identity_email_tokens.consumed_at acl={nekkora_identity_owner=rw/migrador_nekkora,nekkora_platform=w/migrador_nekkora}
+COLUNA public.identity_email_tokens.created_at acl={nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.identity_email_tokens.expires_at acl={nekkora_identity_owner=r/migrador_nekkora,nekkora_platform=a/migrador_nekkora}
+COLUNA public.identity_email_tokens.identity_id acl={nekkora_identity_owner=r/migrador_nekkora,nekkora_platform=a/migrador_nekkora}
+COLUNA public.identity_email_tokens.purpose acl={nekkora_platform=a/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.identity_email_tokens.revoked_at acl={nekkora_identity_owner=rw/migrador_nekkora,nekkora_platform=w/migrador_nekkora}
+COLUNA public.identity_email_tokens.target_email acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.identity_email_tokens.token_hash acl={nekkora_identity_owner=r/migrador_nekkora,nekkora_platform=a/migrador_nekkora}
+COLUNA public.identity_email_tokens.token_id acl={nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.identity_events.correlation_id acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.identity_events.event_type acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.identity_events.identity_id acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.identity_events.target_organization_id acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.identity_link_challenges.account_credential_hash acl={nekkora_identity_owner=w/migrador_nekkora,nekkora_platform=aw/migrador_nekkora}
+COLUNA public.identity_link_challenges.attempts acl={nekkora_platform=w/migrador_nekkora}
+COLUNA public.identity_link_challenges.consumed_at acl={nekkora_identity_owner=w/migrador_nekkora}
+COLUNA public.identity_link_challenges.expires_at acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.identity_link_challenges.identity_id acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.identity_link_challenges.revoked_at acl={nekkora_platform=w/migrador_nekkora}
+COLUNA public.identity_link_challenges.token_hash acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.identity_link_challenges.user_id acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.identity_mfa_factors.confirmed_at acl={nekkora_identity_owner=w/migrador_nekkora}
+COLUNA public.identity_mfa_factors.disabled_at acl={nekkora_identity_owner=w/migrador_nekkora}
+COLUNA public.identity_mfa_factors.last_used_step acl={nekkora_identity_owner=w/migrador_nekkora,nekkora_platform=w/migrador_nekkora}
+COLUNA public.identity_mfa_recovery_codes.invalidated_at acl={nekkora_identity_owner=w/migrador_nekkora}
+COLUNA public.identity_mfa_recovery_codes.used_at acl={nekkora_identity_owner=w/migrador_nekkora}
+COLUNA public.identity_mfa_recovery_codes.used_in_identity_session_id acl={nekkora_identity_owner=w/migrador_nekkora}
+COLUNA public.identity_sessions.csrf_token acl={nekkora_identity_owner=a/migrador_nekkora}
+COLUNA public.identity_sessions.expires_at acl={nekkora_identity_owner=a/migrador_nekkora}
+COLUNA public.identity_sessions.identity_id acl={nekkora_identity_owner=a/migrador_nekkora}
+COLUNA public.identity_sessions.last_seen_at acl={nekkora_platform=w/migrador_nekkora}
+COLUNA public.identity_sessions.mfa_step_up_at acl={nekkora_platform=w/migrador_nekkora}
+COLUNA public.identity_sessions.mfa_verified_at acl={nekkora_identity_owner=a/migrador_nekkora}
+COLUNA public.identity_sessions.recovery_cleared_at acl={nekkora_identity_owner=w/migrador_nekkora}
+COLUNA public.identity_sessions.recovery_used_at acl={nekkora_identity_owner=a/migrador_nekkora}
+COLUNA public.identity_sessions.revoked_at acl={nekkora_identity_owner=w/migrador_nekkora,nekkora_platform=w/migrador_nekkora}
+COLUNA public.identity_sessions.session_token_hash acl={nekkora_identity_owner=a/migrador_nekkora}
+COLUNA public.logs.payload acl={nekkora_retention_owner=w/nekkora_retention_tables_owner}
+COLUNA public.logs.purge_run_id acl={nekkora_retention_owner=w/nekkora_retention_tables_owner}
+COLUNA public.logs.purged_at acl={nekkora_retention_owner=w/nekkora_retention_tables_owner}
+COLUNA public.logs.purged_by_user_id acl={nekkora_retention_owner=w/nekkora_retention_tables_owner}
+COLUNA public.mail_outbox.attempts acl={nekkora_platform=w/migrador_nekkora}
+COLUNA public.mail_outbox.correlation_id acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.mail_outbox.deadline_at acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.mail_outbox.event_key acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.mail_outbox.finished_at acl={nekkora_platform=w/migrador_nekkora}
+COLUNA public.mail_outbox.job_id acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.mail_outbox.key_id acl={nekkora_platform=aw/migrador_nekkora}
+COLUNA public.mail_outbox.kind acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.mail_outbox.last_status acl={nekkora_platform=w/migrador_nekkora}
+COLUNA public.mail_outbox.lease_until acl={nekkora_platform=w/migrador_nekkora}
+COLUNA public.mail_outbox.next_attempt_at acl={nekkora_platform=aw/migrador_nekkora}
+COLUNA public.mail_outbox.notice_ref acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.mail_outbox.payload_ciphertext acl={nekkora_platform=aw/migrador_nekkora}
+COLUNA public.mail_outbox.payload_nonce acl={nekkora_platform=aw/migrador_nekkora}
+COLUNA public.mail_outbox.recipient_hmac acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.mail_outbox.state acl={nekkora_platform=aw/migrador_nekkora}
+COLUNA public.mail_outbox.target_organization_id acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.mfa_events.actor_user_id acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.mfa_events.correlation_id acl={nekkora_platform=a/migrador_nekkora,nekkora_ops_mfa_owner=a/migrador_nekkora}
+COLUNA public.mfa_events.created_at acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.mfa_events.event_id acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.mfa_events.event_type acl={nekkora_platform=a/migrador_nekkora,nekkora_ops_mfa_owner=ar/migrador_nekkora}
+COLUNA public.mfa_events.ops_request_id acl={nekkora_ops_mfa_owner=ar/migrador_nekkora}
+COLUNA public.mfa_events.organization_id acl={nekkora_platform=a/migrador_nekkora,nekkora_ops_mfa_owner=ar/migrador_nekkora}
+COLUNA public.mfa_events.reason_code acl={nekkora_platform=a/migrador_nekkora}
+COLUNA public.mfa_events.user_id acl={nekkora_platform=a/migrador_nekkora,nekkora_ops_mfa_owner=ar/migrador_nekkora}
+COLUNA public.organization_memberships.account_type acl={nekkora_identity_owner=a/migrador_nekkora}
+COLUNA public.organization_memberships.membership_id acl={nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.organization_memberships.organization_id acl={nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=ar/migrador_nekkora}
+COLUNA public.organization_memberships.status acl={nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=ar/migrador_nekkora}
+COLUNA public.organization_memberships.user_id acl={nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=ar/migrador_nekkora}
+COLUNA public.organization_role_assignments.membership_id acl={nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.organization_role_assignments.organization_id acl={nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.organization_role_assignments.role_id acl={nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.organization_role_assignments.status acl={nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.organizations.legal_name acl={nekkora_identity_owner=a/migrador_nekkora}
+COLUNA public.organizations.name acl={nekkora_identity_owner=ar/migrador_nekkora}
+COLUNA public.organizations.organization_id acl={nekkora_portal_owner=r/migrador_nekkora,nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=ar/migrador_nekkora}
+COLUNA public.organizations.status acl={nekkora_portal_owner=r/migrador_nekkora,nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=ar/migrador_nekkora}
+COLUNA public.organizations.updated_at acl={nekkora_ops_mfa_owner=w/migrador_nekkora,nekkora_identity_owner=w/migrador_nekkora}
+COLUNA public.password_reset_tokens.consumed_at acl={nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.password_reset_tokens.created_at acl={nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.password_reset_tokens.revoked_at acl={nekkora_identity_owner=rw/migrador_nekkora}
+COLUNA public.password_reset_tokens.user_id acl={nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.roles.code acl={nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.roles.role_id acl={nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.user_credentials.password_hash acl={nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.user_credentials.user_id acl={nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.user_mfa_factors.confirmed_at acl={nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.user_mfa_factors.created_at acl={nekkora_identity_owner=r/migrador_nekkora,nekkora_ops_mfa_owner=r/migrador_nekkora}
+COLUNA public.user_mfa_factors.disabled_at acl={nekkora_ops_mfa_owner=rw/migrador_nekkora,nekkora_identity_owner=rw/migrador_nekkora}
+COLUNA public.user_mfa_factors.factor_id acl={nekkora_ops_mfa_owner=r/migrador_nekkora}
+COLUNA public.user_mfa_factors.last_used_step acl={nekkora_ops_mfa_owner=r/migrador_nekkora}
+COLUNA public.user_mfa_factors.organization_id acl={nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.user_mfa_factors.user_id acl={nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.user_mfa_recovery_codes.created_at acl={nekkora_identity_owner=r/migrador_nekkora,nekkora_ops_mfa_owner=r/migrador_nekkora}
+COLUNA public.user_mfa_recovery_codes.invalidated_at acl={nekkora_ops_mfa_owner=rw/migrador_nekkora,nekkora_identity_owner=rw/migrador_nekkora}
+COLUNA public.user_mfa_recovery_codes.organization_id acl={nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.user_mfa_recovery_codes.used_at acl={nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.user_mfa_recovery_codes.user_id acl={nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.user_sessions.created_at acl={nekkora_portal_owner=r/migrador_nekkora,nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.user_sessions.expires_at acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.user_sessions.identity_session_id acl={nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.user_sessions.last_seen_at acl={nekkora_portal_owner=rw/migrador_nekkora}
+COLUNA public.user_sessions.organization_id acl={nekkora_portal_owner=r/migrador_nekkora,nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.user_sessions.revoked_at acl={nekkora_portal_owner=r/migrador_nekkora,nekkora_ops_mfa_owner=rw/migrador_nekkora,nekkora_identity_owner=rw/migrador_nekkora}
+COLUNA public.user_sessions.session_id acl={nekkora_portal_owner=r/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.user_sessions.session_token_hash acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.user_sessions.user_id acl={nekkora_portal_owner=r/migrador_nekkora,nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.users.account_type acl={nekkora_portal_owner=r/migrador_nekkora,nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=ar/migrador_nekkora}
+COLUNA public.users.display_name acl={nekkora_identity_owner=a/migrador_nekkora}
+COLUNA public.users.email acl={nekkora_identity_owner=ar/migrador_nekkora}
+COLUNA public.users.email_normalized acl={nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.users.email_verified_at acl={nekkora_portal_owner=r/migrador_nekkora,nekkora_identity_owner=ar/migrador_nekkora}
+COLUNA public.users.organization_id acl={nekkora_portal_owner=r/migrador_nekkora,nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=ar/migrador_nekkora}
+COLUNA public.users.status acl={nekkora_portal_owner=r/migrador_nekkora,nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=ar/migrador_nekkora}
+COLUNA public.users.updated_at acl={nekkora_ops_mfa_owner=w/migrador_nekkora,nekkora_identity_owner=w/migrador_nekkora}
+COLUNA public.users.user_id acl={nekkora_portal_owner=r/migrador_nekkora,nekkora_ops_mfa_owner=r/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora}
+COLUNA public.workspaces.client_id acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.workspaces.name acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.workspaces.organization_id acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.workspaces.status acl={nekkora_portal_owner=r/migrador_nekkora}
+COLUNA public.workspaces.workspace_id acl={nekkora_portal_owner=r/migrador_nekkora}
+ESQUEMA ops dono=migrador_nekkora acl={migrador_nekkora=UC/migrador_nekkora,nekkora_ops_mfa_owner=U/migrador_nekkora}
+ESQUEMA public dono=pg_database_owner acl={pg_database_owner=UC/pg_database_owner,=U/pg_database_owner,nekkora_portal=U/pg_database_owner,nekkora_portal_owner=U/pg_database_owner,nekkora_identity_owner=U/pg_database_owner}
+EXTENSAO pgcrypto dono=migrador_nekkora esquema=public
+EXTENSAO plpgsql dono=<superusuario-do-cluster> esquema=pg_catalog
+EXTENSAO sslinfo dono=migrador_nekkora esquema=ops
+FUNCAO allocate_automation_version_number() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO allocate_workspace_parameter_value_number() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO armor(bytea) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO armor(bytea,text[],text[]) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO assert_automation_version_is_draft(uuid) dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO assert_single_category_per_transaction(uuid,integer) dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO assign_received_at_and_lock_barrier(uuid,integer) dono=nekkora_retention_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_retention_owner=X/nekkora_retention_owner,nekkora_ingestion=X/nekkora_retention_owner}
+FUNCAO audit_automation_version_binding_delete() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO audit_automation_version_parameter_binding() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO audit_automation_version_secret_binding() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO audit_workspace_parameter_insert() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO audit_workspace_parameter_update() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO audit_workspace_parameter_value_insert() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO audit_workspace_secret_insert() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO audit_workspace_secret_update() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO check_identity_link_closure() dono=nekkora_identity_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner}
+FUNCAO check_identity_recovery_code_session() dono=nekkora_identity_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner}
+FUNCAO close_pending_occurrences_on_suspend() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO close_usage_day(uuid,integer,date) dono=nekkora_retention_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_retention_owner=X/nekkora_retention_owner,nekkora_retention_executor=X/nekkora_retention_owner}
+FUNCAO create_schedule_occurrence(uuid,uuid,uuid,timestamp with time zone) dono=nekkora_scheduler_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_scheduler_owner=X/nekkora_scheduler_owner,nekkora_scheduler=X/nekkora_scheduler_owner}
+FUNCAO crypt(text,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO dearmor(text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO decrypt(bytea,bytea,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO decrypt_iv(bytea,bytea,bytea,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO digest(bytea,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO digest(text,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO encrypt(bytea,bytea,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO encrypt_iv(bytea,bytea,bytea,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO enforce_automation_schedule_transition() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO enforce_automation_version_draft_creation() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO enforce_automation_version_parameter_binding() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO enforce_automation_version_secret_binding() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO enforce_binding_mutation_in_draft() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO enforce_execution_creation_prerequisites() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO enforce_execution_event_agent_origin() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO enforce_execution_reservation_prerequisites() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO enforce_identity_link_challenge_insert() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO enforce_identity_session_insert() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO enforce_log_historical_origin() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO enforce_org_admin_presence() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO enforce_org_role_assignment_bootstrap() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO enforce_publication_bindings_consistency() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO enforce_redaction_or_reject() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO enforce_resource_limit_revision_creation() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO enforce_retention_policy_revision_creation() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO enforce_schedule_revision_creation() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO enforce_usage_daily_born_open() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO enforce_user_session_mfa_on_insert() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO enforce_worker_registration_capacity() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO finalize_schedule_occurrence_on_execution_insert() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO gen_random_bytes(integer) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO gen_salt(text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO gen_salt(text,integer) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO get_effective_resource_limit(uuid,integer) dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO get_retention_policy_at(uuid,integer,timestamp with time zone) dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO hmac(bytea,bytea,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO hmac(text,text,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO identity_account_is_linked(uuid,uuid) dono=nekkora_identity_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner,nekkora_platform=X/nekkora_identity_owner}
+FUNCAO identity_challenge_lookup(text) dono=nekkora_identity_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner,nekkora_platform=X/nekkora_identity_owner}
+FUNCAO identity_challenge_resolve(text) dono=nekkora_identity_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner}
+FUNCAO identity_check_context(uuid,uuid) dono=nekkora_identity_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner}
+FUNCAO identity_create_organization(text,text,text) dono=nekkora_identity_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner,nekkora_platform=X/nekkora_identity_owner}
+FUNCAO identity_create_organization_impl(text,text,text) dono=nekkora_identity_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner}
+FUNCAO identity_email_token_lookup(text) dono=nekkora_identity_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner,nekkora_platform=X/nekkora_identity_owner}
+FUNCAO identity_link_account(text,text,uuid) dono=nekkora_identity_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner,nekkora_platform=X/nekkora_identity_owner}
+FUNCAO identity_link_account_impl(text,text,uuid) dono=nekkora_identity_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner}
+FUNCAO identity_login_complete(text,text,bigint,text,text,text,timestamp with time zone) dono=nekkora_identity_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner,nekkora_platform=X/nekkora_identity_owner}
+FUNCAO identity_mfa_confirm_first(text,uuid,text[],bigint,text,text,timestamp with time zone) dono=nekkora_identity_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner,nekkora_platform=X/nekkora_identity_owner}
+FUNCAO identity_mfa_enroll_pending(text,text,bytea,bytea,text) dono=nekkora_identity_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner,nekkora_platform=X/nekkora_identity_owner}
+FUNCAO identity_mfa_replace(text,uuid,text[]) dono=nekkora_identity_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner,nekkora_platform=X/nekkora_identity_owner}
+FUNCAO identity_org_creation_allowed(text) dono=nekkora_identity_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner,nekkora_platform=X/nekkora_identity_owner}
+FUNCAO identity_org_session_allowed(uuid,uuid,uuid) dono=nekkora_identity_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner,nekkora_platform=X/nekkora_identity_owner}
+FUNCAO identity_org_session_target(text,uuid) dono=nekkora_identity_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner,nekkora_platform=X/nekkora_identity_owner}
+FUNCAO identity_organizations(text) dono=nekkora_identity_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner,nekkora_platform=X/nekkora_identity_owner}
+FUNCAO identity_password_change(text,text,text) dono=nekkora_identity_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner,nekkora_platform=X/nekkora_identity_owner}
+FUNCAO identity_password_reset(text,text) dono=nekkora_identity_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner,nekkora_platform=X/nekkora_identity_owner}
+FUNCAO identity_recovery_codes_regenerate(text,text[]) dono=nekkora_identity_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner,nekkora_platform=X/nekkora_identity_owner}
+FUNCAO identity_require_read_committed() dono=nekkora_identity_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner}
+FUNCAO identity_resolve_login(text) dono=nekkora_identity_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner,nekkora_platform=X/nekkora_identity_owner}
+FUNCAO identity_session_can_replace_factor(timestamp with time zone,timestamp with time zone,boolean,timestamp with time zone) dono=nekkora_identity_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner}
+FUNCAO identity_session_lookup(text) dono=nekkora_identity_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner,nekkora_platform=X/nekkora_identity_owner}
+FUNCAO identity_session_proof(uuid,timestamp with time zone,text) dono=nekkora_identity_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner}
+FUNCAO identity_session_resolve(text) dono=nekkora_identity_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner}
+FUNCAO identity_signup_state(text) dono=nekkora_identity_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner,nekkora_platform=X/nekkora_identity_owner}
+FUNCAO identity_token_hash(text) dono=nekkora_identity_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner}
+FUNCAO identity_valid_code_hashes(text[]) dono=nekkora_identity_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner}
+FUNCAO identity_valid_session_params(text,text,timestamp with time zone) dono=nekkora_identity_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_identity_owner=X/nekkora_identity_owner}
+FUNCAO is_command_bindings_consistent(jsonb,uuid) dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO is_valid_command_contract(jsonb) dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public"} acl=-
+FUNCAO is_valid_cron_expression(text) dono=migrador_nekkora definer=f config=- acl=-
+FUNCAO is_valid_event_payload(smallint,jsonb) dono=migrador_nekkora definer=f config=- acl=-
+FUNCAO is_valid_log_payload(smallint,jsonb) dono=migrador_nekkora definer=f config=- acl=-
+FUNCAO is_valid_relative_entrypoint(text) dono=migrador_nekkora definer=f config=- acl=-
+FUNCAO materialize_schedule_occurrence() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO ops.alvo_inelegivel(uuid,uuid) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.ato_codigo(text) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.autorizar(uuid,smallint,timestamp with time zone) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.condicao_avisos_demais(uuid,timestamp with time zone) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.contas_em_mudanca(uuid,uuid,uuid[]) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.contato_alterar(uuid,boolean,smallint,text,boolean,uuid,boolean) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.contato_inelegivel(uuid,uuid,timestamp with time zone) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.contatos_elegiveis(uuid,timestamp with time zone) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.criar_avisos(uuid,uuid,uuid,smallint,uuid[]) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.declaracao_invalida(uuid,uuid,uuid) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.demais_admins(uuid,uuid) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.encerrar(uuid,smallint,text,uuid,timestamp with time zone) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.estado_nome(smallint) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.exigir_read_committed() dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.fotografar_admins(uuid,uuid,uuid,uuid[],timestamp with time zone) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.limite_executado(uuid,uuid,timestamp with time zone) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.nova_tentativa(uuid,uuid,uuid,uuid,smallint) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.operador_da_sessao() dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.papel_operador_invalido(text) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.participante_invalido(uuid,smallint,uuid,timestamp with time zone) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.prevent_certificate_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO ops.prevent_contact_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO ops.prevent_entry_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO ops.prevent_key_state_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO ops.prevent_link_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO ops.prevent_notice_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO ops.prevent_notice_token_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO ops.prevent_operator_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO ops.prevent_permission_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO ops.prevent_proof_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO ops.prevent_request_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO ops.registrar(uuid,uuid,uuid,text,text,text,uuid,text,numeric,uuid,smallint) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.registrar_cadastro(text,text,text,smallint,uuid,uuid,smallint,uuid,uuid,uuid,text,numeric) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.ssl_cipher() dono=migrador_nekkora definer=f config=- acl={migrador_nekkora=X/migrador_nekkora,nekkora_ops_mfa_owner=X/migrador_nekkora}
+FUNCAO ops.ssl_client_cert_present() dono=migrador_nekkora definer=f config=- acl={migrador_nekkora=X/migrador_nekkora,nekkora_ops_mfa_owner=X/migrador_nekkora}
+FUNCAO ops.ssl_client_dn() dono=migrador_nekkora definer=f config=- acl={migrador_nekkora=X/migrador_nekkora,nekkora_ops_mfa_owner=X/migrador_nekkora}
+FUNCAO ops.ssl_client_dn_field(text) dono=migrador_nekkora definer=f config=- acl={migrador_nekkora=X/migrador_nekkora,nekkora_ops_mfa_owner=X/migrador_nekkora}
+FUNCAO ops.ssl_client_serial() dono=migrador_nekkora definer=f config=- acl={migrador_nekkora=X/migrador_nekkora,nekkora_ops_mfa_owner=X/migrador_nekkora}
+FUNCAO ops.ssl_extension_info() dono=migrador_nekkora definer=f config=- acl={migrador_nekkora=X/migrador_nekkora,nekkora_ops_mfa_owner=X/migrador_nekkora}
+FUNCAO ops.ssl_is_used() dono=migrador_nekkora definer=f config=- acl={migrador_nekkora=X/migrador_nekkora,nekkora_ops_mfa_owner=X/migrador_nekkora}
+FUNCAO ops.ssl_issuer_dn() dono=migrador_nekkora definer=f config=- acl={migrador_nekkora=X/migrador_nekkora,nekkora_ops_mfa_owner=X/migrador_nekkora}
+FUNCAO ops.ssl_issuer_field(text) dono=migrador_nekkora definer=f config=- acl={migrador_nekkora=X/migrador_nekkora,nekkora_ops_mfa_owner=X/migrador_nekkora}
+FUNCAO ops.ssl_version() dono=migrador_nekkora definer=f config=- acl={migrador_nekkora=X/migrador_nekkora,nekkora_ops_mfa_owner=X/migrador_nekkora}
+FUNCAO ops.tem_vinculo(uuid,uuid) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.tentativa_vigente(uuid,uuid,smallint) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.travar_contas(uuid,uuid,uuid[]) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.travar_operadores(uuid[],uuid[]) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.usar_token(uuid,text,smallint) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops.vencida(smallint,timestamp with time zone,timestamp with time zone,timestamp with time zone,timestamp with time zone) dono=nekkora_ops_mfa_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops_account_proof_issue(uuid,uuid,text) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_platform=X/nekkora_ops_mfa_owner}
+FUNCAO ops_bootstrap_operator(text,text,text) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner}
+FUNCAO ops_ca_resolve_operator(text,text) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_ca=X/nekkora_ops_mfa_owner}
+FUNCAO ops_contact_add(uuid,text,smallint,text,uuid,text,boolean) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_mfa=X/nekkora_ops_mfa_owner}
+FUNCAO ops_contact_change_channel(uuid,smallint,text,boolean,uuid,boolean) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_mfa=X/nekkora_ops_mfa_owner}
+FUNCAO ops_contact_link_code_issue(uuid,text) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_mfa=X/nekkora_ops_mfa_owner}
+FUNCAO ops_contact_remove(uuid,boolean,uuid,boolean) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_mfa=X/nekkora_ops_mfa_owner}
+FUNCAO ops_intake_key_activate(integer) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_intake=X/nekkora_ops_mfa_owner}
+FUNCAO ops_intake_register(smallint,smallint,integer,text,integer,text,text) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_intake=X/nekkora_ops_mfa_owner}
+FUNCAO ops_link_contact(text) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_mfa=X/nekkora_ops_mfa_owner}
+FUNCAO ops_link_platform_account(text) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_mfa=X/nekkora_ops_mfa_owner}
+FUNCAO ops_link_remove(text,uuid) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_mfa=X/nekkora_ops_mfa_owner}
+FUNCAO ops_mfa_callback_register(uuid) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_mfa=X/nekkora_ops_mfa_owner}
+FUNCAO ops_mfa_cancel(uuid,text) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_mfa=X/nekkora_ops_mfa_owner}
+FUNCAO ops_mfa_execute(uuid) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_mfa=X/nekkora_ops_mfa_owner}
+FUNCAO ops_mfa_final_approve(uuid) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_mfa=X/nekkora_ops_mfa_owner}
+FUNCAO ops_mfa_open(uuid,uuid,uuid,uuid,uuid) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_mfa=X/nekkora_ops_mfa_owner}
+FUNCAO ops_mfa_preapprove(uuid) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_mfa=X/nekkora_ops_mfa_owner}
+FUNCAO ops_mfa_record_failure(uuid,text,text,text) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_mfa=X/nekkora_ops_mfa_owner}
+FUNCAO ops_mfa_resend_notice(uuid,uuid) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_mfa=X/nekkora_ops_mfa_owner}
+FUNCAO ops_mfa_status(uuid) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=,lock_timeout=10s} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_mfa=X/nekkora_ops_mfa_owner}
+FUNCAO ops_mfa_verify(uuid,boolean,uuid,boolean,text) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_mfa=X/nekkora_ops_mfa_owner}
+FUNCAO ops_notice_attempt_state(uuid) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_platform=X/nekkora_ops_mfa_owner}
+FUNCAO ops_notice_claim(uuid,uuid) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_platform=X/nekkora_ops_mfa_owner}
+FUNCAO ops_notice_confirm(uuid,text) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_platform=X/nekkora_ops_mfa_owner}
+FUNCAO ops_notice_contest(uuid,text) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_platform=X/nekkora_ops_mfa_owner}
+FUNCAO ops_notice_delivery_result(uuid,smallint,text) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_platform=X/nekkora_ops_mfa_owner}
+FUNCAO ops_notice_issue(uuid,text,text) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_platform=X/nekkora_ops_mfa_owner}
+FUNCAO ops_notice_pending(integer) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_platform=X/nekkora_ops_mfa_owner}
+FUNCAO ops_notice_recover(uuid) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_platform=X/nekkora_ops_mfa_owner}
+FUNCAO ops_notice_stalled(integer) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_platform=X/nekkora_ops_mfa_owner}
+FUNCAO ops_operator_create(text,text,text) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_mfa=X/nekkora_ops_mfa_owner}
+FUNCAO ops_operator_disable(uuid) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_mfa=X/nekkora_ops_mfa_owner}
+FUNCAO ops_operator_grant(uuid,text) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_mfa=X/nekkora_ops_mfa_owner}
+FUNCAO ops_operator_revoke(uuid,text) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_mfa=X/nekkora_ops_mfa_owner}
+FUNCAO ops_register_certificate(text,text,text,text,numeric,timestamp with time zone,timestamp with time zone,timestamp with time zone,text) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_ca=X/nekkora_ops_mfa_owner}
+FUNCAO ops_revoke_certificate(text,numeric) dono=nekkora_ops_mfa_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_ops_mfa_owner=X/nekkora_ops_mfa_owner,nekkora_ops_ca=X/nekkora_ops_mfa_owner}
+FUNCAO pgp_armor_headers(text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO pgp_key_id(bytea) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO pgp_pub_decrypt(bytea,bytea) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO pgp_pub_decrypt(bytea,bytea,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO pgp_pub_decrypt(bytea,bytea,text,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO pgp_pub_decrypt_bytea(bytea,bytea) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO pgp_pub_decrypt_bytea(bytea,bytea,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO pgp_pub_decrypt_bytea(bytea,bytea,text,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO pgp_pub_encrypt(text,bytea) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO pgp_pub_encrypt(text,bytea,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO pgp_pub_encrypt_bytea(bytea,bytea) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO pgp_pub_encrypt_bytea(bytea,bytea,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO pgp_sym_decrypt(bytea,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO pgp_sym_decrypt(bytea,text,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO pgp_sym_decrypt_bytea(bytea,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO pgp_sym_decrypt_bytea(bytea,text,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO pgp_sym_encrypt(text,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO pgp_sym_encrypt(text,text,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO pgp_sym_encrypt_bytea(bytea,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO pgp_sym_encrypt_bytea(bytea,text,text) dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO portal_authorized_workspaces(uuid,uuid,uuid,timestamp with time zone) dono=nekkora_portal_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_portal_owner=X/nekkora_portal_owner}
+FUNCAO portal_get_execution(uuid,text,uuid) dono=nekkora_portal_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_portal_owner=X/nekkora_portal_owner,nekkora_portal=X/nekkora_portal_owner}
+FUNCAO portal_list_execution_events(uuid,text,uuid) dono=nekkora_portal_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_portal_owner=X/nekkora_portal_owner,nekkora_portal=X/nekkora_portal_owner}
+FUNCAO portal_list_executions(uuid,text,uuid,smallint[],timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid,integer) dono=nekkora_portal_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_portal_owner=X/nekkora_portal_owner,nekkora_portal=X/nekkora_portal_owner}
+FUNCAO portal_list_workspaces(uuid,text) dono=nekkora_portal_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_portal_owner=X/nekkora_portal_owner,nekkora_portal=X/nekkora_portal_owner}
+FUNCAO portal_resolve_session(uuid,text) dono=nekkora_portal_owner definer=f config={"search_path=pg_catalog, pg_temp"} acl={nekkora_portal_owner=X/nekkora_portal_owner}
+FUNCAO prevent_agent_credential_origin_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO prevent_agent_origin_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO prevent_auth_challenge_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO prevent_automation_origin_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO prevent_automation_version_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO prevent_client_workspace_grant_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO prevent_delete() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO prevent_execution_mutation() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO prevent_identity_auth_challenge_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO prevent_identity_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO prevent_identity_credential_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO prevent_identity_email_token_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO prevent_identity_link_challenge_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO prevent_identity_reassignment() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO prevent_identity_session_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO prevent_local_token_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO prevent_mfa_factor_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO prevent_mfa_recovery_code_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO prevent_occurrence_mutation() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO prevent_org_role_assignment_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO prevent_truncate() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO prevent_update() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO prevent_usage_origin_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO prevent_user_credential_reassignment() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO prevent_user_session_reactivation() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO prevent_worker_agent_assignment_origin_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO prevent_worker_agent_end_during_execution() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO prevent_worker_origin_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO prevent_worker_workspace_assignment_origin_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO prevent_workspace_parameter_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO prevent_workspace_role_assignment_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO prevent_workspace_secret_change() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+FUNCAO process_schedule_occurrence(uuid,boolean) dono=nekkora_scheduler_owner definer=f config={"search_path=pg_catalog, public, pg_temp"} acl={nekkora_scheduler_owner=X/nekkora_scheduler_owner}
+FUNCAO process_schedule_occurrence(uuid,uuid,boolean) dono=nekkora_scheduler_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_scheduler_owner=X/nekkora_scheduler_owner,nekkora_scheduler=X/nekkora_scheduler_owner}
+FUNCAO protect_identity_mfa_factor() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO protect_identity_recovery_code() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO protect_mail_outbox() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO provision_first_org_admin(uuid,uuid,uuid,text,uuid) dono=nekkora_provisioning_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_provisioning_owner=X/nekkora_provisioning_owner,nekkora_provisioning=X/nekkora_provisioning_owner,nekkora_identity_owner=X/nekkora_provisioning_owner}
+FUNCAO provision_organization(uuid,text,text,uuid,resource_limit_input[]) dono=nekkora_provisioning_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_provisioning_owner=X/nekkora_provisioning_owner,nekkora_provisioning=X/nekkora_provisioning_owner}
+FUNCAO provision_resource_limit(uuid,integer,smallint,bigint,uuid) dono=nekkora_provisioning_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_provisioning_owner=X/nekkora_provisioning_owner,nekkora_provisioning=X/nekkora_provisioning_owner,nekkora_identity_owner=X/nekkora_provisioning_owner}
+FUNCAO provision_retention_policy(uuid,integer,smallint,integer,uuid) dono=nekkora_provisioning_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_provisioning_owner=X/nekkora_provisioning_owner,nekkora_provisioning=X/nekkora_provisioning_owner}
+FUNCAO public.gen_random_uuid() dono=<superusuario-do-cluster> definer=f config=- acl=-
+FUNCAO purge_expired_records(uuid,integer,uuid,integer) dono=nekkora_retention_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_retention_owner=X/nekkora_retention_owner}
+FUNCAO reconsolidate_usage_day(uuid,integer,date) dono=nekkora_retention_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_retention_owner=X/nekkora_retention_owner,nekkora_retention_executor=X/nekkora_retention_owner}
+FUNCAO refuse_local_entry_for_linked_account() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, pg_temp"} acl={migrador_nekkora=X/migrador_nekkora}
+FUNCAO set_schedule_status(uuid,uuid,smallint,uuid) dono=nekkora_scheduler_owner definer=t config={"search_path=pg_catalog, pg_temp"} acl={nekkora_scheduler_owner=X/nekkora_scheduler_owner,nekkora_platform=X/nekkora_scheduler_owner}
+FUNCAO set_updated_at() dono=migrador_nekkora definer=f config={"search_path=pg_catalog, public, pg_temp"} acl=-
+PADRAO dono=migrador_nekkora esquema=- tipo=f acl={migrador_nekkora=X/migrador_nekkora}
+PAPEL backup_nekkora login=t createrole=f createdb=f bypassrls=t replication=f inherit=t connlimit=-1
+PAPEL migrador_nekkora login=t createrole=f createdb=f bypassrls=f replication=f inherit=t connlimit=-1
+PAPEL nekkora_identity_owner login=f createrole=f createdb=f bypassrls=f replication=f inherit=t connlimit=-1
+PAPEL nekkora_ingestion login=t createrole=f createdb=f bypassrls=f replication=f inherit=t connlimit=-1
+PAPEL nekkora_ops_ca login=t createrole=f createdb=f bypassrls=f replication=f inherit=t connlimit=-1
+PAPEL nekkora_ops_intake login=t createrole=f createdb=f bypassrls=f replication=f inherit=t connlimit=-1
+PAPEL nekkora_ops_mfa login=f createrole=f createdb=f bypassrls=f replication=f inherit=t connlimit=-1
+PAPEL nekkora_ops_mfa_owner login=f createrole=f createdb=f bypassrls=f replication=f inherit=t connlimit=-1
+PAPEL nekkora_platform login=t createrole=f createdb=f bypassrls=f replication=f inherit=t connlimit=-1
+PAPEL nekkora_portal login=t createrole=f createdb=f bypassrls=f replication=f inherit=t connlimit=-1
+PAPEL nekkora_portal_owner login=f createrole=f createdb=f bypassrls=f replication=f inherit=t connlimit=-1
+PAPEL nekkora_provisioning login=t createrole=f createdb=f bypassrls=f replication=f inherit=t connlimit=-1
+PAPEL nekkora_provisioning_owner login=f createrole=f createdb=f bypassrls=f replication=f inherit=t connlimit=-1
+PAPEL nekkora_retention_executor login=t createrole=f createdb=f bypassrls=f replication=f inherit=t connlimit=-1
+PAPEL nekkora_retention_owner login=f createrole=f createdb=f bypassrls=f replication=f inherit=t connlimit=-1
+PAPEL nekkora_retention_tables_owner login=f createrole=f createdb=f bypassrls=f replication=f inherit=t connlimit=-1
+PAPEL nekkora_scheduler login=t createrole=f createdb=f bypassrls=f replication=f inherit=t connlimit=-1
+PAPEL nekkora_scheduler_owner login=f createrole=f createdb=f bypassrls=f replication=f inherit=t connlimit=-1
+PAPEL op_hml_apr login=t createrole=f createdb=f bypassrls=f replication=f inherit=t connlimit=-1
+PAPEL op_hml_cad login=t createrole=f createdb=f bypassrls=f replication=f inherit=t connlimit=-1
+PAPEL op_hml_exe login=t createrole=f createdb=f bypassrls=f replication=f inherit=t connlimit=-1
+PAPEL op_hml_ver login=t createrole=f createdb=f bypassrls=f replication=f inherit=t connlimit=-1
+PERTINENCIA nekkora_ops_mfa -> op_hml_apr admin=f inherit=t set=t
+PERTINENCIA nekkora_ops_mfa -> op_hml_cad admin=f inherit=t set=t
+PERTINENCIA nekkora_ops_mfa -> op_hml_exe admin=f inherit=t set=t
+PERTINENCIA nekkora_ops_mfa -> op_hml_ver admin=f inherit=t set=t
+PERTINENCIA pg_read_all_data -> backup_nekkora admin=f inherit=t set=t
+POLITICA public.agent_credentials.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.agent_credentials.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.agents.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.agents.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.auth_challenges.identity_function_context cmd=ALL papeis={nekkora_identity_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.auth_challenges.ops_function_context cmd=ALL papeis={nekkora_ops_mfa_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.auth_challenges.tenant_request_context cmd=ALL papeis={nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.automation_schedule_occurrences.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.automation_schedule_occurrences.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.automation_schedule_revisions.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.automation_schedule_revisions.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.automation_schedules.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.automation_schedules.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.automation_version_bindings.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.automation_version_bindings.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.automation_version_parameter_bindings.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.automation_version_parameter_bindings.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.automation_version_secret_bindings.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.automation_version_secret_bindings.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.automation_versions.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.automation_versions.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.automations.portal_function_context cmd=SELECT papeis={nekkora_portal_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=-
+POLITICA public.automations.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.automations.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.client_memberships.portal_function_context cmd=SELECT papeis={nekkora_portal_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=-
+POLITICA public.client_memberships.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.client_memberships.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.client_workspace_grant_approvals.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.client_workspace_grant_approvals.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.client_workspace_grant_reviews.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.client_workspace_grant_reviews.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.client_workspace_grants.portal_function_context cmd=SELECT papeis={nekkora_portal_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=-
+POLITICA public.client_workspace_grants.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.client_workspace_grants.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.clients.portal_function_context cmd=SELECT papeis={nekkora_portal_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=-
+POLITICA public.clients.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.clients.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.email_verification_tokens.identity_function_context cmd=ALL papeis={nekkora_identity_owner} permissiva=PERMISSIVE using=(EXISTS ( SELECT 1
+   FROM users u
+  WHERE ((u.user_id = email_verification_tokens.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)))) check=(EXISTS ( SELECT 1
+   FROM users u
+  WHERE ((u.user_id = email_verification_tokens.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid))))
+POLITICA public.email_verification_tokens.tenant_request_context cmd=ALL papeis={nekkora_platform} permissiva=PERMISSIVE using=(EXISTS ( SELECT 1
+   FROM users u
+  WHERE ((u.user_id = email_verification_tokens.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)))) check=(EXISTS ( SELECT 1
+   FROM users u
+  WHERE ((u.user_id = email_verification_tokens.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid))))
+POLITICA public.execution_events.portal_function_context cmd=SELECT papeis={nekkora_portal_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=-
+POLITICA public.execution_events.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.execution_events.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.executions.portal_function_context cmd=SELECT papeis={nekkora_portal_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=-
+POLITICA public.executions.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.executions.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.identities.identity_function_scope cmd=ALL papeis={nekkora_identity_owner} permissiva=PERMISSIVE using=true check=true
+POLITICA public.identities.identity_request_context cmd=ALL papeis={nekkora_platform} permissiva=PERMISSIVE using=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid) check=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+POLITICA public.identity_auth_challenges.identity_function_scope cmd=ALL papeis={nekkora_identity_owner} permissiva=PERMISSIVE using=true check=true
+POLITICA public.identity_auth_challenges.identity_request_context cmd=ALL papeis={nekkora_platform} permissiva=PERMISSIVE using=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid) check=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+POLITICA public.identity_credentials.identity_function_scope cmd=ALL papeis={nekkora_identity_owner} permissiva=PERMISSIVE using=true check=true
+POLITICA public.identity_credentials.identity_request_context cmd=ALL papeis={nekkora_platform} permissiva=PERMISSIVE using=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid) check=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+POLITICA public.identity_email_tokens.identity_function_scope cmd=ALL papeis={nekkora_identity_owner} permissiva=PERMISSIVE using=true check=true
+POLITICA public.identity_email_tokens.identity_request_context cmd=ALL papeis={nekkora_platform} permissiva=PERMISSIVE using=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid) check=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+POLITICA public.identity_events.identity_function_scope cmd=ALL papeis={nekkora_identity_owner} permissiva=PERMISSIVE using=true check=true
+POLITICA public.identity_events.identity_request_context cmd=ALL papeis={nekkora_platform} permissiva=PERMISSIVE using=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid) check=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+POLITICA public.identity_invitations.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.identity_invitations.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.identity_link_challenges.identity_function_scope cmd=ALL papeis={nekkora_identity_owner} permissiva=PERMISSIVE using=true check=true
+POLITICA public.identity_link_challenges.identity_request_context cmd=ALL papeis={nekkora_platform} permissiva=PERMISSIVE using=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid) check=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+POLITICA public.identity_mfa_factors.identity_function_scope cmd=ALL papeis={nekkora_identity_owner} permissiva=PERMISSIVE using=true check=true
+POLITICA public.identity_mfa_factors.identity_request_context cmd=ALL papeis={nekkora_platform} permissiva=PERMISSIVE using=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid) check=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+POLITICA public.identity_mfa_recovery_codes.identity_function_scope cmd=ALL papeis={nekkora_identity_owner} permissiva=PERMISSIVE using=true check=true
+POLITICA public.identity_mfa_recovery_codes.identity_request_context cmd=ALL papeis={nekkora_platform} permissiva=PERMISSIVE using=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid) check=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+POLITICA public.identity_provisioning_events.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.identity_provisioning_events.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.identity_sessions.identity_function_scope cmd=ALL papeis={nekkora_identity_owner} permissiva=PERMISSIVE using=true check=true
+POLITICA public.identity_sessions.identity_request_context cmd=ALL papeis={nekkora_platform} permissiva=PERMISSIVE using=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid) check=(identity_id = (NULLIF(current_setting('nekkora.identity_id'::text, true), ''::text))::uuid)
+POLITICA public.identity_users.identity_function_scope cmd=ALL papeis={nekkora_identity_owner} permissiva=PERMISSIVE using=true check=true
+POLITICA public.logs.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.logs.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.mfa_events.ops_function_context cmd=ALL papeis={nekkora_ops_mfa_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.mfa_events.tenant_request_context cmd=ALL papeis={nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organization_domains.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organization_domains.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organization_memberships.identity_function_context cmd=ALL papeis={nekkora_identity_owner} permissiva=PERMISSIVE using=((organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) OR (EXISTS ( SELECT 1
+   FROM identity_users iu
+  WHERE ((iu.user_id = organization_memberships.user_id) AND (iu.identity_id = (NULLIF(current_setting('nekkora.fn_identity_id'::text, true), ''::text))::uuid))))) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organization_memberships.ops_function_context cmd=ALL papeis={nekkora_ops_mfa_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organization_memberships.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organization_memberships.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organization_purge_runs.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organization_purge_runs.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organization_resource_limit_revisions.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organization_resource_limit_revisions.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organization_retention_policy_revisions.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organization_retention_policy_revisions.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organization_role_assignments.identity_function_context cmd=ALL papeis={nekkora_identity_owner} permissiva=PERMISSIVE using=((organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) OR (EXISTS ( SELECT 1
+   FROM (identity_users iu
+     JOIN organization_memberships m ON ((m.user_id = iu.user_id)))
+  WHERE ((m.organization_id = organization_role_assignments.organization_id) AND (m.membership_id = organization_role_assignments.membership_id) AND (iu.identity_id = (NULLIF(current_setting('nekkora.fn_identity_id'::text, true), ''::text))::uuid))))) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organization_role_assignments.ops_function_context cmd=ALL papeis={nekkora_ops_mfa_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organization_role_assignments.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organization_role_assignments.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organization_usage_daily.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organization_usage_daily.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organizations.identity_function_context cmd=ALL papeis={nekkora_identity_owner} permissiva=PERMISSIVE using=((organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) OR (EXISTS ( SELECT 1
+   FROM (identity_users iu
+     JOIN users u ON ((u.user_id = iu.user_id)))
+  WHERE ((u.organization_id = organizations.organization_id) AND (iu.identity_id = (NULLIF(current_setting('nekkora.fn_identity_id'::text, true), ''::text))::uuid))))) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organizations.ops_function_context cmd=ALL papeis={nekkora_ops_mfa_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organizations.portal_function_context cmd=SELECT papeis={nekkora_portal_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=-
+POLITICA public.organizations.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.organizations.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.password_reset_tokens.identity_function_context cmd=ALL papeis={nekkora_identity_owner} permissiva=PERMISSIVE using=(EXISTS ( SELECT 1
+   FROM users u
+  WHERE ((u.user_id = password_reset_tokens.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)))) check=(EXISTS ( SELECT 1
+   FROM users u
+  WHERE ((u.user_id = password_reset_tokens.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid))))
+POLITICA public.password_reset_tokens.tenant_request_context cmd=ALL papeis={nekkora_platform} permissiva=PERMISSIVE using=(EXISTS ( SELECT 1
+   FROM users u
+  WHERE ((u.user_id = password_reset_tokens.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)))) check=(EXISTS ( SELECT 1
+   FROM users u
+  WHERE ((u.user_id = password_reset_tokens.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid))))
+POLITICA public.user_credentials.identity_function_context cmd=ALL papeis={nekkora_identity_owner} permissiva=PERMISSIVE using=(EXISTS ( SELECT 1
+   FROM users u
+  WHERE ((u.user_id = user_credentials.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)))) check=(EXISTS ( SELECT 1
+   FROM users u
+  WHERE ((u.user_id = user_credentials.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid))))
+POLITICA public.user_credentials.tenant_request_context cmd=ALL papeis={nekkora_platform} permissiva=PERMISSIVE using=(EXISTS ( SELECT 1
+   FROM users u
+  WHERE ((u.user_id = user_credentials.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)))) check=(EXISTS ( SELECT 1
+   FROM users u
+  WHERE ((u.user_id = user_credentials.user_id) AND (u.organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid))))
+POLITICA public.user_mfa_factors.identity_function_context cmd=ALL papeis={nekkora_identity_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.user_mfa_factors.ops_function_context cmd=ALL papeis={nekkora_ops_mfa_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.user_mfa_factors.tenant_request_context cmd=ALL papeis={nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.user_mfa_recovery_codes.identity_function_context cmd=ALL papeis={nekkora_identity_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.user_mfa_recovery_codes.ops_function_context cmd=ALL papeis={nekkora_ops_mfa_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.user_mfa_recovery_codes.tenant_request_context cmd=ALL papeis={nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.user_sessions.identity_function_context cmd=ALL papeis={nekkora_identity_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.user_sessions.ops_function_context cmd=ALL papeis={nekkora_ops_mfa_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.user_sessions.portal_function_context cmd=SELECT papeis={nekkora_portal_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=-
+POLITICA public.user_sessions.portal_function_context_update cmd=UPDATE papeis={nekkora_portal_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.user_sessions.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.user_sessions.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.users.identity_function_context cmd=ALL papeis={nekkora_identity_owner} permissiva=PERMISSIVE using=((organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) OR (EXISTS ( SELECT 1
+   FROM identity_users iu
+  WHERE ((iu.user_id = users.user_id) AND (iu.identity_id = (NULLIF(current_setting('nekkora.fn_identity_id'::text, true), ''::text))::uuid))))) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.users.ops_function_context cmd=ALL papeis={nekkora_ops_mfa_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.users.portal_function_context cmd=SELECT papeis={nekkora_portal_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=-
+POLITICA public.users.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.users.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.worker_agent_assignments.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.worker_agent_assignments.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.worker_workspace_assignments.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.worker_workspace_assignments.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.workers.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.workers.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.workspace_configuration_events.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.workspace_configuration_events.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.workspace_parameter_values.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.workspace_parameter_values.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.workspace_parameters.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.workspace_parameters.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.workspace_role_assignments.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.workspace_role_assignments.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.workspace_secrets.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.workspace_secrets.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+POLITICA public.workspaces.portal_function_context cmd=SELECT papeis={nekkora_portal_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=-
+POLITICA public.workspaces.tenant_function_context cmd=ALL papeis={nekkora_provisioning_owner,nekkora_retention_owner,nekkora_scheduler_owner} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+POLITICA public.workspaces.tenant_request_context cmd=ALL papeis={nekkora_ingestion,nekkora_platform} permissiva=PERMISSIVE using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid) check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+RELACAO ops.ops_account_link_proofs tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_ops_mfa_owner=arw/migrador_nekkora} rls=f forcada=f
+RELACAO ops.ops_contact_link_proofs tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_ops_mfa_owner=arw/migrador_nekkora} rls=f forcada=f
+RELACAO ops.ops_intake_entries tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_ops_mfa_owner=arw/migrador_nekkora} rls=f forcada=f
+RELACAO ops.ops_intake_key_state tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_ops_mfa_owner=rw/migrador_nekkora} rls=f forcada=f
+RELACAO ops.ops_mfa_approval_attempts tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_ops_mfa_owner=ar/migrador_nekkora} rls=f forcada=f
+RELACAO ops.ops_mfa_callbacks tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_ops_mfa_owner=arw/migrador_nekkora} rls=f forcada=f
+RELACAO ops.ops_mfa_notice_results tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_ops_mfa_owner=ar/migrador_nekkora} rls=f forcada=f
+RELACAO ops.ops_mfa_notice_tokens tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_ops_mfa_owner=arw/migrador_nekkora} rls=f forcada=f
+RELACAO ops.ops_mfa_notices tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_ops_mfa_owner=arw/migrador_nekkora} rls=f forcada=f
+RELACAO ops.ops_mfa_recovery_events tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_ops_mfa_owner=ar/migrador_nekkora} rls=f forcada=f
+RELACAO ops.ops_mfa_recovery_requests tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_ops_mfa_owner=arw/migrador_nekkora} rls=f forcada=f
+RELACAO ops.ops_mfa_request_admins tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_ops_mfa_owner=ar/migrador_nekkora} rls=f forcada=f
+RELACAO ops.ops_operator_certificates tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_ops_mfa_owner=arw/migrador_nekkora} rls=f forcada=f
+RELACAO ops.ops_operator_contact_links tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_ops_mfa_owner=arw/migrador_nekkora} rls=f forcada=f
+RELACAO ops.ops_operator_permissions tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_ops_mfa_owner=arw/migrador_nekkora} rls=f forcada=f
+RELACAO ops.ops_operator_platform_accounts tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_ops_mfa_owner=arw/migrador_nekkora} rls=f forcada=f
+RELACAO ops.ops_operators tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_ops_mfa_owner=arw/migrador_nekkora} rls=f forcada=f
+RELACAO ops.ops_origin_buckets tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_ops_mfa_owner=arw/migrador_nekkora} rls=f forcada=f
+RELACAO ops.ops_registry_events tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_ops_mfa_owner=ar/migrador_nekkora} rls=f forcada=f
+RELACAO ops.org_authorized_contact_events tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_ops_mfa_owner=ar/migrador_nekkora} rls=f forcada=f
+RELACAO ops.org_authorized_contacts tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_ops_mfa_owner=arw/migrador_nekkora} rls=f forcada=f
+RELACAO public.agent_credentials tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=ar/migrador_nekkora} rls=t forcada=t
+RELACAO public.agents tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora} rls=t forcada=t
+RELACAO public.auth_challenges tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora} rls=t forcada=t
+RELACAO public.automation_schedule_occurrences tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=r/migrador_nekkora,nekkora_scheduler_owner=arw/migrador_nekkora} rls=t forcada=t
+RELACAO public.automation_schedule_revisions tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=ar/migrador_nekkora,nekkora_scheduler_owner=r/migrador_nekkora} rls=t forcada=t
+RELACAO public.automation_schedules tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=ar/migrador_nekkora,nekkora_scheduler_owner=rw/migrador_nekkora} rls=t forcada=t
+RELACAO public.automation_version_bindings tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arwd/migrador_nekkora,nekkora_scheduler_owner=r/migrador_nekkora} rls=t forcada=t
+RELACAO public.automation_version_parameter_bindings tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=ar/migrador_nekkora} rls=t forcada=t
+RELACAO public.automation_version_secret_bindings tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=ar/migrador_nekkora,nekkora_scheduler_owner=r/migrador_nekkora} rls=t forcada=t
+RELACAO public.automation_versions tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora,nekkora_scheduler_owner=r/migrador_nekkora} rls=t forcada=t
+RELACAO public.automations tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora,nekkora_scheduler_owner=r/migrador_nekkora} rls=t forcada=t
+RELACAO public.client_memberships tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora} rls=t forcada=t
+RELACAO public.client_workspace_grant_approvals tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=ar/migrador_nekkora} rls=t forcada=t
+RELACAO public.client_workspace_grant_reviews tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=ar/migrador_nekkora} rls=t forcada=t
+RELACAO public.client_workspace_grants tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora} rls=t forcada=t
+RELACAO public.clients tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora} rls=t forcada=t
+RELACAO public.email_verification_tokens tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora} rls=t forcada=t
+RELACAO public.execution_events tipo=r dono=nekkora_retention_tables_owner acl={nekkora_retention_tables_owner=arwdDxt/nekkora_retention_tables_owner,nekkora_retention_owner=r/nekkora_retention_tables_owner,nekkora_platform=r/nekkora_retention_tables_owner,nekkora_ingestion=ar/nekkora_retention_tables_owner} rls=t forcada=t
+RELACAO public.executions tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora,nekkora_ingestion=r/migrador_nekkora,nekkora_scheduler_owner=ar/migrador_nekkora} rls=t forcada=t
+RELACAO public.flyway_schema_history tipo=r dono=migrador_nekkora acl=- rls=f forcada=f
+RELACAO public.identities tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=r/migrador_nekkora} rls=t forcada=t
+RELACAO public.identity_auth_challenges tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=r/migrador_nekkora} rls=t forcada=t
+RELACAO public.identity_credentials tipo=r dono=migrador_nekkora acl=- rls=t forcada=t
+RELACAO public.identity_email_tokens tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=r/migrador_nekkora} rls=t forcada=t
+RELACAO public.identity_events tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_identity_owner=a/migrador_nekkora} rls=t forcada=t
+RELACAO public.identity_invitations tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora} rls=t forcada=t
+RELACAO public.identity_link_challenges tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora,nekkora_platform=r/migrador_nekkora} rls=t forcada=t
+RELACAO public.identity_mfa_factors tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_identity_owner=ar/migrador_nekkora,nekkora_platform=r/migrador_nekkora} rls=t forcada=t
+RELACAO public.identity_mfa_recovery_codes tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_identity_owner=ar/migrador_nekkora,nekkora_platform=r/migrador_nekkora} rls=t forcada=t
+RELACAO public.identity_provisioning_events tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_provisioning_owner=a/migrador_nekkora} rls=t forcada=t
+RELACAO public.identity_sessions tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_identity_owner=r/migrador_nekkora,nekkora_platform=r/migrador_nekkora} rls=t forcada=t
+RELACAO public.identity_users tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_identity_owner=ar/migrador_nekkora} rls=t forcada=t
+RELACAO public.logs tipo=r dono=nekkora_retention_tables_owner acl={nekkora_retention_tables_owner=arwdDxt/nekkora_retention_tables_owner,nekkora_retention_owner=r/nekkora_retention_tables_owner,nekkora_platform=r/nekkora_retention_tables_owner,nekkora_ingestion=ar/nekkora_retention_tables_owner} rls=t forcada=t
+RELACAO public.mail_outbox tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=rd/migrador_nekkora} rls=f forcada=f
+RELACAO public.mfa_events tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=r/migrador_nekkora} rls=t forcada=t
+RELACAO public.organization_domains tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora} rls=t forcada=t
+RELACAO public.organization_memberships tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora} rls=t forcada=t
+RELACAO public.organization_purge_runs tipo=r dono=nekkora_retention_tables_owner acl={nekkora_retention_tables_owner=arwdDxt/nekkora_retention_tables_owner,nekkora_retention_owner=ar/nekkora_retention_tables_owner} rls=t forcada=t
+RELACAO public.organization_resource_limit_revisions tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=r/migrador_nekkora,nekkora_scheduler_owner=r/migrador_nekkora,nekkora_provisioning_owner=ar/migrador_nekkora} rls=t forcada=t
+RELACAO public.organization_retention_policy_revisions tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_retention_owner=r/migrador_nekkora,nekkora_platform=r/migrador_nekkora,nekkora_ingestion=r/migrador_nekkora,nekkora_provisioning_owner=ar/migrador_nekkora} rls=t forcada=t
+RELACAO public.organization_role_assignments tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora,nekkora_provisioning_owner=ar/migrador_nekkora} rls=t forcada=t
+RELACAO public.organization_usage_daily tipo=r dono=nekkora_retention_tables_owner acl={nekkora_retention_tables_owner=arwdDxt/nekkora_retention_tables_owner,nekkora_retention_owner=arw/nekkora_retention_tables_owner} rls=t forcada=t
+RELACAO public.organizations tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=rw/migrador_nekkora,nekkora_scheduler_owner=rw/migrador_nekkora,nekkora_provisioning_owner=arw/migrador_nekkora} rls=t forcada=t
+RELACAO public.password_reset_tokens tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora} rls=t forcada=t
+RELACAO public.permissions tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=r/migrador_nekkora} rls=f forcada=f
+RELACAO public.role_permissions tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=r/migrador_nekkora} rls=f forcada=f
+RELACAO public.roles tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=r/migrador_nekkora,nekkora_provisioning_owner=r/migrador_nekkora} rls=f forcada=f
+RELACAO public.user_credentials tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora} rls=t forcada=t
+RELACAO public.user_mfa_factors tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora} rls=t forcada=t
+RELACAO public.user_mfa_recovery_codes tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora} rls=t forcada=t
+RELACAO public.user_sessions tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora} rls=t forcada=t
+RELACAO public.users tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora} rls=t forcada=t
+RELACAO public.worker_agent_assignments tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora,nekkora_ingestion=r/migrador_nekkora} rls=t forcada=t
+RELACAO public.worker_workspace_assignments tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora} rls=t forcada=t
+RELACAO public.workers tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora} rls=t forcada=t
+RELACAO public.workspace_configuration_events tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=ar/migrador_nekkora} rls=t forcada=t
+RELACAO public.workspace_parameter_values tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=ar/migrador_nekkora} rls=t forcada=t
+RELACAO public.workspace_parameters tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora} rls=t forcada=t
+RELACAO public.workspace_role_assignments tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora} rls=t forcada=t
+RELACAO public.workspace_secrets tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora,nekkora_scheduler_owner=rw/migrador_nekkora} rls=t forcada=t
+RELACAO public.workspaces tipo=r dono=migrador_nekkora acl={migrador_nekkora=arwdDxt/migrador_nekkora,nekkora_platform=arw/migrador_nekkora,nekkora_scheduler_owner=r/migrador_nekkora} rls=t forcada=t

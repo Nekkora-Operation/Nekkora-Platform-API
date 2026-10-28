@@ -1,0 +1,15 @@
+cluster_descartavel=nekkora-b11-restauracao-20261027173213 rede=none porta=nenhuma
+papeis_no_arquivo=23 (sem senhas: 0 linhas com PASSWORD) pertinencias=5 com_granted_by=0
+papeis_aplicados_erros=0
+janela_superuser_migrador=ABERTA
+pg_restore=OK
+janela_superuser_migrador=RETIRADA atributos=0
+duracao_restauracao_s=4
+== contagens (origem pelo admin_cluster; destino pelo superusuario do cluster descartavel)
+tabelas_comparadas=82
+linhas_origem=82 linhas_destino=82
+contagens=IGUAIS
+ops_linhas_origem=119
+== invariantes da 016 (sec. 19) na base restaurada (registro)
+invariantes_016_restaurada=OK
+cluster_descartavel=REMOVIDO
