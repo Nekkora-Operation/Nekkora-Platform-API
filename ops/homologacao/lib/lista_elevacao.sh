@@ -19,7 +19,9 @@
 # Lista UNICA das versoes de vinculo obrigatorio, usada pelo runner, pelo criar e pelas validacoes (antes cada um repetia
 # " 016 "). 017-020: elevacao medida (mapa_privilegios.sh) e pre-voo oficial proprio; 021 nao tem elevacao;
 # 022 (ativacao): elevacao exigida (cabecalho da migration; suite db/tests/ativacao-022, B1) e pre-voo oficial proprio.
-VINCULO_OBRIGATORIO=" 016 017 018 019 020 022 "
+# 023 e 024 (acessos, missao de 2026-10-27): elevacao exigida (suites db/tests/acessos-023 e acessos-024, B1) e pre-voo
+# oficial proprio. Estar aqui NAO autoriza nada: so obriga linha vinculada ao id e pre-voo oficial quando houver linha.
+VINCULO_OBRIGATORIO=" 016 017 018 019 020 022 023 024 "
 
 lista_elevacao_normalizada() {
     local arq="$1" vinculo="${2:-}" conteudo

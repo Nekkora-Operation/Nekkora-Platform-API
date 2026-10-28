@@ -14,6 +14,8 @@
 #                 anteriores a 024; eventos de acesso).
 #     B0 - 024 sobre a base em 022 (sem a 023): recusada pela pre-condicao, nada muda.
 #     B1 - 024 SEM a janela: recusada por privilegio, nada muda.
+#     B1b - 024 com a janela, falhando DEPOIS do fechamento dos convites (gatilho homonimo criado por fora): o fechamento
+#          volta com a transacao; nada muda.
 #     B2 - 024 com a janela: dados de public e ops identicos (todas as colunas anteriores) EXCETO o previsto: so os convites
 #          abertos de emissor sem autoridade ficam revogados com o motivo 4 (revoked_at e revoke_reason; mais nada);
 #          linhas antigas validas no modelo novo (colunas novas nulas); diff de catalogo de public EXATAMENTE o previsto
@@ -291,6 +293,25 @@ diff "$SAIDA/B07_dados_023.txt" "$SAIDA/B11_dados.txt" > /dev/null || falha "B1:
 lista "$POP" > "$SAIDA/B11_catalogo.txt"
 diff "$SAIDA/B07_catalogo_023.txt" "$SAIDA/B11_catalogo.txt" > /dev/null || falha "B1: catalogo alterado"
 
+echo "   B1b: 024 com a janela, falhando DEPOIS do fechamento dos convites"
+# gatilho homonimo de um que a sec. 3 da 024 cria, criado por fora: a 024 roda a sec. 2 (o fechamento avisa 2) e falha
+# no CREATE TRIGGER, na MESMA transacao. Esperado: nada muda (os 2 convites continuam abertos), retirada 0|0|0
+consulta "$POP" nekkora "CREATE FUNCTION public.zz_b1b() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RETURN NEW; END';
+    CREATE TRIGGER trg_client_workspace_grants_request BEFORE UPDATE ON public.client_workspace_grants FOR EACH ROW EXECUTE FUNCTION public.zz_b1b()" > /dev/null
+if modelo "$POP" 024 024 "$SAIDA/B12_024_falha_tardia.txt"; then falha "B1b: 024 aplicada com o gatilho homonimo"; fi
+grep -qF "024: convites abertos de emissor sem autoridade fechados na aplicacao: 2" "$SAIDA/B12_024_falha_tardia.txt" \
+    || { cat "$SAIDA/B12_024_falha_tardia.txt"; falha "B1b: a falha deveria vir DEPOIS do fechamento"; }
+grep -qF 'trigger "trg_client_workspace_grants_request" for relation "client_workspace_grants" already exists' "$SAIDA/B12_024_falha_tardia.txt" \
+    || { cat "$SAIDA/B12_024_falha_tardia.txt"; falha "B1b: recusa diferente da esperada"; }
+[ "$(estado_migrador "$POP")" = "0|0|0 dono_do_banco=migrador_nekkora" ] || falha "B1b: migrador fora de 0|0|0"
+consulta "$POP" nekkora "DROP TRIGGER trg_client_workspace_grants_request ON public.client_workspace_grants; DROP FUNCTION public.zz_b1b()" > /dev/null
+psqlc "$POP" nekkora < "$SAIDA/B07_instantaneo.sql" > "$SAIDA/B12_dados.txt"
+diff "$SAIDA/B07_dados_023.txt" "$SAIDA/B12_dados.txt" > /dev/null || falha "B1b: dados alterados (o fechamento nao voltou com a transacao)"
+consulta "$POP" nekkora "$CONV_REV" > "$SAIDA/B12_convites_revogacao.txt"
+diff "$SAIDA/B07_convites_revogacao.txt" "$SAIDA/B12_convites_revogacao.txt" > /dev/null || falha "B1b: convites alterados"
+lista "$POP" > "$SAIDA/B12_catalogo.txt"
+diff "$SAIDA/B07_catalogo_023.txt" "$SAIDA/B12_catalogo.txt" > /dev/null || falha "B1b: catalogo alterado"
+
 echo "   B2: 024 com a janela"
 modelo "$POP" 024 024 "$SAIDA/B20_024.txt" || { cat "$SAIDA/B20_024.txt"; falha "024 na populada"; }
 grep -q "aplicada versao=024 elevada=SUPERUSER" "$SAIDA/B20_024.txt" || falha "B2: 024 sem janela"
@@ -456,6 +477,7 @@ c5 coluna_do_pedido_removida "ALTER TABLE client_workspace_grants DROP COLUMN re
     echo "B: $(cat "$SAIDA/B01_massa_001_012.txt"); massa de acesso no modelo da 023: 5 convites (3 abertos: 1 valido e 2 de emissor sem autoridade; 1 revogado; 1 aceito), concessoes pendente, ativa e suspensa anteriores a 024, eventos"
     echo "B0: 024 sobre a base em 022 -> recusada pela pre-condicao, dados inalterados"
     echo "B1: 024 sem janela recusada por privilegio; dados e catalogo inalterados"
+    echo "B1b: 024 com a janela falhando DEPOIS do fechamento (aviso de 2 convites, depois gatilho homonimo): mesma transacao, os 2 convites continuam abertos; dados e catalogo inalterados; 0|0|0"
     echo "B2: dados de public/ops identicos exceto identity_invitations; nela so revoked_at e revoke_reason dos 2 convites previstos (motivo 4, sem revogador); linhas antigas com as colunas novas nulas; catalogo 023->024 = $(wc -l < "$SAIDA/B24_diff_resumo.txt" | tr -d ' ') linhas previstas; = instalacao limpa; invariantes ($(cat "$SAIDA/B26_estado_migrador.txt")): OK"
     echo "B3: reaplicacao recusada pela pre-condicao; dados e catalogo inalterados"
     echo "C: $(grep -c . "$SAIDA/C_recusas.txt") recusas e $(grep -c . "$SAIDA/C_passam.txt") controles positivos conferidos (D-CONV-4, D-GRANT-1, D-GRANT-1a, reset vinculado)"

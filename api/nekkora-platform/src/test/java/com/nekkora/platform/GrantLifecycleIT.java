@@ -275,6 +275,33 @@ class GrantLifecycleIT extends PlatformTestBase {
                 .as("aprovar com outro valor").isEqualTo("42501");
     }
 
+    /**
+     * KEEP "sem data" preserva o prazo existente (D-GRANT-1a): numa concessao COM prazo (expiresAt), o KEEP sem data nao muda
+     * a proxima revisao nem o prazo (nunca remove o vencimento nem torna a concessao ilimitada); o KEEP com data mais cedo
+     * muda so a proxima revisao, e o prazo continua o mesmo. Nenhum KEEP grava aprovacao.
+     */
+    @Test
+    void keepSemDataPreservaRevisaoEPrazo() throws Exception {
+        Setup s = setup();
+        String base = "/api/v1/o/" + s.org().id() + "/client-grants";
+        String prazo = future(90);
+        UUID g = UUID.fromString(s.admin().post(base, "{\"clientMembershipId\":\"" + s.clientMembership() + "\",\"workspaceId\":\"" + s.workspace()
+                + "\",\"nextReviewAt\":\"" + REVISAO_PEDIDA + "\",\"expiresAt\":\"" + prazo + "\"}").field("grantId"));
+        approverStepUp(s);
+        assertThat(s.approver().post(base + "/" + g + "/approve", "{\"nextReviewAt\":\"" + REVISAO_PEDIDA + "\",\"expiresAt\":\"" + prazo + "\"}").status())
+                .isEqualTo(200);
+        String validade = "SELECT next_review_at || '|' || expires_at FROM client_workspace_grants WHERE grant_id = '" + g + "'";
+        String antes = value(validade);
+        assertThat(antes).doesNotContain("null");
+        stepUp(s);
+        assertThat(s.admin().post(base + "/" + g + "/review", "{\"decision\":\"KEEP\"}").status()).isEqualTo(200);
+        assertThat(value(validade)).as("KEEP sem data: proxima revisao e prazo preservados").isEqualTo(antes);
+        assertThat(s.admin().post(base + "/" + g + "/review", "{\"decision\":\"KEEP\",\"nextReviewAt\":\"" + future(10) + "\"}").status()).isEqualTo(200);
+        assertThat(value("SELECT expires_at = '" + prazo + "'::timestamptz AND next_review_at < '" + REVISAO_PEDIDA + "'::timestamptz FROM client_workspace_grants"
+                + " WHERE grant_id = '" + g + "'")).as("KEEP mais cedo: so a revisao muda; o prazo continua").isEqualTo("t");
+        assertThat(count("SELECT count(*) FROM client_workspace_grant_approvals WHERE grant_id = '" + g + "'")).as("KEEP nao grava aprovacao").isEqualTo(1);
+    }
+
     /** Concessao ATIVA pelo caminho completo (pedido do admin, aprovacao do segundo ORG_ADMIN). */
     private UUID ativa(Setup s, String base) throws Exception {
         UUID g = UUID.fromString(s.admin().post(base, criar(s.clientMembership(), s.workspace())).field("grantId"));
