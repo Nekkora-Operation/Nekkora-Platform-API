@@ -1,0 +1,2 @@
+023: cannot execute CREATE FUNCTION in a read-only transaction
+023: pre-voo dono_das_funcoes_de_identidade_sem_login_nem_participacao|FALHA|-

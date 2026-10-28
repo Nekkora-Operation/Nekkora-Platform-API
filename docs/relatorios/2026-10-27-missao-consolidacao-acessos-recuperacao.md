@@ -19,6 +19,13 @@
 - Proposta das linhas de elevação da 023 e da 024: hashes finais, ambiente e pré-voos (§8). Nenhuma linha foi acrescentada a `elevacao.txt`.
 - A7 confirmada pela responsável: a restauração do B11 em cluster descartável está coberta por esta missão (não vale para produção nem para ambiente preservado).
 
+**Homologação dirigida (2026-10-28), depois do parecer da responsável:**
+- O runner foi estendido até a 024 (`d196aea`): o `atualizar` faz 021 → 022, 022 → 023 e 023 → 024, um passo por vez, e 023 e 024 passam a ter vínculo obrigatório. `elevacao.txt` continua sem as linhas da 023 e da 024.
+- A homologação rodou em descartáveis novos, com a lista de elevação vinculada só a cada um e o e-mail simulado. O `ensaio-api-v1-003` e as evidências do e-mail real não foram tocados.
+- **Achado real na primeira execução (`ensaio-api-v1-004`):** a R015 mostrou que duas restrições de `access_events` voltam de um dump com outra forma. A 024 seria recusada numa base em 023 restaurada de backup. Corrigido em `539a2e0`. Isso **trocou o hash da 024**: a linha da 024 da revisão anterior não vale mais.
+- A segunda execução (`ensaio-api-v1-004b`) usou a 024 final, com tudo como esperado, inclusive a R015 (§9).
+- O fechamento dos convites antigos foi provado com massa declarada, e o KEEP "sem data" ficou explícito (§9).
+
 Legenda: **implementado** (código commitado e enviado); **testado** (local e/ou CI, com o commit indicado); **homologado** (em ambiente de homologação descartável); **mesclado** e **implantado** (nada nesta missão).
 
 ## 1. Ordem de merge e dependências
@@ -102,7 +109,9 @@ Continuam abertos: C9 (agendamento), B4 completo, B9 (≥ 73 h), 5b, P5 e ativa�
 | CI | GitHub Actions | #24 `0d3f8c5` | 21 + 177 + 433 + 12 = **643**, 0/0 |
 | CI | GitHub Actions | #24 `c4caeeb` (024 com as decisões e o reset vinculado) | 21 + **180** + **434** + 12 = **647**, 0 falhas, 0 ignorados (ops +3: `ResetContaVinculadaIT`; platform +1: `bancoExigeSegundaPessoaEOSolicitanteGravado`) |
 | CI | GitHub Actions | #25 `9eed1fe` | 21 + 177 + 411 + 12 = **621**, 0 falhas, 0 ignorados |
-| CI | GitHub Actions | #24 `8527954` e o commit destes documentos | rodam no PR: ver o PR |
+| CI | GitHub Actions | #24 `ec76c37` (`8527954` + documentos) | 21 + **182** + **436** + 12 = **651**, 0 falhas, 0 ignorados |
+| CI | GitHub Actions | #25 `ff36ff1` | 21 + 177 + 411 + 12 = **621**, 0 falhas, 0 ignorados |
+| CI | GitHub Actions | #24 depois da homologação dirigida (`d196aea`, `539a2e0` e documentos) | roda no PR: ver o PR |
 | Regressão local `-pl nekkora-platform -am` | Windows, Docker | árvore do #24 antes do commit | core 21, ops 177, platform 433 com **1 falha minha** (`MailTemplatesTest`: o convite leva token), corrigida e repetida (2/2) antes do commit |
 | Suíte de banco `db/tests/acessos-023` | local | `dbc4366` | A, B0–B3, C (34 recusas, 9 controles positivos), C6 (7 contraprovas): OK |
 | E2E entre processos (`api/e2e/run.sh`) | local, stack descartável | árvore do #24 + `AccessInvitationsE2E` (commit seguinte do #24) | `AccessInvitationsE2E` 5/5, `CrossProcessE2E` 6/6, `IdentityCredentialsE2E` 7/7, `LinkedAccountsE2E` 6/6 |
@@ -112,6 +121,11 @@ Continuam abertos: C9 (agendamento), B4 completo, B9 (≥ 73 h), 5b, P5 e ativa�
 | ITs da 024 (Testcontainers, papéis reais) | Windows, Docker | árvore do commit da 024 | `ResetContaVinculadaIT` 3/3; `GrantLifecycleIT` 4/4; `AccessInvitationsIT` 12/12; `RoleAdministrationIT` 8/8; `AdminReadRoutesIT` 13/13; `AccessContractTest` 2/2 |
 | Contraprova sem a 024 (arquivo retirado de propósito) | local | idem | `ResetContaVinculadaIT`: a abertura volta a `SEM_FATOR_CONFIRMADO` e a execução a `FATOR_DIVERGENTE` (recusa por efeito); 2 falhas esperadas |
 | E2E entre processos com 001–024 | local, stack descartável (removida) | idem | 24/24 (5 + 6 + 7 + 6) |
+| **024 final (`23dca1c3…`, `539a2e0`): suíte `db/tests/acessos-024`** (rodada `2026-10-28T025200Z_nekkora-a024`) | local, dois clusters descartáveis (removidos) | `539a2e0` | A (forma instalada das restrições), B0, B1, **B1b** (falha depois do fechamento: os 2 convites continuam abertos), B2 sobre a **forma restaurada** (catálogo final igual ao da limpa; 41 linhas previstas), B3, C (30 recusas e 16 controles positivos), C5 (8 casos): OK |
+| 024 final: ITs-alvo | Windows, Docker | `539a2e0` | `ResetContaVinculadaIT` 5/5; `GrantLifecycleIT` **7/7** (com `keepSemDataPreservaRevisaoEPrazo`); `AccessContractTest` 2/2; `AccessInvitationsIT` 12/12; `RoleAdministrationIT` 8/8; `AdminReadRoutesIT` 13/13; `ClientGrantRevokeRouteIT` 4/4; `PortalIT` 10/10 |
+| 024 final: pré-voos (`prevoo_023_024.sh`) | local, descartável | `539a2e0` | os 6 casos como esperado |
+| 024 final: E2E entre processos (rodada `2026-10-28T030758Z_nekkora-e2e`) | local, stack descartável (removida) | `539a2e0` (024 `23dca1c3…`) | 5 + 6 + 7 + 6 = **24/24**; 24 migrations pelo modelo do migrador, fim 0\|0\|0 |
+| Homologação dirigida (§9) | `ensaio-api-v1-004` (024 anterior) e `ensaio-api-v1-004b` (024 final) | imagens `8527954`, runner `d196aea`/`539a2e0` | P, F e S da 023 e da 024 e dados da 024: OK nos dois; R015: achado no primeiro, OK no segundo |
 | B11 com privilégios (laboratório) | local, descartável | `a627f0a` | execução 3: FALHA (achado da `pgcrypto`); execução 4: OK, 742 itens comparados iguais, com a exceção declarada do concedente das pertinências; validação estática 297 OK |
 | Suíte de banco `db/tests/acessos-024` (rodada `2026-10-28T004618Z_nekkora-a024`) | local, dois clusters descartáveis (removidos) | árvore de `8527954` (024 `b6390fe8…`) | **A:** 001–024, 11 janelas com retirada 0\|0\|0, §19 da 016 depois de tudo, invariantes 012–024 depois da retirada. **B0:** a 024 sobre 022 é recusada pela pré-condição, sem efeito. **B1:** sem janela, recusada por privilégio, sem efeito. **B2:** dados idênticos, exceto os 2 convites previstos (motivo 4); catálogo 023 → 024 com exatamente 41 linhas previstas e igual ao da instalação limpa; invariantes. **B3:** reaplicação recusada, sem efeito. **C:** 30 recusas e 16 controles positivos. **C5:** controle e 7 contraprovas. Tudo OK |
 | ITs da regra de renovação e do reset (024 final) | Windows, Docker | árvore de `8527954` | `ResetContaVinculadaIT` **5/5** (3 + as 2 corridas); `GrantLifecycleIT` **6/6** (ciclo com pedido e aprovação de renovação; descarte e substituição do pedido; garantias do banco); `AccessContractTest` 2/2; `AccessInvitationsIT` 12/12; `RoleAdministrationIT` 8/8; `AdminReadRoutesIT` 13/13; `ClientGrantRevokeRouteIT` 4/4; `PortalIT` 10/10 |
@@ -156,39 +170,73 @@ Base: `2026-10-23-api-v1-003-inventario-v1.md`, com o que mudou nesta missão.
 
 **A V1 não está completa:** sem o canal Platform–Agent (GAP-09) e as rotas de execução e agendamento (GAP-07/08), ela não pode ser declarada completa.
 
-## 8. Proposta das linhas de elevação da 023 e da 024 (D-ELEV-023/024)
+## 8. Linhas de elevação da 023 e da 024 (D-ELEV-023/024): linhas completas para a aprovação
 
-**Não há aprovação genérica dessas linhas.** Nada foi acrescentado a `ops/homologacao/implantacao/elevacao.txt`, nenhum ambiente foi criado ou alterado. Os pré-voos novos ficam inertes: o runner só os executa para uma versão com linha autorizada.
+**Não há aprovação genérica.** Nada foi acrescentado a `ops/homologacao/implantacao/elevacao.txt`. A homologação usou listas de laboratório, fora do repositório, cada uma vinculada só ao próprio ambiente descartável.
 
-**Linhas propostas** (sha256 dos bytes LF versionados; os mesmos arquivos testados pela suíte, pelo E2E e pelas ITs):
+**Linhas completas** (sha256 dos bytes LF versionados, conferidos por inteiro contra os arquivos finais, a cópia do ambiente e a lista do laboratório em `evidencias/ensaio-api-v1-004b/janela-02x/hashes.txt`):
 
 ```
-023 dcb47661867fa451a20460e6b941a003999569d3c0185dd4962f75c1e8843498 tipo=superuser ambiente=<id escolhido>
-024 b6390fe89d19f1e192335ed7fc22e05d11954944d7df7a5b787e63be8a5227cf tipo=superuser ambiente=<id escolhido>
+023 dcb47661867fa451a20460e6b941a003999569d3c0185dd4962f75c1e8843498 tipo=superuser ambiente=<id aprovado>
+024 23dca1c367918279165bf9d70278e721fe20c69715e3f776d9ea8a2886e1262e tipo=superuser ambiente=<id aprovado>
 ```
 
-A 023 é a de `dbc4366`, inalterada no #24. A 024 é a de `8527954`; qualquer mudança nela troca o hash e invalida esta proposta.
+- A 023 é a de `dbc4366`, inalterada.
+- A 024 é a de `539a2e0`. A linha anterior da 024 (`b6390fe8…`) **não vale mais**: a correção da R015 trocou o arquivo.
+- Qualquer mudança nos arquivos troca o hash e invalida estas linhas.
 
-**Por que a janela é necessária** (medido pelas suítes, caso B1: sem a janela, cada uma é recusada por privilégio e nada muda; `mapa_privilegios.sh` não foi rodado para estas versões):
-- **023:** transfere as funções do aceite para `nekkora_identity_owner` (`ALTER FUNCTION … OWNER TO`, papel do qual o migrador não é membro).
-- **024:** transfere `identity_user_is_linked` e `identity_invitations_close_unauthorized` para `nekkora_identity_owner` e substitui `ops.alvo_inelegivel` e `ops_mfa_execute`, que são do dono da 016 (`nekkora_ops_mfa_owner`).
+**Por que a janela é necessária** (suítes, caso B1: sem a janela, cada uma é recusada por privilégio e nada muda):
+- **023:** transfere as funções do aceite para `nekkora_identity_owner`.
+- **024:** transfere `identity_user_is_linked` e `identity_invitations_close_unauthorized` para `nekkora_identity_owner` e substitui `ops.alvo_inelegivel` e `ops_mfa_execute`, que são do dono da 016.
 
-**Pré-voos** (somente leitura, formato dos de 016–022; executados como `admin_cluster`, com a trava obtida, depois do sha256 e do 0|0|0 e antes de conceder):
+**Pré-voos** (somente leitura, executados como `admin_cluster` antes de conceder):
 
 | Arquivo | sha256 | Conferências |
 |---|---|---|
-| `implantacao/preflight/023.sql` | `52ebb88a7f0d2dc9cf245e8fc92266b87a59344a67a469e133f3a07fb8103028` | 9: PostgreSQL 16; histórico exatamente 001–022 com sucesso; migrador sem atributo nem ACL de parâmetro; migrador dono do banco; 022 presente; objetos dos convites ausentes; **nenhum par de convites abertos duplicados** (a 023 recusaria); `nekkora_identity_owner` sem login nem participação; as duas restrições que a 023 confere com a definição esperada |
-| `implantacao/preflight/024.sql` | `30396817f45c25a18e8b504c8079021235a8814cbb4384a7c0611c6ed23e8dc1` | 10: os quatro comuns (histórico 001–023); 023 presente (inclusive `access_can_invite`); objetos da 024 ausentes; as três restrições que a 024 troca com a definição da 023; `nekkora_identity_owner` e `nekkora_ops_mfa_owner` sem login nem participação; `ops.alvo_inelegivel` e `ops_mfa_execute` do dono da 016; **quantos convites abertos a 024 fechará na aplicação** (informativo, sempre OK) |
+| `implantacao/preflight/023.sql` | `52ebb88a7f0d2dc9cf245e8fc92266b87a59344a67a469e133f3a07fb8103028` | 9: PostgreSQL 16; histórico exatamente 001–022; migrador sem atributo nem ACL de parâmetro; migrador dono do banco; 022 presente; objetos dos convites ausentes; nenhum convite aberto duplicado; `nekkora_identity_owner` sem login nem participação; as restrições que a 023 confere |
+| `implantacao/preflight/024.sql` | `34f23ec3218fbf925e7e7e989141bb4115e6c2e414ae26f1f33e1e003530889a` | 10: os comuns (histórico 001–023); 023 presente; objetos da 024 ausentes; as quatro restrições que a 024 troca, **na forma instalada ou na restaurada**; donos sem login nem participação; funções da 016/018 com o dono esperado; quantos convites a 024 fechará (informativo) |
 
-Prova: `ops/homologacao/testes/prevoo_023_024.sh` (§5), em cluster descartável, com 6 casos.
+**Ambiente:** o parecer da responsável foi um descartável novo. Por causa da correção da R015, a homologação final ficou no `ensaio-api-v1-004b` (§9). O id da aprovação concreta é decisão dela: um descartável ou outro ambiente, sempre com uma linha por versão vinculada a esse id. **Produção:** decisão separada.
 
-**Ambiente: decisão da responsável.** Duas opções:
+## 9. Homologação dirigida (ensaio-api-v1-004 e ensaio-api-v1-004b)
 
-| Opção | Como | Prós | Contras |
-|---|---|---|---|
-| **(a) recomendada:** ambiente descartável novo (por exemplo `ensaio-acessos-024`) | lista de elevação de laboratório (`HOMOLOG_ELEVACAO_ARQ`, só em `ensaio-*`, fora do repositório, como no `ensaio-c016-b10b11`) com as linhas de 016–020 e 022 e as duas propostas, todas vinculadas ao id novo | não toca o `ensaio-api-v1-003`, que guarda a homologação do e-mail real; `elevacao.txt` revisado fica como está | precisa de uma linha por versão vinculada ao id novo, aprovada para esse laboratório |
-| (b) `ensaio-api-v1-003` (preservado, em 022) | linhas 023 e 024 em `elevacao.txt`, vinculadas a `ensaio-api-v1-003` | reaproveita o ambiente que já está em 022 | altera um ambiente preservado: exige autorização específica |
+**Caminho (runner real):**
+1. `criar` (001–015 e parada);
+2. `implantar` 016–021 (janelas com pré-voo) e `concluir-criacao`;
+3. `atualizar` 022, `implantar` e `subir`;
+4. `atualizar` 023 e `testes/janela_023_024.sh 023`, depois `subir`;
+5. `atualizar` 024 e `testes/janela_023_024.sh 024`, depois `subir`;
+6. `testar`.
 
-**Lacuna do runner (para qualquer opção):** hoje o `atualizar` só aceita 021 → 022, e o `criar` só aceita 015, 016 e 021. Para homologar a 023 e a 024 é preciso estender o runner com 022 → 023 e 023 → 024 e incluir 023 e 024 em `VINCULO_OBRIGATORIO`. A extensão não foi feita aqui. Ela entra na mesma etapa da homologação, depois da decisão sobre o ambiente e as linhas.
+Imagens do commit `8527954`. Os dois ambientes são descartáveis novos, com a lista de laboratório vinculada só ao próprio id e o e-mail simulado.
 
-**Condições de cada janela** (iguais às da 022): sha256 conferido, pré-voo com `PREFLIGHT_OK`, uma janela por versão, retirada conferida em 0|0|0 depois de cada janela e também em falha, histórico do Flyway sem falha. **Produção:** decisão separada.
+| Prova | `ensaio-api-v1-004` (024 anterior, `b6390fe8…`) | `ensaio-api-v1-004b` (**024 final**, `23dca1c3…`) |
+|---|---|---|
+| 023, caso P: recusa pelo pré-voo antes de conceder (papel membro de `nekkora_identity_owner`) | OK: nenhuma janela aberta, 0\|0\|0 | OK |
+| 023, caso F: falha dentro da janela (migrador somente leitura) | OK: "início" e "fim … revogado … [falha]", 0\|0\|0, 023 fora do histórico, nenhum `success=false` | OK |
+| 023, caso S: sucesso | OK: "[fim da versão 023]", 0\|0\|0, LIBERADO | OK |
+| 024, caso P | OK | OK |
+| 024, caso F: falha **depois** do fechamento dos convites (gatilho homônimo criado por fora) | OK: o runner registra "fechados na aplicação: 2" e depois o erro; dados conferidos iguais antes e depois da falha; 0\|0\|0 | OK |
+| 024, caso S | OK | OK |
+| 024, caso D: dados (abaixo) | OK | OK |
+| R015: backup e restauração | **FALHA, achado real**: duas restrições voltam com outra forma | **OK**: catálogo idêntico (4926 linhas) e dados idênticos |
+| H01, H05–H09 | OK | OK |
+| H02, H03, H04 | falham por limites conhecidos do `testar` (desenho 001–015): o H03 só tem perfis 015/016; o H02 espera as janelas da lista da criação e conta as das falhas provocadas; o H04 marca os padrões vazios das chaves da fila de e-mail da 021, já na `main` | idem |
+
+Evidências: `ops/homologacao/evidencias/ensaio-api-v1-004/` e `ensaio-api-v1-004b/`, com um LEIA-ME em cada uma.
+- `ensaio-api-v1-004`: recursos Docker removidos.
+- `ensaio-api-v1-004b`: continua no ar até a revisão.
+
+**Fechamento dos convites antigos (única mudança de dados da 024):** a prova usa a massa declarada `ops/homologacao/sql/massa_024_convites.sql` e a conferência somente leitura `conferencia_024_convites.sql`, que é a mesma antes e depois.
+
+| Exigência da responsável | Evidência |
+|---|---|
+| Só convites ainda abertos de emissores sem autoridade são encerrados | `a_fechar` 2 → 0; `fechados_motivo_4_sem_revogador` 0 → 2. O critério é o da 023 (`access_can_invite`), só para convites abertos e com emissor vinculado |
+| Convites válidos de emissores autorizados ficam intactos | aberto do ORG_ADMIN, aceito e revogado com o mesmo md5 de linha antes e depois |
+| Motivo 4 documentado | contrato §4.5/§9, comentário da coluna (`4=EMISSOR_SEM_AUTORIDADE (024)`), OpenAPI (`revokeReason`), relatório |
+| A alteração está na mesma transação da migration | a 024 é uma transação só (`BEGIN … COMMIT`). Provado duas vezes com uma falha **depois** do fechamento: no ambiente, caso F da 024 (aviso de 2 fechados, erro, dados iguais) e na suíte, caso B1b |
+| Nenhum acesso já concedido é removido | vínculos, papéis de organização e de workspace, vínculos de cliente, concessões e contas com o mesmo md5 antes e depois; na suíte (B2), os dados de `public` e `ops` são idênticos, exceto as duas colunas desses convites |
+
+**Limite declarado:** a limpeza usa a autoridade do emissor **no momento da migration**. Se alguém perdeu e recuperou a autoridade antes da 024, o convite dele volta a ser aceitável pela regra da 023, e a 024 **não** o fecha. Para detectar esse caso seria preciso um histórico que a 024 não consulta. A massa inclui esse caso de propósito, e o convite continua aberto (`perdeu_e_recuperou_antes=aberto`). Depois da 024, a perda de autoridade fecha os convites no ato, e o caso não se repete.
+
+**KEEP "sem data":** preserva a próxima revisão e o prazo existentes; nunca remove o vencimento nem torna a concessão ilimitada. O KEEP não altera `expires_at` em caso nenhum. Teste: `GrantLifecycleIT.keepSemDataPreservaRevisaoEPrazo`, numa concessão com prazo. Regra explícita no contrato (§7).

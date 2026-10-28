@@ -1,0 +1,4 @@
+== implantacao 2026-10-28T03:03:39.225Z (lista de elevacao: ensaio-api-v1-004b-elevacao.txt ALTERNATIVA DE ENSAIO sha256 437d69c5302ced3a380bafdea55ca15076d1bd44eafab9b25b2e3a6dc9a51c4d)
+historico antes: 001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true 016:true 017:true 018:true 019:true 020:true 021:true 022:true 023:true
+FALHA: versao 024: pre-voo recusou (codigo 0, ultima linha 'PREFLIGHT_FALHOU'; ver preflight_024.txt); elevacao RECUSADA antes de conceder
+estado do migrador conferido limpo; trava liberada. Sem nova tentativa, sem repair, sem baseline.

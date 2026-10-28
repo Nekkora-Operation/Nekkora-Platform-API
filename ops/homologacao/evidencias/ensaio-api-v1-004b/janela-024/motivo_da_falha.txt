@@ -1,0 +1,2 @@
+024: trigger "trg_client_workspace_grants_request" for relation "client_workspace_grants" already exists
+024: pre-voo donos_que_recebem_funcoes_sem_login_nem_participacao|FALHA|-

@@ -1,0 +1,25 @@
+ensaio-api-v1-004 - PRIMEIRA execucao da homologacao dirigida da 023 e da 024 (missao de acessos, 2026-10-27/28).
+Ambiente descartavel novo (o ensaio-api-v1-003 e as evidencias do e-mail real ficaram intactos), e-mail simulado
+(HOMOLOG_TRANSPORTE=homologacao), lista de elevacao de laboratorio fora do repositorio, vinculada SO a este id
+(016-020, 022, 023 e 024; sha256 completos conferidos contra os arquivos e o relatorio).
+
+Caminho: criar (001-015) -> implantar 016-021 -> concluir-criacao -> atualizar 022 + implantar + subir ->
+atualizar 023 + testes/janela_023_024.sh 023 -> subir -> atualizar 024 + testes/janela_023_024.sh 024 -> subir -> testar.
+
+janela-023/  P (pre-voo recusa antes de conceder), F (falha dentro da janela, migrador somente leitura) e S (sucesso):
+             todos como esperado; retirada conferida em 0|0|0 no sucesso e na falha.
+janela-024/  (024 de sha256 b6390fe8..., a candidata ANTERIOR) P, F e S como esperado. F falha DEPOIS do fechamento dos
+             convites (o runner registra "fechados na aplicacao: 2" e depois o erro do gatilho homonimo): os dados
+             conferidos antes e depois da falha sao iguais (mesma transacao). D: so os 2 convites abertos de emissor sem
+             autoridade fechados (motivo 4, sem revogador); validos, aceito, revogado, o de quem perdeu e recuperou a
+             autoridade ANTES da 024 (continua aberto: limite declarado) e os acessos concedidos intactos.
+testar/      H01-H09 + R015. ACHADO REAL na R015: depois do dump e da restauracao, duas restricoes de access_events
+             ("NOT BETWEEN ... OR ...", uma da 023 e outra da 024) voltam com outra forma (OR achatado; r015_catalogo_diff.txt).
+             Consequencia: a 024 (que exigia o texto exato) seria recusada numa base em 023 restaurada de backup. Corrigido
+             em 539a2e0 (a 024 aceita as duas formas e recria as restricoes na forma restauravel). Como esta base ja tem a
+             024 anterior aplicada (o Flyway recusaria o checksum novo; o runner nao repara), a homologacao foi REFEITA no
+             ensaio-api-v1-004b com a 024 final. H02, H03 e H04 sao limites conhecidos do "testar" (desenho 001-015: o H03 so
+             tem perfis 015/016; o H02 espera as janelas da lista da criacao e conta as janelas das falhas provocadas; o H04
+             marca os padroes vazios das chaves da fila de e-mail da 021, ja na main) - os mesmos motivos pelos quais o
+             "testar" nao foi usado no ensaio-api-v1-003.
+Recursos Docker removidos (homologacao.sh destruir); segredos locais mantidos fora do Git ate o descarte manual.
