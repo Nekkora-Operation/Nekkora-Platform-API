@@ -116,7 +116,7 @@ caso "022 com sha256 diferente do arquivo" "$LAB" "a 022 exige a linha de elevac
 caso "022 vinculada a OUTRO id" "$LAB" "a 022 exige a linha de elevacao vinculada a este id ($LAB) com o sha256" HOMOLOG_ELEVACAO_ARQ="$TMP/outro_id.txt"
 caso "sem linha da 022" "$LAB" "a 022 exige a linha de elevacao vinculada a este id ($LAB) com o sha256" HOMOLOG_ELEVACAO_ARQ="$TMP/sem_022.txt"
 caso "linha sob a versao 021 (aplica sem elevacao: NUNCA_ELEVAR)" "$LAB" "recusada pela gramatica" HOMOLOG_ELEVACAO_ARQ="$TMP/versao_021.txt"
-caso "salto 021 -> 023 (um passo por vez), mesmo com a lista correta" "$LAB" "atualizacao suportada: 021 -> 022, 022 -> 023, 023 -> 024, 024 -> 025 ou 025 -> 026, um passo por vez" HOMOLOG_ELEVACAO_ARQ="$TMP/certa.txt" HOMOLOG_ATUALIZAR_ATE=023
+caso "salto 021 -> 023 (um passo por vez), mesmo com a lista correta" "$LAB" "atualizacao suportada: 021 -> 022, 022 -> 023, 023 -> 024, 024 -> 025, 025 -> 026 ou 026 -> 027, um passo por vez" HOMOLOG_ELEVACAO_ARQ="$TMP/certa.txt" HOMOLOG_ATUALIZAR_ATE=023
 caso "lista revisada (022 vinculada ao ensaio-api-v1-003, nao a este id)" "$LAB" "a 022 exige a linha de elevacao vinculada a este id ($LAB) com o sha256"
 
 echo "== passos 022 -> 023 e 023 -> 024"
@@ -139,7 +139,7 @@ caso "025 -> 026 sem linha da 026" "$LAB25" "a 026 exige a linha de elevacao vin
 caso "025 -> 026 com a 026 sem vinculo (versao de vinculo obrigatorio)" "$LAB25" "recusada pela gramatica" HOMOLOG_ELEVACAO_ARQ="$TMP/sem_vinculo26.txt" HOMOLOG_ATUALIZAR_ATE=026
 caso "025 -> 026 com sha256 da 026 diferente do arquivo" "$LAB25" "a 026 exige a linha de elevacao vinculada a este id ($LAB25) com o sha256" HOMOLOG_ELEVACAO_ARQ="$TMP/sha26_errado.txt" HOMOLOG_ATUALIZAR_ATE=026
 caso "025 -> 026 pela lista revisada (sem linha da 026)" "$LAB25" "a 026 exige a linha de elevacao vinculada a este id ($LAB25) com o sha256" HOMOLOG_ATUALIZAR_ATE=026
-caso "025 -> 027 (fora do suportado)" "$LAB25" "um passo por vez" HOMOLOG_ELEVACAO_ARQ="$TMP/certa25.txt" HOMOLOG_ATUALIZAR_ATE=027
+caso "025 -> 027 (salto)" "$LAB25" "um passo por vez" HOMOLOG_ELEVACAO_ARQ="$TMP/certa25.txt" HOMOLOG_ATUALIZAR_ATE=027
 
 echo "== controle positivo: lista correta passa as conferencias de arquivo e para na liberacao (banco)"
 caso "lista alternativa correta (sem banco: BLOQUEADO)" "$LAB" "ambiente BLOQUEADO: nada alterado" HOMOLOG_ELEVACAO_ARQ="$TMP/certa.txt"
