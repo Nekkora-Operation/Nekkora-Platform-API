@@ -1,0 +1,188 @@
+< con|client_workspace_grants|client_workspace_grants_check1|CHECK (((status = 1) OR (approved_at IS NOT NULL)))
+< con|identity_users|identity_users_link_channel_check|CHECK ((link_channel = ANY (ARRAY['cadastro_web'::text, 'vinculacao'::text])))
+> colacl|identity_invitations|accepted_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_invitations|accepted_at|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_invitations|accepted_identity_id|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_invitations|accepted_user_id|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_invitations|email_normalized|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_invitations|expires_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_invitations|invitation_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_invitations|invited_account_type|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_invitations|issued_by_membership_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_invitations|organization_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_invitations|revoked_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_invitations|role_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_invitations|role_scope|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_invitations|token_hash|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_invitations|workspace_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|organization_memberships|status|nekkora_identity_owner|UPDATE|grant=f
+> colacl|organization_role_assignments|assigned_by_membership_id|nekkora_identity_owner|INSERT|grant=f
+> colacl|organization_role_assignments|assignment_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|organization_role_assignments|membership_id|nekkora_identity_owner|INSERT|grant=f
+> colacl|organization_role_assignments|organization_id|nekkora_identity_owner|INSERT|grant=f
+> colacl|organization_role_assignments|role_id|nekkora_identity_owner|INSERT|grant=f
+> colacl|organization_role_assignments|scope|nekkora_identity_owner|INSERT|grant=f
+> colacl|organization_role_assignments|status|nekkora_identity_owner|INSERT|grant=f
+> colacl|workspace_role_assignments|assigned_by_membership_id|nekkora_identity_owner|INSERT|grant=f
+> colacl|workspace_role_assignments|assignment_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|workspace_role_assignments|membership_id|nekkora_identity_owner|INSERT|grant=f
+> colacl|workspace_role_assignments|membership_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|workspace_role_assignments|organization_id|nekkora_identity_owner|INSERT|grant=f
+> colacl|workspace_role_assignments|organization_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|workspace_role_assignments|role_id|nekkora_identity_owner|INSERT|grant=f
+> colacl|workspace_role_assignments|role_id|nekkora_identity_owner|SELECT|grant=f
+> colacl|workspace_role_assignments|scope|nekkora_identity_owner|INSERT|grant=f
+> colacl|workspace_role_assignments|status|nekkora_identity_owner|INSERT|grant=f
+> colacl|workspace_role_assignments|status|nekkora_identity_owner|SELECT|grant=f
+> colacl|workspace_role_assignments|workspace_id|nekkora_identity_owner|INSERT|grant=f
+> colacl|workspace_role_assignments|workspace_id|nekkora_identity_owner|SELECT|grant=f
+> col|access_events|actor_identity_id|uuid|notnull=f|default=|gen=
+> col|access_events|actor_membership_id|uuid|notnull=f|default=|gen=
+> col|access_events|actor_user_id|uuid|notnull=f|default=|gen=
+> col|access_events|assignment_id|uuid|notnull=f|default=|gen=
+> col|access_events|correlation_id|uuid|notnull=t|default=|gen=
+> col|access_events|created_at|timestamp with time zone|notnull=t|default=clock_timestamp()|gen=
+> col|access_events|decision|smallint|notnull=f|default=|gen=
+> col|access_events|event_id|uuid|notnull=t|default=gen_random_uuid()|gen=
+> col|access_events|event_type|smallint|notnull=t|default=|gen=
+> col|access_events|grant_id|uuid|notnull=f|default=|gen=
+> col|access_events|invitation_id|uuid|notnull=f|default=|gen=
+> col|access_events|organization_id|uuid|notnull=t|default=|gen=
+> col|access_events|previous_role_id|uuid|notnull=f|default=|gen=
+> col|access_events|role_id|uuid|notnull=f|default=|gen=
+> col|access_events|target_membership_id|uuid|notnull=f|default=|gen=
+> col|access_events|target_user_id|uuid|notnull=f|default=|gen=
+> col|access_events|workspace_id|uuid|notnull=f|default=|gen=
+> col|identity_invitations|accepted_identity_id|uuid|notnull=f|default=|gen=
+> col|identity_invitations|issued_by_membership_id|uuid|notnull=f|default=|gen=
+> col|identity_invitations|replaces_invitation_id|uuid|notnull=f|default=|gen=
+> col|identity_invitations|revoke_reason|smallint|notnull=f|default=|gen=
+> col|identity_invitations|revoked_by_membership_id|uuid|notnull=f|default=|gen=
+> col|identity_invitations|role_id|uuid|notnull=f|default=|gen=
+> col|identity_invitations|role_scope|smallint|notnull=f|default=|gen=
+> col|identity_invitations|workspace_id|uuid|notnull=f|default=|gen=
+> con|access_events|access_events_actor_identity_id_fkey|FOREIGN KEY (actor_identity_id) REFERENCES identities(identity_id) ON DELETE RESTRICT
+> con|access_events|access_events_actor_user_id_fkey|FOREIGN KEY (actor_user_id) REFERENCES users(user_id) ON DELETE RESTRICT
+> con|access_events|access_events_check1|CHECK (((event_type = 4) = (actor_identity_id IS NOT NULL)))
+> con|access_events|access_events_check2|CHECK (((decision IS NOT NULL) = (event_type = 12)))
+> con|access_events|access_events_check3|CHECK ((((event_type < 1) OR (event_type > 4)) OR (invitation_id IS NOT NULL)))
+> con|access_events|access_events_check4|CHECK ((((event_type < 9) OR (event_type > 13)) OR (grant_id IS NOT NULL)))
+> con|access_events|access_events_check|CHECK ((((actor_membership_id IS NOT NULL) AND (actor_user_id IS NOT NULL)) <> (actor_identity_id IS NOT NULL)))
+> con|access_events|access_events_decision_check|CHECK ((decision = ANY (ARRAY[1, 2, 3])))
+> con|access_events|access_events_event_type_check|CHECK (((event_type >= 1) AND (event_type <= 13)))
+> con|access_events|access_events_invitation_id_fkey|FOREIGN KEY (invitation_id) REFERENCES identity_invitations(invitation_id) ON DELETE RESTRICT
+> con|access_events|access_events_organization_id_actor_membership_id_fkey|FOREIGN KEY (organization_id, actor_membership_id) REFERENCES organization_memberships(organization_id, membership_id) ON DELETE RESTRICT
+> con|access_events|access_events_organization_id_fkey|FOREIGN KEY (organization_id) REFERENCES organizations(organization_id) ON DELETE RESTRICT
+> con|access_events|access_events_organization_id_grant_id_fkey|FOREIGN KEY (organization_id, grant_id) REFERENCES client_workspace_grants(organization_id, grant_id) ON DELETE RESTRICT
+> con|access_events|access_events_organization_id_target_membership_id_fkey|FOREIGN KEY (organization_id, target_membership_id) REFERENCES organization_memberships(organization_id, membership_id) ON DELETE RESTRICT
+> con|access_events|access_events_organization_id_workspace_id_fkey|FOREIGN KEY (organization_id, workspace_id) REFERENCES workspaces(organization_id, workspace_id) ON DELETE RESTRICT
+> con|access_events|access_events_pkey|PRIMARY KEY (event_id)
+> con|access_events|access_events_previous_role_id_fkey|FOREIGN KEY (previous_role_id) REFERENCES roles(role_id) ON DELETE RESTRICT
+> con|access_events|access_events_role_id_fkey|FOREIGN KEY (role_id) REFERENCES roles(role_id) ON DELETE RESTRICT
+> con|access_events|access_events_target_user_id_fkey|FOREIGN KEY (target_user_id) REFERENCES users(user_id) ON DELETE RESTRICT
+> con|client_workspace_grants|client_workspace_grants_approval_check|CHECK (((status = ANY (ARRAY[1, 4])) OR (approved_at IS NOT NULL)))
+> con|identity_invitations|identity_invitations_accept_check|CHECK (((accepted_identity_id IS NULL) OR (accepted_at IS NOT NULL)))
+> con|identity_invitations|identity_invitations_accepted_identity_id_fkey|FOREIGN KEY (accepted_identity_id) REFERENCES identities(identity_id) ON DELETE RESTRICT
+> con|identity_invitations|identity_invitations_issuer_fkey|FOREIGN KEY (organization_id, issued_by_membership_id) REFERENCES organization_memberships(organization_id, membership_id) ON DELETE RESTRICT
+> con|identity_invitations|identity_invitations_replaces_invitation_id_fkey|FOREIGN KEY (replaces_invitation_id) REFERENCES identity_invitations(invitation_id) ON DELETE RESTRICT
+> con|identity_invitations|identity_invitations_revoke_check|CHECK (((revoked_at IS NOT NULL) OR ((revoke_reason IS NULL) AND (revoked_by_membership_id IS NULL))))
+> con|identity_invitations|identity_invitations_revoke_reason_check|CHECK ((revoke_reason = ANY (ARRAY[1, 2, 3])))
+> con|identity_invitations|identity_invitations_revoker_fkey|FOREIGN KEY (organization_id, revoked_by_membership_id) REFERENCES organization_memberships(organization_id, membership_id) ON DELETE RESTRICT
+> con|identity_invitations|identity_invitations_role_check|CHECK ((((role_id IS NULL) = (role_scope IS NULL)) AND ((role_id IS NULL) OR (invited_account_type = 1)) AND ((workspace_id IS NULL) OR (role_scope = 2)) AND ((role_scope IS DISTINCT FROM 2) OR (workspace_id IS NOT NULL))))
+> con|identity_invitations|identity_invitations_role_fkey|FOREIGN KEY (role_id, role_scope) REFERENCES roles(role_id, scope) ON DELETE RESTRICT
+> con|identity_invitations|identity_invitations_workspace_fkey|FOREIGN KEY (organization_id, workspace_id) REFERENCES workspaces(organization_id, workspace_id) ON DELETE RESTRICT
+> con|identity_users|identity_users_link_channel_check|CHECK ((link_channel = ANY (ARRAY['cadastro_web'::text, 'vinculacao'::text, 'convite'::text])))
+> fnacl|access_can_invite(uuid,uuid,uuid,uuid)|migrador_nekkora|EXECUTE|grant=f
+> fnacl|access_can_invite(uuid,uuid,uuid,uuid)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|access_can_invite(uuid,uuid,uuid,uuid)|nekkora_platform|EXECUTE|grant=f
+> fnacl|access_can_manage_role(uuid,uuid,uuid,uuid)|migrador_nekkora|EXECUTE|grant=f
+> fnacl|access_can_manage_role(uuid,uuid,uuid,uuid)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|access_can_manage_role(uuid,uuid,uuid,uuid)|nekkora_platform|EXECUTE|grant=f
+> fnacl|access_grant_guard()|migrador_nekkora|EXECUTE|grant=f
+> fnacl|access_invitation_on_insert()|migrador_nekkora|EXECUTE|grant=f
+> fnacl|access_invitation_on_update()|migrador_nekkora|EXECUTE|grant=f
+> fnacl|access_membership_effective(uuid,uuid)|migrador_nekkora|EXECUTE|grant=f
+> fnacl|access_membership_effective(uuid,uuid)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|access_membership_effective(uuid,uuid)|nekkora_platform|EXECUTE|grant=f
+> fnacl|access_org_permission(uuid,uuid,text)|migrador_nekkora|EXECUTE|grant=f
+> fnacl|access_org_permission(uuid,uuid,text)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|access_org_permission(uuid,uuid,text)|nekkora_platform|EXECUTE|grant=f
+> fnacl|access_role_assignment_guard()|migrador_nekkora|EXECUTE|grant=f
+> fnacl|identity_accept_invitation(text,text,uuid)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_accept_invitation(text,text,uuid)|nekkora_platform|EXECUTE|grant=f
+> fnacl|identity_accept_invitation_impl(text,text,uuid)|nekkora_identity_owner|EXECUTE|grant=f
+> fn|access_can_invite(uuid,uuid,uuid,uuid)|owner=migrador_nekkora|secdef=f|vol=s|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=boolean|md5=...
+> fn|access_can_manage_role(uuid,uuid,uuid,uuid)|owner=migrador_nekkora|secdef=f|vol=s|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=boolean|md5=...
+> fn|access_grant_guard()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=...
+> fn|access_invitation_on_insert()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=...
+> fn|access_invitation_on_update()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=...
+> fn|access_membership_effective(uuid,uuid)|owner=migrador_nekkora|secdef=f|vol=s|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=boolean|md5=...
+> fn|access_org_permission(uuid,uuid,text)|owner=migrador_nekkora|secdef=f|vol=s|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=boolean|md5=...
+> fn|access_role_assignment_guard()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=...
+> fn|identity_accept_invitation(text,text,uuid)|owner=nekkora_identity_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=text|md5=...
+> fn|identity_accept_invitation_impl(text,text,uuid)|owner=nekkora_identity_owner|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=text|md5=...
+> idx|CREATE INDEX ix_access_events_organization_created ON public.access_events USING btree (organization_id, created_at, event_id)
+> idx|CREATE UNIQUE INDEX access_events_pkey ON public.access_events USING btree (event_id)
+> idx|CREATE UNIQUE INDEX ux_identity_invitations_open ON public.identity_invitations USING btree (organization_id, email_normalized) WHERE ((accepted_at IS NULL) AND (revoked_at IS NULL))
+> idx|CREATE UNIQUE INDEX ux_identity_invitations_replaces ON public.identity_invitations USING btree (replaces_invitation_id) WHERE (replaces_invitation_id IS NOT NULL)
+> pol|access_events|identity_function_context|ALL|PERMISSIVE|{nekkora_identity_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+> pol|access_events|tenant_request_context|ALL|PERMISSIVE|{nekkora_platform}|using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+> pol|identity_invitations|identity_function_context|ALL|PERMISSIVE|{nekkora_identity_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+> pol|workspace_role_assignments|identity_function_context|ALL|PERMISSIVE|{nekkora_identity_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+> relacl|access_events_pkey|migrador_nekkora|DELETE|grant=f
+> relacl|access_events_pkey|migrador_nekkora|INSERT|grant=f
+> relacl|access_events_pkey|migrador_nekkora|REFERENCES|grant=f
+> relacl|access_events_pkey|migrador_nekkora|SELECT|grant=f
+> relacl|access_events_pkey|migrador_nekkora|TRIGGER|grant=f
+> relacl|access_events_pkey|migrador_nekkora|TRUNCATE|grant=f
+> relacl|access_events_pkey|migrador_nekkora|UPDATE|grant=f
+> relacl|access_events|migrador_nekkora|DELETE|grant=f
+> relacl|access_events|migrador_nekkora|INSERT|grant=f
+> relacl|access_events|migrador_nekkora|REFERENCES|grant=f
+> relacl|access_events|migrador_nekkora|SELECT|grant=f
+> relacl|access_events|migrador_nekkora|TRIGGER|grant=f
+> relacl|access_events|migrador_nekkora|TRUNCATE|grant=f
+> relacl|access_events|migrador_nekkora|UPDATE|grant=f
+> relacl|access_events|nekkora_identity_owner|INSERT|grant=f
+> relacl|access_events|nekkora_platform|INSERT|grant=f
+> relacl|access_events|nekkora_platform|SELECT|grant=f
+> relacl|ix_access_events_organization_created|migrador_nekkora|DELETE|grant=f
+> relacl|ix_access_events_organization_created|migrador_nekkora|INSERT|grant=f
+> relacl|ix_access_events_organization_created|migrador_nekkora|REFERENCES|grant=f
+> relacl|ix_access_events_organization_created|migrador_nekkora|SELECT|grant=f
+> relacl|ix_access_events_organization_created|migrador_nekkora|TRIGGER|grant=f
+> relacl|ix_access_events_organization_created|migrador_nekkora|TRUNCATE|grant=f
+> relacl|ix_access_events_organization_created|migrador_nekkora|UPDATE|grant=f
+> relacl|permissions|nekkora_identity_owner|SELECT|grant=f
+> relacl|role_permissions|nekkora_identity_owner|SELECT|grant=f
+> relacl|ux_identity_invitations_open|migrador_nekkora|DELETE|grant=f
+> relacl|ux_identity_invitations_open|migrador_nekkora|INSERT|grant=f
+> relacl|ux_identity_invitations_open|migrador_nekkora|REFERENCES|grant=f
+> relacl|ux_identity_invitations_open|migrador_nekkora|SELECT|grant=f
+> relacl|ux_identity_invitations_open|migrador_nekkora|TRIGGER|grant=f
+> relacl|ux_identity_invitations_open|migrador_nekkora|TRUNCATE|grant=f
+> relacl|ux_identity_invitations_open|migrador_nekkora|UPDATE|grant=f
+> relacl|ux_identity_invitations_replaces|migrador_nekkora|DELETE|grant=f
+> relacl|ux_identity_invitations_replaces|migrador_nekkora|INSERT|grant=f
+> relacl|ux_identity_invitations_replaces|migrador_nekkora|REFERENCES|grant=f
+> relacl|ux_identity_invitations_replaces|migrador_nekkora|SELECT|grant=f
+> relacl|ux_identity_invitations_replaces|migrador_nekkora|TRIGGER|grant=f
+> relacl|ux_identity_invitations_replaces|migrador_nekkora|TRUNCATE|grant=f
+> relacl|ux_identity_invitations_replaces|migrador_nekkora|UPDATE|grant=f
+> rel|access_events_pkey|i|owner=migrador_nekkora|rls=f|force=f
+> rel|access_events|r|owner=migrador_nekkora|rls=t|force=t
+> rel|ix_access_events_organization_created|i|owner=migrador_nekkora|rls=f|force=f
+> rel|ux_identity_invitations_open|i|owner=migrador_nekkora|rls=f|force=f
+> rel|ux_identity_invitations_replaces|i|owner=migrador_nekkora|rls=f|force=f
+> trg|access_events|trg_access_events_prevent_delete|enabled=O|CREATE TRIGGER trg_access_events_prevent_delete BEFORE DELETE ON public.access_events FOR EACH ROW EXECUTE FUNCTION prevent_delete()
+> trg|access_events|trg_access_events_prevent_truncate|enabled=O|CREATE TRIGGER trg_access_events_prevent_truncate BEFORE TRUNCATE ON public.access_events FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|access_events|trg_access_events_prevent_update|enabled=O|CREATE TRIGGER trg_access_events_prevent_update BEFORE UPDATE ON public.access_events FOR EACH ROW EXECUTE FUNCTION prevent_update()
+> trg|client_workspace_grant_approvals|trg_client_workspace_grant_approvals_authority|enabled=O|CREATE TRIGGER trg_client_workspace_grant_approvals_authority BEFORE INSERT ON public.client_workspace_grant_approvals FOR EACH ROW EXECUTE FUNCTION access_grant_guard()
+> trg|client_workspace_grant_reviews|trg_client_workspace_grant_reviews_authority|enabled=O|CREATE TRIGGER trg_client_workspace_grant_reviews_authority BEFORE INSERT ON public.client_workspace_grant_reviews FOR EACH ROW EXECUTE FUNCTION access_grant_guard()
+> trg|client_workspace_grants|trg_client_workspace_grants_authority|enabled=O|CREATE TRIGGER trg_client_workspace_grants_authority BEFORE UPDATE ON public.client_workspace_grants FOR EACH ROW EXECUTE FUNCTION access_grant_guard()
+> trg|identity_invitations|trg_identity_invitations_on_insert|enabled=O|CREATE TRIGGER trg_identity_invitations_on_insert BEFORE INSERT ON public.identity_invitations FOR EACH ROW EXECUTE FUNCTION access_invitation_on_insert()
+> trg|identity_invitations|trg_identity_invitations_on_update|enabled=O|CREATE TRIGGER trg_identity_invitations_on_update BEFORE UPDATE ON public.identity_invitations FOR EACH ROW EXECUTE FUNCTION access_invitation_on_update()
+> trg|identity_invitations|trg_identity_invitations_prevent_delete|enabled=O|CREATE TRIGGER trg_identity_invitations_prevent_delete BEFORE DELETE ON public.identity_invitations FOR EACH ROW EXECUTE FUNCTION prevent_delete()
+> trg|identity_invitations|trg_identity_invitations_prevent_truncate|enabled=O|CREATE TRIGGER trg_identity_invitations_prevent_truncate BEFORE TRUNCATE ON public.identity_invitations FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|organization_role_assignments|trg_org_role_assignments_authority|enabled=O|CREATE TRIGGER trg_org_role_assignments_authority BEFORE INSERT OR UPDATE ON public.organization_role_assignments FOR EACH ROW EXECUTE FUNCTION access_role_assignment_guard()
+> trg|workspace_role_assignments|trg_workspace_role_assignments_authority|enabled=O|CREATE TRIGGER trg_workspace_role_assignments_authority BEFORE INSERT OR UPDATE ON public.workspace_role_assignments FOR EACH ROW EXECUTE FUNCTION access_role_assignment_guard()
