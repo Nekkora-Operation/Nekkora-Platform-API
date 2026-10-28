@@ -1,0 +1,294 @@
+openapi: 3.1.0
+info:
+  title: Nekkora Agent Gateway v1 (canal da maquina)
+  version: 1.0.0
+  description: >
+    Lado da MAQUINA do contrato Platform-Agent 1.0 (docs/relatorios/2026-10-28-platform-agent-contrato.md), servido pelo
+    processo nekkora-agent-gateway (papel de banco nekkora_ingestion). O lado das pessoas (codigos, autorizacoes, consultas)
+    fica em nekkora-api-v1.yaml, tag "Canal do Agent". Autenticacao: credencial de maquina (Authorization: Bearer nka1...);
+    cookie, sessao e CSRF da Platform nao valem aqui. Toda chamada declara a versao do contrato (cabecalho
+    Nekkora-Agent-Contract, versao maior 1; outra: 400 unsupported_contract). Corpo JSON estrito: chave duplicada ou
+    profundidade acima de 8: 400. Toda credencial invalida (formato, organizacao trocada, segredo, revogada, vencida, Agent
+    nao ativo, sem associacao ao Worker) e o mesmo 401. Falhas de autenticacao contam por IP de origem (429). HTTPS com lotes
+    e ACK; o Agent sempre inicia a conexao. Uma falha da API, do Redis ou do banco nunca pede reexecucao: o Agent reenvia os
+    mesmos fatos.
+servers:
+  - url: https://{host}
+    description: Gateway publico (/agent/api/v1 encaminhado ao processo nekkora-agent-gateway)
+    variables:
+      host: { default: homologacao.nekkora.test }
+security:
+  - machineCredential: []
+tags:
+  - name: Maquina
+
+paths:
+  /agent/api/v1/enrollments/redeem:
+    post:
+      tags: [Maquina]
+      operationId: redeemEnrollment
+      summary: 'Resgata o codigo de pareamento ou de rotacao com o segredo gerado pela maquina'
+      description: >
+        O segredo da credencial (credentialSecret, 32 bytes base64url) e gerado pelo Agent e viaja uma vez; o servidor guarda o
+        SHA-256 e nunca devolve segredo. Idempotente pelo par (codigo, segredo): repetir com o mesmo segredo devolve o mesmo
+        resultado (resposta perdida nao tranca a maquina); outro segredo: 401. Pareamento: cria o Agent ACTIVE, a associacao
+        com o Worker e a credencial (90 dias), conferindo na transacao a autoridade ATUAL de quem criou o codigo, a organizacao
+        ativa e o Worker livre (ocupado: 409). Rotacao: exige tambem a credencial atual (Authorization; vencida aceita, revogada
+        nao) e revoga a anterior (motivo 1) na mesma transacao. A credencial e nka1.<organizationId>.<credentialId>.<segredo>.
+      security: [ {}, { machineCredential: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Contract' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RedeemRequest' } } } }
+      responses:
+        '200': { description: 'Maquina pareada (ou credencial rotacionada); Cache-Control no-store', content: { application/json: { schema: { $ref: '#/components/schemas/Redeemed' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/heartbeat:
+    post:
+      tags: [Maquina]
+      operationId: heartbeat
+      summary: 'Presenca, versao e capacidades'
+      description: >
+        Atualiza o ultimo contato e a versao informada e grava as capacidades (lista fechada). Recomendado a cada 60 s. A
+        AUSENCIA de heartbeat nunca encerra execucao, nunca muda estado e nunca libera Worker.
+      parameters: [ { $ref: '#/components/parameters/Contract' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/HeartbeatRequest' } } } }
+      responses:
+        '200': { description: 'Presenca registrada', content: { application/json: { schema: { $ref: '#/components/schemas/Presence' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/authorizations:
+    get:
+      tags: [Maquina]
+      operationId: listAuthorizations
+      summary: 'Autorizacoes de execucao local ATIVAS do Worker da maquina'
+      description: >
+        Nao revogadas, no prazo e com o Worker ainda autorizado no workspace. O Agent as guarda para executar offline dentro do
+        validUntil. Limite declarado: uma revogacao so alcanca a maquina no proximo download.
+      parameters: [ { $ref: '#/components/parameters/Contract' } ]
+      responses:
+        '200': { description: 'Autorizacoes', content: { application/json: { schema: { $ref: '#/components/schemas/AuthorizationList' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/runs:
+    post:
+      tags: [Maquina]
+      operationId: registerRun
+      summary: 'Registra a execucao local (idempotente por Agent + agentExecutionId)'
+      description: >
+        Workspace, automacao, versao e Worker vem da AUTORIZACAO, nunca do corpo. A autorizacao precisa ser do Worker da
+        maquina e o pacote, o dela (senao 403). Repetir o registro devolve o mesmo runId (200) e aplica o relatorio do supervisor
+        enviado com as regras do relatorio; o mesmo agentExecutionId com outra autorizacao ou outro pacote: 409. Autorizacao
+        revogada ou vencida no momento do registro: o fato e ACEITO e marcado (authorizationStateAtRegistration). Pacote sem
+        versao publicada nao e registravel (nao ha autorizacao para ele).
+      parameters: [ { $ref: '#/components/parameters/Contract' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RegisterRequest' } } } }
+      responses:
+        '200': { description: 'Ja registrada', content: { application/json: { schema: { $ref: '#/components/schemas/Registered' } } } }
+        '201': { description: 'Registrada', content: { application/json: { schema: { $ref: '#/components/schemas/Registered' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/runs/{agentExecutionId}/supervisor:
+    post:
+      tags: [Maquina]
+      operationId: reportSupervisor
+      summary: 'Relatorio do supervisor: o UNICO caminho que muda o estado da execucao'
+      description: >
+        Transicoes do Agent (READY->STARTING->RUNNING->terminal; READY->BLOCKED/CANCELLED; STARTING->BLOCKED/FAILED/CANCELLED/
+        OUTCOME_UNKNOWN; RUNNING->SUCCEEDED/FAILED/CANCELLED/TIMED_OUT/OUTCOME_UNKNOWN): APPLIED. Igual ao atual: UNCHANGED.
+        Estado anterior ao atual (relatorio atrasado): STALE, nada muda. Contradicao (outro terminal depois de um terminal, o
+        mesmo terminal com outros dados, transicao proibida): CONFLICT, nada muda, registrado, resposta 409 com o estado vigente.
+        OUTCOME_UNKNOWN e terminal e continua desconhecido. Instantes do relogio do Agent guardados como informados.
+      parameters: [ { $ref: '#/components/parameters/Contract' }, { $ref: '#/components/parameters/AgentExecutionId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SupervisorReport' } } } }
+      responses:
+        '200': { description: 'APPLIED, UNCHANGED ou STALE', content: { application/json: { schema: { $ref: '#/components/schemas/Reported' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: 'CONFLICT registrado; o estado nao mudou', content: { application/json: { schema: { $ref: '#/components/schemas/Reported' } } } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/runs/{agentExecutionId}/events:
+    post:
+      tags: [Maquina]
+      operationId: ingestEvents
+      summary: 'Lote de envelopes nekkora-agent/observability 1.0.0 com ACK depois do commit'
+      description: >
+        Ate 500 envelopes e 2 MiB por lote, ate 25.000 por execucao, cota de lotes por organizacao (429 com Retry-After).
+        Validacao igual a do Agent (1.0.x estrito; 1.y descarta e conta campos novos; outra versao maior recusada); um
+        evento invalido e recusado sozinho. Identidade (execucao, sequence): mesmo conteudo canonico = DUPLICATE; outro
+        conteudo = CONFLICT (o original fica; recusa registrada). declaredMissing: numeros que o Agent nunca vai entregar
+        (perda local); nunca contam como recebidos; sobre evento gravado: CONFLICT. ACK: storedThrough (1..k gravados) e
+        settledThrough (1..k gravados ou declarados ausentes). Fora de ordem: gravado pela sequence, o ACK so avanca sobre
+        intervalo continuo. Retomada: reenviar a partir de settledThrough + 1; ACK perdido devolve DUPLICATE e o mesmo ACK.
+        Falha antes do commit: 5xx SEM ACK e nada gravado. Eventos do Framework nunca mudam o estado da execucao.
+      parameters: [ { $ref: '#/components/parameters/Contract' }, { $ref: '#/components/parameters/AgentExecutionId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/EventBatch' } } } }
+      responses:
+        '200': { description: 'Lote confirmado (commit feito)', content: { application/json: { schema: { $ref: '#/components/schemas/Ack' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+components:
+  securitySchemes:
+    machineCredential:
+      type: http
+      scheme: bearer
+      bearerFormat: 'nka1.<organization_id>.<credential_id>.<segredo base64url de 32 bytes>'
+  parameters:
+    Contract: { name: Nekkora-Agent-Contract, in: header, required: true, schema: { type: string, pattern: '^1\.[0-9]{1,3}$' }, description: 'versao do contrato (maior 1)' }
+    AgentExecutionId: { name: agentExecutionId, in: path, required: true, schema: { type: string, pattern: '^ex-[0-9a-f]{32}$' } }
+  responses:
+    InvalidRequest: { description: 'Corpo, cabecalho de contrato (unsupported_contract) ou parametro invalido', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Unauthenticated: { description: 'Credencial ou codigo invalido (sempre o mesmo corpo)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: unauthenticated } } } }
+    Forbidden: { description: 'Autorizacao de outro Worker ou organizacao, ou pacote diferente do autorizado', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
+    NotFound: { description: 'Execucao nao registrada por esta maquina', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: not_found } } } }
+    Conflict: { description: 'Estado atual impede o ato (Worker ocupado, registro divergente, limite por execucao)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: conflict } } } }
+    RateLimited: { description: 'Cota de lotes da organizacao ou de falhas de autenticacao do IP; Retry-After', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: rate_limited } } } }
+    InternalError: { description: 'Falha antes do commit (sem ACK; nada gravado); reenviar os mesmos fatos', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: internal_error } } } }
+    ServiceUnavailable: { description: 'Dependencia indisponivel (Redis); sem ACK; reenviar depois', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: service_unavailable } } } }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string, enum: [invalid_request, unsupported_contract, unauthenticated, forbidden, not_found, conflict, rate_limited, internal_error, service_unavailable] }
+    RedeemRequest:
+      type: object
+      required: [code, credentialSecret, agentVersion, contractVersions]
+      properties:
+        code: { type: string, description: 'nkp1.<organization_id>.<enrollment_id>.<segredo>' }
+        credentialSecret: { type: string, pattern: '^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$' }
+        agentVersion: { type: string, pattern: '^[0-9A-Za-z.+-]{1,40}$' }
+        contractVersions: { type: array, maxItems: 8, items: { type: string } }
+    Redeemed:
+      type: object
+      properties:
+        organizationId: { type: string, format: uuid }
+        agentId: { type: string, format: uuid }
+        installationId: { type: string, format: uuid }
+        workerId: { type: string, format: uuid }
+        credentialId: { type: string, format: uuid }
+        credentialExpiresAt: { type: string, format: date-time }
+        contractVersion: { type: string }
+    HeartbeatRequest:
+      type: object
+      required: [agentVersion, contractVersion, capabilities]
+      properties:
+        agentVersion: { type: string, pattern: '^[0-9A-Za-z.+-]{1,40}$' }
+        contractVersion: { type: string, pattern: '^1\.[0-9]{1,3}$' }
+        capabilities: { type: array, maxItems: 8, items: { type: string, enum: [RUN_LOCAL, OBS_1_0, SUPERVISOR_REPORT_1_0] } }
+    Presence:
+      type: object
+      properties:
+        serverTime: { type: string, format: date-time }
+        credentialExpiresAt: { type: string, format: date-time }
+        contractVersion: { type: string }
+    AuthorizationList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              authorizationId: { type: string, format: uuid }
+              workspaceId: { type: string, format: uuid }
+              automationId: { type: string, format: uuid }
+              automationVersionId: { type: string, format: uuid }
+              packageFingerprint: { type: string, pattern: '^[0-9a-f]{64}$' }
+              validUntil: { type: string, format: date-time }
+    SupervisorReport:
+      type: object
+      additionalProperties: false
+      required: [state]
+      properties:
+        state: { type: string, enum: [READY, STARTING, RUNNING, SUCCEEDED, FAILED, CANCELLED, TIMED_OUT, BLOCKED, OUTCOME_UNKNOWN] }
+        code: { type: [string, 'null'], pattern: '^AGT-[A-Z]{2,5}-[0-9]{3}$', description: 'So em estado terminal' }
+        exitCode: { type: [integer, 'null'] }
+        counts: { type: [object, 'null'], maxProperties: 16, additionalProperties: { type: integer, minimum: 0 } }
+        created: { type: [string, 'null'], format: date-time }
+        started: { type: [string, 'null'], format: date-time }
+        ended: { type: [string, 'null'], format: date-time }
+        adopted: { type: [boolean, 'null'] }
+        suspensions: { type: [integer, 'null'], minimum: 0 }
+        locks: { type: [integer, 'null'], minimum: 0 }
+    RegisterRequest:
+      type: object
+      required: [agentExecutionId, authorizationId, packageFingerprint, supervisor]
+      properties:
+        agentExecutionId: { type: string, pattern: '^ex-[0-9a-f]{32}$' }
+        authorizationId: { type: string, format: uuid }
+        packageFingerprint: { type: string, pattern: '^[0-9a-f]{64}$', description: 'Impressao digital do pacote (sem o prefixo sha256:)' }
+        supervisor: { $ref: '#/components/schemas/SupervisorReport' }
+    Registered:
+      type: object
+      properties:
+        runId: { type: string, format: uuid }
+        created: { type: boolean }
+        state: { type: string }
+        reportOutcome: { type: string, enum: [APPLIED, UNCHANGED, STALE, CONFLICT] }
+    Reported:
+      type: object
+      properties:
+        runId: { type: string, format: uuid }
+        outcome: { type: string, enum: [APPLIED, UNCHANGED, STALE, CONFLICT] }
+        state: { type: string, description: 'Estado vigente depois do relatorio' }
+    EventBatch:
+      type: object
+      required: [events]
+      properties:
+        events: { type: array, maxItems: 500, items: { type: object, description: 'Envelope nekkora-agent/observability 1.0.0 (sem texto livre)' } }
+        declaredMissing:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            required: [from, to]
+            properties:
+              from: { type: integer, minimum: 1 }
+              to: { type: integer, maximum: 1000000 }
+    Ack:
+      type: object
+      properties:
+        runId: { type: string, format: uuid }
+        storedThrough: { type: integer }
+        settledThrough: { type: integer }
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              sequence: { type: [integer, 'null'] }
+              status: { type: string, enum: [STORED, DUPLICATE, CONFLICT, INVALID] }
+              reason: { type: [string, 'null'] }
+        missing:
+          type: array
+          items:
+            type: object
+            properties:
+              from: { type: integer }
+              to: { type: integer }
+              status: { type: string, enum: [STORED, DUPLICATE, CONFLICT] }
+              reason: { type: [string, 'null'] }

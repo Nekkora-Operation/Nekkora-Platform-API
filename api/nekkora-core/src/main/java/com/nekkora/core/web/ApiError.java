@@ -16,6 +16,8 @@ public enum ApiError {
     ACCOUNT_EXISTS(HttpStatus.CONFLICT, "account_exists"),
     /** Aceite de convite: a conta ligada a identidade esta suspensa ou com vinculo nao retirado e inativo. */
     ACCOUNT_UNAVAILABLE(HttpStatus.CONFLICT, "account_unavailable"),
+    /** Canal do Agent (contrato Platform-Agent 1.0, sec. 15): versao maior do contrato nao suportada. */
+    UNSUPPORTED_CONTRACT(HttpStatus.BAD_REQUEST, "unsupported_contract"),
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "rate_limited"),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "internal_error"),
     SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "service_unavailable");
