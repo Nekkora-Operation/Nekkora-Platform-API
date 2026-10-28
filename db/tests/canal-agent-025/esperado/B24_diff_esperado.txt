@@ -1,0 +1,607 @@
+> colacl|agent_credentials|revocation_reason|nekkora_ingestion|UPDATE|grant=f
+> colacl|agent_credentials|revoked_at|nekkora_ingestion|UPDATE|grant=f
+> colacl|agent_credentials|revoked_by_membership_id|nekkora_ingestion|UPDATE|grant=f
+> colacl|agent_enrollments|agent_id|nekkora_ingestion|UPDATE|grant=f
+> colacl|agent_enrollments|cancelled_at|nekkora_platform|UPDATE|grant=f
+> colacl|agent_enrollments|cancelled_by_membership_id|nekkora_platform|UPDATE|grant=f
+> colacl|agent_enrollments|consumed_at|nekkora_ingestion|UPDATE|grant=f
+> colacl|agent_enrollments|consumed_credential_id|nekkora_ingestion|UPDATE|grant=f
+> colacl|agents|agent_version|nekkora_ingestion|UPDATE|grant=f
+> colacl|agents|last_heartbeat_at|nekkora_ingestion|UPDATE|grant=f
+> colacl|local_run_authorizations|revoked_at|nekkora_platform|UPDATE|grant=f
+> colacl|local_run_authorizations|revoked_by_membership_id|nekkora_platform|UPDATE|grant=f
+> colacl|organization_memberships|membership_id|nekkora_ingestion|SELECT|grant=f
+> colacl|organization_memberships|organization_id|nekkora_ingestion|SELECT|grant=f
+> colacl|organization_memberships|status|nekkora_ingestion|SELECT|grant=f
+> colacl|organization_memberships|user_id|nekkora_ingestion|SELECT|grant=f
+> colacl|organization_role_assignments|membership_id|nekkora_ingestion|SELECT|grant=f
+> colacl|organization_role_assignments|organization_id|nekkora_ingestion|SELECT|grant=f
+> colacl|organization_role_assignments|role_id|nekkora_ingestion|SELECT|grant=f
+> colacl|organization_role_assignments|status|nekkora_ingestion|SELECT|grant=f
+> colacl|organizations|organization_id|nekkora_ingestion|SELECT|grant=f
+> colacl|organizations|status|nekkora_ingestion|SELECT|grant=f
+> colacl|users|organization_id|nekkora_ingestion|SELECT|grant=f
+> colacl|users|status|nekkora_ingestion|SELECT|grant=f
+> colacl|users|user_id|nekkora_ingestion|SELECT|grant=f
+> col|agent_admin_events|actor_agent_id|uuid|notnull=f|default=|gen=
+> col|agent_admin_events|actor_membership_id|uuid|notnull=f|default=|gen=
+> col|agent_admin_events|act|smallint|notnull=t|default=|gen=
+> col|agent_admin_events|agent_id|uuid|notnull=f|default=|gen=
+> col|agent_admin_events|authorization_id|uuid|notnull=f|default=|gen=
+> col|agent_admin_events|created_at|timestamp with time zone|notnull=t|default=clock_timestamp()|gen=
+> col|agent_admin_events|credential_id|uuid|notnull=f|default=|gen=
+> col|agent_admin_events|enrollment_id|uuid|notnull=f|default=|gen=
+> col|agent_admin_events|event_id|uuid|notnull=t|default=gen_random_uuid()|gen=
+> col|agent_admin_events|organization_id|uuid|notnull=t|default=|gen=
+> col|agent_admin_events|reason_code|text|notnull=f|default=|gen=
+> col|agent_admin_events|worker_id|uuid|notnull=f|default=|gen=
+> col|agent_admin_events|workspace_id|uuid|notnull=f|default=|gen=
+> col|agent_enrollments|agent_id|uuid|notnull=f|default=|gen=
+> col|agent_enrollments|agent_name|text|notnull=f|default=|gen=
+> col|agent_enrollments|cancelled_at|timestamp with time zone|notnull=f|default=|gen=
+> col|agent_enrollments|cancelled_by_membership_id|uuid|notnull=f|default=|gen=
+> col|agent_enrollments|code_hash|text|notnull=t|default=|gen=
+> col|agent_enrollments|consumed_at|timestamp with time zone|notnull=f|default=|gen=
+> col|agent_enrollments|consumed_credential_id|uuid|notnull=f|default=|gen=
+> col|agent_enrollments|created_at|timestamp with time zone|notnull=t|default=clock_timestamp()|gen=
+> col|agent_enrollments|created_by_membership_id|uuid|notnull=t|default=|gen=
+> col|agent_enrollments|enrollment_id|uuid|notnull=t|default=gen_random_uuid()|gen=
+> col|agent_enrollments|expires_at|timestamp with time zone|notnull=t|default=|gen=
+> col|agent_enrollments|organization_id|uuid|notnull=t|default=|gen=
+> col|agent_enrollments|purpose|smallint|notnull=t|default=|gen=
+> col|agent_enrollments|worker_id|uuid|notnull=t|default=|gen=
+> col|agent_ingestion_refusals|agent_id|uuid|notnull=t|default=|gen=
+> col|agent_ingestion_refusals|agent_run_id|uuid|notnull=f|default=|gen=
+> col|agent_ingestion_refusals|created_at|timestamp with time zone|notnull=t|default=clock_timestamp()|gen=
+> col|agent_ingestion_refusals|existing_sha256|text|notnull=f|default=|gen=
+> col|agent_ingestion_refusals|kind|smallint|notnull=t|default=|gen=
+> col|agent_ingestion_refusals|offered_sha256|text|notnull=f|default=|gen=
+> col|agent_ingestion_refusals|organization_id|uuid|notnull=t|default=|gen=
+> col|agent_ingestion_refusals|reason|text|notnull=t|default=|gen=
+> col|agent_ingestion_refusals|refusal_id|uuid|notnull=t|default=gen_random_uuid()|gen=
+> col|agent_ingestion_refusals|sequence|bigint|notnull=f|default=|gen=
+> col|agent_presence|agent_id|uuid|notnull=t|default=|gen=
+> col|agent_presence|capabilities|text[]|notnull=t|default=|gen=
+> col|agent_presence|contract_version|text|notnull=t|default=|gen=
+> col|agent_presence|organization_id|uuid|notnull=t|default=|gen=
+> col|agent_presence|reported_at|timestamp with time zone|notnull=t|default=|gen=
+> col|agent_run_events|agent_run_id|uuid|notnull=t|default=|gen=
+> col|agent_run_events|category|smallint|notnull=t|default=|gen=
+> col|agent_run_events|content_sha256|text|notnull=t|default=|gen=
+> col|agent_run_events|envelope|jsonb|notnull=t|default=|gen=
+> col|agent_run_events|error_code|text|notnull=f|default=|gen=
+> col|agent_run_events|event_code|text|notnull=t|default=|gen=
+> col|agent_run_events|observed_utc|timestamp with time zone|notnull=t|default=|gen=
+> col|agent_run_events|organization_id|uuid|notnull=t|default=|gen=
+> col|agent_run_events|received_at|timestamp with time zone|notnull=t|default=clock_timestamp()|gen=
+> col|agent_run_events|sequence|bigint|notnull=t|default=|gen=
+> col|agent_run_events|severity|smallint|notnull=t|default=|gen=
+> col|agent_run_events|source|smallint|notnull=t|default=|gen=
+> col|agent_run_events|step_id|text|notnull=f|default=|gen=
+> col|agent_run_events|studio_step_id|uuid|notnull=f|default=|gen=
+> col|agent_run_events|timestamp_utc|timestamp with time zone|notnull=f|default=|gen=
+> col|agent_run_missing|agent_run_id|uuid|notnull=t|default=|gen=
+> col|agent_run_missing|declared_at|timestamp with time zone|notnull=t|default=clock_timestamp()|gen=
+> col|agent_run_missing|organization_id|uuid|notnull=t|default=|gen=
+> col|agent_run_missing|seq_from|bigint|notnull=t|default=|gen=
+> col|agent_run_missing|seq_to|bigint|notnull=t|default=|gen=
+> col|agent_run_reports|adopted|boolean|notnull=t|default=false|gen=
+> col|agent_run_reports|agent_created_at|timestamp with time zone|notnull=f|default=|gen=
+> col|agent_run_reports|agent_ended_at|timestamp with time zone|notnull=f|default=|gen=
+> col|agent_run_reports|agent_run_id|uuid|notnull=t|default=|gen=
+> col|agent_run_reports|agent_started_at|timestamp with time zone|notnull=f|default=|gen=
+> col|agent_run_reports|code|text|notnull=f|default=|gen=
+> col|agent_run_reports|counts|jsonb|notnull=t|default='{}'::jsonb|gen=
+> col|agent_run_reports|exit_code|integer|notnull=f|default=|gen=
+> col|agent_run_reports|locks|integer|notnull=t|default=0|gen=
+> col|agent_run_reports|organization_id|uuid|notnull=t|default=|gen=
+> col|agent_run_reports|outcome|smallint|notnull=t|default=|gen=
+> col|agent_run_reports|received_at|timestamp with time zone|notnull=t|default=clock_timestamp()|gen=
+> col|agent_run_reports|report_id|uuid|notnull=t|default=gen_random_uuid()|gen=
+> col|agent_run_reports|state|smallint|notnull=t|default=|gen=
+> col|agent_run_reports|suspensions|integer|notnull=t|default=0|gen=
+> col|agent_runs|adopted|boolean|notnull=t|default=false|gen=
+> col|agent_runs|agent_created_at|timestamp with time zone|notnull=f|default=|gen=
+> col|agent_runs|agent_ended_at|timestamp with time zone|notnull=f|default=|gen=
+> col|agent_runs|agent_execution_id|text|notnull=t|default=|gen=
+> col|agent_runs|agent_id|uuid|notnull=t|default=|gen=
+> col|agent_runs|agent_run_id|uuid|notnull=t|default=gen_random_uuid()|gen=
+> col|agent_runs|agent_started_at|timestamp with time zone|notnull=f|default=|gen=
+> col|agent_runs|authorization_id|uuid|notnull=t|default=|gen=
+> col|agent_runs|authorization_state_at_registration|smallint|notnull=t|default=|gen=
+> col|agent_runs|automation_id|uuid|notnull=t|default=|gen=
+> col|agent_runs|automation_version_id|uuid|notnull=t|default=|gen=
+> col|agent_runs|collection_completed_sequence|bigint|notnull=f|default=|gen=
+> col|agent_runs|declared_missing|bigint|notnull=t|default=0|gen=
+> col|agent_runs|events_stored|bigint|notnull=t|default=0|gen=
+> col|agent_runs|exit_code|integer|notnull=f|default=|gen=
+> col|agent_runs|framework_events|bigint|notnull=t|default=0|gen=
+> col|agent_runs|framework_execution_id|text|notnull=f|default=|gen=
+> col|agent_runs|invalid_refused|bigint|notnull=t|default=0|gen=
+> col|agent_runs|last_event_at|timestamp with time zone|notnull=f|default=|gen=
+> col|agent_runs|last_report_at|timestamp with time zone|notnull=t|default=clock_timestamp()|gen=
+> col|agent_runs|locks|integer|notnull=t|default=0|gen=
+> col|agent_runs|lost_at_source|boolean|notnull=t|default=false|gen=
+> col|agent_runs|lost_local|boolean|notnull=t|default=false|gen=
+> col|agent_runs|max_sequence|bigint|notnull=t|default=0|gen=
+> col|agent_runs|organization_id|uuid|notnull=t|default=|gen=
+> col|agent_runs|origin|smallint|notnull=t|default=1|gen=
+> col|agent_runs|package_fingerprint|text|notnull=t|default=|gen=
+> col|agent_runs|platform_execution_id|uuid|notnull=f|default=|gen=
+> col|agent_runs|purged_local|boolean|notnull=t|default=false|gen=
+> col|agent_runs|registered_at|timestamp with time zone|notnull=t|default=clock_timestamp()|gen=
+> col|agent_runs|settled_through|bigint|notnull=t|default=0|gen=
+> col|agent_runs|stored_through|bigint|notnull=t|default=0|gen=
+> col|agent_runs|supervisor_code|text|notnull=f|default=|gen=
+> col|agent_runs|supervisor_conflicts|integer|notnull=t|default=0|gen=
+> col|agent_runs|supervisor_counts|jsonb|notnull=t|default='{}'::jsonb|gen=
+> col|agent_runs|supervisor_reports|integer|notnull=t|default=1|gen=
+> col|agent_runs|supervisor_state|smallint|notnull=t|default=|gen=
+> col|agent_runs|suspensions|integer|notnull=t|default=0|gen=
+> col|agent_runs|worker_agent_assignment_id|uuid|notnull=t|default=|gen=
+> col|agent_runs|worker_id|uuid|notnull=t|default=|gen=
+> col|agent_runs|workspace_id|uuid|notnull=t|default=|gen=
+> col|local_run_authorizations|authorization_id|uuid|notnull=t|default=gen_random_uuid()|gen=
+> col|local_run_authorizations|automation_id|uuid|notnull=t|default=|gen=
+> col|local_run_authorizations|automation_version_id|uuid|notnull=t|default=|gen=
+> col|local_run_authorizations|granted_at|timestamp with time zone|notnull=t|default=clock_timestamp()|gen=
+> col|local_run_authorizations|granted_by_membership_id|uuid|notnull=t|default=|gen=
+> col|local_run_authorizations|organization_id|uuid|notnull=t|default=|gen=
+> col|local_run_authorizations|package_fingerprint|text|notnull=t|default=|gen=
+> col|local_run_authorizations|revoked_at|timestamp with time zone|notnull=f|default=|gen=
+> col|local_run_authorizations|revoked_by_membership_id|uuid|notnull=f|default=|gen=
+> col|local_run_authorizations|valid_until|timestamp with time zone|notnull=t|default=|gen=
+> col|local_run_authorizations|worker_id|uuid|notnull=t|default=|gen=
+> col|local_run_authorizations|worker_workspace_assignment_id|uuid|notnull=t|default=|gen=
+> col|local_run_authorizations|workspace_id|uuid|notnull=t|default=|gen=
+> con|agent_admin_events|agent_admin_events_act_check|CHECK (((act >= 1) AND (act <= 11)))
+> con|agent_admin_events|agent_admin_events_check|CHECK (((actor_membership_id IS NOT NULL) OR (actor_agent_id IS NOT NULL)))
+> con|agent_admin_events|agent_admin_events_organization_id_fkey|FOREIGN KEY (organization_id) REFERENCES organizations(organization_id) ON DELETE RESTRICT
+> con|agent_admin_events|agent_admin_events_pkey|PRIMARY KEY (event_id)
+> con|agent_admin_events|agent_admin_events_reason_code_check|CHECK ((reason_code ~ '^[A-Z][A-Z_]{1,39}$'::text))
+> con|agent_enrollments|agent_enrollments_agent_name_check|CHECK (((agent_name IS NULL) OR (((char_length(agent_name) >= 1) AND (char_length(agent_name) <= 80)) AND (btrim(agent_name) = agent_name) AND (agent_name !~ '[[:cntrl:]]'::text))))
+> con|agent_enrollments|agent_enrollments_check1|CHECK (((purpose = 1) = (agent_name IS NOT NULL)))
+> con|agent_enrollments|agent_enrollments_check2|CHECK (((purpose = 1) OR (agent_id IS NOT NULL)))
+> con|agent_enrollments|agent_enrollments_check3|CHECK (((purpose = 2) OR (consumed_at IS NOT NULL) OR (agent_id IS NULL)))
+> con|agent_enrollments|agent_enrollments_check4|CHECK (((consumed_at IS NULL) = (consumed_credential_id IS NULL)))
+> con|agent_enrollments|agent_enrollments_check5|CHECK (((cancelled_at IS NULL) = (cancelled_by_membership_id IS NULL)))
+> con|agent_enrollments|agent_enrollments_check6|CHECK (((consumed_at IS NULL) OR (cancelled_at IS NULL)))
+> con|agent_enrollments|agent_enrollments_check7|CHECK (((consumed_at IS NULL) OR (consumed_at <= expires_at)))
+> con|agent_enrollments|agent_enrollments_check|CHECK (((expires_at > created_at) AND (expires_at <= (created_at + '01:00:00'::interval))))
+> con|agent_enrollments|agent_enrollments_code_hash_check|CHECK ((code_hash ~ '^[0-9a-f]{64}$'::text))
+> con|agent_enrollments|agent_enrollments_code_hash_key|UNIQUE (code_hash)
+> con|agent_enrollments|agent_enrollments_consumed_credential_id_fkey|FOREIGN KEY (consumed_credential_id) REFERENCES agent_credentials(credential_id) ON DELETE RESTRICT
+> con|agent_enrollments|agent_enrollments_organization_id_agent_id_fkey|FOREIGN KEY (organization_id, agent_id) REFERENCES agents(organization_id, agent_id) ON DELETE RESTRICT
+> con|agent_enrollments|agent_enrollments_organization_id_cancelled_by_membership__fkey|FOREIGN KEY (organization_id, cancelled_by_membership_id) REFERENCES organization_memberships(organization_id, membership_id) ON DELETE RESTRICT
+> con|agent_enrollments|agent_enrollments_organization_id_created_by_membership_id_fkey|FOREIGN KEY (organization_id, created_by_membership_id) REFERENCES organization_memberships(organization_id, membership_id) ON DELETE RESTRICT
+> con|agent_enrollments|agent_enrollments_organization_id_enrollment_id_key|UNIQUE (organization_id, enrollment_id)
+> con|agent_enrollments|agent_enrollments_organization_id_worker_id_fkey|FOREIGN KEY (organization_id, worker_id) REFERENCES workers(organization_id, worker_id) ON DELETE RESTRICT
+> con|agent_enrollments|agent_enrollments_pkey|PRIMARY KEY (enrollment_id)
+> con|agent_enrollments|agent_enrollments_purpose_check|CHECK ((purpose = ANY (ARRAY[1, 2])))
+> con|agent_ingestion_refusals|agent_ingestion_refusals_existing_sha256_check|CHECK ((existing_sha256 ~ '^[0-9a-f]{64}$'::text))
+> con|agent_ingestion_refusals|agent_ingestion_refusals_kind_check|CHECK ((kind = ANY (ARRAY[1, 2, 3, 4, 5])))
+> con|agent_ingestion_refusals|agent_ingestion_refusals_offered_sha256_check|CHECK ((offered_sha256 ~ '^[0-9a-f]{64}$'::text))
+> con|agent_ingestion_refusals|agent_ingestion_refusals_organization_id_agent_id_fkey|FOREIGN KEY (organization_id, agent_id) REFERENCES agents(organization_id, agent_id) ON DELETE RESTRICT
+> con|agent_ingestion_refusals|agent_ingestion_refusals_organization_id_agent_run_id_fkey|FOREIGN KEY (organization_id, agent_run_id) REFERENCES agent_runs(organization_id, agent_run_id) ON DELETE RESTRICT
+> con|agent_ingestion_refusals|agent_ingestion_refusals_pkey|PRIMARY KEY (refusal_id)
+> con|agent_ingestion_refusals|agent_ingestion_refusals_reason_check|CHECK ((reason ~ '^[a-z][a-z0-9_]{0,39}$'::text))
+> con|agent_presence|agent_presence_capabilities_check|CHECK (((cardinality(capabilities) <= 8) AND (capabilities <@ ARRAY['RUN_LOCAL'::text, 'OBS_1_0'::text, 'SUPERVISOR_REPORT_1_0'::text])))
+> con|agent_presence|agent_presence_contract_version_check|CHECK ((contract_version ~ '^1\.[0-9]{1,3}$'::text))
+> con|agent_presence|agent_presence_organization_id_agent_id_fkey|FOREIGN KEY (organization_id, agent_id) REFERENCES agents(organization_id, agent_id) ON DELETE RESTRICT
+> con|agent_presence|agent_presence_pkey|PRIMARY KEY (agent_id)
+> con|agent_run_events|agent_run_events_category_check|CHECK ((category = ANY (ARRAY[1, 2, 3, 4, 5])))
+> con|agent_run_events|agent_run_events_check|CHECK ((((envelope ->> 'sequence'::text) = (sequence)::text) AND ((envelope ->> 'event_code'::text) = event_code)))
+> con|agent_run_events|agent_run_events_content_sha256_check|CHECK ((content_sha256 ~ '^[0-9a-f]{64}$'::text))
+> con|agent_run_events|agent_run_events_envelope_check|CHECK (((jsonb_typeof(envelope) = 'object'::text) AND (octet_length((envelope)::text) <= 4096)))
+> con|agent_run_events|agent_run_events_event_code_check|CHECK ((event_code ~ '^[A-Z][A-Z0-9_]{1,63}$'::text))
+> con|agent_run_events|agent_run_events_organization_id_agent_run_id_fkey|FOREIGN KEY (organization_id, agent_run_id) REFERENCES agent_runs(organization_id, agent_run_id) ON DELETE RESTRICT
+> con|agent_run_events|agent_run_events_pkey|PRIMARY KEY (agent_run_id, sequence)
+> con|agent_run_events|agent_run_events_sequence_check|CHECK (((sequence >= 1) AND (sequence <= 1000000)))
+> con|agent_run_events|agent_run_events_severity_check|CHECK ((severity = ANY (ARRAY[1, 2, 3])))
+> con|agent_run_events|agent_run_events_source_check|CHECK ((source = ANY (ARRAY[1, 2, 3])))
+> con|agent_run_missing|agent_run_missing_check|CHECK (((seq_to >= seq_from) AND (seq_to <= 1000000)))
+> con|agent_run_missing|agent_run_missing_organization_id_agent_run_id_fkey|FOREIGN KEY (organization_id, agent_run_id) REFERENCES agent_runs(organization_id, agent_run_id) ON DELETE RESTRICT
+> con|agent_run_missing|agent_run_missing_pkey|PRIMARY KEY (agent_run_id, seq_from)
+> con|agent_run_missing|agent_run_missing_seq_from_check|CHECK ((seq_from >= 1))
+> con|agent_run_reports|agent_run_reports_code_check|CHECK ((code ~ '^AGT-[A-Z]{2,5}-[0-9]{3}$'::text))
+> con|agent_run_reports|agent_run_reports_counts_check|CHECK (((jsonb_typeof(counts) = 'object'::text) AND (octet_length((counts)::text) <= 1024)))
+> con|agent_run_reports|agent_run_reports_organization_id_agent_run_id_fkey|FOREIGN KEY (organization_id, agent_run_id) REFERENCES agent_runs(organization_id, agent_run_id) ON DELETE RESTRICT
+> con|agent_run_reports|agent_run_reports_outcome_check|CHECK ((outcome = ANY (ARRAY[1, 2, 3, 4])))
+> con|agent_run_reports|agent_run_reports_pkey|PRIMARY KEY (report_id)
+> con|agent_run_reports|agent_run_reports_state_check|CHECK (((state >= 1) AND (state <= 9)))
+> con|agent_runs|agent_runs_agent_execution_id_check|CHECK ((agent_execution_id ~ '^ex-[0-9a-f]{32}$'::text))
+> con|agent_runs|agent_runs_agent_id_agent_execution_id_key|UNIQUE (agent_id, agent_execution_id)
+> con|agent_runs|agent_runs_authorization_state_at_registration_check|CHECK ((authorization_state_at_registration = ANY (ARRAY[1, 2, 3])))
+> con|agent_runs|agent_runs_check1|CHECK ((max_sequence >= settled_through))
+> con|agent_runs|agent_runs_check2|CHECK (((origin <> 1) OR (platform_execution_id IS NULL)))
+> con|agent_runs|agent_runs_check3|CHECK (((supervisor_state >= 4) OR (supervisor_code IS NULL)))
+> con|agent_runs|agent_runs_check|CHECK ((settled_through >= stored_through))
+> con|agent_runs|agent_runs_declared_missing_check|CHECK ((declared_missing >= 0))
+> con|agent_runs|agent_runs_events_stored_check|CHECK ((events_stored >= 0))
+> con|agent_runs|agent_runs_framework_events_check|CHECK ((framework_events >= 0))
+> con|agent_runs|agent_runs_framework_execution_id_check|CHECK ((framework_execution_id ~ '^ex-[0-9a-f]{8,64}$'::text))
+> con|agent_runs|agent_runs_invalid_refused_check|CHECK ((invalid_refused >= 0))
+> con|agent_runs|agent_runs_locks_check|CHECK ((locks >= 0))
+> con|agent_runs|agent_runs_organization_id_agent_id_fkey|FOREIGN KEY (organization_id, agent_id) REFERENCES agents(organization_id, agent_id) ON DELETE RESTRICT
+> con|agent_runs|agent_runs_organization_id_agent_run_id_key|UNIQUE (organization_id, agent_run_id)
+> con|agent_runs|agent_runs_organization_id_authorization_id_fkey|FOREIGN KEY (organization_id, authorization_id) REFERENCES local_run_authorizations(organization_id, authorization_id) ON DELETE RESTRICT
+> con|agent_runs|agent_runs_organization_id_worker_id_worker_agent_assignme_fkey|FOREIGN KEY (organization_id, worker_id, worker_agent_assignment_id) REFERENCES worker_agent_assignments(organization_id, worker_id, assignment_id) ON DELETE RESTRICT
+> con|agent_runs|agent_runs_organization_id_workspace_id_automation_id_auto_fkey|FOREIGN KEY (organization_id, workspace_id, automation_id, automation_version_id) REFERENCES automation_versions(organization_id, workspace_id, automation_id, automation_version_id) ON DELETE RESTRICT
+> con|agent_runs|agent_runs_origin_check|CHECK ((origin = 1))
+> con|agent_runs|agent_runs_package_fingerprint_check|CHECK ((package_fingerprint ~ '^[0-9a-f]{64}$'::text))
+> con|agent_runs|agent_runs_pkey|PRIMARY KEY (agent_run_id)
+> con|agent_runs|agent_runs_stored_through_check|CHECK ((stored_through >= 0))
+> con|agent_runs|agent_runs_supervisor_code_check|CHECK ((supervisor_code ~ '^AGT-[A-Z]{2,5}-[0-9]{3}$'::text))
+> con|agent_runs|agent_runs_supervisor_conflicts_check|CHECK ((supervisor_conflicts >= 0))
+> con|agent_runs|agent_runs_supervisor_counts_check|CHECK (((jsonb_typeof(supervisor_counts) = 'object'::text) AND (octet_length((supervisor_counts)::text) <= 1024)))
+> con|agent_runs|agent_runs_supervisor_reports_check|CHECK ((supervisor_reports >= 1))
+> con|agent_runs|agent_runs_supervisor_state_check|CHECK (((supervisor_state >= 1) AND (supervisor_state <= 9)))
+> con|agent_runs|agent_runs_suspensions_check|CHECK ((suspensions >= 0))
+> con|local_run_authorizations|local_run_authorizations_check1|CHECK (((revoked_at IS NULL) = (revoked_by_membership_id IS NULL)))
+> con|local_run_authorizations|local_run_authorizations_check2|CHECK (((revoked_at IS NULL) OR (revoked_at >= granted_at)))
+> con|local_run_authorizations|local_run_authorizations_check|CHECK (((valid_until > granted_at) AND (valid_until <= (granted_at + '366 days'::interval))))
+> con|local_run_authorizations|local_run_authorizations_organization_id_authorization_id_key|UNIQUE (organization_id, authorization_id)
+> con|local_run_authorizations|local_run_authorizations_organization_id_granted_by_member_fkey|FOREIGN KEY (organization_id, granted_by_membership_id) REFERENCES organization_memberships(organization_id, membership_id) ON DELETE RESTRICT
+> con|local_run_authorizations|local_run_authorizations_organization_id_revoked_by_member_fkey|FOREIGN KEY (organization_id, revoked_by_membership_id) REFERENCES organization_memberships(organization_id, membership_id) ON DELETE RESTRICT
+> con|local_run_authorizations|local_run_authorizations_organization_id_worker_id_workspa_fkey|FOREIGN KEY (organization_id, worker_id, workspace_id, worker_workspace_assignment_id) REFERENCES worker_workspace_assignments(organization_id, worker_id, workspace_id, assignment_id) ON DELETE RESTRICT
+> con|local_run_authorizations|local_run_authorizations_organization_id_workspace_id_auto_fkey|FOREIGN KEY (organization_id, workspace_id, automation_id, automation_version_id) REFERENCES automation_versions(organization_id, workspace_id, automation_id, automation_version_id) ON DELETE RESTRICT
+> con|local_run_authorizations|local_run_authorizations_package_fingerprint_check|CHECK ((package_fingerprint ~ '^[0-9a-f]{64}$'::text))
+> con|local_run_authorizations|local_run_authorizations_pkey|PRIMARY KEY (authorization_id)
+> fnacl|access_membership_effective(uuid,uuid)|nekkora_ingestion|EXECUTE|grant=f
+> fnacl|access_org_permission(uuid,uuid,text)|nekkora_ingestion|EXECUTE|grant=f
+> fnacl|agent_enrollment_on_insert()|migrador_nekkora|EXECUTE|grant=f
+> fnacl|agent_enrollment_on_update()|migrador_nekkora|EXECUTE|grant=f
+> fnacl|agent_run_on_insert()|migrador_nekkora|EXECUTE|grant=f
+> fnacl|agent_run_on_update()|migrador_nekkora|EXECUTE|grant=f
+> fnacl|agent_run_transition_allowed(smallint,smallint)|migrador_nekkora|EXECUTE|grant=f
+> fnacl|agent_run_transition_allowed(smallint,smallint)|nekkora_ingestion|EXECUTE|grant=f
+> fnacl|agent_workspace_permission(uuid,uuid,uuid,text)|migrador_nekkora|EXECUTE|grant=f
+> fnacl|agent_workspace_permission(uuid,uuid,uuid,text)|nekkora_platform|EXECUTE|grant=f
+> fnacl|local_run_authorization_on_insert()|migrador_nekkora|EXECUTE|grant=f
+> fnacl|local_run_authorization_on_update()|migrador_nekkora|EXECUTE|grant=f
+> fn|agent_enrollment_on_insert()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=...
+> fn|agent_enrollment_on_update()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=...
+> fn|agent_run_on_insert()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=...
+> fn|agent_run_on_update()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=...
+> fn|agent_run_transition_allowed(smallint,smallint)|owner=migrador_nekkora|secdef=f|vol=i|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=boolean|md5=...
+> fn|agent_workspace_permission(uuid,uuid,uuid,text)|owner=migrador_nekkora|secdef=f|vol=s|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=boolean|md5=...
+> fn|local_run_authorization_on_insert()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=...
+> fn|local_run_authorization_on_update()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=...
+> idx|CREATE INDEX ix_agent_admin_events_org ON public.agent_admin_events USING btree (organization_id, created_at)
+> idx|CREATE INDEX ix_agent_enrollments_worker ON public.agent_enrollments USING btree (organization_id, worker_id)
+> idx|CREATE INDEX ix_agent_ingestion_refusals_run ON public.agent_ingestion_refusals USING btree (agent_run_id)
+> idx|CREATE INDEX ix_agent_run_reports_run ON public.agent_run_reports USING btree (agent_run_id, received_at)
+> idx|CREATE INDEX ix_agent_runs_registered ON public.agent_runs USING btree (organization_id, registered_at, agent_run_id)
+> idx|CREATE INDEX ix_agent_runs_workspace ON public.agent_runs USING btree (organization_id, workspace_id, registered_at)
+> idx|CREATE INDEX ix_local_run_authorizations_worker ON public.local_run_authorizations USING btree (organization_id, worker_id)
+> idx|CREATE UNIQUE INDEX agent_admin_events_pkey ON public.agent_admin_events USING btree (event_id)
+> idx|CREATE UNIQUE INDEX agent_enrollments_code_hash_key ON public.agent_enrollments USING btree (code_hash)
+> idx|CREATE UNIQUE INDEX agent_enrollments_organization_id_enrollment_id_key ON public.agent_enrollments USING btree (organization_id, enrollment_id)
+> idx|CREATE UNIQUE INDEX agent_enrollments_pkey ON public.agent_enrollments USING btree (enrollment_id)
+> idx|CREATE UNIQUE INDEX agent_ingestion_refusals_pkey ON public.agent_ingestion_refusals USING btree (refusal_id)
+> idx|CREATE UNIQUE INDEX agent_presence_pkey ON public.agent_presence USING btree (agent_id)
+> idx|CREATE UNIQUE INDEX agent_run_events_pkey ON public.agent_run_events USING btree (agent_run_id, sequence)
+> idx|CREATE UNIQUE INDEX agent_run_missing_pkey ON public.agent_run_missing USING btree (agent_run_id, seq_from)
+> idx|CREATE UNIQUE INDEX agent_run_reports_pkey ON public.agent_run_reports USING btree (report_id)
+> idx|CREATE UNIQUE INDEX agent_runs_agent_id_agent_execution_id_key ON public.agent_runs USING btree (agent_id, agent_execution_id)
+> idx|CREATE UNIQUE INDEX agent_runs_organization_id_agent_run_id_key ON public.agent_runs USING btree (organization_id, agent_run_id)
+> idx|CREATE UNIQUE INDEX agent_runs_pkey ON public.agent_runs USING btree (agent_run_id)
+> idx|CREATE UNIQUE INDEX local_run_authorizations_organization_id_authorization_id_key ON public.local_run_authorizations USING btree (organization_id, authorization_id)
+> idx|CREATE UNIQUE INDEX local_run_authorizations_pkey ON public.local_run_authorizations USING btree (authorization_id)
+> pol|agent_admin_events|tenant_request_context|ALL|PERMISSIVE|{nekkora_ingestion,nekkora_platform}|using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+> pol|agent_enrollments|tenant_request_context|ALL|PERMISSIVE|{nekkora_ingestion,nekkora_platform}|using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+> pol|agent_ingestion_refusals|tenant_request_context|ALL|PERMISSIVE|{nekkora_ingestion,nekkora_platform}|using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+> pol|agent_presence|tenant_request_context|ALL|PERMISSIVE|{nekkora_ingestion,nekkora_platform}|using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+> pol|agent_run_events|tenant_request_context|ALL|PERMISSIVE|{nekkora_ingestion,nekkora_platform}|using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+> pol|agent_run_missing|tenant_request_context|ALL|PERMISSIVE|{nekkora_ingestion,nekkora_platform}|using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+> pol|agent_run_reports|tenant_request_context|ALL|PERMISSIVE|{nekkora_ingestion,nekkora_platform}|using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+> pol|agent_runs|tenant_request_context|ALL|PERMISSIVE|{nekkora_ingestion,nekkora_platform}|using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+> pol|local_run_authorizations|tenant_request_context|ALL|PERMISSIVE|{nekkora_ingestion,nekkora_platform}|using=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.organization_id'::text, true), ''::text))::uuid)
+> relacl|agent_admin_events_pkey|migrador_nekkora|DELETE|grant=f
+> relacl|agent_admin_events_pkey|migrador_nekkora|INSERT|grant=f
+> relacl|agent_admin_events_pkey|migrador_nekkora|REFERENCES|grant=f
+> relacl|agent_admin_events_pkey|migrador_nekkora|SELECT|grant=f
+> relacl|agent_admin_events_pkey|migrador_nekkora|TRIGGER|grant=f
+> relacl|agent_admin_events_pkey|migrador_nekkora|TRUNCATE|grant=f
+> relacl|agent_admin_events_pkey|migrador_nekkora|UPDATE|grant=f
+> relacl|agent_admin_events|migrador_nekkora|DELETE|grant=f
+> relacl|agent_admin_events|migrador_nekkora|INSERT|grant=f
+> relacl|agent_admin_events|migrador_nekkora|REFERENCES|grant=f
+> relacl|agent_admin_events|migrador_nekkora|SELECT|grant=f
+> relacl|agent_admin_events|migrador_nekkora|TRIGGER|grant=f
+> relacl|agent_admin_events|migrador_nekkora|TRUNCATE|grant=f
+> relacl|agent_admin_events|migrador_nekkora|UPDATE|grant=f
+> relacl|agent_admin_events|nekkora_ingestion|INSERT|grant=f
+> relacl|agent_admin_events|nekkora_ingestion|SELECT|grant=f
+> relacl|agent_admin_events|nekkora_platform|INSERT|grant=f
+> relacl|agent_admin_events|nekkora_platform|SELECT|grant=f
+> relacl|agent_credentials|nekkora_ingestion|INSERT|grant=f
+> relacl|agent_credentials|nekkora_ingestion|SELECT|grant=f
+> relacl|agent_enrollments_code_hash_key|migrador_nekkora|DELETE|grant=f
+> relacl|agent_enrollments_code_hash_key|migrador_nekkora|INSERT|grant=f
+> relacl|agent_enrollments_code_hash_key|migrador_nekkora|REFERENCES|grant=f
+> relacl|agent_enrollments_code_hash_key|migrador_nekkora|SELECT|grant=f
+> relacl|agent_enrollments_code_hash_key|migrador_nekkora|TRIGGER|grant=f
+> relacl|agent_enrollments_code_hash_key|migrador_nekkora|TRUNCATE|grant=f
+> relacl|agent_enrollments_code_hash_key|migrador_nekkora|UPDATE|grant=f
+> relacl|agent_enrollments_organization_id_enrollment_id_key|migrador_nekkora|DELETE|grant=f
+> relacl|agent_enrollments_organization_id_enrollment_id_key|migrador_nekkora|INSERT|grant=f
+> relacl|agent_enrollments_organization_id_enrollment_id_key|migrador_nekkora|REFERENCES|grant=f
+> relacl|agent_enrollments_organization_id_enrollment_id_key|migrador_nekkora|SELECT|grant=f
+> relacl|agent_enrollments_organization_id_enrollment_id_key|migrador_nekkora|TRIGGER|grant=f
+> relacl|agent_enrollments_organization_id_enrollment_id_key|migrador_nekkora|TRUNCATE|grant=f
+> relacl|agent_enrollments_organization_id_enrollment_id_key|migrador_nekkora|UPDATE|grant=f
+> relacl|agent_enrollments_pkey|migrador_nekkora|DELETE|grant=f
+> relacl|agent_enrollments_pkey|migrador_nekkora|INSERT|grant=f
+> relacl|agent_enrollments_pkey|migrador_nekkora|REFERENCES|grant=f
+> relacl|agent_enrollments_pkey|migrador_nekkora|SELECT|grant=f
+> relacl|agent_enrollments_pkey|migrador_nekkora|TRIGGER|grant=f
+> relacl|agent_enrollments_pkey|migrador_nekkora|TRUNCATE|grant=f
+> relacl|agent_enrollments_pkey|migrador_nekkora|UPDATE|grant=f
+> relacl|agent_enrollments|migrador_nekkora|DELETE|grant=f
+> relacl|agent_enrollments|migrador_nekkora|INSERT|grant=f
+> relacl|agent_enrollments|migrador_nekkora|REFERENCES|grant=f
+> relacl|agent_enrollments|migrador_nekkora|SELECT|grant=f
+> relacl|agent_enrollments|migrador_nekkora|TRIGGER|grant=f
+> relacl|agent_enrollments|migrador_nekkora|TRUNCATE|grant=f
+> relacl|agent_enrollments|migrador_nekkora|UPDATE|grant=f
+> relacl|agent_enrollments|nekkora_ingestion|SELECT|grant=f
+> relacl|agent_enrollments|nekkora_platform|INSERT|grant=f
+> relacl|agent_enrollments|nekkora_platform|SELECT|grant=f
+> relacl|agent_ingestion_refusals_pkey|migrador_nekkora|DELETE|grant=f
+> relacl|agent_ingestion_refusals_pkey|migrador_nekkora|INSERT|grant=f
+> relacl|agent_ingestion_refusals_pkey|migrador_nekkora|REFERENCES|grant=f
+> relacl|agent_ingestion_refusals_pkey|migrador_nekkora|SELECT|grant=f
+> relacl|agent_ingestion_refusals_pkey|migrador_nekkora|TRIGGER|grant=f
+> relacl|agent_ingestion_refusals_pkey|migrador_nekkora|TRUNCATE|grant=f
+> relacl|agent_ingestion_refusals_pkey|migrador_nekkora|UPDATE|grant=f
+> relacl|agent_ingestion_refusals|migrador_nekkora|DELETE|grant=f
+> relacl|agent_ingestion_refusals|migrador_nekkora|INSERT|grant=f
+> relacl|agent_ingestion_refusals|migrador_nekkora|REFERENCES|grant=f
+> relacl|agent_ingestion_refusals|migrador_nekkora|SELECT|grant=f
+> relacl|agent_ingestion_refusals|migrador_nekkora|TRIGGER|grant=f
+> relacl|agent_ingestion_refusals|migrador_nekkora|TRUNCATE|grant=f
+> relacl|agent_ingestion_refusals|migrador_nekkora|UPDATE|grant=f
+> relacl|agent_ingestion_refusals|nekkora_ingestion|INSERT|grant=f
+> relacl|agent_ingestion_refusals|nekkora_ingestion|SELECT|grant=f
+> relacl|agent_ingestion_refusals|nekkora_platform|SELECT|grant=f
+> relacl|agent_presence_pkey|migrador_nekkora|DELETE|grant=f
+> relacl|agent_presence_pkey|migrador_nekkora|INSERT|grant=f
+> relacl|agent_presence_pkey|migrador_nekkora|REFERENCES|grant=f
+> relacl|agent_presence_pkey|migrador_nekkora|SELECT|grant=f
+> relacl|agent_presence_pkey|migrador_nekkora|TRIGGER|grant=f
+> relacl|agent_presence_pkey|migrador_nekkora|TRUNCATE|grant=f
+> relacl|agent_presence_pkey|migrador_nekkora|UPDATE|grant=f
+> relacl|agent_presence|migrador_nekkora|DELETE|grant=f
+> relacl|agent_presence|migrador_nekkora|INSERT|grant=f
+> relacl|agent_presence|migrador_nekkora|REFERENCES|grant=f
+> relacl|agent_presence|migrador_nekkora|SELECT|grant=f
+> relacl|agent_presence|migrador_nekkora|TRIGGER|grant=f
+> relacl|agent_presence|migrador_nekkora|TRUNCATE|grant=f
+> relacl|agent_presence|migrador_nekkora|UPDATE|grant=f
+> relacl|agent_presence|nekkora_ingestion|INSERT|grant=f
+> relacl|agent_presence|nekkora_ingestion|SELECT|grant=f
+> relacl|agent_presence|nekkora_ingestion|UPDATE|grant=f
+> relacl|agent_presence|nekkora_platform|SELECT|grant=f
+> relacl|agent_run_events_pkey|migrador_nekkora|DELETE|grant=f
+> relacl|agent_run_events_pkey|migrador_nekkora|INSERT|grant=f
+> relacl|agent_run_events_pkey|migrador_nekkora|REFERENCES|grant=f
+> relacl|agent_run_events_pkey|migrador_nekkora|SELECT|grant=f
+> relacl|agent_run_events_pkey|migrador_nekkora|TRIGGER|grant=f
+> relacl|agent_run_events_pkey|migrador_nekkora|TRUNCATE|grant=f
+> relacl|agent_run_events_pkey|migrador_nekkora|UPDATE|grant=f
+> relacl|agent_run_events|migrador_nekkora|DELETE|grant=f
+> relacl|agent_run_events|migrador_nekkora|INSERT|grant=f
+> relacl|agent_run_events|migrador_nekkora|REFERENCES|grant=f
+> relacl|agent_run_events|migrador_nekkora|SELECT|grant=f
+> relacl|agent_run_events|migrador_nekkora|TRIGGER|grant=f
+> relacl|agent_run_events|migrador_nekkora|TRUNCATE|grant=f
+> relacl|agent_run_events|migrador_nekkora|UPDATE|grant=f
+> relacl|agent_run_events|nekkora_ingestion|INSERT|grant=f
+> relacl|agent_run_events|nekkora_ingestion|SELECT|grant=f
+> relacl|agent_run_events|nekkora_platform|SELECT|grant=f
+> relacl|agent_run_missing_pkey|migrador_nekkora|DELETE|grant=f
+> relacl|agent_run_missing_pkey|migrador_nekkora|INSERT|grant=f
+> relacl|agent_run_missing_pkey|migrador_nekkora|REFERENCES|grant=f
+> relacl|agent_run_missing_pkey|migrador_nekkora|SELECT|grant=f
+> relacl|agent_run_missing_pkey|migrador_nekkora|TRIGGER|grant=f
+> relacl|agent_run_missing_pkey|migrador_nekkora|TRUNCATE|grant=f
+> relacl|agent_run_missing_pkey|migrador_nekkora|UPDATE|grant=f
+> relacl|agent_run_missing|migrador_nekkora|DELETE|grant=f
+> relacl|agent_run_missing|migrador_nekkora|INSERT|grant=f
+> relacl|agent_run_missing|migrador_nekkora|REFERENCES|grant=f
+> relacl|agent_run_missing|migrador_nekkora|SELECT|grant=f
+> relacl|agent_run_missing|migrador_nekkora|TRIGGER|grant=f
+> relacl|agent_run_missing|migrador_nekkora|TRUNCATE|grant=f
+> relacl|agent_run_missing|migrador_nekkora|UPDATE|grant=f
+> relacl|agent_run_missing|nekkora_ingestion|INSERT|grant=f
+> relacl|agent_run_missing|nekkora_ingestion|SELECT|grant=f
+> relacl|agent_run_missing|nekkora_platform|SELECT|grant=f
+> relacl|agent_run_reports_pkey|migrador_nekkora|DELETE|grant=f
+> relacl|agent_run_reports_pkey|migrador_nekkora|INSERT|grant=f
+> relacl|agent_run_reports_pkey|migrador_nekkora|REFERENCES|grant=f
+> relacl|agent_run_reports_pkey|migrador_nekkora|SELECT|grant=f
+> relacl|agent_run_reports_pkey|migrador_nekkora|TRIGGER|grant=f
+> relacl|agent_run_reports_pkey|migrador_nekkora|TRUNCATE|grant=f
+> relacl|agent_run_reports_pkey|migrador_nekkora|UPDATE|grant=f
+> relacl|agent_run_reports|migrador_nekkora|DELETE|grant=f
+> relacl|agent_run_reports|migrador_nekkora|INSERT|grant=f
+> relacl|agent_run_reports|migrador_nekkora|REFERENCES|grant=f
+> relacl|agent_run_reports|migrador_nekkora|SELECT|grant=f
+> relacl|agent_run_reports|migrador_nekkora|TRIGGER|grant=f
+> relacl|agent_run_reports|migrador_nekkora|TRUNCATE|grant=f
+> relacl|agent_run_reports|migrador_nekkora|UPDATE|grant=f
+> relacl|agent_run_reports|nekkora_ingestion|INSERT|grant=f
+> relacl|agent_run_reports|nekkora_ingestion|SELECT|grant=f
+> relacl|agent_run_reports|nekkora_platform|SELECT|grant=f
+> relacl|agent_runs_agent_id_agent_execution_id_key|migrador_nekkora|DELETE|grant=f
+> relacl|agent_runs_agent_id_agent_execution_id_key|migrador_nekkora|INSERT|grant=f
+> relacl|agent_runs_agent_id_agent_execution_id_key|migrador_nekkora|REFERENCES|grant=f
+> relacl|agent_runs_agent_id_agent_execution_id_key|migrador_nekkora|SELECT|grant=f
+> relacl|agent_runs_agent_id_agent_execution_id_key|migrador_nekkora|TRIGGER|grant=f
+> relacl|agent_runs_agent_id_agent_execution_id_key|migrador_nekkora|TRUNCATE|grant=f
+> relacl|agent_runs_agent_id_agent_execution_id_key|migrador_nekkora|UPDATE|grant=f
+> relacl|agent_runs_organization_id_agent_run_id_key|migrador_nekkora|DELETE|grant=f
+> relacl|agent_runs_organization_id_agent_run_id_key|migrador_nekkora|INSERT|grant=f
+> relacl|agent_runs_organization_id_agent_run_id_key|migrador_nekkora|REFERENCES|grant=f
+> relacl|agent_runs_organization_id_agent_run_id_key|migrador_nekkora|SELECT|grant=f
+> relacl|agent_runs_organization_id_agent_run_id_key|migrador_nekkora|TRIGGER|grant=f
+> relacl|agent_runs_organization_id_agent_run_id_key|migrador_nekkora|TRUNCATE|grant=f
+> relacl|agent_runs_organization_id_agent_run_id_key|migrador_nekkora|UPDATE|grant=f
+> relacl|agent_runs_pkey|migrador_nekkora|DELETE|grant=f
+> relacl|agent_runs_pkey|migrador_nekkora|INSERT|grant=f
+> relacl|agent_runs_pkey|migrador_nekkora|REFERENCES|grant=f
+> relacl|agent_runs_pkey|migrador_nekkora|SELECT|grant=f
+> relacl|agent_runs_pkey|migrador_nekkora|TRIGGER|grant=f
+> relacl|agent_runs_pkey|migrador_nekkora|TRUNCATE|grant=f
+> relacl|agent_runs_pkey|migrador_nekkora|UPDATE|grant=f
+> relacl|agent_runs|migrador_nekkora|DELETE|grant=f
+> relacl|agent_runs|migrador_nekkora|INSERT|grant=f
+> relacl|agent_runs|migrador_nekkora|REFERENCES|grant=f
+> relacl|agent_runs|migrador_nekkora|SELECT|grant=f
+> relacl|agent_runs|migrador_nekkora|TRIGGER|grant=f
+> relacl|agent_runs|migrador_nekkora|TRUNCATE|grant=f
+> relacl|agent_runs|migrador_nekkora|UPDATE|grant=f
+> relacl|agent_runs|nekkora_ingestion|INSERT|grant=f
+> relacl|agent_runs|nekkora_ingestion|SELECT|grant=f
+> relacl|agent_runs|nekkora_ingestion|UPDATE|grant=f
+> relacl|agent_runs|nekkora_platform|SELECT|grant=f
+> relacl|agents|nekkora_ingestion|INSERT|grant=f
+> relacl|agents|nekkora_ingestion|SELECT|grant=f
+> relacl|ix_agent_admin_events_org|migrador_nekkora|DELETE|grant=f
+> relacl|ix_agent_admin_events_org|migrador_nekkora|INSERT|grant=f
+> relacl|ix_agent_admin_events_org|migrador_nekkora|REFERENCES|grant=f
+> relacl|ix_agent_admin_events_org|migrador_nekkora|SELECT|grant=f
+> relacl|ix_agent_admin_events_org|migrador_nekkora|TRIGGER|grant=f
+> relacl|ix_agent_admin_events_org|migrador_nekkora|TRUNCATE|grant=f
+> relacl|ix_agent_admin_events_org|migrador_nekkora|UPDATE|grant=f
+> relacl|ix_agent_enrollments_worker|migrador_nekkora|DELETE|grant=f
+> relacl|ix_agent_enrollments_worker|migrador_nekkora|INSERT|grant=f
+> relacl|ix_agent_enrollments_worker|migrador_nekkora|REFERENCES|grant=f
+> relacl|ix_agent_enrollments_worker|migrador_nekkora|SELECT|grant=f
+> relacl|ix_agent_enrollments_worker|migrador_nekkora|TRIGGER|grant=f
+> relacl|ix_agent_enrollments_worker|migrador_nekkora|TRUNCATE|grant=f
+> relacl|ix_agent_enrollments_worker|migrador_nekkora|UPDATE|grant=f
+> relacl|ix_agent_ingestion_refusals_run|migrador_nekkora|DELETE|grant=f
+> relacl|ix_agent_ingestion_refusals_run|migrador_nekkora|INSERT|grant=f
+> relacl|ix_agent_ingestion_refusals_run|migrador_nekkora|REFERENCES|grant=f
+> relacl|ix_agent_ingestion_refusals_run|migrador_nekkora|SELECT|grant=f
+> relacl|ix_agent_ingestion_refusals_run|migrador_nekkora|TRIGGER|grant=f
+> relacl|ix_agent_ingestion_refusals_run|migrador_nekkora|TRUNCATE|grant=f
+> relacl|ix_agent_ingestion_refusals_run|migrador_nekkora|UPDATE|grant=f
+> relacl|ix_agent_run_reports_run|migrador_nekkora|DELETE|grant=f
+> relacl|ix_agent_run_reports_run|migrador_nekkora|INSERT|grant=f
+> relacl|ix_agent_run_reports_run|migrador_nekkora|REFERENCES|grant=f
+> relacl|ix_agent_run_reports_run|migrador_nekkora|SELECT|grant=f
+> relacl|ix_agent_run_reports_run|migrador_nekkora|TRIGGER|grant=f
+> relacl|ix_agent_run_reports_run|migrador_nekkora|TRUNCATE|grant=f
+> relacl|ix_agent_run_reports_run|migrador_nekkora|UPDATE|grant=f
+> relacl|ix_agent_runs_registered|migrador_nekkora|DELETE|grant=f
+> relacl|ix_agent_runs_registered|migrador_nekkora|INSERT|grant=f
+> relacl|ix_agent_runs_registered|migrador_nekkora|REFERENCES|grant=f
+> relacl|ix_agent_runs_registered|migrador_nekkora|SELECT|grant=f
+> relacl|ix_agent_runs_registered|migrador_nekkora|TRIGGER|grant=f
+> relacl|ix_agent_runs_registered|migrador_nekkora|TRUNCATE|grant=f
+> relacl|ix_agent_runs_registered|migrador_nekkora|UPDATE|grant=f
+> relacl|ix_agent_runs_workspace|migrador_nekkora|DELETE|grant=f
+> relacl|ix_agent_runs_workspace|migrador_nekkora|INSERT|grant=f
+> relacl|ix_agent_runs_workspace|migrador_nekkora|REFERENCES|grant=f
+> relacl|ix_agent_runs_workspace|migrador_nekkora|SELECT|grant=f
+> relacl|ix_agent_runs_workspace|migrador_nekkora|TRIGGER|grant=f
+> relacl|ix_agent_runs_workspace|migrador_nekkora|TRUNCATE|grant=f
+> relacl|ix_agent_runs_workspace|migrador_nekkora|UPDATE|grant=f
+> relacl|ix_local_run_authorizations_worker|migrador_nekkora|DELETE|grant=f
+> relacl|ix_local_run_authorizations_worker|migrador_nekkora|INSERT|grant=f
+> relacl|ix_local_run_authorizations_worker|migrador_nekkora|REFERENCES|grant=f
+> relacl|ix_local_run_authorizations_worker|migrador_nekkora|SELECT|grant=f
+> relacl|ix_local_run_authorizations_worker|migrador_nekkora|TRIGGER|grant=f
+> relacl|ix_local_run_authorizations_worker|migrador_nekkora|TRUNCATE|grant=f
+> relacl|ix_local_run_authorizations_worker|migrador_nekkora|UPDATE|grant=f
+> relacl|local_run_authorizations_organization_id_authorization_id_key|migrador_nekkora|DELETE|grant=f
+> relacl|local_run_authorizations_organization_id_authorization_id_key|migrador_nekkora|INSERT|grant=f
+> relacl|local_run_authorizations_organization_id_authorization_id_key|migrador_nekkora|REFERENCES|grant=f
+> relacl|local_run_authorizations_organization_id_authorization_id_key|migrador_nekkora|SELECT|grant=f
+> relacl|local_run_authorizations_organization_id_authorization_id_key|migrador_nekkora|TRIGGER|grant=f
+> relacl|local_run_authorizations_organization_id_authorization_id_key|migrador_nekkora|TRUNCATE|grant=f
+> relacl|local_run_authorizations_organization_id_authorization_id_key|migrador_nekkora|UPDATE|grant=f
+> relacl|local_run_authorizations_pkey|migrador_nekkora|DELETE|grant=f
+> relacl|local_run_authorizations_pkey|migrador_nekkora|INSERT|grant=f
+> relacl|local_run_authorizations_pkey|migrador_nekkora|REFERENCES|grant=f
+> relacl|local_run_authorizations_pkey|migrador_nekkora|SELECT|grant=f
+> relacl|local_run_authorizations_pkey|migrador_nekkora|TRIGGER|grant=f
+> relacl|local_run_authorizations_pkey|migrador_nekkora|TRUNCATE|grant=f
+> relacl|local_run_authorizations_pkey|migrador_nekkora|UPDATE|grant=f
+> relacl|local_run_authorizations|migrador_nekkora|DELETE|grant=f
+> relacl|local_run_authorizations|migrador_nekkora|INSERT|grant=f
+> relacl|local_run_authorizations|migrador_nekkora|REFERENCES|grant=f
+> relacl|local_run_authorizations|migrador_nekkora|SELECT|grant=f
+> relacl|local_run_authorizations|migrador_nekkora|TRIGGER|grant=f
+> relacl|local_run_authorizations|migrador_nekkora|TRUNCATE|grant=f
+> relacl|local_run_authorizations|migrador_nekkora|UPDATE|grant=f
+> relacl|local_run_authorizations|nekkora_ingestion|SELECT|grant=f
+> relacl|local_run_authorizations|nekkora_platform|INSERT|grant=f
+> relacl|local_run_authorizations|nekkora_platform|SELECT|grant=f
+> relacl|permissions|nekkora_ingestion|SELECT|grant=f
+> relacl|role_permissions|nekkora_ingestion|SELECT|grant=f
+> relacl|worker_agent_assignments|nekkora_ingestion|INSERT|grant=f
+> relacl|worker_workspace_assignments|nekkora_ingestion|SELECT|grant=f
+> relacl|workers|nekkora_ingestion|SELECT|grant=f
+> rel|agent_admin_events_pkey|i|owner=migrador_nekkora|rls=f|force=f
+> rel|agent_admin_events|r|owner=migrador_nekkora|rls=t|force=t
+> rel|agent_enrollments_code_hash_key|i|owner=migrador_nekkora|rls=f|force=f
+> rel|agent_enrollments_organization_id_enrollment_id_key|i|owner=migrador_nekkora|rls=f|force=f
+> rel|agent_enrollments_pkey|i|owner=migrador_nekkora|rls=f|force=f
+> rel|agent_enrollments|r|owner=migrador_nekkora|rls=t|force=t
+> rel|agent_ingestion_refusals_pkey|i|owner=migrador_nekkora|rls=f|force=f
+> rel|agent_ingestion_refusals|r|owner=migrador_nekkora|rls=t|force=t
+> rel|agent_presence_pkey|i|owner=migrador_nekkora|rls=f|force=f
+> rel|agent_presence|r|owner=migrador_nekkora|rls=t|force=t
+> rel|agent_run_events_pkey|i|owner=migrador_nekkora|rls=f|force=f
+> rel|agent_run_events|r|owner=migrador_nekkora|rls=t|force=t
+> rel|agent_run_missing_pkey|i|owner=migrador_nekkora|rls=f|force=f
+> rel|agent_run_missing|r|owner=migrador_nekkora|rls=t|force=t
+> rel|agent_run_reports_pkey|i|owner=migrador_nekkora|rls=f|force=f
+> rel|agent_run_reports|r|owner=migrador_nekkora|rls=t|force=t
+> rel|agent_runs_agent_id_agent_execution_id_key|i|owner=migrador_nekkora|rls=f|force=f
+> rel|agent_runs_organization_id_agent_run_id_key|i|owner=migrador_nekkora|rls=f|force=f
+> rel|agent_runs_pkey|i|owner=migrador_nekkora|rls=f|force=f
+> rel|agent_runs|r|owner=migrador_nekkora|rls=t|force=t
+> rel|ix_agent_admin_events_org|i|owner=migrador_nekkora|rls=f|force=f
+> rel|ix_agent_enrollments_worker|i|owner=migrador_nekkora|rls=f|force=f
+> rel|ix_agent_ingestion_refusals_run|i|owner=migrador_nekkora|rls=f|force=f
+> rel|ix_agent_run_reports_run|i|owner=migrador_nekkora|rls=f|force=f
+> rel|ix_agent_runs_registered|i|owner=migrador_nekkora|rls=f|force=f
+> rel|ix_agent_runs_workspace|i|owner=migrador_nekkora|rls=f|force=f
+> rel|ix_local_run_authorizations_worker|i|owner=migrador_nekkora|rls=f|force=f
+> rel|local_run_authorizations_organization_id_authorization_id_key|i|owner=migrador_nekkora|rls=f|force=f
+> rel|local_run_authorizations_pkey|i|owner=migrador_nekkora|rls=f|force=f
+> rel|local_run_authorizations|r|owner=migrador_nekkora|rls=t|force=t
+> trg|agent_admin_events|trg_agent_admin_events_prevent_delete|enabled=O|CREATE TRIGGER trg_agent_admin_events_prevent_delete BEFORE DELETE ON public.agent_admin_events FOR EACH ROW EXECUTE FUNCTION prevent_delete()
+> trg|agent_admin_events|trg_agent_admin_events_prevent_truncate|enabled=O|CREATE TRIGGER trg_agent_admin_events_prevent_truncate BEFORE TRUNCATE ON public.agent_admin_events FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|agent_admin_events|trg_agent_admin_events_prevent_update|enabled=O|CREATE TRIGGER trg_agent_admin_events_prevent_update BEFORE UPDATE ON public.agent_admin_events FOR EACH ROW EXECUTE FUNCTION prevent_update()
+> trg|agent_enrollments|trg_agent_enrollments_on_insert|enabled=O|CREATE TRIGGER trg_agent_enrollments_on_insert BEFORE INSERT ON public.agent_enrollments FOR EACH ROW EXECUTE FUNCTION agent_enrollment_on_insert()
+> trg|agent_enrollments|trg_agent_enrollments_on_update|enabled=O|CREATE TRIGGER trg_agent_enrollments_on_update BEFORE UPDATE ON public.agent_enrollments FOR EACH ROW EXECUTE FUNCTION agent_enrollment_on_update()
+> trg|agent_enrollments|trg_agent_enrollments_prevent_delete|enabled=O|CREATE TRIGGER trg_agent_enrollments_prevent_delete BEFORE DELETE ON public.agent_enrollments FOR EACH ROW EXECUTE FUNCTION prevent_delete()
+> trg|agent_enrollments|trg_agent_enrollments_prevent_truncate|enabled=O|CREATE TRIGGER trg_agent_enrollments_prevent_truncate BEFORE TRUNCATE ON public.agent_enrollments FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|agent_ingestion_refusals|trg_agent_ingestion_refusals_prevent_delete|enabled=O|CREATE TRIGGER trg_agent_ingestion_refusals_prevent_delete BEFORE DELETE ON public.agent_ingestion_refusals FOR EACH ROW EXECUTE FUNCTION prevent_delete()
+> trg|agent_ingestion_refusals|trg_agent_ingestion_refusals_prevent_truncate|enabled=O|CREATE TRIGGER trg_agent_ingestion_refusals_prevent_truncate BEFORE TRUNCATE ON public.agent_ingestion_refusals FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|agent_ingestion_refusals|trg_agent_ingestion_refusals_prevent_update|enabled=O|CREATE TRIGGER trg_agent_ingestion_refusals_prevent_update BEFORE UPDATE ON public.agent_ingestion_refusals FOR EACH ROW EXECUTE FUNCTION prevent_update()
+> trg|agent_presence|trg_agent_presence_prevent_delete|enabled=O|CREATE TRIGGER trg_agent_presence_prevent_delete BEFORE DELETE ON public.agent_presence FOR EACH ROW EXECUTE FUNCTION prevent_delete()
+> trg|agent_presence|trg_agent_presence_prevent_truncate|enabled=O|CREATE TRIGGER trg_agent_presence_prevent_truncate BEFORE TRUNCATE ON public.agent_presence FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|agent_run_events|trg_agent_run_events_prevent_delete|enabled=O|CREATE TRIGGER trg_agent_run_events_prevent_delete BEFORE DELETE ON public.agent_run_events FOR EACH ROW EXECUTE FUNCTION prevent_delete()
+> trg|agent_run_events|trg_agent_run_events_prevent_truncate|enabled=O|CREATE TRIGGER trg_agent_run_events_prevent_truncate BEFORE TRUNCATE ON public.agent_run_events FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|agent_run_events|trg_agent_run_events_prevent_update|enabled=O|CREATE TRIGGER trg_agent_run_events_prevent_update BEFORE UPDATE ON public.agent_run_events FOR EACH ROW EXECUTE FUNCTION prevent_update()
+> trg|agent_run_missing|trg_agent_run_missing_prevent_delete|enabled=O|CREATE TRIGGER trg_agent_run_missing_prevent_delete BEFORE DELETE ON public.agent_run_missing FOR EACH ROW EXECUTE FUNCTION prevent_delete()
+> trg|agent_run_missing|trg_agent_run_missing_prevent_truncate|enabled=O|CREATE TRIGGER trg_agent_run_missing_prevent_truncate BEFORE TRUNCATE ON public.agent_run_missing FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|agent_run_missing|trg_agent_run_missing_prevent_update|enabled=O|CREATE TRIGGER trg_agent_run_missing_prevent_update BEFORE UPDATE ON public.agent_run_missing FOR EACH ROW EXECUTE FUNCTION prevent_update()
+> trg|agent_run_reports|trg_agent_run_reports_prevent_delete|enabled=O|CREATE TRIGGER trg_agent_run_reports_prevent_delete BEFORE DELETE ON public.agent_run_reports FOR EACH ROW EXECUTE FUNCTION prevent_delete()
+> trg|agent_run_reports|trg_agent_run_reports_prevent_truncate|enabled=O|CREATE TRIGGER trg_agent_run_reports_prevent_truncate BEFORE TRUNCATE ON public.agent_run_reports FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|agent_run_reports|trg_agent_run_reports_prevent_update|enabled=O|CREATE TRIGGER trg_agent_run_reports_prevent_update BEFORE UPDATE ON public.agent_run_reports FOR EACH ROW EXECUTE FUNCTION prevent_update()
+> trg|agent_runs|trg_agent_runs_on_insert|enabled=O|CREATE TRIGGER trg_agent_runs_on_insert BEFORE INSERT ON public.agent_runs FOR EACH ROW EXECUTE FUNCTION agent_run_on_insert()
+> trg|agent_runs|trg_agent_runs_on_update|enabled=O|CREATE TRIGGER trg_agent_runs_on_update BEFORE UPDATE ON public.agent_runs FOR EACH ROW EXECUTE FUNCTION agent_run_on_update()
+> trg|agent_runs|trg_agent_runs_prevent_delete|enabled=O|CREATE TRIGGER trg_agent_runs_prevent_delete BEFORE DELETE ON public.agent_runs FOR EACH ROW EXECUTE FUNCTION prevent_delete()
+> trg|agent_runs|trg_agent_runs_prevent_truncate|enabled=O|CREATE TRIGGER trg_agent_runs_prevent_truncate BEFORE TRUNCATE ON public.agent_runs FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()
+> trg|local_run_authorizations|trg_local_run_authorizations_on_insert|enabled=O|CREATE TRIGGER trg_local_run_authorizations_on_insert BEFORE INSERT ON public.local_run_authorizations FOR EACH ROW EXECUTE FUNCTION local_run_authorization_on_insert()
+> trg|local_run_authorizations|trg_local_run_authorizations_on_update|enabled=O|CREATE TRIGGER trg_local_run_authorizations_on_update BEFORE UPDATE ON public.local_run_authorizations FOR EACH ROW EXECUTE FUNCTION local_run_authorization_on_update()
+> trg|local_run_authorizations|trg_local_run_authorizations_prevent_delete|enabled=O|CREATE TRIGGER trg_local_run_authorizations_prevent_delete BEFORE DELETE ON public.local_run_authorizations FOR EACH ROW EXECUTE FUNCTION prevent_delete()
+> trg|local_run_authorizations|trg_local_run_authorizations_prevent_truncate|enabled=O|CREATE TRIGGER trg_local_run_authorizations_prevent_truncate BEFORE TRUNCATE ON public.local_run_authorizations FOR EACH STATEMENT EXECUTE FUNCTION prevent_truncate()

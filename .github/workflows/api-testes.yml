@@ -34,7 +34,7 @@ jobs:
           java -version
           bash --version | head -1
           docker version --format 'docker {{.Server.Version}}'
-      - name: Testes (core, ops, platform, portal)
+      - name: Testes (core, ops, platform, portal, agent-gateway)
         working-directory: api
         run: ./mvnw -B -ntp test
       - name: Relatorios do surefire (so valores descartaveis dos testes; 14 dias)

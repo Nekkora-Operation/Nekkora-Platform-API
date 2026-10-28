@@ -1,0 +1,20 @@
+{
+  "schema": "nekkora-agent/execution",
+  "version": "1.0.0",
+  "id": "ex-6f670400dd5d9a00d9569fdec8d2c4f4",
+  "kind": "STUDIO_PYTHON",
+  "package": "pacote 5664f1a56556",
+  "fingerprint": "sha256:5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d",
+  "state": "SUCCEEDED",
+  "code": null,
+  "created": "2026-10-28T12:35:04.985233100Z",
+  "started": "2026-10-28T12:35:05.958158700Z",
+  "ended": "2026-10-28T12:35:14.265516Z",
+  "process": {"pid": 51600, "start": 1793190905947, "executableDigest": "sha256:f852aea37925157aed57a2011d9f30b7c8b34ce9c23610e428589985f0b233bb"},
+  "exitCode": 0,
+  "counts": {"SUCCEEDED": 5},
+  "suspensions": 0,
+  "locks": 0,
+  "adopted": false,
+  "outputBytes": 198
+}
