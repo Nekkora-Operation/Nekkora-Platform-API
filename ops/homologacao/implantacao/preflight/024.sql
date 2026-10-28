@@ -6,8 +6,8 @@
 -- se TODAS passarem (senao PREFLIGHT_FALHOU).
 -- Comuns: PostgreSQL 16; historico exatamente 001-023 com sucesso, sem a 024 nem posteriores e sem falha; migrador sem
 -- atributo elevado nem ACL de parametro; migrador dono do banco.
--- Especificas: as condicoes da sec. 1 da 024 (023 aplicada; objetos da 024 ausentes); as tres restricoes que a 024 troca,
--- com a definicao da 023 (a 024 recusaria outra); os donos que recebem funcoes (nekkora_identity_owner e
+-- Especificas: as condicoes da sec. 1 da 024 (023 aplicada; objetos da 024 ausentes); as quatro restricoes que a 024 troca,
+-- com a definicao da 023, instalada ou restaurada de dump (a 024 recusaria outra); os donos que recebem funcoes (nekkora_identity_owner e
 -- nekkora_ops_mfa_owner) sem login e sem participacao; as funcoes da 016/018 que a 024 substitui com o dono esperado;
 -- quantos convites abertos a 024 fechara na aplicacao (informativo: sempre OK; e a unica mudanca de dados).
 WITH c(ordem, item, ok, detalhe) AS (
@@ -49,7 +49,11 @@ WITH c(ordem, item, ok, detalhe) AS (
               AND pg_get_constraintdef(oid) = 'CHECK ((revoke_reason = ANY (ARRAY[1, 2, 3])))') = 1
            AND (SELECT count(*) FROM pg_constraint WHERE conrelid = to_regclass('public.access_events') AND contype = 'c'
                   AND pg_get_constraintdef(oid) IN ('CHECK (((event_type >= 1) AND (event_type <= 13)))',
-                                                    'CHECK ((((event_type < 9) OR (event_type > 13)) OR (grant_id IS NOT NULL)))')) = 2
+                                                    'CHECK ((((event_type < 9) OR (event_type > 13)) OR (grant_id IS NOT NULL)))',
+                                                    'CHECK (((event_type < 9) OR (event_type > 13) OR (grant_id IS NOT NULL)))')) = 2
+           AND (SELECT count(*) FROM pg_constraint WHERE conrelid = to_regclass('public.access_events') AND contype = 'c'
+                  AND pg_get_constraintdef(oid) IN ('CHECK ((((event_type < 1) OR (event_type > 4)) OR (invitation_id IS NOT NULL)))',
+                                                    'CHECK (((event_type < 1) OR (event_type > 4) OR (invitation_id IS NOT NULL)))')) = 1
            AND (SELECT count(*) FROM pg_constraint WHERE conrelid = to_regclass('public.access_events') AND contype = 'c'
                   AND pg_get_constraintdef(oid) LIKE '%13%') = 2,
            '-'

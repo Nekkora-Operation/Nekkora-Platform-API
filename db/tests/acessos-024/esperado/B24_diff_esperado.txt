@@ -1,4 +1,4 @@
-< con|access_events|access_events_check4|CHECK ((((event_type < 9) OR (event_type > 13)) OR (grant_id IS NOT NULL)))
+< con|access_events|access_events_check4|CHECK (((event_type < 9) OR (event_type > 13) OR (grant_id IS NOT NULL)))
 < con|access_events|access_events_event_type_check|CHECK (((event_type >= 1) AND (event_type <= 13)))
 < con|identity_invitations|identity_invitations_revoke_reason_check|CHECK ((revoke_reason = ANY (ARRAY[1, 2, 3])))
 < fn|access_grant_guard()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=...
@@ -15,7 +15,7 @@
 > col|client_workspace_grants|renewal_requested_by_membership_id|uuid|notnull=f|default=|gen=
 > col|client_workspace_grants|requested_by_membership_id|uuid|notnull=f|default=|gen=
 > con|access_events|access_events_event_type_check|CHECK (((event_type >= 1) AND (event_type <= 14)))
-> con|access_events|access_events_grant_check|CHECK ((((event_type < 9) OR (event_type > 14)) OR (grant_id IS NOT NULL)))
+> con|access_events|access_events_grant_check|CHECK (((event_type < 9) OR (event_type > 14) OR (grant_id IS NOT NULL)))
 > con|client_workspace_grant_approvals|client_workspace_grant_approvals_requester_fkey|FOREIGN KEY (organization_id, requested_by_membership_id) REFERENCES organization_memberships(organization_id, membership_id) ON DELETE RESTRICT
 > con|client_workspace_grants|client_workspace_grants_renewal_check|CHECK ((((renewal_requested_by_membership_id IS NULL) = (renewal_requested_at IS NULL)) AND ((renewal_requested_by_membership_id IS NULL) = (renewal_next_review_at IS NULL)) AND ((renewal_requested_by_membership_id IS NULL) = (renewal_justification IS NULL)) AND ((renewal_requested_by_membership_id IS NOT NULL) OR (renewal_expires_at IS NULL)) AND ((renewal_justification IS NULL) OR (btrim(renewal_justification) <> ''::text)) AND ((renewal_expires_at IS NULL) OR (renewal_expires_at > starts_at))))
 > con|client_workspace_grants|client_workspace_grants_renewal_requester_fkey|FOREIGN KEY (organization_id, renewal_requested_by_membership_id) REFERENCES organization_memberships(organization_id, membership_id) ON DELETE RESTRICT

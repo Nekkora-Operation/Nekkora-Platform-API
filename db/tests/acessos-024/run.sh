@@ -9,7 +9,8 @@
 #   A (limpa):    001-024 pelo entrypoint. Invariantes 012, 013, 014 (adaptada), 016, 017/019/020 (adaptadas: o aceite e o
 #                 fechamento por perda de autoridade na lista da Platform; 44 tabelas de tenant), 021, 022, 023 e 024 DEPOIS da
 #                 retirada.
-#   B (populada): 001-012 + massa, 013-015 + massa MFA, 016-022, 023, mais a massa de ACESSO no modelo da 023 (convites
+#   B (populada): 001-012 + massa, 013-015 + massa MFA, 016-022, 023, as restricoes NOT BETWEEN da 023 na forma em que um
+#                 dump as restaura (base restaurada), mais a massa de ACESSO no modelo da 023 (convites
 #                 aberto valido, aberto de emissor SEM autoridade, aceito e revogado; concessoes pendente, ativa e suspensa
 #                 anteriores a 024; eventos de acesso).
 #     B0 - 024 sobre a base em 022 (sem a 023): recusada pela pre-condicao, nada muda.
@@ -274,6 +275,13 @@ consulta "$POP" nekkora "SELECT invitation_id FROM identity_invitations i WHERE 
     ORDER BY 1" > "$SAIDA/B06_convites_a_fechar.txt"
 [ "$(wc -l < "$SAIDA/B06_convites_a_fechar.txt" | tr -d ' ')" = 2 ] || { cat "$SAIDA/B06_convites_a_fechar.txt"; falha "massa: esperados 2 convites a fechar"; }
 
+# base como RESTAURADA de um dump da 023: as duas restricoes "NOT BETWEEN ... OR ..." na forma achatada em que o pg_restore as
+# rele (achado da R015 na homologacao da 024). A instalacao limpa (A) cobre a forma original; aqui, a restaurada
+consulta "$POP" nekkora "ALTER TABLE access_events DROP CONSTRAINT access_events_check3,
+    ADD CONSTRAINT access_events_check3 CHECK (event_type < 1 OR event_type > 4 OR invitation_id IS NOT NULL),
+    DROP CONSTRAINT access_events_check4, ADD CONSTRAINT access_events_check4 CHECK (event_type < 9 OR event_type > 13 OR grant_id IS NOT NULL)" > /dev/null
+[ "$(consulta "$POP" nekkora "SELECT count(*) FROM pg_constraint WHERE conrelid = 'access_events'::regclass AND pg_get_constraintdef(oid) IN
+    ('CHECK (((event_type < 1) OR (event_type > 4) OR (invitation_id IS NOT NULL)))', 'CHECK (((event_type < 9) OR (event_type > 13) OR (grant_id IS NOT NULL)))')")" = 2 ]     || falha "B: restricoes na forma restaurada"
 CONV_SEM="SELECT invitation_id || '|' || md5(row(organization_id, invited_account_type, client_id, email_normalized, issued_by, token_hash, created_at,
     expires_at, accepted_at, accepted_user_id, accepted_identity_id, issued_by_membership_id, role_id, role_scope, workspace_id, revoked_by_membership_id,
     replaces_invitation_id)::text) FROM identity_invitations ORDER BY 1"

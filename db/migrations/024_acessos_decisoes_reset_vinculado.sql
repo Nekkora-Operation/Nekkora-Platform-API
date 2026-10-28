@@ -373,16 +373,22 @@ BEGIN
 END;
 $$;
 
--- evento 14 = CONCESSAO_RENOVACAO_SOLICITADA (codigos permanentes da 023; 1..13 inalterados)
+-- evento 14 = CONCESSAO_RENOVACAO_SOLICITADA (codigos permanentes da 023; 1..13 inalterados).
+-- As restricoes "NOT BETWEEN ... OR ..." da 023 nao sobrevivem identicas a um dump e restauracao: o PostgreSQL guarda o
+-- OR aninhado e a restauracao o rele achatado (achado da R015 na homologacao da 024). Por isso a 024 aceita as DUAS formas
+-- de cada uma (instalada pela 023 ou restaurada de um dump dela) e recria as duas restricoes com OR na forma achatada,
+-- que volta igual de uma restauracao: a de concessao (com o codigo 14) e a de convite (mesmo nome, mesma regra).
 DO $$
 DECLARE
     v_con RECORD;
     v_n INTEGER := 0;
+    v_conv TEXT;
 BEGIN
     FOR v_con IN SELECT conname, pg_get_constraintdef(oid) AS def FROM pg_constraint
                  WHERE conrelid = 'public.access_events'::regclass AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%13%' LOOP
         IF v_con.def NOT IN ('CHECK (((event_type >= 1) AND (event_type <= 13)))',
-                             'CHECK ((((event_type < 9) OR (event_type > 13)) OR (grant_id IS NOT NULL)))') THEN
+                             'CHECK ((((event_type < 9) OR (event_type > 13)) OR (grant_id IS NOT NULL)))',
+                             'CHECK (((event_type < 9) OR (event_type > 13) OR (grant_id IS NOT NULL)))') THEN
             RAISE EXCEPTION '024: restricao de access_events divergente da 023: % %', v_con.conname, v_con.def;
         END IF;
         EXECUTE format('ALTER TABLE public.access_events DROP CONSTRAINT %I', v_con.conname);
@@ -391,11 +397,20 @@ BEGIN
     IF v_n <> 2 THEN
         RAISE EXCEPTION '024: esperadas 2 restricoes de access_events com o codigo 13, encontradas %', v_n;
     END IF;
+    SELECT string_agg(conname, ',') INTO v_conv FROM pg_constraint
+     WHERE conrelid = 'public.access_events'::regclass AND contype = 'c'
+       AND pg_get_constraintdef(oid) IN ('CHECK ((((event_type < 1) OR (event_type > 4)) OR (invitation_id IS NOT NULL)))',
+                                         'CHECK (((event_type < 1) OR (event_type > 4) OR (invitation_id IS NOT NULL)))');
+    IF v_conv IS NULL OR v_conv LIKE '%,%' THEN
+        RAISE EXCEPTION '024: restricao de convite de access_events divergente da 023: %', v_conv;
+    END IF;
+    EXECUTE format('ALTER TABLE public.access_events DROP CONSTRAINT %I', v_conv);
+    EXECUTE format('ALTER TABLE public.access_events ADD CONSTRAINT %I CHECK (event_type < 1 OR event_type > 4 OR invitation_id IS NOT NULL)', v_conv);
 END;
 $$;
 ALTER TABLE public.access_events
     ADD CONSTRAINT access_events_event_type_check CHECK (event_type BETWEEN 1 AND 14),
-    ADD CONSTRAINT access_events_grant_check CHECK (event_type NOT BETWEEN 9 AND 14 OR grant_id IS NOT NULL);
+    ADD CONSTRAINT access_events_grant_check CHECK (event_type < 9 OR event_type > 14 OR grant_id IS NOT NULL);
 COMMENT ON COLUMN public.access_events.event_type IS '1..13: ver cabecalho da 023; 14=CONCESSAO_RENOVACAO_SOLICITADA (024)';
 
 -- === 4. Reset operacional (016) de conta vinculada: recusa declarada ===
@@ -607,6 +622,12 @@ BEGIN
        OR NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.access_events'::regclass
                       AND conname = 'access_events_event_type_check' AND pg_get_constraintdef(oid) LIKE '%<= 14%') THEN
         RAISE EXCEPTION '024: colunas ou restricoes da regra de renovacao ausentes';
+    END IF;
+    -- restricoes com OR de access_events na forma que volta igual de uma restauracao (achado da R015)
+    IF (SELECT count(*) FROM pg_constraint WHERE conrelid = 'public.access_events'::regclass AND contype = 'c'
+          AND pg_get_constraintdef(oid) IN ('CHECK (((event_type < 9) OR (event_type > 14) OR (grant_id IS NOT NULL)))',
+                                            'CHECK (((event_type < 1) OR (event_type > 4) OR (invitation_id IS NOT NULL)))')) <> 2 THEN
+        RAISE EXCEPTION '024: restricoes de access_events fora da forma restauravel';
     END IF;
     -- gatilhos ligados
     IF (SELECT count(*) FROM pg_trigger WHERE tgname IN ('trg_org_role_assignments_issuer_authority',
