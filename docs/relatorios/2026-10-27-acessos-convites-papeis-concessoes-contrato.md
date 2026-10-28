@@ -35,7 +35,7 @@
 
 1. **Autorização pela matriz da 003, relida dentro da transação do ato**, junto com a sessão do ator (padrão de `AdminService`). Nenhuma decisão usa o principal do filtro.
 2. **Ordem de locks:** organização `FOR UPDATE` primeiro (disciplina da 003), depois as contas envolvidas em ordem crescente de `user_id`, depois a linha alvo (convite, atribuição, concessão). Reconferência da sessão, da permissão e do step-up **depois** dos locks; efeitos só depois disso.
-3. **Autenticação recente (step-up de 5 min na mesma sessão):** exigida nos atos que **ampliam** acesso: criar e reenviar convite, atribuir e alterar papel, aprovar, renovar e revisar com KEEP uma concessão. Os atos que **reduzem** acesso (revogar convite, revogar papel, retirar vínculo, suspender ou revogar concessão) dispensam só o step-up, para não atrasar a resposta a incidente. Continuam exigindo sessão de organização válida, CSRF, autoridade conferida sob lock e auditoria. **[aceita em 2026-10-27, D-CONV-2]**
+3. **Autenticação recente (step-up de 5 min na mesma sessão):** exigida nos atos que **ampliam** acesso: criar e reenviar convite, atribuir e alterar papel, aprovar uma concessão (aprovação inicial e aprovação de renovação) e revisar com KEEP. O pedido de renovação não amplia nada e dispensa o step-up (D-GRANT-1a). Os atos que **reduzem** acesso (revogar convite, revogar papel, retirar vínculo, suspender ou revogar concessão) dispensam só o step-up, para não atrasar a resposta a incidente. Continuam exigindo sessão de organização válida, CSRF, autoridade conferida sob lock e auditoria. **[aceita em 2026-10-27, D-CONV-2]**
 4. **Sem autoatribuição:** o ator nunca é o alvo (papel, vínculo). Duas garantias: o serviço (403 `OWN_ACCOUNT`) e o banco (gatilho da 023, §8).
 5. **Isolamento:** toda leitura e escrita passa pelo RLS da organização da rota; alvo de outra organização responde 404 `alvo`, igual a alvo inexistente.
 6. **Auditoria:** todo ato com efeito grava uma linha em `access_events` (023) na mesma transação: tipo, organização, vínculo e conta do ator (ou a identidade, no aceite), conta e vínculo alvo, papel e workspace, convite, atribuição ou concessão, papel anterior (na alteração) e correlação. Recusa não grava evento (só log com `regra=`).
@@ -115,14 +115,27 @@ Resposta: convite inexistente, expirado, revogado, já aceito, de outro e-mail, 
 
 **Escopo entregue:** o ciclo funciona sobre **cliente, conta externa e vínculo de cliente já existentes**: criar, aprovar, renovar, revisar e revogar. **A jornada externa completa não foi entregue.** Faltam a criação de cliente, a entrada da pessoa externa e o convite externo, que dependem do contrato do §9 (D-EXT). Hoje esses registros só nascem por provisionamento ou fixture.
 
-Permissão `external_access.manage` (só ORG_ADMIN), lock da organização antes da concessão, auditoria em todas. **Segunda pessoa (D-GRANT-1, 024):** quem cria fica gravado como solicitante (`requested_by_membership_id`, imutável), e a aprovação INITIAL exige outro ORG_ADMIN. O serviço responde 403 e o banco recusa com 42501. Consequência: uma organização com um único ORG_ADMIN não aprova concessão externa. Uma concessão pendente sem solicitante gravado (anterior à 024, só de provisionamento ou fixture) não é aprovada (409): revogue e crie de novo.
+Permissão `external_access.manage` (só ORG_ADMIN), lock da organização antes da concessão, auditoria em todas. **Segunda pessoa (D-GRANT-1, 024):** quem cria fica gravado como solicitante (`requested_by_membership_id`, imutável), e a aprovação INITIAL exige outro ORG_ADMIN. O serviço responde 403 e o banco recusa com 42501. Consequência: uma organização com um único ORG_ADMIN não aprova nem renova concessão externa. Uma concessão pendente sem solicitante gravado (anterior à 024, só de provisionamento ou fixture) não é aprovada (409): revogue e crie de novo.
+
+**Regra de renovação e KEEP (D-GRANT-1a, aceita em 2026-10-27; 024):**
+
+| Operação | Regra | Como está implementada |
+|---|---|---|
+| Aprovação inicial | duas pessoas distintas | o pedido grava os valores (início, próxima revisão, prazo), imutáveis até a decisão; o aprovador informa os valores que conferiu e eles precisam ser iguais aos pedidos (diferentes: 409); o banco confere pessoa e valores |
+| Renovação que estende a validade | duas pessoas | pedido de renovação (`/renew`, grava os valores pedidos sem mudar o acesso) e aprovação de **outra** pessoa (`/renew/approve`) com exatamente os valores pedidos. A reativação de uma SUSPENSA também é extensão e segue o mesmo caminho |
+| Ampliação de escopo ou permissões | duas pessoas | **nenhum ato amplia**: workspace, cliente e vínculo são origem imutável desde a 003, e o pacote do Portal é fixo. Uma concessão nova é criação, com aprovação inicial |
+| KEEP | uma pessoa, só se não mudar validade, escopo ou permissões, nem adiar uma expiração | sem data ou com a mesma data, só registra; data **mais cedo** é redução; data **mais tarde** reiniciaria o prazo que mantém a concessão ativa (o Portal exige `next_review_at` no futuro), então é recusada (409 `keep_estenderia_prazo`; banco 42501) e vai pelo pedido de renovação |
+| Redução ou revogação | uma pessoa autorizada, com auditoria | KEEP com data mais cedo, SUSPEND, REVOKE e revogação direta |
+
+**Aprovação vinculada aos valores:** qualquer mudança de validade (redução, suspensão, revogação, outra aprovação) **descarta** o pedido de renovação pendente, e um pedido novo substitui o anterior. A aprovação de um pedido que já não existe é recusada (409 `sem_renovacao_pendente`): uma aprovação feita para valores antigos não serve para valores novos. No banco, toda extensão de uma concessão aprovada só passa consumindo o pedido pendente, com a aprovação RENEWAL de outra pessoa gravada no mesmo instante e com exatamente os valores pedidos. O pedido não serve duas vezes.
 
 | Rota | Step-up | Efeito |
 |---|---|---|
-| `POST /api/v1/o/{org}/client-grants` `{clientMembershipId, workspaceId, startsAt?, expiresAt?}` | não (nasce PENDENTE, sem acesso) | 201; vínculo de cliente ativo, cliente ativo, workspace do mesmo cliente; uma concessão não revogada por (vínculo, workspace): repetição → 409 |
-| `POST …/client-grants/{id}/approve` `{nextReviewAt, expiresAt?, justification?}` | sim | PENDENTE → ATIVA, aprovação INITIAL; aprovador ≠ solicitante (403); sem solicitante gravado: 409 |
-| `POST …/client-grants/{id}/renew` `{nextReviewAt, expiresAt?, justification}` | sim | ATIVA ou SUSPENSA → ATIVA, aprovação RENEWAL com os valores anteriores e novos |
-| `POST …/client-grants/{id}/review` `{decision: KEEP\|SUSPEND\|REVOKE, notes?, nextReviewAt?}` | só KEEP | KEEP exige `nextReviewAt` novo; SUSPEND → SUSPENSA; REVOKE → REVOGADA |
+| `POST /api/v1/o/{org}/client-grants` `{clientMembershipId, workspaceId, nextReviewAt, startsAt?, expiresAt?}` | não (nasce PENDENTE, sem acesso) | 201; `nextReviewAt` obrigatório e futuro; vínculo de cliente ativo, cliente ativo, workspace do mesmo cliente; uma concessão não revogada por (vínculo, workspace): repetição → 409 |
+| `POST …/client-grants/{id}/approve` `{nextReviewAt, expiresAt?, justification?}` | sim | PENDENTE → ATIVA, aprovação INITIAL com os valores **pedidos**; valores informados diferentes dos pedidos: 409; aprovador ≠ solicitante (403); sem solicitante gravado: 409 |
+| `POST …/client-grants/{id}/renew` `{nextReviewAt, expiresAt?, justification}` | não | **pedido** de renovação (ATIVA ou SUSPENSA): 202, acesso inalterado, `renewal` preenchido; evento 14 |
+| `POST …/client-grants/{id}/renew/approve` `{nextReviewAt, expiresAt?}` | sim | aprovação do pedido por outra pessoa (o solicitante: 403), com os valores pedidos (diferentes: 409); → ATIVA, aprovação RENEWAL com o solicitante e os valores anteriores e novos; sem pedido pendente: 409 |
+| `POST …/client-grants/{id}/review` `{decision: KEEP\|SUSPEND\|REVOKE, notes?, nextReviewAt?}` | só KEEP | KEEP: sem data ou igual, só registra; mais cedo, reduz; mais tarde, 409. SUSPEND → SUSPENSA; REVOKE → REVOGADA |
 | `POST …/client-grants/{id}/revoke` (existente) | não | passa a travar a organização e a gravar auditoria; continua idempotente; aceita concessão PENDENTE (cancelamento antes da aprovação) |
 
 **Defeito encontrado e corrigido:** a 003 exigia `approved_at` em todo estado diferente de PENDENTE (`CHECK (status = 1 OR approved_at IS NOT NULL)`). Revogar uma concessão pendente violava a restrição, e a rota existente da GAP-01 respondia **500**; além disso, a pendente nunca podia ser cancelada e bloqueava para sempre uma nova pelo índice de não revogadas. Prova do antes: `GrantLifecycleIT.revogacaoDiretaAuditaEPermissaoEEscopoSaoConferidos` falhou com 500 antes da correção. A 023 troca a restrição por `status IN (1, 4) OR approved_at IS NOT NULL`: ATIVA e SUSPENSA continuam exigindo aprovação (suíte, caso C3).
@@ -141,9 +154,10 @@ O Portal lê só concessão ATIVA, aprovada, no prazo e dentro da revisão (013)
 | Sem autoatribuição e autoridade de quem atribui ou revoga papel | gatilho em `organization_role_assignments` e `workspace_role_assignments` | mesma regra, com step-up para ampliar |
 | Último ORG_ADMIN | gatilho da 003 (inalterado) | 403 `invariante` |
 | Aprovação e revisão de concessão por quem tem `external_access.manage` | gatilho em aprovações e revisões; na concessão, toda transição para ATIVA (aprovação, renovação, reativação) e a revogação conferem o aprovador ou o revogador gravado | mesma regra |
-| Segunda pessoa na aprovação INITIAL (024) | concessão nasce PENDENTE, com solicitante que tem a permissão; solicitante imutável; aprovação INITIAL e PENDENTE → ATIVA por vínculo diferente do solicitante (sem solicitante: recusa) | 403 `SECOND_PERSON`; 409 sem solicitante |
+| Segunda pessoa na aprovação INITIAL (024) | concessão nasce PENDENTE, com solicitante que tem a permissão e a próxima revisão pedida; solicitante e valores pedidos imutáveis; aprovação INITIAL por vínculo diferente do solicitante, com exatamente os valores pedidos (sem solicitante: recusa) | 403 `SECOND_PERSON`; 409 sem solicitante ou com valores diferentes |
+| Extensão só por renovação de outra pessoa (024, D-GRANT-1a) | em concessão aprovada, qualquer ganho de validade (revisão ou prazo mais tarde, prazo removido, início antecipado, SUSPENSA → ATIVA) só passa consumindo o pedido pendente, com a aprovação RENEWAL de outra pessoa no mesmo instante e os valores pedidos; mudança de validade descarta o pedido | pedido (`/renew`) e aprovação (`/renew/approve`); KEEP mais tarde: 409 |
 | Convite de emissor sem autoridade nunca volta (024) | gatilhos depois da revogação de papel, da saída do vínculo e da suspensão da conta: revogam os convites abertos do emissor que perdeu a autoridade (motivo 4) | — (o banco faz no mesmo ato) |
-| Suspensão e extensão de prazo (KEEP) da concessão | **sem** conferência própria na tabela da concessão (não há coluna de autor para esses atos); o autor é o da linha de revisão gravada na mesma transação, que o gatilho confere | o serviço grava a revisão e a mudança juntas |
+| Suspensão e redução de prazo (KEEP mais cedo) da concessão | **sem** conferência própria na tabela da concessão (não há coluna de autor para esses atos); o autor é o da linha de revisão gravada na mesma transação, que o gatilho confere. Só reduzem: estender exige a renovação acima | o serviço grava a revisão e a mudança juntas |
 | Auditoria imutável | `access_events` sem UPDATE, DELETE nem TRUNCATE | grava na transação do ato |
 | Concessão PENDENTE cancelável | restrição de aprovação trocada (REVOGADA sem aprovação) | revogação idempotente |
 | Step-up | **não** (só o serviço) | `user_sessions.mfa_step_up_at` em 5 min |
@@ -160,9 +174,9 @@ Os gatilhos de autoridade **não** barram o superusuário (administração do cl
 | D-CONV-3 | readmissão por convite, sem restaurar papéis ou concessões antigos | **aceita** | 023 (aceite) |
 | D-CONV-4 | convite de emissor que perdeu a autoridade deixa de valer e não ressuscita; emitir outro | **aceita; código mudou** | **024** (revogação no ato, motivo 4) |
 | D-GRANT-1 | segunda pessoa nas concessões de acesso externo nesta V1: aprovador diferente do solicitante | **decidida; código mudou** | **024** + `GrantAdminService` |
-| D-GRANT-1a | a renovação e a revisão KEEP de concessão já aprovada continuam com uma pessoa só (step-up, autoridade, auditoria) | **a confirmar** | — (para exigir segunda pessoa também nesses atos, é preciso um passo de pedido e outro de aprovação) |
+| D-GRANT-1a | renovação que estende, reativação e ampliação: duas pessoas; KEEP com uma pessoa só sem estender nada; redução e revogação com uma pessoa autorizada e auditoria; aprovação vinculada aos valores pedidos (§7) | **aceita; código mudou** | **024** (pedido na concessão, aprovação RENEWAL com o solicitante, extensão só pelo pedido) + `GrantAdminService` (`/renew`, `/renew/approve`, KEEP) |
 | D-EXT | entrada da pessoa externa: reutilizar a identidade global, com conta e permissões externas delimitadas, sem criar outra senha implicitamente. O convite externo só é habilitado depois de fechado esse contrato | **direção definida; contrato a fechar** | 023 recusa convite externo (`42501`, D-EXT); nenhuma rota externa nova |
-| D-ELEV-023/024 | linhas de elevação da 023 e da 024 para aplicar num ambiente de homologação | **pendente** (quando houver ambiente alvo) | `aplicar_como_migrador.sh` eleva as duas nas suítes e nas bases de teste |
+| D-ELEV-023/024 | linhas de elevação da 023 e da 024 para aplicar num ambiente de homologação | **proposta, sem aprovação** (`2026-10-27-missao-consolidacao-acessos-recuperacao.md`, §8): hashes finais, ambiente e pré-voos `implantacao/preflight/023.sql` e `024.sql`; nenhuma linha foi acrescentada a `elevacao.txt` | `aplicar_como_migrador.sh` eleva as duas nas suítes e nas bases de teste |
 
 ## 10. Reset operacional (016) de conta vinculada: recusa explícita (024)
 
@@ -180,3 +194,12 @@ Requisito da separação entre identidade global e conta da organização: o res
 - Execução depois da aprovação recusada (`CONTA_VINCULADA`, RECUSADA). Ficam idênticos o fator, os códigos, os desafios e as sessões da conta; o fator e as sessões da identidade; e os avisos. Nenhum evento de reset.
 - Controle positivo: a mesma sequência numa conta **não** vinculada executa, com os efeitos do reset e um evento.
 - Contraprova sem a 024, rodada de propósito: a abertura volta a `SEM_FATOR_CONFIRMADO` e a execução a `FATOR_DIVERGENTE`.
+
+**Corrida vinculação × execução, nos dois ordenamentos**, com a função **real** de vinculação da 017 (`identity_link_account`, papel `nekkora_platform`; a fixture só prepara identidade, sessão com step-up e desafio). As duas funções travam a organização `FOR UPDATE` antes da conta, então quem trava primeiro vence e a outra espera o commit (conferido em `pg_stat_activity`):
+
+| Ordem | Resultado | Sem a 024 (contraprova) |
+|---|---|---|
+| vinculação primeiro, com a transação aberta; a execução espera | depois do commit, a execução é recusada com `CONTA_VINCULADA` (RECUSADA), não com `FATOR_DIVERGENTE`, embora a vinculação tenha desabilitado o fator aprovado. Nenhum evento de reset; a conta fica no estado que a vinculação deixou; a sessão da identidade continua ativa | `FATOR_DIVERGENTE` (recusa por efeito) |
+| execução primeiro, com a transação aberta; a vinculação espera | o reset vale sobre a conta ainda **não** vinculada (EXECUTADA, um evento) e a vinculação só prossegue depois do commit (`executed_at` < `linked_at`). Uma abertura nova sobre a conta agora vinculada é recusada com `CONTA_VINCULADA` | a abertura nova cai em `SEM_FATOR_CONFIRMADO` |
+
+**Suíte de banco:** `db/tests/acessos-024` (instalação, atualização populada, privilégios, invariantes, contraprovas e reaplicação recusada; caso C4 para a elegibilidade e os privilégios do reset vinculado).
