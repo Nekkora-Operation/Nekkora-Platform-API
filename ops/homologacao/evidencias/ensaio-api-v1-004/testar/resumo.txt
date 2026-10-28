@@ -1,0 +1,12 @@
+teste|resultado|execucao|detalhe
+H01|OK|agora|commit 8527954; limites em todos; so o gateway publicado (127.0.0.1:55772); rede interna internal=true; preexistentes e principal preservados
+H02|FALHA|agora|ver h02_*
+H03|FALHA|agora|modelo de migrations nao determinado (ver h03_nota.txt)
+H04|FALHA|agora|ver h04_rede_tls.txt
+H05|OK|agora|26 verificacoes pelo gateway: login/MFA (externo, interno, outra organizacao), Portal com o cookie da Platform, concessao e cliente isolados, organizacao B recusada, logout e revoke-all derrubando o Portal, CSRF/Origin
+H06|OK|agora|conexoes fisicas da Platform observadas: 1;transacoes com set_config(nekkora.organization_id): 85;DISCARD ALL na devolucao ao pool: 85;contexto seguido de nova transacao/contexto sem DISCARD ALL na mesma conexao: 0; pool Hikari + pgJDBC do ambiente; logs de instrucao ligados so durante o teste (parametros nunca registrados) e restaurados
+H07|OK|agora|17 verificacoes: Redis fora (503 no pre-login e na escrita, leitura e revoke-all seguem); com a R7 esgotada logout e revoke-all -> 204 e revogacao efetiva; logout sem sessao 204 (idempotente); revoke-all sem sessao 401
+H09|OK|agora|id em uso recusado sem criar recursos; checksum divergente recusado; falha simulada (sem e com elevacao) parou sem nova tentativa, revogou a elevacao e deixou historico e esquema intactos; runner sem repair/baseline/clean
+R015|FALHA|agora|ver r015_restauracao.txt
+H08|OK|agora|109 marcadores ausentes de 4628 linhas de log de todos os servicos e de todas as evidencias; detector com controle positivo
+reutilizada|-|evidencia anterior|suites SQL 012/013/014, restauracao-015 original, atualizacao-populada, 58 testes Maven e E2E 6/6 do commit 8527954 (docs/relatorios/2026-09-26-validacao-api-v1.md); nao repetidas: a homologacao nao muda o schema nem o codigo

@@ -946,7 +946,8 @@ jornadas-api)
 
 # ==================================================================================================== atualizar
 # Atualizacao de um ensaio-* LIBERADO para versoes posteriores das migrations e das imagens (missao PLATFORM-API-V1-003,
-# revisao: prova da atualizacao 021 -> 022 numa base populada pelo caminho real de implantacao). SO ensaio-*, SO 021 -> 022.
+# revisao: prova da atualizacao 021 -> 022 numa base populada pelo caminho real de implantacao; missao de acessos de
+# 2026-10-27: 022 -> 023 e 023 -> 024). SO ensaio-*, UM passo por vez: 021 -> 022, 022 -> 023 ou 023 -> 024.
 # Nada e aplicado no banco aqui: o "implantar" seguinte aplica as versoes novas com os controles de sempre (linha
 # vinculada, pre-voo, janela, retirada conferida), e o "subir" sobe os servicos com as imagens novas.
 #   1. recusa, ANTES de qualquer mudanca: ambiente BLOQUEADO; versao alvo fora do suportado; copia de migrations do
@@ -964,7 +965,10 @@ atualizar)
     prepara_funcoes
     ALVO="${HOMOLOG_ATUALIZAR_ATE:-}"
     [[ "$HOMOLOG_ID" =~ ^ensaio- ]] || falha "atualizar so em ambiente descartavel (id ensaio-*)"
-    [ "$HOMOLOG_ATE" = 021 ] && [ "$ALVO" = 022 ] || falha "atualizacao suportada: 021 -> 022 com HOMOLOG_ATUALIZAR_ATE=022 (ambiente em $HOMOLOG_ATE, alvo '${ALVO}')"
+    case "$HOMOLOG_ATE>$ALVO" in
+        "021>022"|"022>023"|"023>024") ;;
+        *) falha "atualizacao suportada: 021 -> 022, 022 -> 023 ou 023 -> 024, um passo por vez, com HOMOLOG_ATUALIZAR_ATE=<versao seguinte> (ambiente em $HOMOLOG_ATE, alvo '${ALVO}')";;
+    esac
     [ "${HOMOLOG_TRANSPORTE:-}" = homologacao ] || falha "atualizar exige o transporte de homologacao"
     novas=""
     for n in $(seq $((10#$HOMOLOG_ATE + 1)) $((10#$ALVO))); do

@@ -241,4 +241,34 @@ public class PlatformConfig {
                               PlatformProperties p) {
         return new AdminService(tx, accounts, sessions, mfa, mail, p.session().stepUp());
     }
+
+    /** Administracao de acesso (023): convites, papeis, vinculo e concessoes, com a mesma janela de step-up do reset de MFA. */
+    @Bean
+    com.nekkora.platform.admin.AccessActions accessActions(OrgTransactions tx, AccountRepository accounts, SessionRepository sessions, PlatformProperties p) {
+        return new com.nekkora.platform.admin.AccessActions(tx, accounts, sessions, p.session().stepUp());
+    }
+
+    @Bean
+    com.nekkora.platform.admin.AccessEvents accessEvents() {
+        return new com.nekkora.platform.admin.AccessEvents();
+    }
+
+    @Bean
+    com.nekkora.platform.admin.InvitationService invitationService(com.nekkora.platform.admin.AccessActions actions,
+                                                                  com.nekkora.platform.admin.AccessEvents events, com.nekkora.platform.mail.MailIntents mail) {
+        return com.nekkora.platform.admin.InvitationService.create(actions, events, mail);
+    }
+
+    @Bean
+    com.nekkora.platform.admin.RoleAdminService roleAdminService(com.nekkora.platform.admin.AccessActions actions,
+                                                                com.nekkora.platform.admin.AccessEvents events, MfaRepository mfa,
+                                                                com.nekkora.platform.mail.MailIntents mail) {
+        return com.nekkora.platform.admin.RoleAdminService.create(actions, events, mfa, mail);
+    }
+
+    @Bean
+    com.nekkora.platform.admin.GrantAdminService grantAdminService(com.nekkora.platform.admin.AccessActions actions,
+                                                                  com.nekkora.platform.admin.AccessEvents events) {
+        return com.nekkora.platform.admin.GrantAdminService.create(actions, events);
+    }
 }

@@ -1,0 +1,14 @@
+# com a 024
+a_fechar=0
+fechados_motivo_4_sem_revogador=2
+intactos|aberto-adm-h024@org.test|aberto|2177bbba47368f1bbdda760aeab47f08
+intactos|aberto-reg-h024@org.test|aberto|326956daab3fe112744e1cf3c27324d6
+intactos|membro-h024@org.test|aceito|a98775ae73eac8ac4dca4d2002a1971c
+intactos|revogado-h024@org.test|revogado:1|75e964334885be294c48710b4d056737
+acessos|organization_memberships|4|c071448e4cdd1bed7df0735ffd675fb6
+acessos|organization_role_assignments|4|9abcb7baf4441e82f7fa0d8dfa0627c1
+acessos|workspace_role_assignments|1|030e57ac2cbf86d0b47a6a2c9b31e99b
+acessos|client_memberships|1|52a4e10c598a3bd1e56b135e2ffc5600
+acessos|client_workspace_grants|1|fa5b31e8448deb1a36a452ae0e36131f
+acessos|users|5|8b3e8f912f83b77c72a721bf1168d788
+perdeu_e_recuperou_antes=aberto

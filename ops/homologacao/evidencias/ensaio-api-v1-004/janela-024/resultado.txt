@@ -1,0 +1,6 @@
+versao|caso|codigo|janela|estado|historico|confere
+024|P recusa pelo pre-voo antes de conceder|2|0 linhas da 024|0|0|0|001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true 016:true 017:true 018:true 019:true 020:true 021:true 022:true 023:true|SIM
+024|F falha DENTRO da janela (depois do fechamento dos convites; dados inalterados)|2|inicio versao=024 SUPERUSER concedido;fim    versao=024 SUPERUSER revogado, sessoes encerradas, estado conferido (0|0|0) [falha];|0|0|0|001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true 016:true 017:true 018:true 019:true 020:true 021:true 022:true 023:true|SIM
+024|S sucesso; ambiente LIBERADO|0|2 linhas da 024|0|0|0|001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true 016:true 017:true 018:true 019:true 020:true 021:true 022:true 023:true 024:true|SIM
+024|D dados: so os 2 convites de emissor sem autoridade fechados (motivo 4); validos, aceito, o de quem perdeu e recuperou antes e os acessos intactos|-|-|-|-|SIM
+RESULTADO: 0 linha(s) fora do esperado

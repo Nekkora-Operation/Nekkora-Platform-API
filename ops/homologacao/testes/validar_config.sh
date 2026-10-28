@@ -345,9 +345,12 @@ confere "lista operacional normalizada: 011-013 legadas e 016-020 e 022 superuse
     "[ \"\$(lista_elevacao_normalizada '$AQUI/implantacao/elevacao.txt' \"\$VINCULO_OBRIGATORIO\" | awk '{print \$1, \$3, \$4}' | tr '\n' ' ')\" = '011 superuser - 012 superuser - 013 superuser - 016 superuser ensaio-api-v1-003 017 superuser ensaio-api-v1-003 018 superuser ensaio-api-v1-003 019 superuser ensaio-api-v1-003 020 superuser ensaio-api-v1-003 022 superuser ensaio-api-v1-003 ' ]"
 confere "lista operacional: sha256 de 016-020 = bytes LF de db/migrations; 021 sem linha" \
     "( for v in 016 017 018 019 020; do lista_elevacao_normalizada '$AQUI/implantacao/elevacao.txt' \"\$VINCULO_OBRIGATORIO\" | grep -q \"^\$v \$(sha256sum '$REPO'/db/migrations/\${v}_*.sql | cut -c1-64) \" || exit 1; done ) && ! grep -q '^021 ' '$AQUI/implantacao/elevacao.txt'"
-confere "runner: versao de vinculo obrigatorio SEM linha recusada antes do Flyway; pre-voo oficial existente para 016-020 e 022" \
+confere "runner: versao de vinculo obrigatorio SEM linha recusada antes do Flyway; pre-voo oficial existente para 016-020 e 022-024" \
     "grep -q 'exige elevacao vinculada e nao esta na lista de elevacao; nada aplicado' '$AQUI/implantacao/implantar.sh' \
-     && ( for v in 016 017 018 019 020 022; do [ -s '$AQUI/implantacao/preflight/'\$v.sql ] && grep -q PREFLIGHT_OK '$AQUI/implantacao/preflight/'\$v.sql || exit 1; done )"
+     && ( for v in 016 017 018 019 020 022 023 024; do [ -s '$AQUI/implantacao/preflight/'\$v.sql ] && grep -q PREFLIGHT_OK '$AQUI/implantacao/preflight/'\$v.sql || exit 1; done ) \
+     && [ \"\$VINCULO_OBRIGATORIO\" = ' 016 017 018 019 020 022 023 024 ' ]"
+confere "elevacao.txt operacional SEM linha da 023 nem da 024 (so propostas, sem aprovacao; o laboratorio usa lista alternativa fora do repositorio)" \
+    "! grep -qE '^02[34] ' '$AQUI/implantacao/elevacao.txt'"
 
 echo "== 7. classificacao e reconciliacao das fixtures (casos sinteticos, sem banco)"
 F="$AQUI/lib/fixture_conferencia.py"
@@ -753,7 +756,7 @@ confere "atualizacao do frontend: coleta do gateway pelo selecao_gateway.sh; ref
 confere "runner: pre-voo da pasta da lista alternativa SO para versao sintetica 9xx sem pre-voo oficial (022 e 016-020 sempre pelo oficial)" \
     "[ \"\$(grep -c 'pf=\"\$(dirname \"\$LISTA\")/preflight/\$v.sql\"' '$AQUI/implantacao/implantar.sh')\" = 1 ] \
      && grep -qF '[ ! -f \"\$pf\" ] && [ -n \"\${HOMOLOG_ELEVACAO_ARQ:-}\" ] && [[ \"\$v\" =~ ^9[0-9]{2}\$ ]]; then pf=' '$AQUI/implantacao/implantar.sh'"
-confere "atualizar 021 -> 022 com lista alternativa: recusa fora de ensaio-* e nas conferencias de existencia, gramatica, versao, sha256 e vinculo, sem alterar o ambiente; lista correta so para na liberacao: testes/test_atualizar_lista.sh" \
+confere "atualizar 021 -> 022, 022 -> 023 e 023 -> 024 (um passo) com lista alternativa: recusa fora de ensaio-* e nas conferencias de existencia, gramatica, versao, sha256 e vinculo, sem alterar o ambiente; lista correta so para na liberacao: testes/test_atualizar_lista.sh" \
     "bash '$AQUI/testes/test_atualizar_lista.sh' > '$TMP/atz.txt' 2>&1 && grep -q '^RESULTADO: atualizar com lista alternativa OK' '$TMP/atz.txt'"
 confere "procedimento da atualizacao do frontend com compose controlado (preparo, recusas sem escrita nem up, falhas pedindo reverter, caminho valido e reversao): testes/test_frontend_atualizar.sh" \
     "bash '$AQUI/testes/test_frontend_atualizar.sh' > '$TMP/fa.txt' 2>&1 && grep -q '^RESULTADO: atualizacao do frontend OK' '$TMP/fa.txt'"
