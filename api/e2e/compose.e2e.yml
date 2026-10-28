@@ -83,6 +83,22 @@ services:
       e2e:
         ipv4_address: 10.251.47.31
 
+  # Canal da maquina (025): processo, datasource e papel PROPRIOS (nekkora_ingestion); nenhuma variavel da Platform ou do Portal.
+  agent-gateway:
+    build:
+      context: ..
+      dockerfile: e2e/Dockerfile
+      args:
+        JAR: nekkora-agent-gateway/target/nekkora-agent-gateway-0.1.0-SNAPSHOT.jar
+    environment:
+      NEKKORA_GATEWAY_DB_URL: jdbc:postgresql://postgres:5432/nekkora
+      NEKKORA_GATEWAY_DB_SENHA: ${E2E_INGESTAO_SENHA:?}
+      NEKKORA_REDIS_HOST: redis
+      NEKKORA_PROXIES_CONFIAVEIS: 10.251.47.10/32
+    networks:
+      e2e:
+        ipv4_address: 10.251.47.32
+
   nginx:
     image: nginx:1.29-alpine
     volumes:
@@ -93,6 +109,7 @@ services:
     depends_on:
       - platform
       - portal
+      - agent-gateway
     networks:
       e2e:
         ipv4_address: 10.251.47.10

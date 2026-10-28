@@ -287,7 +287,7 @@ exposição ao Portal precisa de decisão própria sobre concessões.
    - o relatório do supervisor a cada transição.
    
    O `ExecutionController` não muda de semântica.
-5. **Exemplos seguros:** `docs/relatorios/2026-10-28-platform-agent-exemplos/` (sem segredos reais).
+5. **Exemplos seguros:** `docs/relatorios/2026-10-28-platform-agent-exemplos/exemplos.md` (sem segredos reais).
 6. **Testes de aceite:**
    - um pareamento repetido com resposta perdida não tranca a máquina;
    - lote reenviado depois de ACK perdido;
@@ -295,7 +295,7 @@ exposição ao Portal precisa de decisão própria sobre concessões.
    - perda local declarada;
    - credencial revogada para tudo;
    - nada é relançado por falha de transporte.
-7. **Pronto na API:** este contrato inteiro, com testes de integração e o simulador `api/agent-sim`.
+7. **Pronto na API:** este contrato inteiro, com testes de integração e o Agent simulado alimentado pelos registros reais do Agent: `MachineClient` (testes do gateway), `AgentChannelE2E` (stack E2E, entre processos) e `AgentBench` (medição).
 8. **Pausado:** despacho remoto, cancelamento remoto e agendamento, que dependem de um canal de comando no Agent. O
    desenho está em §14. Pode continuar: tudo do lado da API que não depende de comandos.
 
