@@ -1,0 +1,11 @@
+servidor_versao_maior_16|OK|16.15
+historico_001_023_com_sucesso_sem_024_nem_posteriores_sem_falha|OK|001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true 016:true 017:true 018:true 019:true 020:true 021:true 022:true 023:true
+migrador_sem_atributo_nem_acl_de_parametro|OK|0 ACL de parametro no total
+migrador_dono_do_banco|OK|migrador_nekkora
+marca_da_023_presente|OK|-
+objetos_da_024_ausentes|OK|-
+restricoes_trocadas_com_a_definicao_da_023|OK|-
+donos_que_recebem_funcoes_sem_login_nem_participacao|FALHA|-
+funcoes_substituidas_da_016_018_com_o_dono_esperado|OK|-
+convites_abertos_que_a_024_fechara|OK|2 convite(s) aberto(s) de emissor sem autoridade (fechados com o motivo 4 na aplicacao)
+PREFLIGHT_FALHOU

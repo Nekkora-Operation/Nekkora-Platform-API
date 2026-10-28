@@ -1,0 +1,25 @@
+ensaio-api-v1-004b - homologacao dirigida da 023 e da 024 FINAL (missao de acessos, 2026-10-28), refeita depois do achado
+da R015 no ensaio-api-v1-004 (ver evidencias/ensaio-api-v1-004/LEIA-ME.txt). Ambiente descartavel novo; ensaio-api-v1-003
+intacto; e-mail simulado (HOMOLOG_TRANSPORTE=homologacao); lista de elevacao de laboratorio fora do repositorio, vinculada
+SO a este id (016-020, 022, 023, 024), com os sha256 completos conferidos contra os arquivos:
+  023 dcb47661867fa451a20460e6b941a003999569d3c0185dd4962f75c1e8843498
+  024 23dca1c367918279165bf9d70278e721fe20c69715e3f776d9ea8a2886e1262e
+  pre-voos: 023.sql 52ebb88a7f0d2dc9cf245e8fc92266b87a59344a67a469e133f3a07fb8103028
+            024.sql 34f23ec3218fbf925e7e7e989141bb4115e6c2e414ae26f1f33e1e003530889a
+
+Caminho (runner, commit das imagens 8527954; runner em d196aea/539a2e0): criar (001-015) -> implantar 016-021 ->
+concluir-criacao -> atualizar 022 + implantar + subir -> atualizar 023 + janela_023_024.sh 023 -> subir ->
+atualizar 024 + janela_023_024.sh 024 -> subir -> testar. Tudo com codigo 0, exceto o testar (abaixo).
+
+janela-023/  P recusa pelo pre-voo antes de conceder (nenhuma janela aberta); F falha DENTRO da janela (migrador somente
+             leitura): "inicio" e "fim ... revogado ... [falha]", 0|0|0, 023 fora do historico, nenhum success=false;
+             S sucesso: "[fim da versao 023]", 0|0|0, LIBERADO.
+janela-024/  os mesmos P, F e S. F com um gatilho homonimo criado por fora: a 024 registra "fechados na aplicacao: 2" e
+             falha depois; conferencia_depois_da_falha.txt = conferencia_antes.txt (mesma transacao; os 2 convites
+             continuam abertos). D (conferencia_antes/depois): a_fechar 2 -> 0; fechados com motivo 4 e sem revogador 0 -> 2;
+             convites intactos (aberto valido, aceito, revogado e o de quem perdeu e recuperou o papel ANTES da 024, que
+             continua aberto) e acessos (vinculos, papeis de organizacao e de workspace, vinculos de cliente, concessoes,
+             contas) com o mesmo md5 antes e depois.
+testar/      R015 OK: catalogo identico (4926 linhas) e dados identicos depois do backup e da restauracao, com a 024 final.
+             H01, H05-H09 OK. H02, H03 e H04: limites conhecidos do "testar" (desenho 001-015; ver o LEIA-ME do
+             ensaio-api-v1-004), nao desta missao.

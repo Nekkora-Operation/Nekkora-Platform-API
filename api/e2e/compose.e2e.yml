@@ -61,6 +61,8 @@ services:
       NEKKORA_VINCULACAO: "true"
       # recuperacao de senha da identidade (IdentityCredentialsE2E, missao 002): so nesta stack descartavel
       NEKKORA_RECUPERACAO_SENHA: "true"
+      # convites (AccessInvitationsE2E, 023): so nesta stack descartavel
+      NEKKORA_CONVITES: "true"
     networks:
       e2e:
         ipv4_address: 10.251.47.30

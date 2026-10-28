@@ -1,0 +1,4 @@
+repositorio 23dca1c367918279165bf9d70278e721fe20c69715e3f776d9ea8a2886e1262e 024_acessos_decisoes_reset_vinculado.sql
+ambiente    23dca1c367918279165bf9d70278e721fe20c69715e3f776d9ea8a2886e1262e
+lista       23dca1c367918279165bf9d70278e721fe20c69715e3f776d9ea8a2886e1262e tipo=superuser ambiente=ensaio-api-v1-004b
+pre-voo     34f23ec3218fbf925e7e7e989141bb4115e6c2e414ae26f1f33e1e003530889a implantacao/preflight/024.sql

@@ -18,6 +18,7 @@ import com.nekkora.core.db.OrgTransactions;
 import com.nekkora.core.db.OrgTransactions.Mode;
 import com.nekkora.core.web.ApiException;
 import com.nekkora.platform.admin.AdminService;
+import com.nekkora.platform.admin.GrantAdminService;
 import com.nekkora.platform.identity.IdentityOrgRepository;
 import com.nekkora.platform.session.ValidSession;
 
@@ -27,10 +28,12 @@ public class AccountController {
 
     private final OrgTransactions tx;
     private final AdminService admin;
+    private final GrantAdminService grants;
 
-    public AccountController(OrgTransactions tx, AdminService admin) {
+    public AccountController(OrgTransactions tx, AdminService admin, GrantAdminService grants) {
         this.tx = tx;
         this.admin = admin;
+        this.grants = grants;
     }
 
     /**
@@ -80,7 +83,7 @@ public class AccountController {
 
     @PostMapping("/api/v1/o/{org}/client-grants/{grant}/revoke")
     public ResponseEntity<Void> revokeGrant(@PathVariable UUID org, @PathVariable UUID grant, HttpServletRequest req) {
-        admin.revokeGrant(org, SessionFilter.principal(req), SessionFilter.token(req), grant);
+        grants.revoke(org, SessionFilter.principal(req), SessionFilter.token(req), grant);
         return ResponseEntity.noContent().build();
     }
 }

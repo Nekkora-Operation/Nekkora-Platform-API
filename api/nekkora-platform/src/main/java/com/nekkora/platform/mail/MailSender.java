@@ -30,7 +30,13 @@ public interface MailSender {
         /** Substituicao do fator da identidade concluida (DC-17.13, T1): aviso ao titular, sem token. */
         NOTICE_MFA_REPLACED,
         /** Codigos de recuperacao da identidade regenerados (conjunto anterior invalidado): aviso ao titular, sem token. */
-        NOTICE_RECOVERY_CODES_REGENERATED
+        NOTICE_RECOVERY_CODES_REGENERATED,
+        /** Convite para entrar numa organizacao (023): ao endereco convidado, com o token de uso unico (pagina por organizacao). */
+        ORG_INVITATION,
+        /** Papel atribuido, alterado ou revogado na organizacao: aviso a conta alvo, sem token. */
+        NOTICE_ORG_ACCESS_CHANGED,
+        /** Vinculo com a organizacao retirado: aviso a conta alvo, sem token. */
+        NOTICE_ORG_MEMBERSHIP_REVOKED
     }
 
     void send(Kind kind, UUID organization, String recipient, String tokenOrNull);

@@ -1,0 +1,10 @@
+servidor_versao_maior_16|OK|16.15
+historico_001_022_com_sucesso_sem_023_nem_posteriores_sem_falha|OK|001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true 016:true 017:true 018:true 019:true 020:true 021:true 022:true
+migrador_sem_atributo_nem_acl_de_parametro|OK|0 ACL de parametro no total
+migrador_dono_do_banco|OK|migrador_nekkora
+marca_da_022_presente|OK|-
+objetos_dos_convites_ausentes|OK|-
+sem_convites_abertos_duplicados|OK|0 convites abertos
+dono_das_funcoes_de_identidade_sem_login_nem_participacao|OK|-
+restricoes_que_a_023_confere_com_a_definicao_esperada|OK|-
+PREFLIGHT_OK
