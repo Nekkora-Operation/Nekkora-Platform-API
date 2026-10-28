@@ -20,8 +20,10 @@
 # " 016 "). 017-020: elevacao medida (mapa_privilegios.sh) e pre-voo oficial proprio; 021 nao tem elevacao;
 # 022 (ativacao): elevacao exigida (cabecalho da migration; suite db/tests/ativacao-022, B1) e pre-voo oficial proprio.
 # 023 e 024 (acessos, missao de 2026-10-27): elevacao exigida (suites db/tests/acessos-023 e acessos-024, B1) e pre-voo
-# oficial proprio. Estar aqui NAO autoriza nada: so obriga linha vinculada ao id e pre-voo oficial quando houver linha.
-VINCULO_OBRIGATORIO=" 016 017 018 019 020 022 023 024 "
+# oficial proprio. 026 (retencao dos eventos do Agent, missao Platform-Agent de 2026-10-28): elevacao exigida (suite
+# db/tests/retencao-agent-026, B0) e pre-voo oficial proprio. Estar aqui NAO autoriza nada: so obriga linha vinculada ao id e
+# pre-voo oficial quando houver linha.
+VINCULO_OBRIGATORIO=" 016 017 018 019 020 022 023 024 026 "
 # Versoes que NUNCA recebem janela: aplicam sem atributo nenhum (021: fila de e-mail; 025: canal Platform-Agent, sem papel,
 # dono nem SECURITY DEFINER novos, suite db/tests/canal-agent-025, caso A elevada=nao). Uma linha para elas e recusada pela
 # gramatica, em qualquer lista (revisada ou alternativa): a janela de SUPERUSER nao e concedida a quem nao precisa.

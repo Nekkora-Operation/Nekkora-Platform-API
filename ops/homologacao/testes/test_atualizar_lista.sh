@@ -4,7 +4,8 @@
 # 022 -> 023 e 023 -> 024: executa o homologacao.sh REAL contra ambientes ficticios em saidas/ (removidos no fim) e
 # confere, em cada recusa, a mensagem, o codigo e que NADA mudou no ambiente (mesmos arquivos e bytes, ambiente.env
 # intacto, nenhum atualizacao-*). Salto de versao (021 -> 023) e recusado: um passo por vez. Desde a missao Platform-Agent
-# de 2026-10-28, o passo 024 -> 025, SEM janela: uma linha da 025 (ou da 021) em qualquer lista e recusada pela gramatica.
+# de 2026-10-28, o passo 024 -> 025, SEM janela: uma linha da 025 (ou da 021) em qualquer lista e recusada pela gramatica; e o
+# passo 025 -> 026, COM janela (vinculo obrigatorio, como 022-024).
 #   - fora de ensaio-*: a opcao (e o atualizar) e recusada antes de qualquer alteracao;
 #   - a lista alternativa passa pelas mesmas conferencias da revisada: existencia, gramatica (tipo e vinculo obrigatorio),
 #     versao alvo, linha da 022 com o sha256 do arquivo e vinculada ao id exato;
@@ -17,12 +18,12 @@ set -uo pipefail
 AQUI="$(cd "$(dirname "$0")/.." && pwd)"
 REPO="$(cd "$AQUI/../.." && pwd)"
 H="$AQUI/homologacao.sh"
-LAB=ensaio-validacao-atz; FORA=validacao-atz; LAB22=ensaio-validacao-atz22; LAB23=ensaio-validacao-atz23; LAB24=ensaio-validacao-atz24
-for id in "$LAB" "$FORA" "$LAB22" "$LAB23" "$LAB24"; do
+LAB=ensaio-validacao-atz; FORA=validacao-atz; LAB22=ensaio-validacao-atz22; LAB23=ensaio-validacao-atz23; LAB24=ensaio-validacao-atz24; LAB25=ensaio-validacao-atz25
+for id in "$LAB" "$FORA" "$LAB22" "$LAB23" "$LAB24" "$LAB25"; do
     [ ! -e "$AQUI/saidas/$id" ] || { echo "ERRO: $AQUI/saidas/$id ja existe" >&2; exit 3; }
 done
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP" "$AQUI/saidas/$LAB" "$AQUI/saidas/$FORA" "$AQUI/saidas/$LAB22" "$AQUI/saidas/$LAB23" "$AQUI/saidas/$LAB24"' EXIT
+trap 'rm -rf "$TMP" "$AQUI/saidas/$LAB" "$AQUI/saidas/$FORA" "$AQUI/saidas/$LAB22" "$AQUI/saidas/$LAB23" "$AQUI/saidas/$LAB24" "$AQUI/saidas/$LAB25"' EXIT
 falhas=0
 ok() { echo "OK    $*"; }
 nok() { echo "FALHA $*"; falhas=$((falhas + 1)); }
@@ -36,7 +37,7 @@ for id in "$LAB" "$FORA"; do
       echo "HOMOLOG_ATE=021"; echo "HOMOLOG_COMMIT=0000000"; echo "HOMOLOG_TRANSPORTE=homologacao"; } > "$AQUI/saidas/$id/ambiente.env"
 done
 # ambientes ficticios ja atualizados: em 022 (passo 022 -> 023), em 023 (passo 023 -> 024) e em 024 (passo 024 -> 025)
-for par in "$LAB22 022" "$LAB23 023" "$LAB24 024"; do
+for par in "$LAB22 022" "$LAB23 023" "$LAB24 024" "$LAB25 025"; do
     set -- $par
     mkdir -p "$AQUI/saidas/$1/migracoes"
     for n in $(seq -w 1 "$((10#$2))"); do cp "$REPO"/db/migrations/0${n}_*.sql "$AQUI/saidas/$1/migracoes/"; done
@@ -81,6 +82,15 @@ lista "$TMP/certa24.txt" "$LAB24" "022 $S022 tipo=superuser ambiente=$LAB24"
 printf '023 %s tipo=superuser ambiente=%s\n024 %s tipo=superuser ambiente=%s\n' "$S023" "$LAB24" "$S024" "$LAB24" >> "$TMP/certa24.txt"
 cp "$TMP/certa24.txt" "$TMP/com_025.txt"; echo "025 $S025 tipo=superuser ambiente=$LAB24" >> "$TMP/com_025.txt"
 cp "$TMP/certa24.txt" "$TMP/com_025_legado.txt"; echo "025 $S025" >> "$TMP/com_025_legado.txt"
+S026="$(sha256sum < "$REPO"/db/migrations/026_*.sql | cut -c1-64)"
+lista "$TMP/certa25.txt" "$LAB25" "022 $S022 tipo=superuser ambiente=$LAB25"
+printf '023 %s tipo=superuser ambiente=%s\n024 %s tipo=superuser ambiente=%s\n026 %s tipo=superuser ambiente=%s\n' "$S023" "$LAB25" "$S024" "$LAB25" "$S026" "$LAB25" >> "$TMP/certa25.txt"
+lista "$TMP/sem_026.txt" "$LAB25" "022 $S022 tipo=superuser ambiente=$LAB25"
+printf '023 %s tipo=superuser ambiente=%s\n024 %s tipo=superuser ambiente=%s\n' "$S023" "$LAB25" "$S024" "$LAB25" >> "$TMP/sem_026.txt"
+lista "$TMP/sem_vinculo26.txt" "$LAB25" "022 $S022 tipo=superuser ambiente=$LAB25"
+printf '023 %s tipo=superuser ambiente=%s\n024 %s tipo=superuser ambiente=%s\n026 %s tipo=superuser\n' "$S023" "$LAB25" "$S024" "$LAB25" "$S026" >> "$TMP/sem_vinculo26.txt"
+lista "$TMP/sha26_errado.txt" "$LAB25" "022 $S022 tipo=superuser ambiente=$LAB25"
+printf '023 %s tipo=superuser ambiente=%s\n024 %s tipo=superuser ambiente=%s\n026 %s tipo=superuser ambiente=%s\n' "$S023" "$LAB25" "$S024" "$LAB25" "$SX" "$LAB25" >> "$TMP/sha26_errado.txt"
 
 caso() {   # $1 descricao, $2 id, $3 trecho esperado na mensagem, demais: variaveis de ambiente (alvo padrao: 022)
     local desc="$1" id="$2" esp="$3" antes depois rc=0; shift 3
@@ -106,7 +116,7 @@ caso "022 com sha256 diferente do arquivo" "$LAB" "a 022 exige a linha de elevac
 caso "022 vinculada a OUTRO id" "$LAB" "a 022 exige a linha de elevacao vinculada a este id ($LAB) com o sha256" HOMOLOG_ELEVACAO_ARQ="$TMP/outro_id.txt"
 caso "sem linha da 022" "$LAB" "a 022 exige a linha de elevacao vinculada a este id ($LAB) com o sha256" HOMOLOG_ELEVACAO_ARQ="$TMP/sem_022.txt"
 caso "linha sob a versao 021 (aplica sem elevacao: NUNCA_ELEVAR)" "$LAB" "recusada pela gramatica" HOMOLOG_ELEVACAO_ARQ="$TMP/versao_021.txt"
-caso "salto 021 -> 023 (um passo por vez), mesmo com a lista correta" "$LAB" "atualizacao suportada: 021 -> 022, 022 -> 023, 023 -> 024 ou 024 -> 025, um passo por vez" HOMOLOG_ELEVACAO_ARQ="$TMP/certa.txt" HOMOLOG_ATUALIZAR_ATE=023
+caso "salto 021 -> 023 (um passo por vez), mesmo com a lista correta" "$LAB" "atualizacao suportada: 021 -> 022, 022 -> 023, 023 -> 024, 024 -> 025 ou 025 -> 026, um passo por vez" HOMOLOG_ELEVACAO_ARQ="$TMP/certa.txt" HOMOLOG_ATUALIZAR_ATE=023
 caso "lista revisada (022 vinculada ao ensaio-api-v1-003, nao a este id)" "$LAB" "a 022 exige a linha de elevacao vinculada a este id ($LAB) com o sha256"
 
 echo "== passos 022 -> 023 e 023 -> 024"
@@ -124,12 +134,20 @@ caso "024 -> 025 com linha da 025 (vinculada ao id)" "$LAB24" "recusada pela gra
 caso "024 -> 025 com linha legada da 025 (sem vinculo)" "$LAB24" "recusada pela gramatica" HOMOLOG_ELEVACAO_ARQ="$TMP/com_025_legado.txt" HOMOLOG_ATUALIZAR_ATE=025
 caso "024 -> 026 (salto)" "$LAB24" "um passo por vez" HOMOLOG_ELEVACAO_ARQ="$TMP/certa24.txt" HOMOLOG_ATUALIZAR_ATE=026
 
+echo "== passo 025 -> 026 (COM janela, vinculo obrigatorio)"
+caso "025 -> 026 sem linha da 026" "$LAB25" "a 026 exige a linha de elevacao vinculada a este id ($LAB25) com o sha256" HOMOLOG_ELEVACAO_ARQ="$TMP/sem_026.txt" HOMOLOG_ATUALIZAR_ATE=026
+caso "025 -> 026 com a 026 sem vinculo (versao de vinculo obrigatorio)" "$LAB25" "recusada pela gramatica" HOMOLOG_ELEVACAO_ARQ="$TMP/sem_vinculo26.txt" HOMOLOG_ATUALIZAR_ATE=026
+caso "025 -> 026 com sha256 da 026 diferente do arquivo" "$LAB25" "a 026 exige a linha de elevacao vinculada a este id ($LAB25) com o sha256" HOMOLOG_ELEVACAO_ARQ="$TMP/sha26_errado.txt" HOMOLOG_ATUALIZAR_ATE=026
+caso "025 -> 026 pela lista revisada (sem linha da 026)" "$LAB25" "a 026 exige a linha de elevacao vinculada a este id ($LAB25) com o sha256" HOMOLOG_ATUALIZAR_ATE=026
+caso "025 -> 027 (fora do suportado)" "$LAB25" "um passo por vez" HOMOLOG_ELEVACAO_ARQ="$TMP/certa25.txt" HOMOLOG_ATUALIZAR_ATE=027
+
 echo "== controle positivo: lista correta passa as conferencias de arquivo e para na liberacao (banco)"
 caso "lista alternativa correta (sem banco: BLOQUEADO)" "$LAB" "ambiente BLOQUEADO: nada alterado" HOMOLOG_ELEVACAO_ARQ="$TMP/certa.txt"
 caso "022 -> 023 com a lista correta (sem banco: BLOQUEADO)" "$LAB22" "ambiente BLOQUEADO: nada alterado" HOMOLOG_ELEVACAO_ARQ="$TMP/certa22.txt" HOMOLOG_ATUALIZAR_ATE=023
 caso "023 -> 024 com a lista correta (sem banco: BLOQUEADO)" "$LAB23" "ambiente BLOQUEADO: nada alterado" HOMOLOG_ELEVACAO_ARQ="$TMP/certa23.txt" HOMOLOG_ATUALIZAR_ATE=024
 caso "024 -> 025 com a lista do laboratorio, sem linha da 025 (sem banco: BLOQUEADO)" "$LAB24" "ambiente BLOQUEADO: nada alterado" HOMOLOG_ELEVACAO_ARQ="$TMP/certa24.txt" HOMOLOG_ATUALIZAR_ATE=025
 caso "024 -> 025 pela lista revisada (a 025 nao precisa de linha; sem banco: BLOQUEADO)" "$LAB24" "ambiente BLOQUEADO: nada alterado" HOMOLOG_ATUALIZAR_ATE=025
+caso "025 -> 026 com a lista correta (sem banco: BLOQUEADO)" "$LAB25" "ambiente BLOQUEADO: nada alterado" HOMOLOG_ELEVACAO_ARQ="$TMP/certa25.txt" HOMOLOG_ATUALIZAR_ATE=026
 
 echo "RESULTADO: $falhas falha(s)"
 [ "$falhas" = 0 ] && echo "RESULTADO: atualizar com lista alternativa OK"
