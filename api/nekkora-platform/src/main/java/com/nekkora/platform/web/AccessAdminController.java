@@ -39,7 +39,7 @@ public class AccessAdminController {
     public record RoleRequest(String role, String workspaceId) {
     }
 
-    public record GrantRequest(String clientMembershipId, String workspaceId, String startsAt, String expiresAt) {
+    public record GrantRequest(String clientMembershipId, String workspaceId, String startsAt, String expiresAt, String nextReviewAt) {
     }
 
     public record ApprovalRequest(String nextReviewAt, String expiresAt, String justification) {
@@ -147,7 +147,7 @@ public class AccessAdminController {
         }
         return ResponseEntity.status(HttpStatus.CREATED).body(grants.create(org, SessionFilter.principal(req), SessionFilter.token(req),
                 uuid(body.clientMembershipId(), "vinculo_cliente"), uuid(body.workspaceId(), "workspace"), instantOrNull(body.startsAt(), "inicio"),
-                instantOrNull(body.expiresAt(), "prazo")));
+                instantOrNull(body.expiresAt(), "prazo"), instant(body.nextReviewAt(), "proxima_revisao")));
     }
 
     @PostMapping("/api/v1/o/{org}/client-grants/{grant}/approve")
@@ -160,14 +160,25 @@ public class AccessAdminController {
                 instantOrNull(body.expiresAt(), "prazo"), body.justification());
     }
 
+    /** Pedido de renovacao (024): nao muda o acesso; a aprovacao e de outra pessoa ({@code /renew/approve}). */
     @PostMapping("/api/v1/o/{org}/client-grants/{grant}/renew")
-    public GrantAdminService.Grant renew(@PathVariable UUID org, @PathVariable UUID grant, @RequestBody(required = false) ApprovalRequest body,
-                                         HttpServletRequest req) {
+    public ResponseEntity<GrantAdminService.Grant> renew(@PathVariable UUID org, @PathVariable UUID grant, @RequestBody(required = false) ApprovalRequest body,
+                                                         HttpServletRequest req) {
         if (body == null) {
             throw ApiException.invalid("corpo");
         }
-        return grants.renew(org, SessionFilter.principal(req), SessionFilter.token(req), grant, instant(body.nextReviewAt(), "proxima_revisao"),
-                instantOrNull(body.expiresAt(), "prazo"), body.justification());
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(grants.requestRenewal(org, SessionFilter.principal(req), SessionFilter.token(req), grant,
+                instant(body.nextReviewAt(), "proxima_revisao"), instantOrNull(body.expiresAt(), "prazo"), body.justification()));
+    }
+
+    @PostMapping("/api/v1/o/{org}/client-grants/{grant}/renew/approve")
+    public GrantAdminService.Grant approveRenewal(@PathVariable UUID org, @PathVariable UUID grant, @RequestBody(required = false) ApprovalRequest body,
+                                                  HttpServletRequest req) {
+        if (body == null) {
+            throw ApiException.invalid("corpo");
+        }
+        return grants.approveRenewal(org, SessionFilter.principal(req), SessionFilter.token(req), grant, instant(body.nextReviewAt(), "proxima_revisao"),
+                instantOrNull(body.expiresAt(), "prazo"));
     }
 
     @PostMapping("/api/v1/o/{org}/client-grants/{grant}/review")

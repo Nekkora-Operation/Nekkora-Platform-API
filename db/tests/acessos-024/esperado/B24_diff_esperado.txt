@@ -1,0 +1,41 @@
+< con|access_events|access_events_check4|CHECK ((((event_type < 9) OR (event_type > 13)) OR (grant_id IS NOT NULL)))
+< con|access_events|access_events_event_type_check|CHECK (((event_type >= 1) AND (event_type <= 13)))
+< con|identity_invitations|identity_invitations_revoke_reason_check|CHECK ((revoke_reason = ANY (ARRAY[1, 2, 3])))
+< fn|access_grant_guard()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=...
+< fn|access_invitation_on_update()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=...
+< fn|ops_mfa_execute(uuid)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_resultado text, r_motivo text, r_solicitacao uuid, r_estado text)|md5=...
+> colacl|identity_invitations|created_at|nekkora_identity_owner|SELECT|grant=f
+> colacl|identity_invitations|revoke_reason|nekkora_identity_owner|UPDATE|grant=f
+> colacl|identity_invitations|revoked_at|nekkora_identity_owner|UPDATE|grant=f
+> col|client_workspace_grant_approvals|requested_by_membership_id|uuid|notnull=f|default=|gen=
+> col|client_workspace_grants|renewal_expires_at|timestamp with time zone|notnull=f|default=|gen=
+> col|client_workspace_grants|renewal_justification|text|notnull=f|default=|gen=
+> col|client_workspace_grants|renewal_next_review_at|timestamp with time zone|notnull=f|default=|gen=
+> col|client_workspace_grants|renewal_requested_at|timestamp with time zone|notnull=f|default=|gen=
+> col|client_workspace_grants|renewal_requested_by_membership_id|uuid|notnull=f|default=|gen=
+> col|client_workspace_grants|requested_by_membership_id|uuid|notnull=f|default=|gen=
+> con|access_events|access_events_event_type_check|CHECK (((event_type >= 1) AND (event_type <= 14)))
+> con|access_events|access_events_grant_check|CHECK ((((event_type < 9) OR (event_type > 14)) OR (grant_id IS NOT NULL)))
+> con|client_workspace_grant_approvals|client_workspace_grant_approvals_requester_fkey|FOREIGN KEY (organization_id, requested_by_membership_id) REFERENCES organization_memberships(organization_id, membership_id) ON DELETE RESTRICT
+> con|client_workspace_grants|client_workspace_grants_renewal_check|CHECK ((((renewal_requested_by_membership_id IS NULL) = (renewal_requested_at IS NULL)) AND ((renewal_requested_by_membership_id IS NULL) = (renewal_next_review_at IS NULL)) AND ((renewal_requested_by_membership_id IS NULL) = (renewal_justification IS NULL)) AND ((renewal_requested_by_membership_id IS NOT NULL) OR (renewal_expires_at IS NULL)) AND ((renewal_justification IS NULL) OR (btrim(renewal_justification) <> ''::text)) AND ((renewal_expires_at IS NULL) OR (renewal_expires_at > starts_at))))
+> con|client_workspace_grants|client_workspace_grants_renewal_requester_fkey|FOREIGN KEY (organization_id, renewal_requested_by_membership_id) REFERENCES organization_memberships(organization_id, membership_id) ON DELETE RESTRICT
+> con|client_workspace_grants|client_workspace_grants_requester_fkey|FOREIGN KEY (organization_id, requested_by_membership_id) REFERENCES organization_memberships(organization_id, membership_id) ON DELETE RESTRICT
+> con|identity_invitations|identity_invitations_revoke_reason_check|CHECK ((revoke_reason = ANY (ARRAY[1, 2, 3, 4])))
+> fnacl|access_grant_request_guard()|migrador_nekkora|EXECUTE|grant=f
+> fnacl|access_issuer_authority_lost()|migrador_nekkora|EXECUTE|grant=f
+> fnacl|identity_invitations_close_unauthorized(uuid,uuid[])|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_invitations_close_unauthorized(uuid,uuid[])|nekkora_platform|EXECUTE|grant=f
+> fnacl|identity_user_is_linked(uuid)|nekkora_identity_owner|EXECUTE|grant=f
+> fnacl|identity_user_is_linked(uuid)|nekkora_ops_mfa_owner|EXECUTE|grant=f
+> fn|access_grant_guard()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=...
+> fn|access_grant_request_guard()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=...
+> fn|access_invitation_on_update()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=...
+> fn|access_issuer_authority_lost()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=...
+> fn|identity_invitations_close_unauthorized(uuid,uuid[])|owner=nekkora_identity_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=integer|md5=...
+> fn|identity_user_is_linked(uuid)|owner=nekkora_identity_owner|secdef=t|vol=s|strict=f|lang=sql|config={"search_path=pg_catalog, pg_temp"}|result=boolean|md5=...
+> fn|ops_mfa_execute(uuid)|owner=nekkora_ops_mfa_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp",nekkora.fn_organization_id=}|result=TABLE(r_resultado text, r_motivo text, r_solicitacao uuid, r_estado text)|md5=...
+> trg|client_workspace_grants|trg_client_workspace_grants_request|enabled=O|CREATE TRIGGER trg_client_workspace_grants_request BEFORE INSERT OR UPDATE ON public.client_workspace_grants FOR EACH ROW EXECUTE FUNCTION access_grant_request_guard()
+> trg|organization_memberships|trg_organization_memberships_issuer_authority|enabled=O|CREATE TRIGGER trg_organization_memberships_issuer_authority AFTER UPDATE OF status ON public.organization_memberships FOR EACH ROW WHEN (((old.status = 2) AND (new.status <> 2))) EXECUTE FUNCTION access_issuer_authority_lost()
+> trg|organization_role_assignments|trg_org_role_assignments_issuer_authority|enabled=O|CREATE TRIGGER trg_org_role_assignments_issuer_authority AFTER UPDATE OF status ON public.organization_role_assignments FOR EACH ROW WHEN (((old.status = 1) AND (new.status <> 1))) EXECUTE FUNCTION access_issuer_authority_lost()
+> trg|users|trg_users_issuer_authority|enabled=O|CREATE TRIGGER trg_users_issuer_authority AFTER UPDATE OF status ON public.users FOR EACH ROW WHEN (((old.status = 2) AND (new.status <> 2))) EXECUTE FUNCTION access_issuer_authority_lost()
+> trg|workspace_role_assignments|trg_workspace_role_assignments_issuer_authority|enabled=O|CREATE TRIGGER trg_workspace_role_assignments_issuer_authority AFTER UPDATE OF status ON public.workspace_role_assignments FOR EACH ROW WHEN (((old.status = 1) AND (new.status <> 1))) EXECUTE FUNCTION access_issuer_authority_lost()

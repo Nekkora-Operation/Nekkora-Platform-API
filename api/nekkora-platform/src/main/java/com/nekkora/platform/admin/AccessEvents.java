@@ -10,11 +10,11 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  */
 public final class AccessEvents {
 
-    /** Codigos permanentes de {@code access_events.event_type} (cabecalho da 023). */
+    /** Codigos permanentes de {@code access_events.event_type} (cabecalho da 023; 14 da 024). */
     public enum Type {
         CONVITE_EMITIDO(1), CONVITE_REVOGADO(2), CONVITE_REENVIADO(3), CONVITE_ACEITO(4), PAPEL_ATRIBUIDO(5), PAPEL_REVOGADO(6),
         PAPEL_ALTERADO(7), VINCULO_RETIRADO(8), CONCESSAO_CRIADA(9), CONCESSAO_APROVADA(10), CONCESSAO_RENOVADA(11),
-        CONCESSAO_REVISADA(12), CONCESSAO_REVOGADA(13);
+        CONCESSAO_REVISADA(12), CONCESSAO_REVOGADA(13), CONCESSAO_RENOVACAO_SOLICITADA(14);
 
         private final short code;
 

@@ -974,7 +974,7 @@ paths:
       summary: 'Cria concessao PENDENTE (external_access.manage)'
       description: >
         Contrato, secao 7. Vinculo de cliente e cliente ativos, conta externa ativa e workspace ativo do MESMO cliente
-        (senao 404). Uma concessao nao revogada por vinculo e workspace: 409. Sem acesso ate a aprovacao. Quem cria fica gravado como solicitante (024). Auditoria (access_events 9).
+        (senao 404). Uma concessao nao revogada por vinculo e workspace: 409. Sem acesso ate a aprovacao. Quem cria fica gravado como solicitante (024) e os valores pedidos (startsAt, nextReviewAt obrigatorio e futuro, expiresAt) ficam imutaveis ate a decisao: a aprovacao aplica exatamente esses valores (D-GRANT-1a). Auditoria (access_events 9).
       security: [ { sessionCookie: [], csrfHeader: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GrantCreateRequest' } } } }
@@ -1018,7 +1018,7 @@ paths:
       operationId: approveClientGrant
       summary: 'Aprova: PENDENTE -> ATIVA, aprovacao INITIAL (step-up)'
       description: >
-        nextReviewAt futuro obrigatorio; expiresAt opcional, depois do inicio. Fora de PENDENTE: 409. Segunda pessoa (D-GRANT-1, 024): aprovador igual ao solicitante: 403; concessao sem solicitante gravado (anterior a 024): 409 (revogue e crie de novo). A 023 e a 024 conferem a permissao do aprovador e a separacao no banco. Auditoria (access_events 10).
+        Aprovacao vinculada aos valores pedidos (D-GRANT-1a, 024): nextReviewAt e expiresAt sao os valores que o aprovador conferiu e precisam ser IGUAIS aos pedidos na criacao (diferentes: 409 valores_divergentes; proxima revisao pedida ja vencida: 409 proxima_revisao_vencida). Fora de PENDENTE: 409. Segunda pessoa (D-GRANT-1, 024): aprovador igual ao solicitante: 403; concessao sem solicitante gravado (anterior a 024): 409 (revogue e crie de novo). A 023 e a 024 conferem no banco a permissao do aprovador, a separacao e os valores. Auditoria (access_events 10).
       security: [ { sessionCookie: [], csrfHeader: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' }, { name: grant, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GrantApprovalRequest' } } } }
@@ -1035,15 +1035,43 @@ paths:
   /api/v1/o/{org}/client-grants/{grant}/renew:
     post:
       tags: [Acessos]
-      operationId: renewClientGrant
-      summary: 'Renova: ATIVA ou SUSPENSA -> ATIVA, aprovacao RENEWAL (step-up)'
+      operationId: requestClientGrantRenewal
+      summary: 'Pede renovacao (ATIVA ou SUSPENSA): grava o pedido, sem mudar o acesso'
       description: >
-        justification obrigatoria; os valores anteriores e novos ficam na aprovacao. Outros estados: 409. Auditoria (access_events 11).
+        D-GRANT-1a (024): toda extensao de uma concessao aprovada (proxima revisao ou prazo mais tarde, prazo removido,
+        SUSPENSA -> ATIVA) e um pedido seguido da aprovacao de OUTRA pessoa (/renew/approve) com exatamente os valores
+        pedidos. justification obrigatoria; nextReviewAt futuro; expiresAt nulo = sem prazo. Um pedido novo substitui o
+        anterior; qualquer mudanca de validade (KEEP com data mais cedo, suspensao, revogacao, outra aprovacao) descarta o
+        pedido pendente. Sem step-up (o pedido nao amplia nada). Outros estados: 409. Auditoria (access_events 14).
       security: [ { sessionCookie: [], csrfHeader: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' }, { name: grant, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GrantApprovalRequest' } } } }
       responses:
-        '200': { description: 'Concessao ativa', content: { application/json: { schema: { $ref: '#/components/schemas/GrantState' } } } }
+        '202': { description: 'Pedido gravado (renewal preenchido); acesso inalterado', content: { application/json: { schema: { $ref: '#/components/schemas/GrantState' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/client-grants/{grant}/renew/approve:
+    post:
+      tags: [Acessos]
+      operationId: approveClientGrantRenewal
+      summary: 'Aprova o pedido de renovacao: -> ATIVA, aprovacao RENEWAL (step-up, outra pessoa)'
+      description: >
+        nextReviewAt e expiresAt sao os valores que o aprovador conferiu e precisam ser IGUAIS aos do pedido (diferentes:
+        409 valores_divergentes). O solicitante nao aprova (403). Sem pedido pendente (nunca houve ou caiu com uma mudanca
+        de validade): 409 sem_renovacao_pendente; proxima revisao pedida ja vencida: 409 proxima_revisao_vencida. Os
+        valores anteriores, os novos e o solicitante ficam na aprovacao (003/024). O banco confere de novo. Auditoria
+        (access_events 11).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: grant, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GrantApprovalRequest' } } } }
+      responses:
+        '200': { description: 'Concessao ativa com os valores pedidos', content: { application/json: { schema: { $ref: '#/components/schemas/GrantState' } } } }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1056,9 +1084,9 @@ paths:
     post:
       tags: [Acessos]
       operationId: reviewClientGrant
-      summary: 'Revisao periodica: KEEP (step-up, nova data), SUSPEND ou REVOKE'
+      summary: 'Revisao periodica: KEEP (step-up, sem estender), SUSPEND ou REVOKE'
       description: >
-        KEEP e SUSPEND so em ATIVA; REVOKE em ATIVA ou SUSPENSA; outros: 409. A revisao fica na tabela propria da 003. Auditoria (access_events 12, com a decisao).
+        KEEP e SUSPEND so em ATIVA; REVOKE em ATIVA ou SUSPENSA; outros: 409. KEEP (D-GRANT-1a, 024): sem nextReviewAt ou com a mesma data, so registra a revisao; com data mais cedo (futura), reduz; data mais tarde estenderia o acesso: 409 keep_estenderia_prazo (use o pedido de renovacao). Reducao, suspensao e revogacao descartam o pedido de renovacao pendente. A revisao fica na tabela propria da 003. Auditoria (access_events 12, com a decisao).
       security: [ { sessionCookie: [], csrfHeader: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' }, { name: grant, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GrantReviewRequest' } } } }
@@ -1869,29 +1897,30 @@ components:
         workspaceRoles: { type: array, items: { $ref: '#/components/schemas/RoleAssignment' } }
     GrantCreateRequest:
       type: object
-      required: [clientMembershipId, workspaceId]
+      required: [clientMembershipId, workspaceId, nextReviewAt]
       properties:
         clientMembershipId: { type: string, format: uuid }
         workspaceId: { type: string, format: uuid }
         startsAt: { type: string, format: date-time, description: 'padrao: agora' }
         expiresAt: { type: string, format: date-time, description: 'depois de startsAt' }
+        nextReviewAt: { type: string, format: date-time, description: 'obrigatorio e futuro (024): proxima revisao pedida' }
     GrantApprovalRequest:
       type: object
       required: [nextReviewAt]
       properties:
-        nextReviewAt: { type: string, format: date-time, description: 'futuro' }
-        expiresAt: { type: string, format: date-time }
-        justification: { type: string, maxLength: 2000, description: 'obrigatoria na renovacao' }
+        nextReviewAt: { type: string, format: date-time, description: 'pedido: futuro; aprovacao: igual ao pedido' }
+        expiresAt: { type: string, format: date-time, description: 'pedido: depois do inicio, ausente = sem prazo; aprovacao: igual ao pedido' }
+        justification: { type: string, maxLength: 2000, description: 'obrigatoria no pedido de renovacao; opcional na aprovacao inicial; ignorada em /renew/approve' }
     GrantReviewRequest:
       type: object
       required: [decision]
       properties:
         decision: { type: string, enum: [KEEP, SUSPEND, REVOKE] }
         notes: { type: string, maxLength: 2000 }
-        nextReviewAt: { type: string, format: date-time, description: 'obrigatorio e futuro em KEEP' }
+        nextReviewAt: { type: string, format: date-time, description: 'KEEP: opcional; igual ou mais cedo (futuro); mais tarde -> 409' }
     GrantState:
       type: object
-      required: [grantId, clientMembershipId, workspaceId, status, startsAt, expiresAt, nextReviewAt]
+      required: [grantId, clientMembershipId, workspaceId, status, startsAt, expiresAt, nextReviewAt, renewal]
       properties:
         grantId: { type: string, format: uuid }
         clientMembershipId: { type: string, format: uuid }
@@ -1899,7 +1928,17 @@ components:
         status: { type: string, enum: [PENDENTE, ATIVA, SUSPENSA, REVOGADA] }
         startsAt: { type: string, format: date-time }
         expiresAt: { type: [string, 'null'], format: date-time }
-        nextReviewAt: { type: [string, 'null'], format: date-time }
+        nextReviewAt: { type: [string, 'null'], format: date-time, description: 'na PENDENTE: a pedida' }
+        renewal:
+          description: 'pedido de renovacao pendente (024); null sem pedido'
+          type: [object, 'null']
+          required: [requestedByMembershipId, requestedAt, nextReviewAt, expiresAt, justification]
+          properties:
+            requestedByMembershipId: { type: string, format: uuid }
+            requestedAt: { type: string, format: date-time }
+            nextReviewAt: { type: string, format: date-time }
+            expiresAt: { type: [string, 'null'], format: date-time, description: 'null = sem prazo' }
+            justification: { type: string }
     AccessEventPage:
       type: object
       required: [items, nextCursor]
@@ -1912,7 +1951,7 @@ components:
             required: [eventId, type, actorUserId, byInvitee, targetUserId, role, previousRole, workspaceId, invitationId, assignmentId, grantId, decision, correlationId, createdAt]
             properties:
               eventId: { type: string, format: uuid }
-              type: { type: string, enum: [CONVITE_EMITIDO, CONVITE_REVOGADO, CONVITE_REENVIADO, CONVITE_ACEITO, PAPEL_ATRIBUIDO, PAPEL_REVOGADO, PAPEL_ALTERADO, VINCULO_RETIRADO, CONCESSAO_CRIADA, CONCESSAO_APROVADA, CONCESSAO_RENOVADA, CONCESSAO_REVISADA, CONCESSAO_REVOGADA] }
+              type: { type: string, enum: [CONVITE_EMITIDO, CONVITE_REVOGADO, CONVITE_REENVIADO, CONVITE_ACEITO, PAPEL_ATRIBUIDO, PAPEL_REVOGADO, PAPEL_ALTERADO, VINCULO_RETIRADO, CONCESSAO_CRIADA, CONCESSAO_APROVADA, CONCESSAO_RENOVADA, CONCESSAO_REVISADA, CONCESSAO_REVOGADA, CONCESSAO_RENOVACAO_SOLICITADA] }
               actorUserId: { type: [string, 'null'], format: uuid, description: 'nulo no aceite (o autor e a identidade convidada)' }
               byInvitee: { type: boolean }
               targetUserId: { type: [string, 'null'], format: uuid }

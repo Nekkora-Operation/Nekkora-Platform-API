@@ -58,7 +58,7 @@ class AccessContractTest {
         for (Map.Entry<String, Object> e : paths.entrySet()) {
             boolean acesso = e.getKey().equals(InvitationAcceptController.ACCEPT) || e.getKey().matches("/api/v1/o/\\{org}/(invitations|role-assignments).*")
                     || e.getKey().matches("/api/v1/o/\\{org}/users/\\{user}/(roles|membership/revoke)")
-                    || e.getKey().matches("/api/v1/o/\\{org}/client-grants(/\\{grant}/(approve|renew|review))?");
+                    || e.getKey().matches("/api/v1/o/\\{org}/client-grants(/\\{grant}/(approve|renew|renew/approve|review))?");
             if (!acesso) {
                 continue;
             }
@@ -68,19 +68,21 @@ class AccessContractTest {
                 }
             }
         }
-        assertThat(mapeadas).as("rotas dos controllers = rotas publicadas").isEqualTo(publicadas).hasSize(14);
+        assertThat(mapeadas).as("rotas dos controllers = rotas publicadas").isEqualTo(publicadas).hasSize(15);
 
-        Map<String, Set<String>> exercitados = Map.of(
-                "post /api/v1/o/{org}/invitations", Set.of("201", "400", "403", "404", "409"),
-                "post /api/v1/o/{org}/invitations/{invitation}/resend", Set.of("201", "409"),
-                "post /api/v1/o/{org}/invitations/{invitation}/revoke", Set.of("204", "404", "409"),
-                "post /api/v1/invitations/accept", Set.of("200", "404", "409"),
-                "post /api/v1/o/{org}/users/{user}/roles", Set.of("200", "403", "404"),
-                "post /api/v1/o/{org}/role-assignments/{assignment}/replace", Set.of("200", "400"),
-                "post /api/v1/o/{org}/users/{user}/membership/revoke", Set.of("204", "403"),
-                "post /api/v1/o/{org}/client-grants", Set.of("201", "404", "409"),
-                "post /api/v1/o/{org}/client-grants/{grant}/approve", Set.of("200", "403", "409"),
-                "post /api/v1/o/{org}/client-grants/{grant}/review", Set.of("200", "400"));
+        Map<String, Set<String>> exercitados = Map.ofEntries(
+                Map.entry("post /api/v1/o/{org}/invitations", Set.of("201", "400", "403", "404", "409")),
+                Map.entry("post /api/v1/o/{org}/invitations/{invitation}/resend", Set.of("201", "409")),
+                Map.entry("post /api/v1/o/{org}/invitations/{invitation}/revoke", Set.of("204", "404", "409")),
+                Map.entry("post /api/v1/invitations/accept", Set.of("200", "404", "409")),
+                Map.entry("post /api/v1/o/{org}/users/{user}/roles", Set.of("200", "403", "404")),
+                Map.entry("post /api/v1/o/{org}/role-assignments/{assignment}/replace", Set.of("200", "400")),
+                Map.entry("post /api/v1/o/{org}/users/{user}/membership/revoke", Set.of("204", "403")),
+                Map.entry("post /api/v1/o/{org}/client-grants", Set.of("201", "400", "404", "409")),
+                Map.entry("post /api/v1/o/{org}/client-grants/{grant}/approve", Set.of("200", "403", "409")),
+                Map.entry("post /api/v1/o/{org}/client-grants/{grant}/renew", Set.of("202", "400", "409")),
+                Map.entry("post /api/v1/o/{org}/client-grants/{grant}/renew/approve", Set.of("200", "403", "409")),
+                Map.entry("post /api/v1/o/{org}/client-grants/{grant}/review", Set.of("200", "409")));
         for (Map.Entry<String, Set<String>> e : exercitados.entrySet()) {
             String[] mp = e.getKey().split(" ", 2);
             Map<String, Object> o = (Map<String, Object>) ((Map<String, Object>) paths.get(mp[1])).get(mp[0]);

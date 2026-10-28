@@ -7,11 +7,19 @@
 --   * D-CONV-4: o convite cujo emissor PERDE a autoridade (papel revogado, vinculo retirado ou suspenso, conta suspensa) e
 --     REVOGADO no mesmo ato, com o motivo novo 4=EMISSOR_SEM_AUTORIDADE. Ate a 023 ele so ficava inaceitavel enquanto o
 --     emissor estivesse sem autoridade: recuperar o papel depois o fazia valer de novo. Agora o convite antigo nunca volta;
---     outro convite tem de ser emitido. A reconferencia no aceite (023) continua;
+--     outro convite tem de ser emitido. A reconferencia no aceite (023) continua. Os convites abertos que ja estao nesse
+--     estado quando a 024 e aplicada sao fechados na aplicacao (unica mudanca de dados);
 --   * D-GRANT-1: segunda pessoa na concessao externa. A concessao grava quem a SOLICITOU (requested_by_membership_id, imutavel)
 --     e a aprovacao INITIAL (PENDENTE -> ATIVA) exige aprovador DIFERENTE do solicitante. Concessao pendente sem solicitante
---     (anterior a 024, so por provisionamento ou fixture) nao e aprovada: revogue e crie de novo. A renovacao e a revisao
---     KEEP de uma concessao ja aprovada continuam com um ato so (decisao registrada no contrato, secao 9);
+--     (anterior a 024, so por provisionamento ou fixture) nao e aprovada: revogue e crie de novo;
+--   * D-GRANT-1a (regra de renovacao e KEEP, decisao da responsavel): a aprovacao fica VINCULADA aos valores solicitados.
+--     A concessao pendente guarda os valores pedidos (inicio, proxima revisao, prazo), imutaveis ate a decisao; a aprovacao
+--     INITIAL aplica exatamente esses valores. Toda extensao de uma concessao aprovada (proxima revisao mais tarde, prazo
+--     mais tarde ou removido, inicio antecipado, SUSPENSA -> ATIVA) exige um PEDIDO de renovacao gravado na concessao e a
+--     aprovacao RENEWAL de OUTRA pessoa, com exatamente os valores pedidos; qualquer mudanca de validade descarta o pedido
+--     pendente (a aprovacao anterior nao serve para valores novos). KEEP com uma pessoa so quando nao estende nada (mesma
+--     data ou data mais cedo). Reducao, suspensao e revogacao: uma pessoa com a permissao, auditada. O escopo e as
+--     permissoes da concessao nao mudam por nenhum ato (origem imutavel desde a 003; pacote fixo de leitura do Portal);
 --   * Reset operacional (016) de conta VINCULADA a uma identidade global: recusa declarada, motivo CONTA_VINCULADA, em toda
 --     etapa que confere a elegibilidade do alvo (abrir, verificar, pre-aprovar, aprovar) e na execucao ANTES da conferencia
 --     do fator. Ate aqui a recusa dependia de efeito: a vinculacao exige o fator local desabilitado (017, E-3), e o alvo caia
@@ -33,6 +41,8 @@ BEGIN
     IF to_regprocedure('public.identity_user_is_linked(uuid)') IS NOT NULL
        OR to_regprocedure('public.identity_invitations_close_unauthorized(uuid,uuid[])') IS NOT NULL
        OR EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.client_workspace_grants'::regclass
+                   AND attname IN ('requested_by_membership_id', 'renewal_requested_by_membership_id') AND NOT attisdropped)
+       OR EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.client_workspace_grant_approvals'::regclass
                    AND attname = 'requested_by_membership_id' AND NOT attisdropped) THEN
         RAISE EXCEPTION '024: objetos ja existem';
     END IF;
@@ -153,6 +163,22 @@ $$;
 
 GRANT SELECT (created_at), UPDATE (revoked_at, revoke_reason) ON public.identity_invitations TO nekkora_identity_owner;
 
+-- convites abertos que JA estao inaceitaveis na aplicacao (emissor sem a autoridade do convite): fechados agora, com o motivo
+-- 4, para que nao voltem a valer se o emissor recuperar a autoridade. Unica mudanca de dados da 024. Convites do modelo da
+-- 002 (sem emissor vinculado) ficam como estao: a 023 ja os recusa no aceite.
+DO $$
+DECLARE
+    v_n INTEGER;
+BEGIN
+    UPDATE public.identity_invitations i
+       SET revoked_at = greatest(clock_timestamp(), i.created_at), revoke_reason = 4
+     WHERE i.accepted_at IS NULL AND i.revoked_at IS NULL AND i.issued_by_membership_id IS NOT NULL
+       AND NOT public.access_can_invite(i.organization_id, i.issued_by_membership_id, i.role_id, i.workspace_id);
+    GET DIAGNOSTICS v_n = ROW_COUNT;
+    RAISE NOTICE '024: convites abertos de emissor sem autoridade fechados na aplicacao: %', v_n;
+END;
+$$;
+
 -- === 3. D-GRANT-1: segunda pessoa na aprovacao da concessao externa ===
 ALTER TABLE public.client_workspace_grants
     ADD COLUMN requested_by_membership_id UUID,
@@ -161,12 +187,65 @@ ALTER TABLE public.client_workspace_grants
 COMMENT ON COLUMN public.client_workspace_grants.requested_by_membership_id IS
     'vinculo de quem solicitou (024): imutavel; a aprovacao INITIAL exige outra pessoa. Nulo so em linha anterior a 024';
 
+-- D-GRANT-1a: pedido de renovacao pendente, na propria concessao (um por vez; um pedido novo substitui o anterior). A
+-- historia fica nas aprovacoes RENEWAL (com o solicitante) e em access_events (pedido = evento 14).
+ALTER TABLE public.client_workspace_grants
+    ADD COLUMN renewal_requested_by_membership_id UUID,
+    ADD COLUMN renewal_requested_at TIMESTAMPTZ,
+    ADD COLUMN renewal_next_review_at TIMESTAMPTZ,
+    ADD COLUMN renewal_expires_at TIMESTAMPTZ,
+    ADD COLUMN renewal_justification TEXT,
+    ADD CONSTRAINT client_workspace_grants_renewal_requester_fkey FOREIGN KEY (organization_id, renewal_requested_by_membership_id)
+        REFERENCES public.organization_memberships (organization_id, membership_id) ON DELETE RESTRICT,
+    ADD CONSTRAINT client_workspace_grants_renewal_check CHECK (
+        (renewal_requested_by_membership_id IS NULL) = (renewal_requested_at IS NULL)
+        AND (renewal_requested_by_membership_id IS NULL) = (renewal_next_review_at IS NULL)
+        AND (renewal_requested_by_membership_id IS NULL) = (renewal_justification IS NULL)
+        AND (renewal_requested_by_membership_id IS NOT NULL OR renewal_expires_at IS NULL)
+        AND (renewal_justification IS NULL OR btrim(renewal_justification) <> '')
+        AND (renewal_expires_at IS NULL OR renewal_expires_at > starts_at));
+COMMENT ON COLUMN public.client_workspace_grants.renewal_requested_by_membership_id IS
+    'pedido de renovacao pendente (024): quem pediu; a aprovacao RENEWAL exige outra pessoa e exatamente os valores renewal_*';
+COMMENT ON COLUMN public.client_workspace_grants.renewal_expires_at IS 'prazo pedido na renovacao; nulo = sem prazo (so com pedido)';
+
+ALTER TABLE public.client_workspace_grant_approvals
+    ADD COLUMN requested_by_membership_id UUID,
+    ADD CONSTRAINT client_workspace_grant_approvals_requester_fkey FOREIGN KEY (organization_id, requested_by_membership_id)
+        REFERENCES public.organization_memberships (organization_id, membership_id) ON DELETE RESTRICT;
+COMMENT ON COLUMN public.client_workspace_grant_approvals.requested_by_membership_id IS
+    'quem pediu o que foi aprovado (024): o solicitante da concessao (INITIAL) ou do pedido de renovacao (RENEWAL); nulo antes da 024';
+
 -- criacao pela aplicacao: nasce PENDENTE, sem aprovacao nem revogacao, com solicitante que tem external_access.manage
+-- D-GRANT-1a: os valores pedidos de uma pendente sao imutaveis; pedido de renovacao so por quem tem a permissao, numa
+-- concessao aprovada, sem mudar a validade no mesmo ato; qualquer mudanca de validade descarta o pedido pendente (para
+-- todos os papeis: e o que impede aprovar um pedido feito sobre valores que ja mudaram)
 CREATE FUNCTION public.access_grant_request_guard() RETURNS TRIGGER
 LANGUAGE plpgsql
 SET search_path = pg_catalog, pg_temp
 AS $$
+DECLARE
+    v_validade BOOLEAN;
+    v_pedido BOOLEAN;
 BEGIN
+    IF TG_OP = 'UPDATE' THEN
+        v_validade := (NEW.status, NEW.starts_at, NEW.expires_at, NEW.next_review_at, NEW.approved_by_membership_id, NEW.approved_at)
+                      IS DISTINCT FROM (OLD.status, OLD.starts_at, OLD.expires_at, OLD.next_review_at, OLD.approved_by_membership_id, OLD.approved_at);
+        v_pedido := NEW.renewal_requested_by_membership_id IS NOT NULL
+                    AND (NEW.renewal_requested_by_membership_id, NEW.renewal_requested_at, NEW.renewal_next_review_at, NEW.renewal_expires_at,
+                         NEW.renewal_justification)
+                        IS DISTINCT FROM (OLD.renewal_requested_by_membership_id, OLD.renewal_requested_at, OLD.renewal_next_review_at,
+                                          OLD.renewal_expires_at, OLD.renewal_justification);
+        IF v_validade THEN
+            IF v_pedido AND NOT coalesce((SELECT r.rolsuper FROM pg_catalog.pg_roles r WHERE r.rolname = current_user), false) THEN
+                RAISE EXCEPTION 'pedido de renovacao nao muda a validade no mesmo ato (grant_id=%)', OLD.grant_id USING ERRCODE = '42501';
+            END IF;
+            NEW.renewal_requested_by_membership_id := NULL;
+            NEW.renewal_requested_at := NULL;
+            NEW.renewal_next_review_at := NULL;
+            NEW.renewal_expires_at := NULL;
+            NEW.renewal_justification := NULL;
+        END IF;
+    END IF;
     IF coalesce((SELECT r.rolsuper FROM pg_catalog.pg_roles r WHERE r.rolname = current_user), false) THEN
         RETURN NEW;
     END IF;
@@ -174,10 +253,21 @@ BEGIN
         IF NEW.requested_by_membership_id IS DISTINCT FROM OLD.requested_by_membership_id THEN
             RAISE EXCEPTION 'solicitante da concessao e imutavel (grant_id=%)', OLD.grant_id USING ERRCODE = '42501';
         END IF;
+        IF OLD.status = 1 AND (NEW.starts_at, NEW.expires_at, NEW.next_review_at) IS DISTINCT FROM (OLD.starts_at, OLD.expires_at, OLD.next_review_at) THEN
+            RAISE EXCEPTION 'valores solicitados da concessao sao imutaveis ate a decisao (grant_id=%)', OLD.grant_id USING ERRCODE = '42501';
+        END IF;
+        IF v_pedido AND (OLD.status NOT IN (2, 3) OR NEW.renewal_next_review_at <= clock_timestamp()
+                         OR NOT public.access_org_permission(NEW.organization_id, NEW.renewal_requested_by_membership_id, 'external_access.manage')) THEN
+            RAISE EXCEPTION 'pedido de renovacao sem autoridade ou fora do estado (grant_id=%)', OLD.grant_id USING ERRCODE = '42501';
+        END IF;
         RETURN NEW;
     END IF;
-    IF NEW.status <> 1 OR NEW.approved_at IS NOT NULL OR NEW.approved_by_membership_id IS NOT NULL OR NEW.revoked_at IS NOT NULL THEN
+    IF NEW.status <> 1 OR NEW.approved_at IS NOT NULL OR NEW.approved_by_membership_id IS NOT NULL OR NEW.revoked_at IS NOT NULL
+       OR NEW.renewal_requested_by_membership_id IS NOT NULL THEN
         RAISE EXCEPTION 'concessao nasce pendente, sem aprovacao' USING ERRCODE = '42501';
+    END IF;
+    IF NEW.next_review_at IS NULL OR NEW.next_review_at <= clock_timestamp() THEN
+        RAISE EXCEPTION 'concessao nasce com a proxima revisao pedida, no futuro' USING ERRCODE = '42501';
     END IF;
     IF NEW.requested_by_membership_id IS NULL
        OR NOT public.access_org_permission(NEW.organization_id, NEW.requested_by_membership_id, 'external_access.manage') THEN
@@ -190,7 +280,7 @@ $$;
 CREATE TRIGGER trg_client_workspace_grants_request BEFORE INSERT OR UPDATE ON public.client_workspace_grants
     FOR EACH ROW EXECUTE FUNCTION public.access_grant_request_guard();
 
--- autoridade (023) + separacao: aprovacao INITIAL e transicao PENDENTE -> ATIVA por vinculo diferente do solicitante
+-- autoridade (023) + separacao (D-GRANT-1) + aprovacao vinculada aos valores pedidos (D-GRANT-1a)
 CREATE OR REPLACE FUNCTION public.access_grant_guard() RETURNS TRIGGER
 LANGUAGE plpgsql
 SET search_path = pg_catalog, pg_temp
@@ -199,28 +289,38 @@ DECLARE
     v_actor UUID;
     v_requester UUID;
     v_initial BOOLEAN := false;
+    v_renewal BOOLEAN := false;
+    v_extends BOOLEAN := false;
+    g RECORD;
 BEGIN
     IF TG_TABLE_NAME = 'client_workspace_grant_approvals' THEN
         v_actor := NEW.approved_by_membership_id;
-        IF NEW.approval_type = 1 THEN
-            v_initial := true;
-            SELECT g.requested_by_membership_id INTO v_requester FROM public.client_workspace_grants g
-             WHERE g.organization_id = NEW.organization_id AND g.grant_id = NEW.grant_id;
-        END IF;
     ELSIF TG_TABLE_NAME = 'client_workspace_grant_reviews' THEN
         v_actor := NEW.reviewed_by_membership_id;
     ELSIF NEW.status = 4 AND OLD.status <> 4 THEN
         v_actor := NEW.revoked_by_membership_id;
-    ELSIF (NEW.status = 2 AND OLD.status <> 2) OR NEW.approved_by_membership_id IS DISTINCT FROM OLD.approved_by_membership_id THEN
-        v_actor := NEW.approved_by_membership_id;   -- aprovacao, renovacao ou reativacao: o aprovador gravado tem de ter a permissao
-        IF OLD.status = 1 THEN
+    ELSIF OLD.status = 1 THEN
+        IF NEW.status = 2 OR NEW.approved_by_membership_id IS DISTINCT FROM OLD.approved_by_membership_id THEN
+            v_actor := NEW.approved_by_membership_id;   -- aprovacao INITIAL (valores: imutaveis na pendente, guarda da solicitacao)
             v_initial := true;
             v_requester := NEW.requested_by_membership_id;
+        ELSE
+            RETURN NEW;
         END IF;
     ELSE
-        -- ultimo acesso pelo Portal; suspensao e extensao de prazo (KEEP) sem coluna de autor na concessao: o autor e o da
-        -- linha de revisao gravada na mesma transacao, conferida por este mesmo gatilho na tabela de revisoes
-        RETURN NEW;
+        -- concessao ja aprovada: renovacao = aprovador ou instante de aprovacao novos; extensao = qualquer ganho de validade
+        v_renewal := NEW.approved_by_membership_id IS DISTINCT FROM OLD.approved_by_membership_id
+                     OR NEW.approved_at IS DISTINCT FROM OLD.approved_at;
+        v_extends := (NEW.status = 2 AND OLD.status <> 2)
+                     OR (NEW.next_review_at IS NOT NULL AND (OLD.next_review_at IS NULL OR NEW.next_review_at > OLD.next_review_at))
+                     OR (OLD.expires_at IS NOT NULL AND (NEW.expires_at IS NULL OR NEW.expires_at > OLD.expires_at))
+                     OR NEW.starts_at < OLD.starts_at;
+        IF NOT (v_renewal OR v_extends) THEN
+            -- ultimo acesso pelo Portal; suspensao e KEEP que nao estende (mesma data ou mais cedo): sem coluna de autor na
+            -- concessao, o autor e o da linha de revisao gravada na mesma transacao, conferida por este gatilho nas revisoes
+            RETURN NEW;
+        END IF;
+        v_actor := NEW.approved_by_membership_id;
     END IF;
     IF coalesce((SELECT r.rolsuper FROM pg_catalog.pg_roles r WHERE r.rolname = current_user), false) THEN
         RETURN NEW;
@@ -231,9 +331,72 @@ BEGIN
     IF v_initial AND (v_requester IS NULL OR v_requester = v_actor) THEN
         RAISE EXCEPTION 'aprovacao de concessao externa exige pessoa diferente do solicitante' USING ERRCODE = '42501';
     END IF;
+    IF TG_TABLE_NAME = 'client_workspace_grant_approvals' THEN
+        SELECT * INTO g FROM public.client_workspace_grants x WHERE x.organization_id = NEW.organization_id AND x.grant_id = NEW.grant_id;
+        IF NEW.approval_type = 1 THEN
+            -- INITIAL: outra pessoa, exatamente os valores pedidos na concessao pendente
+            IF g.status IS DISTINCT FROM 1::smallint OR g.requested_by_membership_id IS NULL OR g.requested_by_membership_id = v_actor
+               OR NEW.requested_by_membership_id IS DISTINCT FROM g.requested_by_membership_id
+               OR NEW.new_starts_at IS DISTINCT FROM g.starts_at OR NEW.new_expires_at IS DISTINCT FROM g.expires_at
+               OR NEW.new_next_review_at IS DISTINCT FROM g.next_review_at THEN
+                RAISE EXCEPTION 'aprovacao inicial exige pessoa diferente do solicitante e exatamente os valores pedidos' USING ERRCODE = '42501';
+            END IF;
+        ELSE
+            -- RENEWAL: pedido pendente de outra pessoa, exatamente os valores pedidos, sobre os valores atuais
+            IF g.status NOT IN (2, 3) OR g.renewal_requested_by_membership_id IS NULL OR g.renewal_requested_by_membership_id = v_actor
+               OR NEW.requested_by_membership_id IS DISTINCT FROM g.renewal_requested_by_membership_id
+               OR NEW.new_next_review_at IS DISTINCT FROM g.renewal_next_review_at OR NEW.new_expires_at IS DISTINCT FROM g.renewal_expires_at
+               OR NEW.new_starts_at IS DISTINCT FROM g.starts_at OR NEW.previous_starts_at IS DISTINCT FROM g.starts_at
+               OR NEW.previous_expires_at IS DISTINCT FROM g.expires_at OR NEW.previous_next_review_at IS DISTINCT FROM g.next_review_at
+               OR NEW.new_next_review_at <= clock_timestamp() THEN
+                RAISE EXCEPTION 'renovacao exige pedido pendente de outra pessoa e exatamente os valores pedidos' USING ERRCODE = '42501';
+            END IF;
+        END IF;
+    ELSIF TG_TABLE_NAME = 'client_workspace_grants' AND (v_renewal OR v_extends) THEN
+        -- extensao ou renovacao: so consumindo o pedido pendente, com a aprovacao RENEWAL gravada no mesmo instante
+        IF NOT v_renewal OR OLD.renewal_requested_by_membership_id IS NULL OR v_actor = OLD.renewal_requested_by_membership_id
+           OR NEW.status <> 2 OR NEW.starts_at <> OLD.starts_at
+           OR NEW.next_review_at IS DISTINCT FROM OLD.renewal_next_review_at OR NEW.expires_at IS DISTINCT FROM OLD.renewal_expires_at
+           OR NEW.next_review_at <= clock_timestamp()
+           OR NOT EXISTS (SELECT 1 FROM public.client_workspace_grant_approvals a
+                          WHERE a.organization_id = NEW.organization_id AND a.grant_id = NEW.grant_id AND a.approval_type = 2
+                            AND a.approved_by_membership_id = v_actor AND a.approved_at = NEW.approved_at
+                            AND a.requested_by_membership_id = OLD.renewal_requested_by_membership_id
+                            AND a.new_next_review_at = NEW.next_review_at AND a.new_expires_at IS NOT DISTINCT FROM NEW.expires_at
+                            AND a.previous_next_review_at IS NOT DISTINCT FROM OLD.next_review_at
+                            AND a.previous_expires_at IS NOT DISTINCT FROM OLD.expires_at) THEN
+            RAISE EXCEPTION 'extensao da concessao exige pedido de renovacao e aprovacao de outra pessoa, com os valores pedidos'
+                USING ERRCODE = '42501';
+        END IF;
+    END IF;
     RETURN NEW;
 END;
 $$;
+
+-- evento 14 = CONCESSAO_RENOVACAO_SOLICITADA (codigos permanentes da 023; 1..13 inalterados)
+DO $$
+DECLARE
+    v_con RECORD;
+    v_n INTEGER := 0;
+BEGIN
+    FOR v_con IN SELECT conname, pg_get_constraintdef(oid) AS def FROM pg_constraint
+                 WHERE conrelid = 'public.access_events'::regclass AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%13%' LOOP
+        IF v_con.def NOT IN ('CHECK (((event_type >= 1) AND (event_type <= 13)))',
+                             'CHECK ((((event_type < 9) OR (event_type > 13)) OR (grant_id IS NOT NULL)))') THEN
+            RAISE EXCEPTION '024: restricao de access_events divergente da 023: % %', v_con.conname, v_con.def;
+        END IF;
+        EXECUTE format('ALTER TABLE public.access_events DROP CONSTRAINT %I', v_con.conname);
+        v_n := v_n + 1;
+    END LOOP;
+    IF v_n <> 2 THEN
+        RAISE EXCEPTION '024: esperadas 2 restricoes de access_events com o codigo 13, encontradas %', v_n;
+    END IF;
+END;
+$$;
+ALTER TABLE public.access_events
+    ADD CONSTRAINT access_events_event_type_check CHECK (event_type BETWEEN 1 AND 14),
+    ADD CONSTRAINT access_events_grant_check CHECK (event_type NOT BETWEEN 9 AND 14 OR grant_id IS NOT NULL);
+COMMENT ON COLUMN public.access_events.event_type IS '1..13: ver cabecalho da 023; 14=CONCESSAO_RENOVACAO_SOLICITADA (024)';
 
 -- === 4. Reset operacional (016) de conta vinculada: recusa declarada ===
 
@@ -434,6 +597,16 @@ BEGIN
     -- o dono da 016 nao ganhou privilegio de tabela de identidade
     IF has_any_column_privilege('nekkora_ops_mfa_owner', 'public.identity_users', 'SELECT, INSERT, UPDATE') THEN
         RAISE EXCEPTION '024: dono da 016 com privilegio em identity_users';
+    END IF;
+    -- D-GRANT-1a: pedido de renovacao e solicitante da aprovacao presentes; evento 14 no catalogo
+    IF (SELECT count(*) FROM pg_attribute WHERE attrelid = 'public.client_workspace_grants'::regclass AND NOT attisdropped
+          AND attname IN ('requested_by_membership_id', 'renewal_requested_by_membership_id', 'renewal_requested_at',
+                          'renewal_next_review_at', 'renewal_expires_at', 'renewal_justification')) <> 6
+       OR NOT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.client_workspace_grant_approvals'::regclass
+                      AND attname = 'requested_by_membership_id' AND NOT attisdropped)
+       OR NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.access_events'::regclass
+                      AND conname = 'access_events_event_type_check' AND pg_get_constraintdef(oid) LIKE '%<= 14%') THEN
+        RAISE EXCEPTION '024: colunas ou restricoes da regra de renovacao ausentes';
     END IF;
     -- gatilhos ligados
     IF (SELECT count(*) FROM pg_trigger WHERE tgname IN ('trg_org_role_assignments_issuer_authority',
