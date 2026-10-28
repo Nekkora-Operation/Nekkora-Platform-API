@@ -1,6 +1,6 @@
 # Contrato Platform–Agent 1.0 (canal da máquina, identidade, registro de execução e telemetria)
 
-**Estado:** candidato, implementado do lado da API na branch `feat/platform-agent-canal` (migration 025, módulo
+**Estado:** candidato, implementado do lado da API (PR #27, trazido à `main` pelo PR de integração) (migration 025, módulo
 `nekkora-agent-gateway` e rotas administrativas da Platform). O Agent ainda não implementa este contrato (ver §12). Base
 real: `2026-10-28-platform-agent-inventario.md`.
 

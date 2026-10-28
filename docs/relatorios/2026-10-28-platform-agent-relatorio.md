@@ -21,7 +21,11 @@ Documentos:
 - A `main` (`e43b957`) só tem #22, #20 e #21. #23, #24 e #25 foram mesclados nas branches intermediárias **depois** de essas
   branches entrarem na `main`, então a `main` termina na migration 022.
 - O PR **#26** integra esse conteúdo aprovado à `main` (merge sem conflito, `validar-config` OK).
-- Esta entrega é empilhada sobre o #26 (migration **025**). **Ordem de merge: #26, depois este PR.**
+- Esta entrega foi empilhada sobre o #26 (migration **025**), como #27.
+- **Atualização de 28/10:** o #26 entrou na `main` (`870bb23`), mas o #27 foi mesclado 9 s depois na branch intermediária
+  (`1d101e2`), que já estava na `main`. A `main` ficou com a 023, a 024 e o #25 (D-PA-1 conferida), **sem** a 025. O PR de
+  integração traz à `main` exatamente o conteúdo aprovado, com árvore idêntica à de `1d101e2`, e depois os commits da
+  consolidação (§9). Ele aponta para a `main` e não depende de outra branch.
 
 ## 2. O que foi entregue
 
