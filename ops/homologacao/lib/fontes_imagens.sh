@@ -11,7 +11,7 @@
 # daqui tem de ser exatamente os <module> de api/pom.xml (conferido pela guarda). Fora da lista, de proposito:
 # api/nekkora-platform/src/test (compilado para as ferramentas do ensaio, nao entra em imagem) e o repositorio Maven
 # local (~/.m2), que nao e do Git.
-FONTES_IMAGENS_MODULOS="nekkora-core nekkora-ops nekkora-platform nekkora-portal"
+FONTES_IMAGENS_MODULOS="nekkora-agent-gateway nekkora-core nekkora-ops nekkora-platform nekkora-portal"
 FONTES_IMAGENS="api/pom.xml api/mvnw api/.mvn api/e2e/Dockerfile api/e2e/Dockerfile.operacao api/nekkora-ops/src/test"
 for _m in $FONTES_IMAGENS_MODULOS; do FONTES_IMAGENS="$FONTES_IMAGENS api/$_m/pom.xml api/$_m/src/main"; done
 unset _m

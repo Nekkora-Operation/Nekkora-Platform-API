@@ -349,6 +349,13 @@ confere "runner: versao de vinculo obrigatorio SEM linha recusada antes do Flywa
     "grep -q 'exige elevacao vinculada e nao esta na lista de elevacao; nada aplicado' '$AQUI/implantacao/implantar.sh' \
      && ( for v in 016 017 018 019 020 022 023 024; do [ -s '$AQUI/implantacao/preflight/'\$v.sql ] && grep -q PREFLIGHT_OK '$AQUI/implantacao/preflight/'\$v.sql || exit 1; done ) \
      && [ \"\$VINCULO_OBRIGATORIO\" = ' 016 017 018 019 020 022 023 024 ' ]"
+S025V="$(sha256sum < "$REPO"/db/migrations/025_*.sql | cut -c1-64)"
+echo "025 $S025V tipo=superuser ambiente=ensaio-validacao-l" > "$TMP/l025.txt"
+echo "025 $S025V" > "$TMP/l025_legado.txt"
+lista_recusada "025 com linha vinculada (aplica sem elevacao: NUNCA_ELEVAR)" "$TMP/l025.txt" "a 025 aplica sem elevacao e nao pode ter linha na lista"
+lista_recusada "025 com linha legada" "$TMP/l025_legado.txt" "a 025 aplica sem elevacao e nao pode ter linha na lista"
+confere "lista de elevacao: 021 e 025 NUNCA elevadas (NUNCA_ELEVAR); nenhuma linha delas na lista operacional" \
+    "[ \"\$NUNCA_ELEVAR\" = ' 021 025 ' ] && ! grep -qE '^0(21|25) ' '$AQUI/implantacao/elevacao.txt'"
 confere "elevacao.txt operacional SEM linha da 023 nem da 024 (so propostas, sem aprovacao; o laboratorio usa lista alternativa fora do repositorio)" \
     "! grep -qE '^02[34] ' '$AQUI/implantacao/elevacao.txt'"
 
@@ -756,7 +763,7 @@ confere "atualizacao do frontend: coleta do gateway pelo selecao_gateway.sh; ref
 confere "runner: pre-voo da pasta da lista alternativa SO para versao sintetica 9xx sem pre-voo oficial (022 e 016-020 sempre pelo oficial)" \
     "[ \"\$(grep -c 'pf=\"\$(dirname \"\$LISTA\")/preflight/\$v.sql\"' '$AQUI/implantacao/implantar.sh')\" = 1 ] \
      && grep -qF '[ ! -f \"\$pf\" ] && [ -n \"\${HOMOLOG_ELEVACAO_ARQ:-}\" ] && [[ \"\$v\" =~ ^9[0-9]{2}\$ ]]; then pf=' '$AQUI/implantacao/implantar.sh'"
-confere "atualizar 021 -> 022, 022 -> 023 e 023 -> 024 (um passo) com lista alternativa: recusa fora de ensaio-* e nas conferencias de existencia, gramatica, versao, sha256 e vinculo, sem alterar o ambiente; lista correta so para na liberacao: testes/test_atualizar_lista.sh" \
+confere "atualizar 021 -> 022, 022 -> 023, 023 -> 024 e 024 -> 025 (um passo; a 025 sem janela) com lista alternativa: recusa fora de ensaio-* e nas conferencias de existencia, gramatica, versao, sha256 e vinculo, sem alterar o ambiente; lista correta so para na liberacao: testes/test_atualizar_lista.sh" \
     "bash '$AQUI/testes/test_atualizar_lista.sh' > '$TMP/atz.txt' 2>&1 && grep -q '^RESULTADO: atualizar com lista alternativa OK' '$TMP/atz.txt'"
 confere "procedimento da atualizacao do frontend com compose controlado (preparo, recusas sem escrita nem up, falhas pedindo reverter, caminho valido e reversao): testes/test_frontend_atualizar.sh" \
     "bash '$AQUI/testes/test_frontend_atualizar.sh' > '$TMP/fa.txt' 2>&1 && grep -q '^RESULTADO: atualizacao do frontend OK' '$TMP/fa.txt'"
