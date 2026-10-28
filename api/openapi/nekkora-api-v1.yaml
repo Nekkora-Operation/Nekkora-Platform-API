@@ -6,7 +6,7 @@ info:
     Contrato HTTP DEFINITIVO da API v1 (DC-14, decisao da responsavel em 2026-10-03: este arquivo e a fonte; o anexo da
     proposta GAP-02/03/06 deixa de ser a fonte). Cobre todas as rotas publicadas: identidade, sessao e MFA (contrato 8.7),
     administracao minima, recuperacao emergencial de MFA (016), permissoes (GAP-02), administracao de leitura (GAP-03),
-    leitura interna do produto (GAP-06), acessos (convites, papeis, vinculo, concessoes e auditoria; 023) e o portal externo (013). Conferido contra o codigo (mapeamentos dos controladores)
+    leitura interna do produto (GAP-06), acessos (convites, papeis, vinculo, concessoes e auditoria; 023), o lado das pessoas do canal do Agent (025; o lado da maquina e nekkora-agent-v1.yaml) e o portal externo (013). Conferido contra o codigo (mapeamentos dos controladores)
     e contra os testes HTTP (D-INV-06). x-decisoes: decisoes da responsavel (DC-xx do contrato GAP-02/03/06) que fundamentam a
     operacao; nenhuma esta pendente. Corpo de erro sempre {"error":"<codigo>"} (contrato 8.7 §5.2). Rotas internas de
     leitura: ordem 401 -> 400 -> 403 -> 404; paginacao keyset sobre o estado atual com cursor assinado (secoes 1.4-1.5 do
@@ -29,6 +29,8 @@ tags:
   - name: GAP-06 leitura interna
   - name: Acessos
     description: 'Convites, papeis, retirada de vinculo, concessoes e auditoria (contrato de 2026-10-27; 023)'
+  - name: Canal do Agent
+    description: 'Pareamento, credencial, Worker no workspace, autorizacao de execucao local e consultas das execucoes do Agent (contrato Platform-Agent 1.0; 025). O lado da maquina e o openapi/nekkora-agent-v1.yaml'
   - name: Portal externo
 
 paths:
@@ -1473,6 +1475,265 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/ListLimitExceeded' }
 
+  /api/v1/o/{org}/agent-enrollments:
+    post:
+      tags: [Canal do Agent]
+      operationId: createAgentPairingCode
+      summary: 'Cria o codigo de pareamento de um Agent a um Worker (step-up)'
+      description: >
+        Exige agent.manage, agent_credential.manage e worker_agent.assign (e worker.manage ao criar o Worker) e step-up recente. workerId OU workerName (cria o Worker; a 010 confere WORKERS_REGISTERED). Worker com Agent ativo: 409. O codigo nkp1 aparece SO nesta resposta (Cache-Control no-store); o banco guarda o SHA-256. Validade de 5 a 60 minutos (padrao 15). A 025 reconfere a autoridade na criacao e no resgate. Auditoria (agent_admin_events 1 e 7).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AgentPairingRequest' } } } }
+      responses:
+        '201': { description: 'Codigo emitido', content: { application/json: { schema: { $ref: '#/components/schemas/AgentCode' } } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/agent-enrollments/{enrollment}/cancel:
+    post:
+      tags: [Canal do Agent]
+      operationId: cancelAgentCode
+      summary: 'Cancela um codigo ainda nao usado'
+      description: >
+        Exige agent_credential.manage. Consumido ou ja cancelado: 409. Auditoria (agent_admin_events 2).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: enrollment, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      responses:
+        '204': { description: 'Cancelado' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/agents:
+    get:
+      tags: [Canal do Agent]
+      operationId: listAgents
+      summary: 'Lista os Agents da organizacao'
+      description: >
+        Exige agent.manage. Identidade, Worker, versao informada, ultimo contato, conectividade (CONNECTED ate 180 s do ultimo heartbeat), capacidades e validade da credencial; nunca o hash.
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' } ]
+      responses:
+        '200': { description: 'Agents', content: { application/json: { schema: { $ref: '#/components/schemas/AgentList' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/agents/{agent}/credential-rotations:
+    post:
+      tags: [Canal do Agent]
+      operationId: createAgentRotationCode
+      summary: 'Cria o codigo de rotacao da credencial (step-up)'
+      description: >
+        Exige agent_credential.manage e step-up. O Agent resgata o codigo apresentando a credencial atual; a anterior e revogada (motivo 1) na mesma transacao. Agent inexistente ou sem associacao ativa: 404. Auditoria (agent_admin_events 4).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: agent, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AgentRotationRequest' } } } }
+      responses:
+        '201': { description: 'Codigo emitido', content: { application/json: { schema: { $ref: '#/components/schemas/AgentCode' } } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/agents/{agent}/revoke:
+    post:
+      tags: [Canal do Agent]
+      operationId: revokeAgent
+      summary: 'Revoga o Agent (step-up)'
+      description: >
+        Exige agent.manage e step-up. reason COMPROMISED (motivo 3) ou ADMINISTRATIVE (4). Na mesma transacao: credencial revogada, associacao com o Worker encerrada, codigos abertos cancelados, Agent REVOKED. Efeito imediato no canal (atos em curso terminam antes). Ja revogado: 409. Auditoria (agent_admin_events 6).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: agent, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AgentRevokeRequest' } } } }
+      responses:
+        '204': { description: 'Revogado' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/workers:
+    get:
+      tags: [Canal do Agent]
+      operationId: listWorkers
+      summary: 'Lista os Workers'
+      description: >
+        Exige worker.manage. Situacao, Agent associado e workspaces autorizados.
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' } ]
+      responses:
+        '200': { description: 'Workers', content: { application/json: { schema: { $ref: '#/components/schemas/WorkerList' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/workers/{worker}/workspaces/{workspace}:
+    put:
+      tags: [Canal do Agent]
+      operationId: authorizeWorkerInWorkspace
+      summary: 'Autoriza o Worker no workspace (step-up)'
+      description: >
+        Exige worker_workspace.authorize e step-up. Idempotente: ja autorizado devolve 200 com a mesma associacao. Worker ou workspace nao ativo: 409. Auditoria (agent_admin_events 8).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: worker, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }, { name: workspace, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      responses:
+        '200': { description: 'Ja autorizado', content: { application/json: { schema: { $ref: '#/components/schemas/WorkerWorkspace' } } } }
+        '201': { description: 'Autorizado', content: { application/json: { schema: { $ref: '#/components/schemas/WorkerWorkspace' } } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    delete:
+      tags: [Canal do Agent]
+      operationId: revokeWorkerInWorkspace
+      summary: 'Revoga a autorizacao do Worker no workspace'
+      description: >
+        Exige worker_workspace.authorize. As autorizacoes de execucao local desse Worker no workspace deixam de ser entregues ao Agent. Auditoria (agent_admin_events 9).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: worker, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }, { name: workspace, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      responses:
+        '204': { description: 'Revogada' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/workspaces/{workspace}/local-run-authorizations:
+    post:
+      tags: [Canal do Agent]
+      operationId: createLocalRunAuthorization
+      summary: 'Autoriza execucao local de uma versao publicada num Worker (step-up)'
+      description: >
+        Exige automation.execute no workspace e step-up. Vincula organizacao, workspace, Worker AUTORIZADO no workspace, versao PUBLICADA e o pacote imutavel (packageFingerprint = command_json.artifact.sha256 da versao). validUntil ate 366 dias. Versao rascunho ou sem artefato, ou Worker sem autorizacao no workspace: 409. A 025 reconfere tudo no banco. Auditoria (agent_admin_events 10).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: workspace, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/LocalRunAuthorizationRequest' } } } }
+      responses:
+        '201': { description: 'Autorizacao criada', content: { application/json: { schema: { $ref: '#/components/schemas/LocalRunAuthorization' } } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    get:
+      tags: [Canal do Agent]
+      operationId: listLocalRunAuthorizations
+      summary: 'Lista as autorizacoes de execucao local do workspace'
+      description: >
+        Exige automation.read no workspace.
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: workspace, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      responses:
+        '200': { description: 'Autorizacoes', content: { application/json: { schema: { $ref: '#/components/schemas/LocalRunAuthorizationList' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/workspaces/{workspace}/local-run-authorizations/{authorization}/revoke:
+    post:
+      tags: [Canal do Agent]
+      operationId: revokeLocalRunAuthorization
+      summary: 'Revoga uma autorizacao de execucao local'
+      description: >
+        Exige automation.execute no workspace. Limite declarado: uma maquina desconectada so ve a revogacao no proximo download das autorizacoes; execucoes ja feitas continuam sendo fatos aceitos e marcados (authorizationStateAtRegistration). Auditoria (agent_admin_events 11).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: workspace, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }, { name: authorization, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      responses:
+        '204': { description: 'Revogada' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/agent-runs:
+    get:
+      tags: [Canal do Agent]
+      operationId: listAgentRuns
+      summary: 'Execucoes locais registradas pelo Agent'
+      description: >
+        automation.read no workspace de cada execucao (regra unica de acesso por workspace). Ordem estavel (registeredAt, runId) com cursor assinado. Filtros workspaceId, automationId, state (READY ... OUTCOME_UNKNOWN), from/to (registro). Cada item traz a correlacao, a origem, o desfecho do supervisor e as quatro dimensoes do contrato (processo, resultado, transporte, historico com motivos).
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: workspaceId, in: query, schema: { type: string, format: uuid } }, { name: automationId, in: query, schema: { type: string, format: uuid } }, { name: state, in: query, schema: { type: array, items: { $ref: '#/components/schemas/AgentSupervisorState' } }, style: form, explode: true }, { name: from, in: query, schema: { type: string, format: date-time } }, { name: to, in: query, schema: { type: string, format: date-time } }, { $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/Limit' } ]
+      responses:
+        '200': { description: 'Pagina de execucoes', content: { application/json: { schema: { $ref: '#/components/schemas/AgentRunPage' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/agent-runs/{run}:
+    get:
+      tags: [Canal do Agent]
+      operationId: getAgentRun
+      summary: 'Uma execucao local registrada pelo Agent'
+      description: >
+        Como a listagem, mais as transacoes vistas nos eventos do Framework (so codigos e contagens). Sem acesso ao workspace ou de outra organizacao: 404.
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: run, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      responses:
+        '200': { description: 'Execucao', content: { application/json: { schema: { $ref: '#/components/schemas/AgentRun' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/agent-runs/{run}/events:
+    get:
+      tags: [Canal do Agent]
+      operationId: listAgentRunEvents
+      summary: 'Etapas reais da execucao, em ordem de sequence'
+      description: >
+        So os campos do envelope OBS 1.0.0 (sem texto livre); ordem de observacao do Agent (sequence), nunca o relogio. Numeros declarados ausentes nao viram evento. Cursor assinado.
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: run, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }, { $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/Limit' } ]
+      responses:
+        '200': { description: 'Pagina de eventos', content: { application/json: { schema: { $ref: '#/components/schemas/AgentRunEventPage' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
 components:
   securitySchemes:
     sessionCookie:
@@ -1555,7 +1816,7 @@ components:
     Error:
       type: object
       required: [error]
-      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable] } }
+      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] } }
     WorkspacePermissionCode:
       description: 'Permissoes de workspace (13): podem aparecer em allWorkspaces e em atribuicoes de workspace.'
       type: string
@@ -2008,3 +2269,191 @@ components:
       required: [items]
       properties:
         items: { type: array, maxItems: 1000, items: { type: object, required: [type, receivedAt], properties: { type: { type: string, enum: [process_started, process_succeeded, process_failed, process_start_failed, process_cancelled] }, receivedAt: { type: string, format: date-time } } } }
+    AgentPairingRequest:
+      type: object
+      additionalProperties: false
+      required: [agentName]
+      properties:
+        workerId: { type: string, format: uuid, description: 'Worker existente (ou workerName, nunca os dois)' }
+        workerName: { type: string, minLength: 1, maxLength: 80 }
+        agentName: { type: string, minLength: 1, maxLength: 80, description: 'Nome logico da maquina, informado pela pessoa (nada e coletado da maquina)' }
+        expiresInMinutes: { type: integer, minimum: 5, maximum: 60, default: 15 }
+    AgentRotationRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        expiresInMinutes: { type: integer, minimum: 5, maximum: 60, default: 15 }
+    AgentRevokeRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: { type: string, enum: [COMPROMISED, ADMINISTRATIVE] }
+    AgentCode:
+      type: object
+      required: [enrollmentId, code, expiresAt, workerId]
+      properties:
+        enrollmentId: { type: string, format: uuid }
+        code: { type: string, pattern: '^nkp1\.[0-9a-f-]{36}\.[0-9a-f-]{36}\.[A-Za-z0-9_-]{43}$', description: 'So nesta resposta' }
+        expiresAt: { type: string, format: date-time }
+        workerId: { type: string, format: uuid }
+        agentId: { type: [string, 'null'], format: uuid, description: 'So na rotacao' }
+    AgentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              agentId: { type: string, format: uuid }
+              name: { type: string }
+              installationId: { type: string, format: uuid }
+              agentVersion: { type: string }
+              status: { type: string, enum: [PENDING, ACTIVE, SUSPENDED, REVOKED] }
+              workerId: { type: [string, 'null'], format: uuid }
+              registeredAt: { type: string, format: date-time }
+              lastHeartbeatAt: { type: [string, 'null'], format: date-time }
+              connectivity: { type: string, enum: [CONNECTED, DISCONNECTED] }
+              contractVersion: { type: [string, 'null'] }
+              capabilities: { type: array, items: { type: string, enum: [RUN_LOCAL, OBS_1_0, SUPERVISOR_REPORT_1_0] } }
+              credentialExpiresAt: { type: [string, 'null'], format: date-time }
+    WorkerList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              workerId: { type: string, format: uuid }
+              name: { type: string }
+              status: { type: string, enum: [ACTIVE, SUSPENDED, RETIRED] }
+              agentId: { type: [string, 'null'], format: uuid }
+              workspaceIds: { type: array, items: { type: string, format: uuid } }
+    WorkerWorkspace:
+      type: object
+      properties:
+        assignmentId: { type: string, format: uuid }
+        workerId: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        created: { type: boolean }
+    LocalRunAuthorizationRequest:
+      type: object
+      additionalProperties: false
+      required: [workerId, automationVersionId, validUntil]
+      properties:
+        workerId: { type: string, format: uuid }
+        automationVersionId: { type: string, format: uuid }
+        validUntil: { type: string, format: date-time, description: 'Com fuso; ate 366 dias' }
+    LocalRunAuthorization:
+      type: object
+      properties:
+        authorizationId: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        workerId: { type: string, format: uuid }
+        automationId: { type: string, format: uuid }
+        automationVersionId: { type: string, format: uuid }
+        packageFingerprint: { type: string, pattern: '^[0-9a-f]{64}$' }
+        grantedAt: { type: string, format: date-time }
+        validUntil: { type: string, format: date-time }
+        revokedAt: { type: [string, 'null'], format: date-time }
+    LocalRunAuthorizationList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/LocalRunAuthorization' } }
+    AgentSupervisorState: { type: string, enum: [READY, STARTING, RUNNING, SUCCEEDED, FAILED, CANCELLED, TIMED_OUT, BLOCKED, OUTCOME_UNKNOWN] }
+    AgentRun:
+      type: object
+      properties:
+        runId: { type: string, format: uuid }
+        correlation:
+          type: object
+          properties:
+            agentExecutionId: { type: string, pattern: '^ex-[0-9a-f]{32}$' }
+            frameworkExecutionId: { type: [string, 'null'] }
+            platformExecutionId: { type: [string, 'null'], format: uuid, description: 'Nulo em execucao local' }
+            agentId: { type: string, format: uuid }
+            workerId: { type: string, format: uuid }
+            workspaceId: { type: string, format: uuid }
+            automationId: { type: string, format: uuid }
+            automationVersionId: { type: string, format: uuid }
+            authorizationId: { type: string, format: uuid }
+        origin: { type: string, enum: [LOCAL_AUTHORIZED] }
+        authorizationStateAtRegistration: { type: string, enum: [ACTIVE, REVOKED, EXPIRED] }
+        registeredAt: { type: string, format: date-time }
+        supervisor:
+          type: object
+          properties:
+            state: { $ref: '#/components/schemas/AgentSupervisorState' }
+            code: { type: [string, 'null'], description: 'AGT-XXX-nnn' }
+            exitCode: { type: [integer, 'null'] }
+            counts: { type: object, additionalProperties: { type: integer } }
+            agentCreatedAt: { type: [string, 'null'], format: date-time, description: 'Relogio do Agent, como informado' }
+            agentStartedAt: { type: [string, 'null'], format: date-time }
+            agentEndedAt: { type: [string, 'null'], format: date-time }
+            adopted: { type: boolean }
+            suspensions: { type: integer }
+            locks: { type: integer }
+            reports: { type: integer }
+            conflicts: { type: integer, description: 'Relatorios contraditorios registrados (o estado nao mudou)' }
+            lastReportAt: { type: string, format: date-time }
+        process: { type: string, enum: [NOT_STARTED, STARTING, RUNNING, ENDED] }
+        outcome: { type: string, enum: [PENDING, KNOWN, UNKNOWN] }
+        transport:
+          type: object
+          properties:
+            connectivity: { type: string, enum: [CONNECTED, DISCONNECTED] }
+            lastHeartbeatAt: { type: [string, 'null'], format: date-time }
+            lastEventAt: { type: [string, 'null'], format: date-time }
+        history:
+          type: object
+          properties:
+            completeness: { type: string, enum: [COMPLETE, PENDING, INCOMPLETE] }
+            reasons: { type: array, items: { type: string, enum: [DELIVERY_PENDING, LOST_AT_SOURCE, LOST_LOCAL, PURGED_LOCAL, INVALID_REFUSED, DELIVERY_CONFLICT] } }
+            eventsStored: { type: integer }
+            storedThrough: { type: integer }
+            settledThrough: { type: integer }
+            maxSequence: { type: integer }
+            declaredMissing: { type: integer }
+            collectionCompletedSequence: { type: [integer, 'null'] }
+            invalidRefused: { type: integer }
+            stepsAvailable: { type: boolean, description: 'false: processo sem eventos do Framework (etapas indisponiveis; nada e inventado)' }
+        transactionsSeen: { type: object, additionalProperties: { type: integer }, description: 'So no detalhe' }
+    AgentRunPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/AgentRun' } }
+        nextCursor: { type: [string, 'null'] }
+    AgentRunEventPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              sequence: { type: integer }
+              source: { type: string, enum: [AGENT, FRAMEWORK, COLLECTOR] }
+              eventCode: { type: string }
+              severity: { type: string, enum: [INFO, WARNING, ERROR] }
+              category: { type: string, enum: [LIFECYCLE, ACTIVITY, BUSINESS, FAILURE, TELEMETRY] }
+              phase: { type: [string, 'null'] }
+              stepId: { type: [string, 'null'] }
+              studioStepId: { type: [string, 'null'], format: uuid }
+              action: { type: [string, 'null'] }
+              status: { type: [string, 'null'] }
+              errorCode: { type: [string, 'null'] }
+              attempt: { type: [integer, 'null'] }
+              elapsedMs: { type: [integer, 'null'] }
+              transactionRef: { type: [string, 'null'] }
+              counts: { type: [object, 'null'], additionalProperties: { type: integer } }
+              timestampUtc: { type: [string, 'null'], format: date-time, description: 'Instante informado pela origem' }
+              observedUtc: { type: string, format: date-time, description: 'Instante em que o Agent leu o evento' }
+              receivedAt: { type: string, format: date-time }
+        nextCursor: { type: [string, 'null'] }
