@@ -1,3 +1,6 @@
 .env
 # metadados do Finder (macOS)
 .DS_Store
+# bytecode do Python
+__pycache__/
+*.pyc

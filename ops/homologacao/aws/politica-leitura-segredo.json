@@ -1,0 +1,11 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "LerSoOSegredoDoTransporteDaHomologacao",
+      "Effect": "Allow",
+      "Action": "secretsmanager:GetSecretValue",
+      "Resource": "arn:aws:secretsmanager:sa-east-1:${CONTA_AWS}:secret:nekkora/homologacao/platform/m365-??????"
+    }
+  ]
+}

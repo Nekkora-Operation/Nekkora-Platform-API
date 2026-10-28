@@ -58,8 +58,9 @@ class GraphMailTransportTest {
 
     @AfterAll
     static void cleanUp() throws Exception {
-        Files.deleteIfExists(p12);
-        Files.deleteIfExists(dir);
+        try (var s = Files.walk(dir)) {
+            s.sorted(java.util.Comparator.reverseOrder()).forEach(f -> f.toFile().delete());
+        }
     }
 
     @BeforeEach
@@ -224,6 +225,127 @@ class GraphMailTransportTest {
         String saida = out.toString(StandardCharsets.UTF_8);
         assertThat(saida).contains("prova_envio desfecho=ACEITO status=202").contains("prova_envio desfecho=RECUSADO status=403")
                 .doesNotContain("falso-").doesNotContain(SENHA);
+    }
+
+    /**
+     * Cliente e certificado do segredo da AWS (formato nekkora-m365/1): o PKCS#12 em base64 do segredo monta o mesmo transporte
+     * que o arquivo, a mesma assercao confere, e o segredo e apagado da memoria depois da partida.
+     */
+    @Test
+    void transportePeloSegredoNoFormatoNekkoraM365() throws Exception {
+        String secret = JSON.writeValueAsString(Map.of("formato", "nekkora-m365/1", "tenant_id", TENANT, "client_id", CLIENT,
+                "certificado_pkcs12", Base64.getEncoder().encodeToString(Files.readAllBytes(p12)), "certificado_senha", SENHA));
+        String tenant = TENANT;
+        M365Segredo m = M365Segredo.ler(secret, tenant);
+        GraphMailTransport t;
+        try {
+            t = new GraphMailTransport(new GraphMailTransport.Config(tenant, m.clientId(), "no-reply@exemplo.test", null, m.senha(), Duration.ofSeconds(5),
+                    fake.base(), fake.base()), m.pkcs12());
+        } finally {
+            m.apagar();
+        }
+        assertThat(m.pkcs12()).containsOnly(0);
+        assertThat(t.deliver(message()).result()).isEqualTo(MailTransport.Result.ACEITO);
+        assertThat(form(fake.tokenRequests.get(0).body())).containsEntry("client_id", CLIENT);
+        assertThat(t.certificateThumbprint())
+                .isEqualTo(Base64.getUrlEncoder().withoutPadding().encodeToString(MessageDigest.getInstance("SHA-256").digest(cert.getEncoded())));
+        assertThatThrownBy(() -> new GraphMailTransport(new GraphMailTransport.Config(TENANT, CLIENT, "r@x", null, SENHA.toCharArray(), Duration.ofSeconds(1),
+                fake.base(), fake.base()), new byte[0])).hasMessageContaining("certificado");
+    }
+
+    /**
+     * Comando de prova com a lista fechada de destinatarios: fora da lista, nada e enviado (64, nenhum pedido ao Graph); em
+     * ensaio-* sem lista, tambem 64. Na lista, o envio segue.
+     */
+    @Test
+    void comandoDeProvaRespeitaAListaDeDestinatarios() {
+        Map<String, String> base = Map.of("NEKKORA_M365_TENANT", TENANT, "NEKKORA_M365_CLIENT", CLIENT, "NEKKORA_M365_CERT", p12.toString(),
+                "NEKKORA_M365_CERT_SENHA", SENHA, "NEKKORA_M365_LOGIN_URL", fake.base(), "NEKKORA_M365_GRAPH_URL", fake.base());
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        java.io.PrintStream ps = new java.io.PrintStream(out, true, StandardCharsets.UTF_8);
+        Map<String, String> ensaioSemLista = new HashMap<>(base);
+        ensaioSemLista.put("NEKKORA_AMBIENTE", "ensaio-api-v1-003");
+        assertThat(ProvaEnvioM365.run(new String[] {"--remetente", "no-reply@exemplo.test", "--para", "controle@exemplo.test"}, ensaioSemLista, ps, ps))
+                .isEqualTo(64);
+        Map<String, String> comLista = new HashMap<>(ensaioSemLista);
+        comLista.put("NEKKORA_MAIL_DESTINATARIOS_PERMITIDOS", "controle@exemplo.test");
+        // ensaio-* exige tambem o teto global de tentativas
+        assertThat(ProvaEnvioM365.run(new String[] {"--remetente", "no-reply@exemplo.test", "--para", "controle@exemplo.test"}, comLista, ps, ps))
+                .isEqualTo(64);
+        comLista.put("NEKKORA_MAIL_TENTATIVAS_DIR", tentativasDir().toString());
+        comLista.put("NEKKORA_MAIL_TENTATIVAS_MAXIMO", "20");
+        assertThat(ProvaEnvioM365.run(new String[] {"--remetente", "no-reply@exemplo.test", "--para", "outro@exemplo.test"}, comLista, ps, ps))
+                .isEqualTo(64);
+        assertThat(fake.tokenRequests).as("nada saiu").isEmpty();
+        assertThat(fake.sendRequests).isEmpty();
+        assertThat(ProvaEnvioM365.run(new String[] {"--remetente", "no-reply@exemplo.test", "--para", "Controle@exemplo.test"}, comLista, ps, ps)).isZero();
+        assertThat(fake.sendRequests).hasSize(1);
+        assertThat(out.toString(StandardCharsets.UTF_8)).contains("fora de NEKKORA_MAIL_DESTINATARIOS_PERMITIDOS").contains("ensaio-* exige")
+                .contains("ensaio-* exige o teto de tentativas");
+    }
+
+    private static Path tentativasDir() {
+        try {
+            return Files.createTempDirectory(dir, "tentativas-");
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /**
+     * Teto global: cada sendMail reserva uma vaga antes; esgotado, RECUSADO SEM pedido ao Graph. O desfecho de cada vaga fica
+     * no registro. O teto so e definido uma vez.
+     */
+    @Test
+    void tetoGlobalDeTentativasRecusaSemRede() throws Exception {
+        Path d = tentativasDir();
+        GraphMailTransport t = transport(Duration.ofSeconds(5));
+        t.limitarTentativas(TentativasEnvio.em(d, 2, "platform"));
+        fake.script.add(FakeGraph.Reply.of(403));
+        assertThat(t.deliver(message()).result()).isEqualTo(MailTransport.Result.RECUSADO);
+        assertThat(t.deliver(message()).result()).isEqualTo(MailTransport.Result.ACEITO);
+        MailTransport.Delivery esgotado = t.deliver(message());
+        assertThat(esgotado.result()).isEqualTo(MailTransport.Result.RECUSADO);
+        assertThat(esgotado.status()).as("sem resposta do Graph").isNull();
+        assertThat(fake.sends()).as("a terceira nao saiu").isEqualTo(2);
+        assertThat(Files.readString(d.resolve("tentativa-001"))).contains("desfecho=RECUSADO status=403");
+        assertThat(Files.readString(d.resolve("tentativa-002"))).contains("desfecho=ACEITO status=202");
+        assertThat(Files.exists(d.resolve("tentativa-003"))).isFalse();
+        assertThatThrownBy(() -> t.limitarTentativas(TentativasEnvio.em(d, 20, "platform"))).hasMessageContaining("ja definido");
+    }
+
+    /**
+     * A prova conta no MESMO teto da fila: com o teto ja esgotado pela fila, a prova nao tenta (65) e nada vai ao Graph; uma
+     * prova com vaga consome uma e informa a contagem.
+     */
+    @Test
+    void provaContaNoMesmoTetoDaFila() throws Exception {
+        Path d = tentativasDir();
+        Map<String, String> env = new HashMap<>(Map.of("NEKKORA_M365_TENANT", TENANT, "NEKKORA_M365_CLIENT", CLIENT, "NEKKORA_M365_CERT", p12.toString(),
+                "NEKKORA_M365_CERT_SENHA", SENHA, "NEKKORA_M365_LOGIN_URL", fake.base(), "NEKKORA_M365_GRAPH_URL", fake.base()));
+        env.put("NEKKORA_AMBIENTE", "ensaio-api-v1-003");
+        env.put("NEKKORA_MAIL_DESTINATARIOS_PERMITIDOS", "controle@exemplo.test");
+        env.put("NEKKORA_MAIL_TENTATIVAS_DIR", d.toString());
+        env.put("NEKKORA_MAIL_TENTATIVAS_MAXIMO", "2");
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        java.io.PrintStream ps = new java.io.PrintStream(out, true, StandardCharsets.UTF_8);
+        GraphMailTransport fila = transport(Duration.ofSeconds(5));
+        fila.limitarTentativas(TentativasEnvio.em(d, 2, "platform"));
+        assertThat(fila.deliver(message()).result()).isEqualTo(MailTransport.Result.ACEITO);
+        assertThat(ProvaEnvioM365.run(new String[] {"--remetente", "no-reply@exemplo.test", "--para", "controle@exemplo.test"}, env, ps, ps)).isZero();
+        assertThat(out.toString(StandardCharsets.UTF_8)).contains("tentativas_usadas=2 maximo=2");
+        assertThat(Files.readString(d.resolve("tentativa-002"))).contains("origem=prova");
+        assertThat(ProvaEnvioM365.run(new String[] {"--remetente", "no-reply@exemplo.test", "--para", "controle@exemplo.test"}, env, ps, ps)).isEqualTo(65);
+        assertThat(fila.deliver(message()).status()).isNull();
+        assertThat(fake.sends()).as("uma da fila e uma da prova; nada depois do teto").isEqualTo(2);
+        assertThat(out.toString(StandardCharsets.UTF_8)).contains("prova_envio teto_atingido usadas=2 maximo=2 (nada enviado)");
+    }
+
+    /** Impressao do certificado no formato do keytool (para conferir com o .cer publicado). */
+    @Test
+    void impressaoDoCertificadoNoFormatoDoKeytool() throws Exception {
+        String hex = java.util.HexFormat.ofDelimiter(":").withUpperCase().formatHex(MessageDigest.getInstance("SHA-256").digest(cert.getEncoded()));
+        assertThat(transport(Duration.ofSeconds(1)).certificateSha256Hex()).isEqualTo(hex).matches("([0-9A-F]{2}:){31}[0-9A-F]{2}");
     }
 
     private static Map<String, String> form(String body) {

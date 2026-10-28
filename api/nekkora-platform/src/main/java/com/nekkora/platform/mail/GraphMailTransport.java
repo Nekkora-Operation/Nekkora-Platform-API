@@ -81,38 +81,62 @@ public final class GraphMailTransport implements MailTransport {
     private final String thumbprintS256;
     private volatile String accessToken;
     private volatile Instant accessTokenRenewAt = Instant.EPOCH;
+    private volatile TentativasEnvio tentativas = TentativasEnvio.SEM_TETO;
 
     public GraphMailTransport(Config cfg) {
-        this(cfg, client(cfg), Clock.systemUTC());
+        this(cfg, readCertificate(cfg), client(cfg.timeout(), cfg.proxy()), Clock.systemUTC());
+    }
+
+    /**
+     * Certificado ja em memoria (PKCS#12 lido do Secrets Manager): {@code cfg.certificate()} fica nulo. O chamador apaga
+     * {@code pkcs12} e a senha depois da partida.
+     */
+    public GraphMailTransport(Config cfg, byte[] pkcs12) {
+        this(cfg, pkcs12, client(cfg.timeout(), cfg.proxy()), Clock.systemUTC());
+    }
+
+    private static byte[] readCertificate(Config cfg) {
+        if (cfg.certificate() == null || !Files.isReadable(cfg.certificate())) {
+            throw new IllegalStateException("nekkora.mail.m365.certificado ausente ou ilegivel");
+        }
+        try {
+            return Files.readAllBytes(cfg.certificate());
+        } catch (IOException e) {
+            throw new IllegalStateException("certificado do transporte nao carregado (" + e.getClass().getSimpleName() + ")");
+        }
     }
 
     /**
      * Cliente HTTP. {@code proxy} ({@code host:porta}, opcional): saida por um proxy que so libera os endpoints do Entra e do
      * Graph, para ambientes cuja rede da Platform nao tem saida direta (a homologacao isolada).
      */
-    private static HttpClient client(Config cfg) {
-        HttpClient.Builder b = HttpClient.newBuilder().connectTimeout(cfg.timeout()).followRedirects(HttpClient.Redirect.NEVER);
-        if (cfg.proxy() != null && !cfg.proxy().isBlank()) {
-            int i = cfg.proxy().lastIndexOf(':');
-            if (i <= 0 || i == cfg.proxy().length() - 1) {
+    public static HttpClient client(Duration timeout, String proxy) {
+        HttpClient.Builder b = HttpClient.newBuilder().connectTimeout(timeout).followRedirects(HttpClient.Redirect.NEVER);
+        if (proxy != null && !proxy.isBlank()) {
+            int i = proxy.lastIndexOf(':');
+            if (i <= 0 || i == proxy.length() - 1) {
                 throw new IllegalStateException("nekkora.mail.m365.proxy deve ser host:porta");
             }
-            b.proxy(java.net.ProxySelector.of(new java.net.InetSocketAddress(cfg.proxy().substring(0, i), Integer.parseInt(cfg.proxy().substring(i + 1)))));
+            b.proxy(java.net.ProxySelector.of(new java.net.InetSocketAddress(proxy.substring(0, i), Integer.parseInt(proxy.substring(i + 1)))));
         }
         return b.build();
     }
 
     GraphMailTransport(Config cfg, HttpClient http, Clock clock) {
+        this(cfg, readCertificate(cfg), http, clock);
+    }
+
+    GraphMailTransport(Config cfg, byte[] pkcs12, HttpClient http, Clock clock) {
         require(cfg.tenantId(), "nekkora.mail.m365.tenant-id");
         require(cfg.clientId(), "nekkora.mail.m365.client-id");
         require(cfg.sender(), "nekkora.mail.remetente");
-        if (cfg.certificate() == null || !Files.isReadable(cfg.certificate())) {
+        if (pkcs12 == null || pkcs12.length == 0) {
             throw new IllegalStateException("nekkora.mail.m365.certificado ausente ou ilegivel");
         }
         this.cfg = cfg;
         this.http = http;
         this.clock = clock;
-        try (InputStream in = Files.newInputStream(cfg.certificate())) {
+        try (InputStream in = new java.io.ByteArrayInputStream(pkcs12)) {
             KeyStore ks = KeyStore.getInstance("PKCS12");
             ks.load(in, cfg.certificatePassword());
             String alias = null;
@@ -146,6 +170,60 @@ public final class GraphMailTransport implements MailTransport {
         return thumbprintS256;
     }
 
+    /** SHA-256 do DER do certificado em hexadecimal com dois-pontos (o formato do {@code keytool -printcert}). */
+    public String certificateSha256Hex() {
+        byte[] d = Base64.getUrlDecoder().decode(thumbprintS256);
+        StringBuilder b = new StringBuilder();
+        for (int i = 0; i < d.length; i++) {
+            b.append(i == 0 ? "" : ":").append(String.format("%02X", d[i]));
+        }
+        return b.toString();
+    }
+
+    /**
+     * Teto global de tentativas de envio ({@link TentativasEnvio}), definido UMA vez na partida (Platform ou prova). Toda
+     * chamada {@code sendMail} reserva uma vaga antes; sem vaga, RECUSADO sem rede.
+     */
+    public synchronized void limitarTentativas(TentativasEnvio t) {
+        if (tentativas.limitado()) {
+            throw new IllegalStateException("teto de tentativas ja definido");
+        }
+        tentativas = t;
+    }
+
+    public TentativasEnvio tentativas() {
+        return tentativas;
+    }
+
+    /** Reivindicacoes de um token de aplicacao, para a prova do caminho de autenticacao (nunca o token). */
+    public record TokenInfo(String tid, String appid, String aud, int roles, long expiraEmSegundos, boolean legivel) {
+    }
+
+    /**
+     * Prova do caminho de autenticacao real: obtem o token pela assercao de certificado (o mesmo pedido do envio) e devolve
+     * so as reivindicacoes de controle: tenant, aplicativo, audiencia, QUANTIDADE de papeis de aplicacao (com o RBAC para
+     * Aplicacoes do Exchange, nenhum papel do Graph e esperado) e validade. Nao envia mensagem e nao conta tentativa.
+     * {@code null} se o Entra recusar ou nao houver conexao; o status fica em {@code falha[0]}.
+     */
+    public TokenInfo inspecionarToken(Integer[] falha) {
+        String t;
+        try {
+            t = token();
+        } catch (TokenFailure f) {
+            falha[0] = f.status;
+            return null;
+        }
+        String[] partes = t.split("\\.");
+        try {
+            JsonNode c = JSON.readTree(Base64.getUrlDecoder().decode(partes[1]));
+            String appid = c.path("appid").asString(c.path("azp").asString(""));
+            return new TokenInfo(c.path("tid").asString(""), appid, c.path("aud").asString(""), c.path("roles").size(),
+                    c.path("exp").asLong(0) - clock.instant().getEpochSecond(), true);
+        } catch (RuntimeException e) {
+            return new TokenInfo("", "", "", -1, 0, false);
+        }
+    }
+
     @Override
     public Delivery deliver(Message m) {
         String token;
@@ -174,6 +252,16 @@ public final class GraphMailTransport implements MailTransport {
     }
 
     private Delivery send(Message m, String token, String sender) {
+        TentativasEnvio.Reserva vaga = tentativas.reservar(m.correlation());
+        if (!vaga.concedida()) {
+            return new Delivery(Result.RECUSADO, null, null);
+        }
+        Delivery d = sendReserved(m, token, sender);
+        tentativas.registrar(vaga, d.result(), d.status());
+        return d;
+    }
+
+    private Delivery sendReserved(Message m, String token, String sender) {
         Map<String, Object> message = new LinkedHashMap<>();
         message.put("subject", m.subject());
         message.put("body", Map.of("contentType", "Text", "content", m.body()));

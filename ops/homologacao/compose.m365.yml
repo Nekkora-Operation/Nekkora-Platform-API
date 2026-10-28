@@ -1,25 +1,28 @@
-# SOBREPOSICAO PREPARADA (missao PLATFORM-API-V1-003, item 6): transporte REAL de e-mail (Microsoft Graph, so de
-# aplicacao, certificado, RBAC para Aplicacoes restrito a no-reply@nekkora.com) num ambiente ensaio-* de homologacao.
-# NAO esta ligada ao runner e NAO deve ser usada antes da autorizacao especifica das acoes externas (Microsoft 365, DNS,
-# cofre e envio real): docs/relatorios/2026-10-23-api-v1-003-email-real-preparacao.md, sec. 3 e 4.
+# SOBREPOSICAO: transporte REAL de e-mail (Microsoft Graph, so de aplicacao, certificado, RBAC para Aplicacoes restrito a
+# no-reply@nekkora.com) num ambiente ensaio-* de homologacao (missao do e-mail real em homologacao). Ligada SO pela acao
+# "homologacao.sh email-real <id> ligar", que confere antes a fila, as credenciais temporarias e a lista de destinatarios,
+# e desligada por "email-real <id> desligar" (volta ao transporte de homologacao). No lugar de compose.caixa.yml: os dois
+# transportes sao exclusivos. Nao usar antes da autorizacao especifica das acoes externas (Microsoft 365, DNS, AWS e envio
+# real): docs/relatorios/2026-10-24-email-real-homologacao.md.
 #
-# Uso (depois da autorizacao), no lugar de compose.caixa.yml (os dois transportes sao exclusivos):
-#   HOMOLOG_M365_CLIENT=<Application (client) ID do aplicativo dedicado> HOMOLOG_M365_CERT=<caminho do PKCS#12 no cofre local>
-#   docker compose -f compose.homolog.yml -f compose.016.yml -f compose.021.yml -f compose.m365.yml up -d proxy-m365 platform
-# A senha do PKCS#12 vai no platform.env do ambiente (NEKKORA_M365_CERT_SENHA, diretorio de segredos, fora do Git).
+# Segredos (diretorio de segredos do ambiente, fora do Git; nenhum valor neste arquivo):
+#   m365/aws.env   credenciais TEMPORARIAS da AWS (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN), da funcao
+#                  de leitura do segredo; a Platform le o segredo uma vez, na partida, e recusa credencial sem token de sessao
+#   m365/fila.env  chave PROPRIA da fila (NEKKORA_FILA_CHAVE_ID, NEKKORA_FILA_CHAVES), gerada pelo runner
+#   m365/tentativas/  teto GLOBAL de tentativas de envio ao Graph (TentativasEnvio): uma vaga por arquivo, reservada ANTES
+#                  de cada sendMail pela fila e pela ProvaEnvioM365 (mesmo container, mesmo diretorio); sobrevive a
+#                  desligar, ligar e reinicio. Sem vaga, nada sai. Nao e segredo (instante, origem, correlacao, desfecho)
+# O cliente (App ID) e o certificado PKCS#12 ficam SO no segredo nekkora/homologacao/platform/m365 do AWS Secrets Manager
+# (formato nekkora-m365/1): nenhum arquivo de chave privada no host.
 #
 # Rede: a Platform CONTINUA so na rede "interna" (internal: true, sem saida). O unico caminho para fora e o proxy-m365,
-# que esta na interna e numa rede de saida propria, e so abre tuneis CONNECT 443 para login.microsoftonline.com e
-# graph.microsoft.com (proxy/squid.conf; politica conferida: os dois nomes 200, qualquer outro destino ou porta 403).
+# que esta na interna e numa rede de saida propria, e so abre tuneis CONNECT 443 para login.microsoftonline.com,
+# graph.microsoft.com e secretsmanager.sa-east-1.amazonaws.com (proxy/squid.conf). Parar o proxy-m365 corta toda a saida.
 
 networks:
   saida_m365:
     labels:
       nekkora.homologacao: ${HOMOLOG_ID:?defina HOMOLOG_ID}
-
-secrets:
-  m365_cert:
-    file: ${HOMOLOG_M365_CERT:?caminho do PKCS#12 do aplicativo (cofre local, fora do Git)}
 
 services:
   proxy-m365:
@@ -27,7 +30,12 @@ services:
     labels:
       nekkora.homologacao: ${HOMOLOG_ID:?}
     read_only: true
-    tmpfs: [/var/log/squid, /var/spool/squid, /var/run, /run]
+    # tmpfs do usuario proxy (uid/gid 13 na imagem): sem isso o squid nao abre o log e nao sobe (raiz somente leitura)
+    tmpfs:
+      - /var/log/squid:uid=13,gid=13,mode=0750
+      - /var/spool/squid:uid=13,gid=13,mode=0750
+      - /var/run:uid=13,gid=13
+      - /run:uid=13,gid=13
     volumes:
       - ./proxy/squid.conf:/etc/squid/squid.conf:ro
     networks:
@@ -38,15 +46,25 @@ services:
     mem_limit: 128m
 
   platform:
+    env_file:
+      - ${HOMOLOG_SEGREDOS:?}/m365/aws.env
+      - ${HOMOLOG_SEGREDOS:?}/m365/fila.env
     environment:
       NEKKORA_AMBIENTE: ${HOMOLOG_ID:?}
       NEKKORA_MAIL_TRANSPORTE: m365
       NEKKORA_MAIL_REMETENTE: no-reply@nekkora.com
       # Tenant ID do Entra dono de nekkora.com (descoberta OpenID publica, 2026-10-23); NAO o GUID da organizacao do
-      # Exchange (facfe491-..., Get-OrganizationConfig.Guid). A confirmacao autenticada (R-2) fica na sec. 2 do relatorio.
+      # Exchange (facfe491-..., Get-OrganizationConfig.Guid). O segredo tem de trazer o mesmo tenant_id
       NEKKORA_M365_TENANT: ae4ed48d-e7d8-4f24-83f2-443e997c5a65
-      NEKKORA_M365_CLIENT: ${HOMOLOG_M365_CLIENT:?Application (client) ID do aplicativo dedicado}
-      NEKKORA_M365_CERT: /run/secrets/m365_cert
+      NEKKORA_M365_SEGREDO_AWS: nekkora/homologacao/platform/m365
+      NEKKORA_M365_AWS_REGIAO: sa-east-1
       NEKKORA_M365_PROXY: proxy-m365:3128
-    secrets: [m365_cert]
+      # lista fechada de destinatarios (enderecos controlados; m365/destinatarios.txt, fora do Git), obrigatoria em ensaio-*
+      NEKKORA_MAIL_DESTINATARIOS_PERMITIDOS: ${HOMOLOG_M365_DESTINATARIOS:?lista de destinatarios controlados}
+      NEKKORA_AVISOS_EMERGENCIA: "true"
+      # teto global de tentativas da homologacao inteira (relatorio, secao 4.7): fila e prova contam juntas
+      NEKKORA_MAIL_TENTATIVAS_DIR: /tentativas
+      NEKKORA_MAIL_TENTATIVAS_MAXIMO: "20"
+    volumes:
+      - ${HOMOLOG_SEGREDOS:?}/m365/tentativas:/tentativas
     depends_on: [proxy-m365]

@@ -3,6 +3,7 @@ package com.nekkora.platform.auth.crypto;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
+import java.util.Base64;
 import java.util.Map;
 import java.util.UUID;
 
@@ -37,6 +38,21 @@ public final class SecretCipher {
         });
         this.currentKey = currentKey;
         this.keys = Map.copyOf(keys);
+    }
+
+    /** Lista {@code "id:<base64 32 bytes>,id2:..."} (formato de {@code NEKKORA_MFA_CHAVES} e {@code NEKKORA_FILA_CHAVES}). */
+    public static Map<String, byte[]> parseKeys(String list) {
+        Map<String, byte[]> keys = new java.util.HashMap<>();
+        for (String pair : list.split(",")) {
+            String[] kv = pair.trim().split(":", 2);
+            if (kv.length != 2 || kv[0].isBlank()) {
+                throw new IllegalArgumentException("lista de chaves fora do formato id:base64");
+            }
+            if (keys.put(kv[0], Base64.getDecoder().decode(kv[1])) != null) {
+                throw new IllegalArgumentException("id de chave repetido");
+            }
+        }
+        return keys;
     }
 
     public Encrypted encrypt(byte[] secret, UUID org, UUID user) {

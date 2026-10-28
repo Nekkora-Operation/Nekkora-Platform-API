@@ -67,14 +67,17 @@ if render -f "$B" > "$TMP/base.yml"; then ok "base renderiza"; else nok "base na
 if render -f "$B" -f "$O16" --profile operacao > "$TMP/016.yml"; then ok "base + 016 renderiza"; else nok "016 nao renderiza: $(head -3 "$TMP/compose.err")"; fi
 if render -f "$B" -f "$O16" -f "$CX" --profile operacao --profile caixa > "$TMP/caixa.yml"; then ok "base + 016 + caixa renderiza"; else nok "caixa nao renderiza: $(head -3 "$TMP/compose.err")"; fi
 if render -f "$B" -f "$O16" -f "$CX" -f "$O21" --profile operacao --profile caixa > "$TMP/021.yml"; then ok "base + 016 + caixa + 021 renderiza"; else nok "021 nao renderiza: $(head -3 "$TMP/compose.err")"; fi
-# transporte real PREPARADO (missao 003, item 6): renderiza com valores de exemplo; a Platform continua so na interna e o
-# unico caminho de saida e o proxy-m365 (os dois nomes do Entra/Graph); nunca junto da caixa
-printf 'pkcs12-de-exemplo' > "$TMP/m365.p12"
-if env HOMOLOG_M365_CLIENT=00000000-0000-0000-0000-000000000000 HOMOLOG_M365_CERT="$TMP/m365.p12" docker compose -f "$B" -f "$O16" -f "$O21" -f "$M365" config > "$TMP/m365.yml" 2>"$TMP/compose.err"; then
-    ok "base + 016 + 021 + m365 (preparada) renderiza"
+# transporte REAL (missao do e-mail real em homologacao): renderiza com valores de exemplo; a Platform continua so na
+# interna, o unico caminho de saida e o proxy-m365 (Entra, Graph e o Secrets Manager da regiao), cliente e certificado SO
+# do segredo da AWS (nenhum arquivo de chave), credenciais temporarias e chave da fila por arquivo de segredos, lista de
+# destinatarios obrigatoria; nunca junto da caixa
+mkdir -p "$S/m365"; echo NEKKORA_SENTINELA_AWS=1 > "$S/m365/aws.env"; echo NEKKORA_SENTINELA_FILA=1 > "$S/m365/fila.env"
+echo NEKKORA_SENTINELA_PLATFORM=1 > "$S/platform.env"
+if env HOMOLOG_M365_DESTINATARIOS='controle+*@exemplo.test' docker compose -f "$B" -f "$O16" -f "$O21" -f "$M365" config > "$TMP/m365.yml" 2>"$TMP/compose.err"; then
+    ok "base + 016 + 021 + m365 renderiza"
 else nok "m365 nao renderiza: $(head -3 "$TMP/compose.err")"; fi
-env HOMOLOG_M365_CLIENT=00000000-0000-0000-0000-000000000000 HOMOLOG_M365_CERT="$TMP/m365.p12" docker compose -f "$B" -f "$O16" -f "$O21" -f "$M365" config --format json > "$TMP/m365.json" 2>/dev/null
-confere "m365: Platform so na rede interna; proxy na interna e na saida propria; transporte m365 com o proxy e o tenant do Entra" "python - '$TMP/m365.json' <<'PY'
+env HOMOLOG_M365_DESTINATARIOS='controle+*@exemplo.test' docker compose -f "$B" -f "$O16" -f "$O21" -f "$M365" config --format json > "$TMP/m365.json" 2>/dev/null
+confere "m365: Platform so na rede interna; proxy na interna e na saida propria; transporte m365 com o proxy, o tenant do Entra, o segredo da AWS (sa-east-1) e a lista de destinatarios" "python - '$TMP/m365.json' <<'PY'
 import json, sys
 c = json.load(open(sys.argv[1], encoding='utf-8'))
 plat, prox = c['services']['platform'], c['services']['proxy-m365']
@@ -82,11 +85,76 @@ env = plat.get('environment', {})
 ok = (set(plat['networks']) == {'interna'} and set(prox['networks']) == {'interna', 'saida_m365'} and prox.get('read_only') is True
       and env.get('NEKKORA_MAIL_TRANSPORTE') == 'm365' and env.get('NEKKORA_M365_PROXY') == 'proxy-m365:3128'
       and env.get('NEKKORA_M365_TENANT') == 'ae4ed48d-e7d8-4f24-83f2-443e997c5a65' and env.get('NEKKORA_MAIL_REMETENTE') == 'no-reply@nekkora.com'
+      and env.get('NEKKORA_M365_SEGREDO_AWS') == 'nekkora/homologacao/platform/m365' and env.get('NEKKORA_M365_AWS_REGIAO') == 'sa-east-1'
+      and env.get('NEKKORA_MAIL_DESTINATARIOS_PERMITIDOS') == 'controle+*@exemplo.test'
+      and not any(k in env for k in ('NEKKORA_M365_CLIENT', 'NEKKORA_M365_CERT', 'NEKKORA_M365_CERT_SENHA'))
+      and not plat.get('secrets')
       and c['networks']['interna'].get('internal') is True and not c['networks']['saida_m365'].get('internal'))
 sys.exit(0 if ok else 1)
 PY"
-confere "m365: politica do proxy so CONNECT 443 para login.microsoftonline.com e graph.microsoft.com (tudo o mais negado)"     "grep -qx 'acl m365 dstdomain login.microsoftonline.com graph.microsoft.com' '$AQUI/proxy/squid.conf' && grep -qx 'http_access allow CONNECT m365' '$AQUI/proxy/squid.conf'      && grep -qx 'http_access deny all' '$AQUI/proxy/squid.conf' && grep -qx 'http_access deny CONNECT !porta_tls' '$AQUI/proxy/squid.conf' && [ \"\$(grep -c '^http_access allow' '$AQUI/proxy/squid.conf')\" = 1 ]"
-confere "m365: sobreposicao preparada NAO ligada ao runner (nenhuma referencia em homologacao.sh)" "! grep -q 'compose.m365.yml' '$AQUI/homologacao.sh'"
+confere "m365: variaveis de platform.env, m365/aws.env e m365/fila.env juntas na Platform (a sobreposicao acrescenta, nao troca)" "python - '$TMP/m365.json' <<'PY'
+import json, sys
+c = json.load(open(sys.argv[1], encoding='utf-8'))
+env = c['services']['platform'].get('environment', {})
+sys.exit(0 if all(env.get(k) == '1' for k in ('NEKKORA_SENTINELA_PLATFORM', 'NEKKORA_SENTINELA_AWS', 'NEKKORA_SENTINELA_FILA')) else 1)
+PY"
+: > "$S/platform.env"
+confere "m365: sem lista de destinatarios a sobreposicao nao renderiza" "! env -u HOMOLOG_M365_DESTINATARIOS docker compose -f '$B' -f '$O16' -f '$O21' -f '$M365' config > /dev/null 2>&1"
+confere "m365: politica do proxy so CONNECT 443 para Entra, Graph e Secrets Manager sa-east-1 (tudo o mais negado)"     "grep -qx 'acl m365 dstdomain login.microsoftonline.com graph.microsoft.com secretsmanager.sa-east-1.amazonaws.com' '$AQUI/proxy/squid.conf' && grep -qx 'http_access allow CONNECT m365' '$AQUI/proxy/squid.conf'      && grep -qx 'http_access deny all' '$AQUI/proxy/squid.conf' && grep -qx 'http_access deny CONNECT !porta_tls' '$AQUI/proxy/squid.conf' && [ \"\$(grep -c '^http_access allow' '$AQUI/proxy/squid.conf')\" = 1 ] && [ \"\$(grep -c '^acl ' '$AQUI/proxy/squid.conf')\" = 3 ]"
+confere "m365: tmpfs do proxy do usuario proxy (uid 13), sem o que o squid nao sobe com a raiz somente leitura" "python - '$TMP/m365.json' <<'PY'
+import json, sys
+c = json.load(open(sys.argv[1], encoding='utf-8'))
+t = c['services']['proxy-m365'].get('tmpfs') or []
+sys.exit(0 if len(t) == 4 and all('uid=13' in x and 'gid=13' in x for x in t) else 1)
+PY"
+confere "m365: teto global de tentativas na Platform (20, diretorio montado de m365/tentativas; fila e prova no mesmo container)" "python - '$TMP/m365.json' <<'PY'
+import json, sys
+c = json.load(open(sys.argv[1]))
+plat = c['services']['platform']
+env = plat.get('environment') or {}
+vols = [v for v in plat.get('volumes') or [] if v.get('target') == '/tentativas']
+ok = (env.get('NEKKORA_MAIL_TENTATIVAS_DIR') == '/tentativas' and env.get('NEKKORA_MAIL_TENTATIVAS_MAXIMO') == '20'
+      and len(vols) == 1 and vols[0]['type'] == 'bind' and vols[0]['source'].replace('\\\\', '/').endswith('/m365/tentativas')
+      and not vols[0].get('read_only') and any(v.get('target') == '/tls/ca.crt' for v in plat.get('volumes') or []))
+sys.exit(0 if ok else 1)
+PY"
+confere "m365: runner confere o teto antes de ligar e de cada prova, exige o evento de teto na partida e tem tentativas/autenticacao" "grep -q 'teto global de tentativas atingido' '$AQUI/homologacao.sh' && grep -q 'prova_envio teto_atingido' '$AQUI/homologacao.sh' && grep -q 'evento=mail.teto_tentativas_configurado maximo=\$TETO_MAX ' '$AQUI/homologacao.sh' && grep -q '^    tentativas)$' '$AQUI/homologacao.sh' && grep -q '^    autenticacao)$' '$AQUI/homologacao.sh' && grep -q 'ProvaAutenticacaoM365' '$AQUI/homologacao.sh'"
+confere "m365: m365-aws.sh so apaga a chave no confirmar (publicar sem trap de remocao)" "! grep -q \"trap 'apagar'\" '$AQUI/aws/m365-aws.sh' && grep -q '^confirmar()' '$AQUI/aws/m365-aws.sh' && grep -q 'chave_privada_no_disco=MANTIDA' '$AQUI/aws/m365-aws.sh'"
+confere "m365: com o transporte real, a lista de destinatarios vale para todo comando compose (prova, autenticacao, desligar)" "grep -q 'compose.m365.yml interpola a lista em TODO comando compose' '$AQUI/homologacao.sh' && grep -q 'HOMOLOG_M365_DESTINATARIOS=\"\$(python \"\$AQUI/lib/email_real.py\" destinatarios' '$AQUI/homologacao.sh'"
+confere "m365: desligar confere pelo Docker que o proxy parou e para pelo rotulo se o compose falhar" "grep -q 'proxy-m365 CONTINUA no ar' '$AQUI/homologacao.sh' && grep -q '^    proxy_no_ar()' '$AQUI/homologacao.sh'"
+confere "m365: prova e autenticacao sem conversao de caminho do Git Bash no docker exec" "[ \"\$(grep -c 'out=\"\$(MSYS_NO_PATHCONV=1 compose exec -T platform java' '$AQUI/homologacao.sh')\" = 2 ]"
+confere "m365: regiao do segredo igual no compose e no proxy" "grep -q 'NEKKORA_M365_AWS_REGIAO: sa-east-1' '$M365' && grep -q 'secretsmanager.sa-east-1.amazonaws.com' '$AQUI/proxy/squid.conf'"
+confere "m365: sobreposicao usada SO pela acao email-real do runner (troca com a caixa)" "python - '$AQUI/homologacao.sh' <<'PY'
+import re, sys
+h = open(sys.argv[1], encoding='utf-8').read()
+i = h.rindex('\n# ====', 0, h.index('\nemail-real)\n')); j = h.index('\n# ====', h.index('\nemail-real)\n'))
+fora = h[:i] + h[j:]
+sys.exit(0 if 'compose.m365.yml' not in fora and h[i:j].count('compose.m365.yml') >= 2 else 1)
+PY"
+confere "m365: email-real so em ensaio-*, recusa sem credenciais/lista/fila vazia ANTES de mudar o ambiente, desligar corta o proxy primeiro" "python - '$AQUI/homologacao.sh' <<'PY'
+import sys
+h = open(sys.argv[1], encoding='utf-8').read()
+i = h.index('\nemail-real)\n'); j = h.index('\n# ====', i); b = h[i:j]
+lig = b[b.index('    ligar)'):b.index('    desligar)')]
+des = b[b.index('    desligar)'):b.index('    prova)')]
+antes = lig[:lig.index('grava_ambiente m365')]
+ok = ('^ensaio-' in b[:b.index('case \"\$sub\"')] and 'credenciais \"\$M/aws.env\"' in antes and 'destinatarios \"\$M/destinatarios.txt\"' in antes
+      and '[ \"\$(fila_ativas)\" = 0 ]' in antes and 'config -q' in antes and 'AwsSecretsManager.java' in antes and 'confere_liberacao' in antes
+      and des.index('compose stop proxy-m365') < des.index('grava_ambiente homologacao') and 'rm -f \"\$M/aws.env\"' in des)
+sys.exit(0 if ok else 1)
+PY"
+confere "m365: testes/test_email_real.py (credenciais temporarias, lista, chave da fila, cabecalhos recebidos)" "python '$AQUI/testes/test_email_real.py' > '$TMP/er.txt' 2>&1 && grep -q '^RESULTADO: email_real OK' '$TMP/er.txt'"
+confere "m365: aws/m365-aws.sh (W1-W3, certificado e confirmar) contra AWS CLI falsa: nada secreto na linha de comando, chave so sai depois da leitura utilizavel" "bash '$AQUI/testes/test_m365_aws.sh' > '$TMP/maws.txt' 2>&1 && grep -q '^RESULTADO: m365_aws OK' '$TMP/maws.txt'"
+confere "m365: politicas da AWS so GetSecretValue no segredo da homologacao, funcao so com MFA" "python - '$AQUI/aws' <<'PY'
+import json, os, sys
+d = sys.argv[1]
+p = json.load(open(os.path.join(d, 'politica-leitura-segredo.json')))['Statement']
+t = json.load(open(os.path.join(d, 'confianca-funcao-leitura.json')))['Statement']
+ok = (len(p) == 1 and p[0]['Effect'] == 'Allow' and p[0]['Action'] == 'secretsmanager:GetSecretValue'
+      and p[0]['Resource'].endswith(':secret:nekkora/homologacao/platform/m365-??????') and ':sa-east-1:' in p[0]['Resource']
+      and len(t) == 1 and t[0]['Action'] == 'sts:AssumeRole' and t[0]['Condition']['Bool']['aws:MultiFactorAuthPresent'] == 'true')
+sys.exit(0 if ok else 1)
+PY"
 confere "sub-redes pelo prefixo" "grep -q 'subnet: 10.252.20.0/24' '$TMP/base.yml' && grep -q 'subnet: 10.252.21.0/24' '$TMP/base.yml' && ! grep -q '10.252.10' '$TMP/base.yml'"
 confere "job operacao em .33, so no perfil" "grep -q 'ipv4_address: 10.252.20.33' '$TMP/016.yml' && ! grep -q 'operacao:' '$TMP/base.yml'"
 confere "chave da CA operacional montada so no job operacao" "[ \"\$(grep -c 'target: /tls/ops-ca.key' '$TMP/caixa.yml')\" = 1 ]"

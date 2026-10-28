@@ -1,0 +1,14 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "SoAOperadoraComMfa",
+      "Effect": "Allow",
+      "Principal": { "AWS": "arn:aws:iam::${CONTA_AWS}:user/${USUARIO_IAM}" },
+      "Action": "sts:AssumeRole",
+      "Condition": {
+        "Bool": { "aws:MultiFactorAuthPresent": "true" }
+      }
+    }
+  ]
+}
