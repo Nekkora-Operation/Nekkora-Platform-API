@@ -22,12 +22,16 @@
 # 023 e 024 (acessos, missao de 2026-10-27): elevacao exigida (suites db/tests/acessos-023 e acessos-024, B1) e pre-voo
 # oficial proprio. Estar aqui NAO autoriza nada: so obriga linha vinculada ao id e pre-voo oficial quando houver linha.
 VINCULO_OBRIGATORIO=" 016 017 018 019 020 022 023 024 "
+# Versoes que NUNCA recebem janela: aplicam sem atributo nenhum (021: fila de e-mail; 025: canal Platform-Agent, sem papel,
+# dono nem SECURITY DEFINER novos, suite db/tests/canal-agent-025, caso A elevada=nao). Uma linha para elas e recusada pela
+# gramatica, em qualquer lista (revisada ou alternativa): a janela de SUPERUSER nao e concedida a quem nao precisa.
+NUNCA_ELEVAR=" 021 025 "
 
 lista_elevacao_normalizada() {
     local arq="$1" vinculo="${2:-}" conteudo
     [ -f "$arq" ] && [ -r "$arq" ] || { echo "FALHA: lista de elevacao ausente ou ilegivel ($arq)" >&2; return 1; }
     conteudo="$(tr -d '\r' < "$arq")" || { echo "FALHA: erro de leitura da lista de elevacao ($arq)" >&2; return 1; }
-    printf '%s\n' "$conteudo" | awk -v vinculo=" $vinculo " '
+    printf '%s\n' "$conteudo" | awk -v vinculo=" $vinculo " -v nunca="$NUNCA_ELEVAR" '
         function erro(m) { printf "FALHA: lista de elevacao, linha %d: %s\n", NR, m > "/dev/stderr"; ruim = 1; exit 1 }
         /^[[:space:]]*(#|$)/ { next }
         {
@@ -60,6 +64,7 @@ lista_elevacao_normalizada() {
                 }
             }
             if ($1 == "014" && tipo != "bypassrls") erro("a 014 so pode ter elevacao do tipo bypassrls (tem " tipo ")")
+            if (index(nunca, " " $1 " ") > 0) erro("a " $1 " aplica sem elevacao e nao pode ter linha na lista")
             if (index(vinculo, " " $1 " ") > 0) {
                 if (tipo != "superuser") erro("versao " $1 " so pode ter elevacao do tipo superuser (tem " tipo ")")
                 if (alvo == "-") erro("versao " $1 " sem vinculo ao id do ambiente (obrigatorio)")
