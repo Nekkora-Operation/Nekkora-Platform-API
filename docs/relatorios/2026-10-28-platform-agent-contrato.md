@@ -323,8 +323,12 @@ Quatro dimensões, sempre separadas nas consultas:
 - `LOST_LOCAL`: perda local do Agent. `EVENT_GAP` com `AGT-OBS-009`, ou números em `declaredMissing`.
 - `PURGED_LOCAL`: expurgo no Agent antes da entrega (`HISTORY_PURGED`, `AGT-OBS-010`).
 - `INVALID_REFUSED`: eventos recusados pela API ou pelo Agent (`EVENT_INVALID`).
-- `PURGED_SERVER`: expurgo no servidor. **Reservado.** Esta versão não expurga eventos do Agent, e a retenção do servidor
-  continua pendente (§11).
+
+**Retenção no servidor não é motivo de histórico.** Desde a 026, o expurgo por política de retenção aparece numa dimensão
+própria, `retention` (`AVAILABLE`, `PARTIALLY_PURGED` ou `PURGED`, com `eventsPurged`), só no detalhe da execução. A completude
+continua a da entrega: uma execução `COMPLETE` expurgada continua `COMPLETE`. Nas etapas, cada evento expurgado vem com
+`purged: true`, a classificação (`source`, `eventCode`, `severity`, `category`) e os instantes, e sem o conteúdo da etapa.
+Expurgo nunca é apresentado como perda na origem (`LOST_*`).
 
 `COMPLETE` exige o `COLLECTION_COMPLETED` recebido, `storedThrough` igual à sua `sequence` e nenhum motivo. Uma execução sem
 eventos do Framework aparece com as etapas indisponíveis (`stepsAvailable: false`).
@@ -351,7 +355,7 @@ exposição ao Portal precisa de decisão própria sobre concessões.
 | Lado | Regra desta versão |
 |---|---|
 | Agent | o atual: 50 execuções e cota de 96 MiB, sem fila de saída. **Precisa** (§12) de retenção que não apague o que não teve ACK, e de declarar em `declaredMissing` o que perdeu |
-| API | os eventos ficam enquanto houver espaço. Um erro de gravação (inclusive espaço esgotado) dá 5xx sem ACK, e o Agent continua com os fatos. O expurgo por política de retenção (010) **não** cobre `agent_run_events` nesta versão, e a consolidação diária de bytes da 011 (`close_usage_day`) não conta esses eventos. Os dois ficam como pendência explícita |
+| API (026) | **Contabilização:** cada evento recebe `received_at` do servidor sob a linha-barreira do recurso 6 (`AGENT_EVENT_BYTES_DAILY`), como os eventos e logs da 011. `close_usage_day` e `reconsolidate_usage_day` contam os eventos do Agent do dia e os bytes do envelope.<br>**Retenção:** a política da categoria 3 (`AGENT_RUN_EVENTS`), vigente no recebimento, decide. Sem política, não há expurgo. `purge_expired_records(…, 3, …)` só atua em dia fechado e depois do prazo. O expurgo é redação, nunca DELETE: o envelope e os campos da etapa viram nulos; a identidade, o `content_sha256`, a classificação e os instantes ficam. Por isso o reenvio de um evento expurgado continua `DUPLICATE`, e outro conteúdo, `CONFLICT`. O expurgo não toca `agent_runs`: `storedThrough` e `settledThrough` nunca diminuem.<br>**Ativação:** o EXECUTE de `purge_expired_records` continua sem ser concedido a ninguém, como na 011. Ligar o expurgo é decisão operacional (D-RET-1).<br>**Erros:** um erro de gravação (inclusive espaço esgotado) dá 5xx sem ACK |
 
 ## 12. Encaminhamento ao Agent (bloqueio da integração real)
 
