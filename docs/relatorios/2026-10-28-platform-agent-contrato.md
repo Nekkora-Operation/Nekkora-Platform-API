@@ -4,6 +4,14 @@
 `nekkora-agent-gateway` e rotas administrativas da Platform). O Agent ainda não implementa este contrato (ver §12). Base
 real: `2026-10-28-platform-agent-inventario.md`.
 
+**Consolidação de 28/10 (parecer da titular):** três pontos ficaram inequívocos antes do encaminhamento ao Agent:
+- a impressão do pacote, com regra, conteúdo, normalização e vetor verificável (§6.4). Ela deixou de ser igualada a
+  `artifact.sha256`;
+- o significado de `storedThrough` e `settledThrough`, o caráter definitivo de `declaredMissing` e o momento em que o Agent
+  pode descartar a cópia local (§8.1 a §8.3);
+- os limites da repetição do resgate (§4.2). Uma falha real foi corrigida: depois de uma rotação ou revogação, a repetição
+  ainda devolvia o vínculo antigo.
+
 ## 1. Princípios
 
 1. **A organização vem do servidor.** A credencial de máquina leva o identificador da organização e da credencial. O
@@ -65,8 +73,16 @@ nome de usuário, nome do computador, caminhos nem outros dados da máquina.
 - `POST /agent/api/v1/enrollments/redeem` com `{code, credentialSecret, agentVersion, contractVersions}`.
 - **O segredo da credencial é gerado pelo Agent** (32 bytes aleatórios, base64url). Ele viaja uma vez por HTTPS, e o servidor
   guarda só o SHA-256. O servidor nunca devolve segredo.
-- **Idempotência:** repetir o resgate com o mesmo código **e** o mesmo segredo devolve o mesmo resultado. Uma resposta perdida
-  não tranca a máquina para fora. O mesmo código com **outro** segredo é recusado (reutilização indevida).
+- **Idempotência (resposta perdida):** repetir o resgate com o mesmo código **e** o mesmo segredo devolve o mesmo resultado
+  **somente enquanto a credencial emitida por aquele resgate ainda vale**. É a mesma conferência do §4.4, com o segredo
+  provando a posse: não revogada, não vencida, Agent ACTIVE e associação Worker–Agent ativa.
+  - A repetição só lê. Ela não reativa credencial revogada e não desfaz rotação: o código de pareamento original não devolve
+    a credencial substituída. Também não restaura associação encerrada e não cria nada.
+  - Fora dessas condições, a resposta é `401 unauthenticated`, igual à de um código inválido.
+  - O mesmo código com **outro** segredo é recusado (reutilização indevida).
+  - Testes (`AgentGatewayIT`): `pareamentoRepetidoComRespostaPerdidaDevolveOMesmoResultadoEOutroSegredoERecusado`,
+    `rotacaoExigeACredencialAtualERevogaAAnteriorNaMesmaTransacao` (repetição da rotação) e
+    `repeticaoDoResgateNaoDesfazRotacaoNemReativaCredencialRevogadaNemRestauraAssociacao`.
 - Na transação do resgate, sob lock, são conferidos:
   - código válido, não vencido, não cancelado e não consumido por outro segredo;
   - quem criou o código **ainda** tem as permissões (`access_org_permission`, da 023);
@@ -92,6 +108,16 @@ nome de usuário, nome do computador, caminhos nem outros dados da máquina.
   - credencial revogada (motivos 3 ou 4);
   - associação Worker–Agent encerrada;
   - efeito imediato na API.
+- **Perda da credencial atual** (disco perdido, reinstalação, perfil apagado): a rotação exige a credencial atual, então não
+  há caminho da máquina sozinha. A recuperação exige um **novo ato autorizado**:
+  1. uma pessoa revoga o Agent (`ADMINISTRATIVE`, ou `COMPROMISED` se houver suspeita);
+  2. a mesma ou outra pessoa autorizada cria um novo código de pareamento para o Worker, que ficou livre com a revogação;
+  3. a máquina resgata o código e recebe outro `agent_id` e outra credencial.
+
+  O histórico do Agent anterior fica intacto e continua consultável. Nada reaproveita a credencial perdida, e nenhum
+  identificador local substitui a autenticação. Teste: `AgentAdminIT.revogacaoDoAgentEncerraCredencialAssociacaoECodigosAbertos`.
+  Uma resposta de rotação perdida **não** é perda de credencial: repetir a rotação com o segredo novo devolve o mesmo
+  resultado (§4.2).
 - **Concorrência:** toda operação da máquina trava a linha da credencial em `FOR SHARE` na transação do ato. Uma revogação
   confirmada antes faz a operação ser recusada. Uma revogação concorrente espera a operação em curso terminar: o que já tinha
   sido aceito fica, e nada depois dela é aceito.
@@ -124,9 +150,10 @@ a credencial da máquina não vale na Platform.
   - organização, workspace e Worker, que precisa estar **autorizado no workspace** (`worker_workspace_assignments`
     ativa: `PUT /api/v1/o/{org}/workers/{w}/workspaces/{ws}`, com `worker_workspace.authorize`);
   - automação e **versão publicada** (`automation_versions.status = 2`);
-  - **pacote imutável:** `package_fingerprint` = `command_json.artifact.sha256` da versão. Para um pacote STUDIO_PYTHON, esse
-    valor é a impressão digital do Agent (`sha256:<hex>` sem o prefixo). A autorização copia o valor, e o banco confere a
-    igualdade.
+  - **pacote imutável:** `package_fingerprint` e `package_fingerprint_rule` = a impressão declarada na versão em
+    `command_json.agent_package {fingerprint_rule, fingerprint}` (§6.4). A autorização copia os dois valores, e o banco confere
+    a igualdade. **Não** é `command_json.artifact.sha256`, que mede os bytes do artefato distribuído. Uma versão sem
+    `agent_package` não recebe autorização local (`409`).
   - validade (`validUntil`, até 365 dias) e revogação (`…/{id}/revoke`).
 - O gatilho do banco reconfere tudo isso na inserção (autoridade de quem autoriza, versão publicada, artefato, Worker
   autorizado). A autorização é imutável, exceto pela revogação.
@@ -149,6 +176,38 @@ a credencial da máquina não vale na Platform.
 - Workspace, automação, versão e Worker vêm **da autorização**, nunca do corpo.
 - **Pacote local sem versão publicada não é registrável** nesta versão (não existe autorização para ele). Não se cria versão
   fictícia. A proposta de representação própria está no §13.
+
+### 6.4 Impressão do pacote: regra `nekkora-agent/package-fingerprint/1`
+
+É a impressão que o Agent já calcula e aprova (`ExecutionPackage.fingerprint`, Nekkora-Agent `932e61c`). O contrato a adota
+como está. **Nada muda no Studio:** a regra usa só o que o pacote gerado já contém.
+
+| Item | Definição |
+|---|---|
+| Algoritmo | SHA-256 |
+| Conteúdo incluído | o descritor (`manifest.json` em STUDIO_PYTHON; o descritor do laboratório em LAB_GENERIC) e **somente** os arquivos listados em `files` do descritor. Arquivos fora da lista não contam e nem são copiados para a execução |
+| Hash de cada arquivo | se os bytes forem UTF-8 válido, o texto com cada `CRLF` trocado por `LF`, de novo em UTF-8; senão, os bytes como estão. Nada mais é normalizado: BOM, espaços e `CR` isolado contam. Formato `sha256:<64 hex minúsculos>`, igual ao do gerador do Studio |
+| Conferência | antes de calcular, cada arquivo listado precisa existir dentro da pasta, ser arquivo comum (sem ligação) e ter o hash declarado no descritor. Senão, o pacote é recusado e nenhuma impressão é produzida |
+| Texto canônico | linhas terminadas em `LF`, em UTF-8: `nekkora-agent/package-fingerprint/1`, o tipo (`STUDIO_PYTHON` ou `LAB_GENERIC`), `<descritor>\t<hash do descritor>` e, em ordem crescente de caminho (comparação de `String` Java, que para estes caminhos ASCII é a ordem dos bytes), uma linha `<caminho relativo>\t<hash declarado>` por arquivo |
+| Impressão | `sha256:` + hex do SHA-256 do texto canônico. No canal, vai **sem** o prefixo (`[0-9a-f]{64}`) e acompanhada de `packageFingerprintRule` |
+| Versão da regra | a primeira linha do texto canônico e `package_fingerprint_rule`. Uma mudança de qualquer item acima exige `…/2`. Esta API aceita só `…/1` |
+
+**Vetores** (os dois lados precisam reproduzir):
+1. **Sintético**, no teste `PackageFingerprintVectorTest` do gateway:
+   - `main.py` = `print('ola')\r\n` → `sha256:dbccf933401a15cfe345e90891e20b5a05a495f552e4577b80c052276604e24f`, igual ao hash com `LF`;
+   - `dados.bin` = bytes `ff fe 00 01` (não é UTF-8, entra como está) → `sha256:d2ad9277baaee14856d20ec2b21f87a0cb8a7f86c6ef090fd5a082b1e85135ac`;
+   - `manifest.json` (com `CRLF` final) → `sha256:779965c156b7c0f0921285933008850b19d592ce990ba7dffb42b8dd22eae868`;
+   - impressão `cada6a642bc7001a314b513a9dd56a312b4ff7612149c0ee29d523e641dff828`.
+2. **Real:** o pacote gerado pelo Studio `da7bb94` na COMPAT-001 (9 arquivos) → `5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d`.
+   É o valor que o Agent empacotado gravou nos registros reais a1, a2 e a5.
+
+Conferência feita em 28/10: os dois vetores dão o mesmo resultado em três implementações. São elas a função do próprio Agent,
+chamada sobre as classes compiladas sem alterar o repositório, a referência Java do teste e uma reimplementação independente.
+
+**O que ela não é:** `command_json.artifact.sha256` (005) mede os **bytes** do artefato que `artifact.reference` aponta. Um
+ZIP do mesmo pacote tem outro sha256 a cada compactação, e a impressão continua a mesma. As duas medidas não são comparadas
+entre si. Quem publica a versão (hoje, só por operação; o fluxo de publicação ainda não existe na API) declara as duas.
+A API não recebe o pacote, então não calcula a impressão: ela guarda e compara.
 
 ## 7. Relatório do supervisor (desfecho)
 
@@ -191,22 +250,52 @@ A02 da COMPAT-001) não mudam o estado. O campo fica reservado para uma versão 
 - mesma identidade e conteúdo diferente → `CONFLICT`: recusado, o original fica e a recusa é registrada em
   `agent_ingestion_refusals`.
 
-**ACK** (resposta 200, enviada **só depois do commit**):
+### 8.1 ACK (resposta 200, enviada **só depois do commit**)
 
-| Campo | Significado |
-|---|---|
-| `storedThrough` | maior `k` tal que todos os eventos `1..k` estão **gravados** |
-| `settledThrough` | maior `k` tal que cada número `1..k` está gravado **ou** foi declarado ausente pelo Agent. **Declarado ausente não é recebido** |
-| `results[]` | por evento: `STORED`, `DUPLICATE`, `CONFLICT` ou `INVALID` (com o motivo) |
+| Campo | Significado | Para que serve no Agent |
+|---|---|---|
+| `storedThrough` | maior `k` tal que **todo** evento `1..k` está **gravado** no servidor | medida de recebimento. Só ela diz "o servidor tem o histórico até aqui" |
+| `settledThrough` | maior `k` tal que **cada** número `1..k` está gravado **ou** foi declarado ausente pelo Agent (§8.2). Sempre `settledThrough ≥ storedThrough`. **Declarado ausente não é recebido** | cursor de entrega. Abaixo dele não há nada a reenviar |
+| `results[]` | por evento: `STORED`, `DUPLICATE`, `CONFLICT` ou `INVALID` (com o motivo) | resultado de cada item do lote |
+| `missing[]` | por intervalo declarado: `STORED`, `DUPLICATE` ou `CONFLICT` (com o motivo) | resultado de cada declaração |
+
+Os dois números nunca diminuem para a mesma execução, inclusive depois de um expurgo de retenção no servidor (§11). São iguais
+quando nada foi declarado ausente.
 
 - **Fora de ordem:** cada evento é gravado pela sua `sequence`. Os dois números só avançam quando o intervalo fica contínuo.
 - **Retomada:** o Agent reenvia a partir de `settledThrough + 1`. Se o ACK se perdeu, o reenvio devolve `DUPLICATE` e o mesmo
   ACK.
-- **Falha antes do commit** (banco, Redis ou API indisponíveis): erro 5xx **sem ACK**. O Agent reenvia os mesmos fatos.
-- **`declaredMissing`:** números que o Agent sabe que nunca vai entregar. Por exemplo, a lacuna local `AGT-OBS-009`: o
-  envelope `EVENT_GAP` gravado depois indica a perda. Esses números ficam registrados como ausentes na origem. A completude
-  vira `INCOMPLETE`, e o intervalo nunca é apresentado como recebido. Um número já gravado não pode ser declarado ausente
-  (`CONFLICT`).
+- **Falha antes do commit** (banco, Redis ou API indisponíveis): erro 5xx, `429` ou queda da conexão, **sem ACK**. Nada foi
+  gravado. O Agent reenvia os mesmos fatos e **nunca reexecuta a automação**.
+
+### 8.2 `declaredMissing`: perda definitiva, nunca atraso
+
+- Um número só pode ser declarado ausente quando **a cópia local dele deixou de existir de forma definitiva** e o Agent sabe
+  que nunca vai entregá-lo. Exemplo: a lacuna local `AGT-OBS-009`, indicada pelo envelope `EVENT_GAP` gravado depois.
+- **Nunca** se declara ausente o que está apenas atrasado: falta de rede, gravação local pendente, fila cheia, `429`, reenvio
+  agendado ou evento ainda não lido do arquivo.
+- A declaração é **irrevogável**. O número fica registrado como ausente na origem, e um evento enviado depois com aquele
+  número é recusado (`CONFLICT`, `declarada_ausente`, registrado em `agent_ingestion_refusals`). A completude vira
+  `INCOMPLETE` (`LOST_LOCAL`), e o intervalo nunca é apresentado como recebido.
+- Declarar um número **já gravado** é recusado (`CONFLICT`, `evento_gravado`): o que o servidor tem nunca vira perda.
+- **Idempotência:** só o mesmo intervalo exato repetido é `DUPLICATE`. Um intervalo que se sobrepõe a outro já declarado é
+  recusado (`CONFLICT`, `sobreposicao`). O Agent guarda os intervalos que declarou e, no reenvio, repete os mesmos.
+- Testes (`AgentGatewayIT`): `lacunaDeclaradaNaoContaComoRecebidaEResultadoDesconhecidoContinuaDesconhecido` (lacuna,
+  evento tardio recusado, declaração sobre evento gravado recusada) e
+  `execucaoRealDoAgentForaDeOrdemComAckPerdidoEDesfechoDoSupervisor` (fora de ordem, ACK perdido).
+
+### 8.3 Quando o Agent pode descartar a cópia local
+
+| Situação do número `n` | O Agent pode descartar a cópia? |
+|---|---|
+| `n ≤ settledThrough` de um ACK recebido | **sim**: ou está gravado no servidor depois do commit, ou já foi declarado perdido |
+| `n > settledThrough` com `STORED` ou `DUPLICATE` em `results[]` | está gravado, então não precisa ser reenviado, mas **não** se descarta antes de o `settledThrough` alcançá-lo. Se o Agent reiniciar, o reenvio a partir de `settledThrough + 1` devolve `DUPLICATE`, sem efeito |
+| `INVALID` | **não**. O número não é gravado nem liquidado. Como o Agent valida o mesmo envelope antes de gravar (§8, Validação), um `INVALID` indica divergência de versão ou defeito. O Agent mantém a cópia, não reenvia em laço e registra o código. A entrega daquela execução fica parada naquele número até a correção. Se a pessoa desistir do número, ele passa a ser perda definitiva e pode então ser declarado (§8.2) |
+| `CONFLICT` (`conteudo_diferente`) | o número já está gravado com o conteúdo original, que prevalece. Ele conta para os dois números do ACK. O Agent registra a divergência, que indica defeito local |
+| sem resposta, `5xx`, `429` ou queda | **não**: nada foi confirmado |
+
+A cópia local nunca é descartada por idade, cota ou retenção antes do ACK. Se a cota obrigar a apagar algo não confirmado, o
+Agent declara a perda (§8.2), em vez de apagar em silêncio.
 
 **Limites:**
 - até 500 eventos e 2 MiB por lote;
@@ -266,38 +355,57 @@ exposição ao Portal precisa de decisão própria sobre concessões.
 
 ## 12. Encaminhamento ao Agent (bloqueio da integração real)
 
-1. **Repositório e commit:** `Nekkora-Agent` `f77e00e` (local; o remoto está vazio).
-2. **Ausente:** cliente HTTPS e toda a parte da máquina deste contrato:
-   - resgate do pareamento com o segredo gerado localmente e o armazenamento protegido da credencial;
-   - heartbeat;
-   - download das autorizações;
-   - registro da execução com `authorizationId`;
-   - envio dos relatórios do supervisor;
-   - fila de saída do `atividade.jsonl` com reenvio desde `settledThrough`;
-   - `declaredMissing` para as lacunas `AGT-OBS-009`;
-   - retenção atrelada ao ACK.
-   
-   O `ArchitectureTest` proíbe rede no código de produção: é preciso uma exceção restrita a um pacote novo.
-3. **Evidência:** `ArchitectureTest.noNetworkOrShellUsageInProductionCode` e a observabilidade §8 ("Nada disso existe
-   hoje").
-4. **Alteração mínima:** pacote `com.nekkora.agent.platform` com:
-   - um cliente HTTPS (`java.net.http`, TLS do sistema, sem proxy implícito);
-   - uma credencial guardada com DPAPI do usuário;
-   - um transportador que lê o `atividade.jsonl` pela posição e envia lotes;
-   - o relatório do supervisor a cada transição.
-   
-   O `ExecutionController` não muda de semântica.
-5. **Exemplos seguros:** `docs/relatorios/2026-10-28-platform-agent-exemplos/exemplos.md` (sem segredos reais).
-6. **Testes de aceite:**
-   - um pareamento repetido com resposta perdida não tranca a máquina;
+Encaminhamento autorizado pela titular em 28/10 (D-PA-8). O que a missão do Agent precisa, sem inventar protocolo.
+
+1. **Repositório e base:** `Nekkora-Agent`, local. A missão STUDIO-AGENT-LOCAL-001 deixou o `932e61c` só local; o remoto
+   está vazio. A base exata fica a critério da missão do Agent.
+2. **Ausente hoje:** cliente HTTPS e toda a parte da máquina deste contrato. O `ArchitectureTest.noNetworkOrShellUsageInProductionCode`
+   proíbe rede no código de produção, e a observabilidade (§8 da documentação do Agent) diz "Nada disso existe hoje".
+3. **Arquitetura pedida:**
+   - **módulo de transporte próprio** (sugestão: `com.nekkora.agent.platform`). É o **único** lugar com rede. O
+     `ArchitectureTest` passa a permitir `java.net.http` **somente** nesse pacote e continua proibindo rede e processo em todo o
+     resto, inclusive no executor;
+   - **executor separado:** o transporte não chama o executor, e o executor não chama o transporte. O `ExecutionController`
+     não muda de semântica. O transporte só **lê** os fatos já gravados (`atividade.jsonl` e `estado.json`) e o seu próprio
+     progresso;
+   - **execução local independente da rede:** uma execução autorizada começa, roda e termina com a rede caída, a API fora ou a
+     credencial revogada. A falha de transporte nunca muda estado, nunca relança e nunca bloqueia a execução seguinte. A única
+     exceção é o download das autorizações (§6.2), que decide o que pode **começar**, nunca o que já começou;
+   - **segundo plano:** o envio de eventos e de relatórios do supervisor roda numa fila própria, com espera crescente
+     limitada e `Retry-After` respeitado em `429` e `503`.
+4. **Persistência local segura:**
+   - **credencial:** o segredo é gerado na máquina (32 bytes aleatórios, base64url) e gravado protegido (DPAPI do usuário)
+     **antes** do resgate, para que a repetição do §4.2 seja possível. Ele nunca vai para log, registro, evidência ou tela;
+   - **progresso de entrega por execução:** o último `settledThrough` e o último `storedThrough` confirmados, os intervalos
+     declarados ausentes, a última posição lida do `atividade.jsonl` e o último relatório do supervisor aceito. A gravação é
+     atômica (arquivo temporário e troca), e o progresso só avança **depois** do ACK;
+   - **retomada:** depois de reiniciar, o Agent continua de `settledThrough + 1` e reenvia o que não teve ACK. O reenvio é
+     sempre seguro (`DUPLICATE`).
+5. **Regras do canal que o Agent precisa seguir:**
+   - impressão do pacote pela regra `nekkora-agent/package-fingerprint/1`, comparada **com** `packageFingerprintRule` (§6.4);
+   - descarte da cópia local só nos casos do §8.3;
+   - `declaredMissing` só para perda definitiva (§8.2), nunca para atraso;
+   - o relatório do supervisor a cada transição e na reconciliação (§7). `OUTCOME_UNKNOWN` continua desconhecido;
+   - retenção local atrelada ao ACK: a cota não apaga o que não foi confirmado sem declarar a perda (§8.3).
+6. **Correção pedida junto (achado A01 da COMPAT-001):** o schema OBS 1.0.0 publicado pelo Agent não é JSON válido (`\.` no
+   padrão de `step_id`). A API valida pelas regras do código do Agent, não pelo arquivo. O schema precisa voltar a ser JSON
+   válido e conferido por teste, sem mudar a regra.
+7. **Exemplos seguros:** `docs/relatorios/2026-10-28-platform-agent-exemplos/exemplos.md` (sem segredos reais).
+8. **Testes de aceite no Agent:**
+   - os dois vetores da impressão (§6.4);
+   - pareamento repetido com resposta perdida não tranca a máquina, e a repetição depois de rotação ou revogação é recusada;
    - lote reenviado depois de ACK perdido;
-   - Agent reiniciado no meio de uma entrega;
-   - perda local declarada;
-   - credencial revogada para tudo;
-   - nada é relançado por falha de transporte.
-7. **Pronto na API:** este contrato inteiro, com testes de integração e o Agent simulado alimentado pelos registros reais do Agent: `MachineClient` (testes do gateway), `AgentChannelE2E` (stack E2E, entre processos) e `AgentBench` (medição).
-8. **Pausado:** despacho remoto, cancelamento remoto e agendamento, que dependem de um canal de comando no Agent. O
-   desenho está em §14. Pode continuar: tudo do lado da API que não depende de comandos.
+   - Agent reiniciado no meio de uma entrega retoma de `settledThrough + 1`, sem duplicar nem perder;
+   - perda local declarada uma vez só, com o mesmo intervalo no reenvio;
+   - `INVALID` não descarta a cópia nem entra em laço;
+   - credencial revogada para o transporte inteiro, e a execução local continua;
+   - nada é relançado por falha de transporte;
+   - o `ArchitectureTest` recusa rede fora do módulo de transporte (contraprova).
+9. **Pronto na API:** este contrato inteiro, com testes de integração e o Agent simulado alimentado pelos registros reais do
+   Agent: `MachineClient` (testes do gateway), `AgentChannelE2E` (stack E2E, entre processos) e `AgentBench` (medição).
+   Para a prova integrada, a API sobe com `api/e2e/run.sh`.
+10. **Pausado:** despacho remoto, cancelamento remoto e agendamento, que dependem de um canal de comando no Agent (§14) e de
+    decisão própria sobre os estados (D-PA-7). Pode continuar: tudo do lado da API que não depende de comandos.
 
 ## 13. Proposta (não implementada): pacote local sem versão publicada
 

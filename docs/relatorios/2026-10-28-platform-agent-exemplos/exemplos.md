@@ -29,7 +29,13 @@ Cache-Control: no-store
 ```
 
 A credencial é `nka1.<organizationId>.<credentialId>.<credentialSecret>`. **Resposta perdida:** repetir o mesmo corpo devolve
-o mesmo resultado. Outro `credentialSecret` com o mesmo código: `401 {"error":"unauthenticated"}`.
+o mesmo resultado, **enquanto a credencial emitida ainda vale** (contrato, §4.2). Respondem
+`401 {"error":"unauthenticated"}`, sem reativar nada:
+- outro `credentialSecret` com o mesmo código;
+- a mesma repetição depois de uma rotação ou de uma revogação.
+
+**Credencial perdida** (reinstalação, disco): não há recuperação pela máquina. Uma pessoa revoga o Agent e cria um novo código
+de pareamento (contrato, §4.3).
 
 ## 2. Heartbeat e autorizações
 
@@ -50,11 +56,16 @@ GET /agent/api/v1/authorizations
 
 ```json
 {"items":[{"authorizationId":"3f90…","workspaceId":"1c2e…","automationId":"8d41…","automationVersionId":"b2c0…",
-  "packageFingerprint":"5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d","validUntil":"2026-11-27T14:30:00Z"}]}
+  "packageFingerprint":"5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d",
+  "packageFingerprintRule":"nekkora-agent/package-fingerprint/1","validUntil":"2026-11-27T14:30:00Z"}]}
 ```
 
-O Agent só executa por esta via um pacote cuja impressão digital (sem o prefixo `sha256:`) seja `packageFingerprint`. Ele
-guarda a lista para uso offline, dentro de `validUntil`.
+O Agent só executa por esta via um pacote cuja impressão, calculada pela regra `packageFingerprintRule` (contrato, §6.4) e
+sem o prefixo `sha256:`, seja `packageFingerprint`. Uma regra desconhecida significa "não executar por esta autorização". O
+Agent guarda a lista para uso offline, dentro de `validUntil`.
+
+O valor acima é a impressão real do pacote do Studio `da7bb94` (COMPAT-001). O vetor sintético do contrato (§6.4), com `CRLF`
+e um arquivo binário, dá `cada6a642bc7001a314b513a9dd56a312b4ff7612149c0ee29d523e641dff828`.
 
 ## 3. Registro da execução
 
@@ -92,17 +103,27 @@ POST /agent/api/v1/runs/ex-6f670400dd5d9a00d9569fdec8d2c4f4/events
 os dois números vão para 3. A retomada é a partir de `settledThrough + 1`. O mesmo lote de novo devolve `DUPLICATE` e o
 mesmo ACK.
 
-**Perda local declarada:** depois de um `EVENT_GAP` com `AGT-OBS-009`, o Agent declara os números que nunca vai entregar:
+**Descarte da cópia local** (contrato, §8.3):
+- as sequences 2 e 3 estão gravadas, mas **não** são descartadas enquanto o `settledThrough` for 0;
+- quando um ACK trouxer `settledThrough` 3, o Agent descarta 1 a 3 e guarda o progresso **depois** do ACK.
+
+**Perda local declarada:** depois de um `EVENT_GAP` com `AGT-OBS-009`, o Agent declara os números que nunca vai entregar.
+Só se declara perda **definitiva**: a cópia local deixou de existir. Atraso, rede caída ou `429` nunca são declarados.
 
 ```json
 {"events":[ … ], "declaredMissing":[{"from":301,"to":320}]}
 ```
 
-Esses números contam só em `settledThrough`, nunca em `storedThrough`. A completude fica `INCOMPLETE` (`LOST_LOCAL`).
+Esses números contam só em `settledThrough`, nunca em `storedThrough`. A completude fica `INCOMPLETE` (`LOST_LOCAL`). A
+declaração é irrevogável: um evento enviado depois com a sequence 305 recebe `CONFLICT` (`declarada_ausente`). No reenvio, o
+Agent repete o **mesmo** intervalo (`DUPLICATE`). Um intervalo sobreposto, como `{"from":300,"to":330}`, é recusado
+(`sobreposicao`).
 
 **Recusas por evento** (o resto do lote segue):
 - `{"sequence":5,"status":"CONFLICT","reason":"conteudo_diferente"}`: a mesma sequence com outro conteúdo. O original fica.
-- `{"sequence":7,"status":"INVALID","reason":"unknown_field"}`: campo fora do envelope 1.0.0, por exemplo `message`.
+- `{"sequence":7,"status":"INVALID","reason":"unknown_field"}`: campo fora do envelope 1.0.0, por exemplo `message`. O
+  número não é gravado nem liquidado. O Agent mantém a cópia, não reenvia em laço e a entrega daquela execução para ali até a
+  correção (contrato, §8.3).
 
 **Sem ACK:** `5xx`, `429` (com `Retry-After`) e queda da conexão. Nada foi gravado: reenviar os mesmos fatos. **Nunca
 reexecutar a automação.**
@@ -135,4 +156,5 @@ terminal que continua desconhecido.
 
 A pessoa gera o código de rotação na Platform. O Agent gera um segredo novo e chama o mesmo `redeem` **com a credencial
 atual** no `Authorization`. A anterior é revogada (motivo 1) na mesma transação. Resposta perdida: repetir com o segredo
-novo devolve o mesmo resultado, mesmo que a credencial antiga já esteja revogada.
+novo devolve o mesmo resultado, mesmo que a credencial antiga já esteja revogada, porque o segredo novo prova a posse da
+credencial nova. Repetir o **pareamento original** com o segredo antigo, depois da rotação, recebe `401`.

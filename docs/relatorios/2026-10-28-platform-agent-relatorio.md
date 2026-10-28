@@ -9,7 +9,7 @@ chegou à API pelo canal. O que está provado:
 - um Agent **simulado** alimentado pelos **registros reais** do Agent empacotado (sucesso, cancelamento e queda da missão
   COMPAT-001).
 
-O encaminhamento ao Agent está no contrato, §12.
+O encaminhamento ao Agent está no contrato, §12. A consolidação pedida pela titular em 28/10 está no §9 deste relatório.
 
 Documentos:
 - inventário: `2026-10-28-platform-agent-inventario.md`;
@@ -56,6 +56,8 @@ real (R). **Nenhuma prova R:** o Agent não tem transporte.
 | Sentinelas de dado sensível recusadas (CPF, cartão, e-mail, caminho, número de pedido, texto livre) | `ObsEnvelopeTest.recusas`, `AgentGatewayIT.entradaMaliciosa…` | U, I |
 | Transições do supervisor; terminal sem contradição silenciosa; relatório atrasado; instantes em microssegundos | `SupervisorReportTest` (6) | U |
 | Pareamento repetido com resposta perdida; outro segredo recusado; código vencido, cancelado, malformado ou com organização trocada (401 único) | `AgentGatewayIT` | I |
+| Repetição do resgate depois de rotação ou revogação: recusada, sem reativar credencial, desfazer rotação nem restaurar associação | `AgentGatewayIT.repeticaoDoResgateNaoDesfazRotacao…` | I |
+| Impressão do pacote: vetor da regra `package-fingerprint/1` (CRLF, binário, texto canônico) | `PackageFingerprintVectorTest` (2) | U |
 | Credencial separada de cookie e sessão; contrato obrigatório (`unsupported_contract`) | `AgentGatewayIT` | I |
 | Rotação com a credencial atual, a anterior revogada na mesma transação, repetição idempotente | `AgentGatewayIT` | I |
 | Dois resgates concorrentes no mesmo Worker: um passa e o outro recebe 409 | `AgentGatewayIT` (sincronização por latch, estado final conferido) | I |
@@ -68,11 +70,11 @@ real (R). **Nenhuma prova R:** o Agent não tem transporte.
 | Limite por organização (429 com `Retry-After`, nada gravado); Redis fora (503, sem ACK, nada gravado) | `AgentGatewayLimitsIT` (2) | I |
 | Código: permissões, step-up, auditoria sem o código; Worker ocupado; cancelamento; conta sem permissão | `AgentAdminIT` | I |
 | Quem criou o código perdeu a autoridade: o resgate é recusado no banco (42501) | `AgentAdminIT` | I |
-| Revogação do Agent encerra credencial, associação e códigos abertos | `AgentAdminIT` | I |
-| Autorização local: Worker autorizado, versão publicada, artefato igual ao pacote | `AgentAdminIT` | I |
+| Revogação do Agent encerra credencial, associação e códigos abertos; o Worker aceita um novo pareamento (recuperação da credencial perdida) | `AgentAdminIT` | I |
+| Autorização local: Worker autorizado, versão publicada, impressão declarada na versão (`agent_package`); versão só com `artifact.sha256` recusada | `AgentAdminIT` | I |
 | Consultas: correlação, quatro dimensões, etapas por sequence com cursor, isolamento por workspace e por organização | `AgentAdminIT` | I |
 | Rotas = OpenAPI, com os códigos exercitados | `AgentContractTest` (2), `GatewayContractTest` (1) | U |
-| Migration: instalação, atualização populada, recusa sem a 024, falha no meio, reaplicação, privilégios, RLS, gatilhos e 8 contraprovas | suíte `db/tests/canal-agent-025` | banco |
+| Migration: instalação, atualização populada, recusa sem a 024, falha no meio, reaplicação, privilégios, RLS, gatilhos (inclusive o `sha256` dos bytes do artefato recusado como impressão) e 8 contraprovas | suíte `db/tests/canal-agent-025` | banco |
 | **Primeiro marco entre processos:** pareamento pela API; transporte interrompido (gateway parado, 502 sem ACK) e retomada; ACK perdido; desfecho e completude COMPLETE pela Platform, sem duplicata; queda com lacuna (UNKNOWN, INCOMPLETE); revogação; nenhum segredo nos logs | `AgentChannelE2E` (5) | S |
 | Volume, latência e consumo | `AgentBench` (§5) | S |
 
@@ -104,18 +106,18 @@ capacidade de produção.**
 7. **Elevação:** a 025 não precisa de janela. O runner de homologação não foi estendido à 025 nesta entrega. As suítes, os
    testes Java e o E2E aplicam 001–025 pelo modelo do migrador.
 
-## 7. Decisões pedidas à responsável
+## 7. Decisões da responsável (parecer de 28/10)
 
-| Id | Decisão | Recomendação |
-|---|---|---|
-| D-PA-1 | ordem de merge: #26 e depois este PR | sim (este PR depende da 023/024 para a numeração e das funções de autoridade da 023) |
-| D-PA-2 | identidade do pacote: `command_json.artifact.sha256` = impressão digital do Agent (STUDIO_PYTHON) | sim; o Studio e a publicação futura precisam adotar a mesma regra |
-| D-PA-3 | rotação da credencial como ato administrativo (código de rotação), não automática | sim: é o que o modelo da 004 permite (revogação com pertinência humana, uma credencial ativa) |
-| D-PA-4 | pacote local sem versão publicada (§13) | decidir se entra numa fatia própria |
-| D-PA-5 | exposição das execuções do Agent ao Portal externo | fatia própria, com as concessões |
-| D-PA-6 | retenção e uso diário de `agent_run_events` | estender o expurgo e o `close_usage_day` numa migration própria |
-| D-PA-7 | para o despacho: estados `OUTCOME_UNKNOWN`/`TIMED_OUT`/`BLOCKED` em `executions` e a correlação com `agent_runs` | decidir antes da fase de comandos |
-| D-PA-8 | Agent: implementar o §12 (transporte) e corrigir o schema OBS (achado A01) | encaminhar ao repositório do Agent |
+| Id | Decisão | Encaminhamento da titular | Situação |
+|---|---|---|---|
+| D-PA-1 | ordem de merge | #26 antes deste PR, conferindo que o #26 leva a 023, a 024 e a recuperação operacional à `main`. Depois, atualizar a base e os checks deste PR | conferência no §9.4 |
+| D-PA-2 | identidade do pacote | exigir correspondência, mas definir o que o hash mede. A impressão do Agent mede conteúdo normalizado, e `artifact.sha256`, bytes. Só seriam iguais se medissem a mesma coisa. Sem mudanças no Studio para acomodar uma equivalência não demonstrada | **feito** (§9.1): as duas medidas foram separadas |
+| D-PA-3 | rotação administrativa | adequada para este bloco. Documentar a recuperação da credencial perdida, que exige novo ato autorizado sem contornar a autenticação | **feito** (contrato, §4.3; teste em `AgentAdminIT`) |
+| D-PA-4 | pacote sem versão publicada | fora deste bloco. A exigência atual fica, e o registro de execução local não publicada será tratado à parte | mantido |
+| D-PA-5 | Portal externo | fatia posterior, com as concessões existentes. Sem ampliar a exposição agora | mantido |
+| D-PA-6 | retenção e uso diário | continuar na API agora, em PR próprio, antes de habilitar ingestão contínua | PR próprio, em seguida a este |
+| D-PA-7 | estados para o despacho | decidir junto com o contrato de comandos. Sem acrescentar `OUTCOME_UNKNOWN`, `TIMED_OUT` e `BLOCKED` ao mesmo enum: resultado, prazo e impedimento podem ser dimensões diferentes | pausado com a fase de comandos |
+| D-PA-8 | transporte no Agent | encaminhar agora, com a correção do schema OBS e a revisão pontual da regra arquitetural que proíbe rede | contrato, §12 reescrito |
 
 ## 8. Testes
 
@@ -123,7 +125,64 @@ capacidade de produção.**
 |---|---|
 | Regressão completa local (`./mvnw -o verify`, Windows, commit `2a49760`) | core 21 + ops 182 + platform 447 + portal 12 + agent-gateway 29 = **691**, 0 falhas, 0 ignorados, BUILD SUCCESS |
 | E2E entre processos (`api/e2e/run.sh`, 001–025) | **29/29**: AgentChannelE2E 5, AccessInvitationsE2E 5, CrossProcessE2E 6, IdentityCredentialsE2E 7, LinkedAccountsE2E 6 |
-| Suíte `db/tests/canal-agent-025` | OK: A, B0–B3, C1–C3 (22 recusas e 5 controles positivos) e C5 (8 contraprovas) |
+| Suíte `db/tests/canal-agent-025` | OK: A, B0–B3, C1–C3 (22 recusas e 5 controles positivos) e C5 (8 contraprovas). Depois da consolidação (§9): 23 recusas |
 | Instalação limpa 001–025 (`aplicar_como_migrador.sh`) | `aplicadas=25 estado=0\|0\|0`, a 025 `elevada=nao`, invariantes da 016 depois da retirada OK |
 
 As contagens do CI por commit estão no PR.
+
+## 9. Consolidação de 28/10 (parecer da titular)
+
+O parecer pediu três pontos inequívocos antes de o contrato ir ao Agent. As mudanças estão neste PR. Os testes acompanham os
+pontos, sem repetir a regressão completa.
+
+### 9.1 Impressão do pacote (D-PA-2)
+
+- **Achado:** a impressão do Agent (`ExecutionPackage.fingerprint`) é o SHA-256 de um texto canônico. Ele contém a regra, o
+  tipo, o hash do descritor e os hashes declarados dos arquivos listados, com `CRLF` trocado por `LF` no texto UTF-8. Ela
+  **não** mede os bytes de um arquivo distribuído. Igualá-la a `artifact.sha256` (bytes do artefato, 005) estava errado.
+- **Mudança:**
+  - a versão declara a impressão em `command_json.agent_package {fingerprint_rule, fingerprint}`;
+  - a autorização guarda `package_fingerprint` e `package_fingerprint_rule`, que só aceita `nekkora-agent/package-fingerprint/1`;
+  - o gatilho confere os dois valores contra a versão;
+  - o canal devolve `packageFingerprintRule`;
+  - `artifact.sha256` não é mais comparado.
+  - A 025 ainda é candidata e não foi aplicada em ambiente preservado. O diff de catálogo previsto ganhou duas linhas
+    aditivas (607 → 609).
+- **Regra e vetores:** contrato, §6.4. Os dois vetores (sintético `cada6a64…` e pacote real do Studio `5664f1a5…`) dão o mesmo
+  resultado em três implementações:
+  - a função do próprio Agent, chamada sobre as classes compiladas sem alterar o repositório;
+  - a referência Java do `PackageFingerprintVectorTest`;
+  - uma reimplementação independente.
+- **Studio:** nenhuma mudança. A regra usa só o que o pacote gerado já contém.
+- **Provas:**
+  - `PackageFingerprintVectorTest` (2);
+  - `AgentAdminIT`: uma versão só com `artifact.sha256`, mesmo igual à impressão, é recusada;
+  - suíte da 025, caso `C3_autorizacao_sha_do_artefato`;
+  - fixtures com `artifact.sha256` deliberadamente diferente da impressão.
+
+### 9.2 ACK e lacunas
+
+- O código já se comportava como pedido. Faltava deixar inequívoco no contrato (§8.1 a §8.3):
+  - `storedThrough` mede recebimento, e `settledThrough` é o cursor de entrega;
+  - `declaredMissing` é perda **definitiva**, irrevogável, nunca atraso;
+  - quando o Agent pode descartar a cópia local, inclusive nos casos `INVALID` e `CONFLICT`.
+- **Testes já existentes:**
+  - `AgentGatewayIT.lacunaDeclarada…`: evento tardio de número declarado recusado e declaração sobre evento gravado recusada;
+  - `…ForaDeOrdemComAckPerdido…`.
+
+### 9.3 Repetição do resgate (falha corrigida)
+
+- **Falha real:** depois de uma rotação ou de uma revogação, repetir o resgate com o código e o segredo antigos ainda
+  devolvia `200` com o vínculo antigo. Nada era reativado, porque a autenticação de cada chamada recusaria a credencial.
+  Mesmo assim, a máquina receberia um "sucesso" enganoso.
+- **Correção:** a repetição passa pela mesma autenticação do §4.4, com o segredo provando a posse. Ela só devolve o vínculo
+  enquanto a credencial emitida ainda vale; senão, `401` uniforme.
+- **Teste:** `AgentGatewayIT.repeticaoDoResgateNaoDesfazRotacaoNemReativaCredencialRevogadaNemRestauraAssociacao`. Ele
+  cobre a rotação, a repetição da rotação, a revogação e o estado final conferido no banco.
+
+### 9.4 Testes desta consolidação
+
+| Rodada | Resultado |
+|---|---|
+| Gateway (`AgentGatewayIT`, `AgentGatewayLimitsIT`, `ObsEnvelopeTest`, `SupervisorReportTest`, `GatewayContractTest`, `PackageFingerprintVectorTest`) e Platform (`AgentAdminIT`, `AgentContractTest`) | gateway **32** (`AgentGatewayIT` 13, `AgentGatewayLimitsIT` 2, `ObsEnvelopeTest` 8, `SupervisorReportTest` 6, `GatewayContractTest` 1, `PackageFingerprintVectorTest` 2) e Platform **7** (`AgentAdminIT` 5, `AgentContractTest` 2), 0 falhas |
+| Suíte `db/tests/canal-agent-025` | OK. Uma rodada intermediária falhou **antes** da 025, na massa antiga da 001–012: o relógio da VM do Docker recuou cerca de 0,35 ms entre duas chamadas a `clock_timestamp()`. A rodada seguinte, sem mudança, passou |
