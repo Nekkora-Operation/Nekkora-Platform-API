@@ -100,15 +100,14 @@ capacidade de produção.**
 ## 6. Limitações declaradas
 
 1. **Agent real:** sem transporte, a integração real não foi feita (§12 do contrato).
-2. **Expurgo e consolidação diária:** o expurgo por política de retenção (010/011) e o `close_usage_day` não cobrem
-   `agent_run_events`. O espaço do servidor cresce sem limite automático nesta versão.
+2. **Expurgo e consolidação diária:** resolvidos pela 026 (§10). O expurgo continua desligado até a decisão D-RET-1.
 3. **Offline:** uma revogação no servidor não interrompe uma máquina desconectada. O fato chega marcado
    (`authorizationStateAtRegistration`).
 4. **Pacote sem versão publicada** não é registrável. A proposta está no §13 do contrato.
 5. **Portal externo** sem rota nova.
 6. **Comandos, cancelamento remoto e agendamento:** pausados (dependem do Agent).
-7. **Elevação:** a 025 não precisa de janela. O runner de homologação não foi estendido à 025 nesta entrega. As suítes, os
-   testes Java e o E2E aplicam 001–025 pelo modelo do migrador.
+7. **Elevação:** a 025 não precisa de janela, e o runner a recusa numa lista (§10). A 026 precisa e tem janela vinculada com
+   pré-voo; a linha dela fica só proposta (D-ELEV-026).
 
 ## 7. Decisões da responsável (parecer de 28/10)
 
@@ -190,3 +189,94 @@ pontos, sem repetir a regressão completa.
 |---|---|
 | Gateway (`AgentGatewayIT`, `AgentGatewayLimitsIT`, `ObsEnvelopeTest`, `SupervisorReportTest`, `GatewayContractTest`, `PackageFingerprintVectorTest`) e Platform (`AgentAdminIT`, `AgentContractTest`) | gateway **32** (`AgentGatewayIT` 13, `AgentGatewayLimitsIT` 2, `ObsEnvelopeTest` 8, `SupervisorReportTest` 6, `GatewayContractTest` 1, `PackageFingerprintVectorTest` 2) e Platform **7** (`AgentAdminIT` 5, `AgentContractTest` 2), 0 falhas |
 | Suíte `db/tests/canal-agent-025` | OK. Uma rodada intermediária falhou **antes** da 025, na massa antiga da 001–012: o relógio da VM do Docker recuou cerca de 0,35 ms entre duas chamadas a `clock_timestamp()`. A rodada seguinte, sem mudança, passou |
+
+## 10. Runner até a 025 e retenção dos eventos do Agent (026)
+
+Os dois itens do parecer que não dependem do transporte.
+
+### 10.1 Runner (PR #29)
+
+- **`atualizar`:** passo 024 → 025 **sem janela**. `NUNCA_ELEVAR=" 021 025 "`: uma linha delas em qualquer lista é recusada
+  pela gramática, e o `implantar` aplica a 025 com `elevada=nao`.
+- **Achado:** o #27 acrescentou `nekkora-agent-gateway` ao `api/pom.xml`, mas a guarda das imagens não o cobria. O
+  `validar-config` tinha 1 falha, e o `atualizar` recusaria qualquer passo. Corrigido no #28 (`d56e4f6`) e no #29.
+
+### 10.2 Migration 026 (PR #30, candidata, com janela)
+
+- **Contabilização:**
+  - `received_at` dos eventos do Agent é atribuído sob a barreira do recurso 6 (`AGENT_EVENT_BYTES_DAILY`);
+  - `close_usage_day` e `reconsolidate_usage_day` contam os eventos do Agent e os bytes do envelope.
+- **Retenção (categoria 3):**
+  - o expurgo é redação, nunca DELETE;
+  - a identidade, o `content_sha256`, a classificação e os instantes ficam, e o reenvio continua `DUPLICATE`;
+  - `agent_runs` não muda, e o ACK nunca diminui;
+  - só atua em dia fechado, com política finita vigente no recebimento e depois do prazo;
+  - o EXECUTE do expurgo continua sem concessão.
+- **Completude × retenção:**
+  - a completude continua a da entrega;
+  - o expurgo aparece em `retention {state, eventsPurged}` e `purged` por evento, nunca como `LOST_*`.
+- **Janela:** necessária porque a 026 altera as tabelas e as funções de manutenção cujos donos são os papéis da 011 (caso B0).
+  Ela não cria papel, dono, SECURITY DEFINER nem EXECUTE.
+- **Achado da suíte (C3):** `IN (SELECT … LIMIT n FOR UPDATE)` passou do lote sob o plano de laço aninhado escolhido com a RLS.
+  Foram 3 com lote 2. A categoria 3 usa uma CTE materializada. As categorias 1 e 2 (011/012, sem EXECUTE) têm a mesma
+  construção (D-RET-2).
+
+### 10.3 Provas
+
+| Rodada | Resultado |
+|---|---|
+| Suíte `db/tests/retencao-agent-026` | OK: A, B0, B1, B1b, B2 (diff previsto de 40 linhas), B3, C1–C4 (13 recusas e 10 controles), C5 (8 contraprovas) |
+| Gateway 33 e Platform 8 (testes do canal, com os dois casos novos de retenção) | 0 falhas |
+| `test_atualizar_lista.sh` (024 → 025 e 025 → 026), `guarda_fontes_imagens.sh` 106/0, `validar-config` | ver PRs #29 e #30 |
+| Ambiente descartável `ensaio-agent-026` | LIBERADO com 001–025 pelo runner (022, 023 e 024 com pré-voo e janela; 025 sem janela); a 026 espera a aprovação da linha (§10.5) |
+
+### 10.4 Recuperação do ensaio e prova (28/10)
+
+- **Interrupção:** o sistema ficou sem memória, e a sessão parou a prova; depois, o Docker Desktop reiniciou.
+- **Diagnóstico, só com leituras:**
+  - histórico 001–021, todos com sucesso;
+  - migrador sem nenhum atributo, sem participação e sem sessão (0|0|0);
+  - nenhuma trava consultiva no banco;
+  - janelas 011–020 todas revogadas com conferência;
+  - a interrupção caiu **fora** de qualquer janela, no `atualizar` 021→022, depois do build das imagens e antes do
+    `ambiente.env`.
+- **`recuperar`:** migrador 0|0|0. O ambiente continuou BLOQUEADO só porque a cópia de migrações já tinha a 022.
+- **Retomada, só pelo runner e sem edição manual:**
+  1. `implantar` (o caminho que o `recuperar` indica): 022 com pré-voo OK e janela revogada;
+  2. o `atualizar` 021→022 repetido, que concluiu o passo;
+  3. 023 e 024, com pré-voo e janela;
+  4. **025 sem janela** (sem a marca "ELEVADA");
+  5. `subir`.
+- **Resultado:** LIBERADO com 001–025, serviços no ar. A 026 não foi aplicada, porque espera a aprovação da linha abaixo.
+
+### 10.5 Decisões da titular (28/10)
+
+| Id | Decisão |
+|---|---|
+| D-RET-1 | expurgo **desligado** fora do laboratório; a política só é exercitada em testes descartáveis; a retenção operacional ainda precisa ser definida |
+| D-RET-2 | corrigir em PR separado, com reprodução dirigida e controles do lote: migration 027 (PR #31) |
+| D-ELEV-026 | ambiente exclusivo `ensaio-agent-026`. A linha só vale com aprovação do hash apresentado (abaixo). A linha foi retirada da lista do laboratório até lá |
+| D-PA-7 | segue para a fase do contrato de comandos; não bloqueia a telemetria |
+
+**Linha proposta para aprovação (D-ELEV-026):**
+
+```
+026 5f6579e66606329992b529c4e4b92498e75350312cfdb6a047bcce14b64904a6 tipo=superuser ambiente=ensaio-agent-026
+```
+
+- **026 final:** `db/migrations/026_retencao_eventos_agent.sql` em `7d30c24`.
+- **Pré-voo oficial:** `ops/homologacao/implantacao/preflight/026.sql`, sha256 `d099994fdd515afe5556c9e40a71d8bf24a0256fdeb2064da4425bdcc6c67414`.
+  - Ele confere: histórico 001–025 sem falha; migrador sem atributo; 025 presente e 026 ausente; as três restrições e o gatilho
+    que a 026 troca; os donos das tabelas e das funções de manutenção, sem login nem participação.
+  - É somente leitura.
+
+### 10.6 Referência fixa do contrato para a missão do Agent
+
+Para que o Agent não implemente um contrato que mudou durante o trabalho, a referência é o commit `7d30c2437927e33cd56ba7c66eee600a9d46f598`.
+
+| Arquivo | sha256 nesse commit |
+|---|---|
+| `docs/relatorios/2026-10-28-platform-agent-contrato.md` | `c7f4e7f98122cba90e3f5666d71c4387786a02a50e885ec1d2955944f63410f7` |
+| `docs/relatorios/2026-10-28-platform-agent-exemplos/exemplos.md` | `3bd333783796935bfd5f3c6bf605477433545399da552f720479f5ba219a70aa` |
+
+Qualquer mudança de protocolo depois desse commit exige uma nova referência, comunicada à missão do Agent.
