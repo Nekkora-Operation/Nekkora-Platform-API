@@ -1,0 +1,28 @@
+cluster_descartavel=nekkora-b11-restauracao-20261027224512 rede=none porta=nenhuma
+papeis_no_arquivo=23 (sem senhas: 0 linhas com PASSWORD) pertinencias=5 com_granted_by=0
+papeis_aplicados_erros=0
+banco=CRIADO dono=migrador_nekkora
+pgcrypto=CRIADA_PELO_MIGRADOR_SEM_JANELA
+janela_superuser_migrador=ABERTA
+pg_restore=OK
+janela_superuser_migrador=RETIRADA atributos=0
+duracao_restauracao_s=4
+== contagens (origem pelo admin_cluster; destino pelo superusuario do cluster descartavel)
+tabelas_comparadas=82
+linhas_origem=82 linhas_destino=82
+contagens=IGUAIS
+ops_linhas_origem=119
+== invariantes da 016 (sec. 19) na base restaurada (exigidas)
+invariantes_016_restaurada=OK
+== privilegios (catalogo: papeis, pertinencias sem o concedente, donos, ACL, RLS, politicas, funcoes, extensoes, padroes)
+itens_origem=742 itens_destino=742
+PAPEL=22 PERTINENCIA=5 BANCO=1 ESQUEMA=2 RELACAO=82 COLUNA=204 POLITICA=135 FUNCAO=253 EXTENSAO=3 PADRAO=1 
+privilegios=IGUAIS
+concedentes_origem: nekkora_ops_mfa -> op_hml_apr concedente=admin_cluster;nekkora_ops_mfa -> op_hml_cad concedente=admin_cluster;nekkora_ops_mfa -> op_hml_exe concedente=admin_cluster;nekkora_ops_mfa -> op_hml_ver concedente=admin_cluster;pg_read_all_data -> backup_nekkora concedente=admin_cluster
+concedentes_destino: nekkora_ops_mfa -> op_hml_apr concedente=<superusuario-da-restauracao>;nekkora_ops_mfa -> op_hml_cad concedente=<superusuario-da-restauracao>;nekkora_ops_mfa -> op_hml_exe concedente=<superusuario-da-restauracao>;nekkora_ops_mfa -> op_hml_ver concedente=<superusuario-da-restauracao>;pg_read_all_data -> backup_nekkora concedente=<superusuario-da-restauracao>
+extensao sslinfo: origem dono=migrador_nekkora esquema=ops | destino dono=migrador_nekkora esquema=ops
+extensao pgcrypto: origem dono=migrador_nekkora esquema=public | destino dono=migrador_nekkora esquema=public
+extensao plpgsql: origem dono=<superusuario-do-cluster> esquema=pg_catalog | destino dono=<superusuario-do-cluster> esquema=pg_catalog
+donos_das_funcoes_origem:  36 dono=<superusuario-do-cluster>; 102 dono=migrador_nekkora; 32 dono=nekkora_identity_owner; 65 dono=nekkora_ops_mfa_owner; 6 dono=nekkora_portal_owner; 4 dono=nekkora_provisioning_owner; 4 dono=nekkora_retention_owner; 4 dono=nekkora_scheduler_owner
+donos_das_funcoes_destino:  36 dono=<superusuario-do-cluster>; 102 dono=migrador_nekkora; 32 dono=nekkora_identity_owner; 65 dono=nekkora_ops_mfa_owner; 6 dono=nekkora_portal_owner; 4 dono=nekkora_provisioning_owner; 4 dono=nekkora_retention_owner; 4 dono=nekkora_scheduler_owner
+cluster_descartavel=REMOVIDO
