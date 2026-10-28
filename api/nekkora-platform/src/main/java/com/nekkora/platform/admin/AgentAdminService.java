@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 import com.nekkora.core.token.Tokens;
+import com.nekkora.core.web.ApiException;
 import com.nekkora.core.web.RequestContext;
 import com.nekkora.platform.access.WorkspaceAccess;
 import com.nekkora.platform.admin.AccessActions.Failure;
@@ -43,7 +44,7 @@ public final class AgentAdminService {
     public CodeIssued createPairing(UUID org, ValidSession actor, String token, UUID workerId, String workerName, String agentName, Integer minutes) {
         int ttl = ttl(minutes);
         if ((workerId == null) == (workerName == null) || !validName(agentName) || workerName != null && !validName(workerName)) {
-            throw AccessActions.refuse(Failure.INVALID, "pareamento");
+            throw ApiException.invalid("pareamento");
         }
         return actions.write(org, j -> {
             actions.requireActor(j, org, actor, token);
@@ -136,7 +137,7 @@ public final class AgentAdminService {
         short code = switch (reason == null ? "" : reason) {
             case "COMPROMISED" -> (short) 3;
             case "ADMINISTRATIVE" -> (short) 4;
-            default -> throw AccessActions.refuse(Failure.INVALID, "motivo");
+            default -> throw ApiException.invalid("motivo");
         };
         actions.write(org, j -> {
             actions.requireActor(j, org, actor, token);
@@ -223,7 +224,7 @@ public final class AgentAdminService {
     public LocalAuthorization authorizeLocalRun(UUID org, ValidSession actor, String token, UUID workspaceId, UUID workerId, UUID versionId,
                                                 OffsetDateTime validUntil) {
         if (validUntil == null) {
-            throw AccessActions.refuse(Failure.INVALID, "validade");
+            throw ApiException.invalid("validade");
         }
         return actions.write(org, j -> {
             actions.requireActor(j, org, actor, token);
@@ -343,7 +344,7 @@ public final class AgentAdminService {
     private static int ttl(Integer minutes) {
         int m = minutes == null ? 15 : minutes;
         if (m < 5 || m > 60) {
-            throw AccessActions.refuse(Failure.INVALID, "validade_codigo");
+            throw ApiException.invalid("validade_codigo");
         }
         return m;
     }
