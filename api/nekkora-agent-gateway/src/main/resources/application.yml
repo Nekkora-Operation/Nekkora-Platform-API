@@ -1,0 +1,49 @@
+# Canal da maquina (Platform-Agent 1.0) - configuracao. Segredos SO por ambiente: NEKKORA_GATEWAY_DB_URL, NEKKORA_GATEWAY_DB_SENHA.
+# Credencial exclusiva do nekkora_ingestion; este processo NAO recebe as credenciais do nekkora_platform nem do portal.
+spring:
+  application:
+    name: nekkora-agent-gateway
+  main:
+    banner-mode: off
+  data:
+    redis:
+      host: ${NEKKORA_REDIS_HOST:localhost}
+      port: ${NEKKORA_REDIS_PORT:6379}
+      timeout: 500ms
+      connect-timeout: 500ms
+
+server:
+  port: ${NEKKORA_PORTA:8083}
+  forward-headers-strategy: none
+  error:
+    whitelabel:
+      enabled: false
+    include-message: never
+    include-stacktrace: never
+    include-exception: false
+    include-binding-errors: never
+  tomcat:
+    accesslog:
+      enabled: false
+
+nekkora:
+  trusted-proxies: ${NEKKORA_PROXIES_CONFIAVEIS:127.0.0.1/32,::1/128}
+  database:
+    url: ${NEKKORA_GATEWAY_DB_URL}
+    user: ${NEKKORA_GATEWAY_DB_USUARIO:nekkora_ingestion}
+    password: ${NEKKORA_GATEWAY_DB_SENHA}
+    max-pool-size: ${NEKKORA_GATEWAY_DB_POOL:10}
+  limits:
+    batches-per-minute: ${NEKKORA_GATEWAY_LOTES_POR_MINUTO:600}
+    redeem-failures-per-hour: ${NEKKORA_GATEWAY_RESGATES_RECUSADOS_POR_HORA:20}
+    credential-days: ${NEKKORA_GATEWAY_VALIDADE_CREDENCIAL_DIAS:90}
+
+logging:
+  level:
+    root: INFO
+    org.springframework.web: WARN
+    org.springframework.jdbc: WARN
+    org.apache.catalina: WARN
+    com.zaxxer.hikari: WARN
+    org.postgresql: WARN
+    io.lettuce: WARN
