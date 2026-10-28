@@ -32,7 +32,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Canal da maquina de ponta a ponta no processo REAL do gateway (porta aleatoria, papel nekkora_ingestion), PostgreSQL 16
- * com 001-025 e Redis reais. A maquina e um Agent SIMULADO ({@link MachineClient}) alimentado com os registros REAIS do Agent
+ * com 001-026 e Redis reais. A maquina e um Agent SIMULADO ({@link MachineClient}) alimentado com os registros REAIS do Agent
  * empacotado (COMPAT-001): envelopes e estado.json do sucesso (a1), do cancelamento (a2) e da queda do Agent (a5).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = AgentGatewayApplication.class)
@@ -319,6 +319,49 @@ class AgentGatewayIT {
         assertThat(fx.count("SELECT count(*) FROM agent_run_reports WHERE agent_run_id = '" + runId + "'")).isEqualTo(5);
         // cada envelope gravado e exatamente o canonico do Agent (sem duplicata)
         assertThat(fx.count("SELECT count(DISTINCT sequence) FROM agent_run_events WHERE agent_run_id = '" + runId + "'")).isEqualTo(294);
+    }
+
+    @Test
+    void depoisDoExpurgoOReenvioContinuaDuplicadoOAckNaoVoltaEOutroConteudoEConflito() throws Exception {
+        Paired p = paired(fx);
+        MachineClient m = p.m();
+        String ex = executionOf("a2-cancelamento");
+        m.register(ex, p.authorization().toString(), AgentFixture.REAL_FINGERPRINT, running());
+        List<String> all = envelopes("a2-cancelamento");
+        MachineClient.Response first = m.events(ex, all.subList(0, 40), null);
+        assertThat(first.body().get("storedThrough").asLong()).isEqualTo(40);
+        String run = first.body().get("runId").asString();
+        // a ingestao gravou received_at sob a barreira do recurso 6 (026)
+        assertThat(fx.count("SELECT count(*) FROM organization_usage_daily WHERE organization_id = '" + fx.org + "' AND resource_code = 6 "
+                + "AND usage_date = (clock_timestamp() AT TIME ZONE 'UTC')::date")).isEqualTo(1);
+        // fixture: recebidos ha 3 dias, politica de 1 dia vigente desde antes; dia fechado e expurgo (funcao do dono, como a operacao)
+        String day = fx.value("SELECT (clock_timestamp() AT TIME ZONE 'UTC')::date - 3");
+        String user = fx.value("SELECT user_id FROM organization_memberships WHERE membership_id = '" + fx.adminMembership + "'");
+        DB.asSuperuser("SET session_replication_role = replica",
+                "UPDATE agent_run_events SET received_at = ('" + day + "'::date + time '12:00') AT TIME ZONE 'UTC' WHERE agent_run_id = '" + run + "'",
+                "INSERT INTO organization_retention_policy_revisions (organization_id, category, revision_number, effective_from, retention_mode, retention_days, "
+                        + "provisioned_by_user_id) SELECT '" + fx.org + "', 3, coalesce(max(revision_number), 0) + 1, now() - interval '10 days', 1, 1, '" + user
+                        + "' FROM organization_retention_policy_revisions WHERE organization_id = '" + fx.org + "' AND category = 3",
+                "SET session_replication_role = origin",
+                "SELECT public.close_usage_day('" + fx.org + "', 6, '" + day + "')",
+                "SELECT public.purge_expired_records('" + fx.org + "', 3, '" + user + "', 1000)");
+        assertThat(fx.count("SELECT count(*) FROM agent_run_events WHERE agent_run_id = '" + run + "' AND purged_at IS NOT NULL AND envelope IS NULL")).isEqualTo(40);
+
+        // reenvio (ACK perdido) depois do expurgo: o content_sha256 ficou, entao e DUPLICATE e o ACK e o mesmo, sem voltar
+        MachineClient.Response again = m.events(ex, all.subList(0, 40), null);
+        assertThat(again.status()).isEqualTo(200);
+        assertThat(again.body().get("storedThrough").asLong()).isEqualTo(40);
+        assertThat(again.body().get("settledThrough").asLong()).isEqualTo(40);
+        again.body().get("results").forEach(x -> assertThat(x.get("status").asString()).isEqualTo("DUPLICATE"));
+        // a mesma sequence com outro conteudo continua CONFLICT; o original (redigido) fica
+        ObjectNode forged = (ObjectNode) JSON.readTree(all.get(9));
+        forged.put("severity", "ERROR");
+        assertThat(m.events(ex, List.of(forged.toString()), null).body().get("results").get(0).get("status").asString()).isEqualTo("CONFLICT");
+        // a entrega continua: os seguintes entram no dia de hoje, nao expurgados
+        MachineClient.Response rest = m.events(ex, all.subList(40, 60), null);
+        assertThat(rest.body().get("storedThrough").asLong()).isEqualTo(60);
+        assertThat(fx.value("SELECT stored_through || '|' || events_stored FROM agent_runs WHERE agent_run_id = '" + run + "'")).isEqualTo("60|60");
+        assertThat(fx.count("SELECT count(*) FROM agent_run_events WHERE agent_run_id = '" + run + "' AND purged_at IS NULL")).isEqualTo(20);
     }
 
     @Test

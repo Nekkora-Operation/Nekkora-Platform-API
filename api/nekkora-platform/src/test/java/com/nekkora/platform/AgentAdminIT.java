@@ -266,6 +266,62 @@ class AgentAdminIT extends PlatformTestBase {
         return "http://localhost:" + port;
     }
 
+    @Test
+    void expurgoDoServidorApareceComoRetencaoNuncaComoPerda() throws Exception {
+        Setup s = setup();
+        UUID worker = workerRow(s.org(), "W-ret");
+        UUID agent = agentOn(s.org(), worker);
+        UUID wwa = UUID.fromString(value("INSERT INTO worker_workspace_assignments (organization_id, worker_id, workspace_id, status, authorized_by_membership_id) "
+                + "VALUES ('" + s.org().id() + "', '" + worker + "', '" + s.workspace() + "', 1, '" + s.org().adminMembership() + "') RETURNING assignment_id"));
+        UUID authorization = UUID.fromString(value("INSERT INTO local_run_authorizations (organization_id, workspace_id, worker_id, worker_workspace_assignment_id, "
+                + "automation_id, automation_version_id, package_fingerprint, granted_by_membership_id, valid_until) VALUES ('" + s.org().id() + "', '" + s.workspace()
+                + "', '" + worker + "', '" + wwa + "', '" + s.automation() + "', '" + s.version() + "', '" + FINGERPRINT + "', '" + s.org().adminMembership()
+                + "', now() + interval '30 days') RETURNING authorization_id"));
+        String waa = value("SELECT assignment_id FROM worker_agent_assignments WHERE agent_id = '" + agent + "'");
+        String ex = "ex-" + "ef".repeat(16);
+        UUID run = UUID.randomUUID();
+        // historico COMPLETO entregue (1..3, coleta concluida na 3) e desfecho conhecido
+        assertThat(asIngestion(s.org().id(),
+                "INSERT INTO agent_runs (agent_run_id, organization_id, workspace_id, automation_id, automation_version_id, authorization_id, agent_id, worker_id, "
+                        + "worker_agent_assignment_id, agent_execution_id, package_fingerprint, authorization_state_at_registration, supervisor_state) VALUES ('" + run
+                        + "', '" + s.org().id() + "', '" + s.workspace() + "', '" + s.automation() + "', '" + s.version() + "', '" + authorization + "', '" + agent + "', '"
+                        + worker + "', '" + waa + "', '" + ex + "', '" + FINGERPRINT + "', 1, 3)",
+                event(s.org().id(), run, ex, 1, "AGENT", "RUNNING", "LIFECYCLE", null),
+                event(s.org().id(), run, ex, 2, "FRAMEWORK", "ACTION_COMPLETED", "ACTIVITY", "search.fill_search_term"),
+                event(s.org().id(), run, ex, 3, "AGENT", "COLLECTION_COMPLETED", "LIFECYCLE", null),
+                "UPDATE agent_runs SET events_stored = 3, stored_through = 3, settled_through = 3, max_sequence = 3, collection_completed_sequence = 3, "
+                        + "framework_events = 1, supervisor_state = 4, exit_code = 0 WHERE agent_run_id = '" + run + "'")).isEqualTo("OK");
+        // a ingestao (026) gravou received_at sob a barreira do recurso 6 do dia
+        assertThat(count("SELECT count(*) FROM organization_usage_daily WHERE organization_id = '" + s.org().id() + "' AND resource_code = 6 "
+                + "AND usage_date = (clock_timestamp() AT TIME ZONE 'UTC')::date AND status = 1")).isEqualTo(1);
+        String o = "/api/v1/o/" + s.org().id();
+        BrowserClient.Response before = s.admin().get(o + "/agent-runs/" + run);
+        assertThat(before.body()).contains("\"completeness\":\"COMPLETE\"").contains("\"state\":\"AVAILABLE\"").contains("\"eventsPurged\":0");
+
+        // fixture: os eventos foram recebidos ha 3 dias, com politica de 1 dia ja vigente; o dia e fechado e o expurgo roda
+        String day = value("SELECT (clock_timestamp() AT TIME ZONE 'UTC')::date - 3");
+        String user = value("SELECT user_id FROM organization_memberships WHERE membership_id = '" + s.org().adminMembership() + "'");
+        DB.asSuperuser("SET session_replication_role = replica",
+                "UPDATE agent_run_events SET received_at = ('" + day + "'::date + time '12:00') AT TIME ZONE 'UTC' WHERE agent_run_id = '" + run + "'",
+                "INSERT INTO organization_retention_policy_revisions (organization_id, category, revision_number, effective_from, retention_mode, retention_days, "
+                        + "provisioned_by_user_id) VALUES ('" + s.org().id() + "', 3, 1, now() - interval '10 days', 1, 1, '" + user + "')",
+                "SET session_replication_role = origin",
+                "SELECT public.close_usage_day('" + s.org().id() + "', 6, '" + day + "')");
+        assertThat(value("SELECT public.purge_expired_records('" + s.org().id() + "', 3, '" + user + "', 100)")).isEqualTo("3");
+
+        // expurgo NAO e perda: a completude continua a da entrega; a retencao aparece em dimensao propria
+        BrowserClient.Response after = s.admin().get(o + "/agent-runs/" + run);
+        assertThat(after.status()).isEqualTo(200);
+        assertThat(after.body()).contains("\"completeness\":\"COMPLETE\"").contains("\"reasons\":[]").contains("\"storedThrough\":3")
+                .contains("\"state\":\"PURGED\"").contains("\"eventsPurged\":3").doesNotContain("LOST_");
+        BrowserClient.Response events = s.admin().get(o + "/agent-runs/" + run + "/events");
+        assertThat(events.body()).contains("\"purged\":true").contains("\"eventCode\":\"ACTION_COMPLETED\"").doesNotContain("search.fill_search_term")
+                .doesNotContain("\"purged\":false");
+        // a contabilizacao do dia fechado ficou com os eventos do Agent
+        assertThat(value("SELECT records_count || '|' || status FROM organization_usage_daily WHERE organization_id = '" + s.org().id() + "' AND resource_code = 6 "
+                + "AND usage_date = '" + day + "'")).isEqualTo("3|2");
+    }
+
     private static String event(UUID org, UUID run, String ex, int seq, String source, String code, String category, String step) {
         String env = "{\"schema\":\"nekkora-agent/observability\",\"version\":\"1.0.0\",\"agent_execution_id\":\"" + ex + "\",\"sequence\":" + seq
                 + ",\"observed_utc\":\"2026-10-28T12:35:06.0Z\",\"source\":\"" + source + "\",\"event_code\":\"" + code + "\",\"severity\":\"INFO\",\"category\":\""
