@@ -22,8 +22,8 @@
 # 023 e 024 (acessos, missao de 2026-10-27): elevacao exigida (suites db/tests/acessos-023 e acessos-024, B1) e pre-voo
 # oficial proprio. 026 (retencao dos eventos do Agent, missao Platform-Agent de 2026-10-28): elevacao exigida (suite
 # db/tests/retencao-agent-026, B0) e pre-voo oficial proprio. Estar aqui NAO autoriza nada: so obriga linha vinculada ao id e
-# pre-voo oficial quando houver linha.
-VINCULO_OBRIGATORIO=" 016 017 018 019 020 022 023 024 026 "
+# pre-voo oficial quando houver linha. 027 (lote do expurgo, D-RET-2): idem (suite db/tests/lote-expurgo-027, B0).
+VINCULO_OBRIGATORIO=" 016 017 018 019 020 022 023 024 026 027 "
 # Versoes que NUNCA recebem janela: aplicam sem atributo nenhum (021: fila de e-mail; 025: canal Platform-Agent, sem papel,
 # dono nem SECURITY DEFINER novos, suite db/tests/canal-agent-025, caso A elevada=nao). Uma linha para elas e recusada pela
 # gramatica, em qualquer lista (revisada ou alternativa): a janela de SUPERUSER nao e concedida a quem nao precisa.
