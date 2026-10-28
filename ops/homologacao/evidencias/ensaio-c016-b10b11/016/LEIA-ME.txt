@@ -10,6 +10,6 @@ execucao3-b11-privilegios (2026-10-27T22:37Z, H016_SOMENTE=B11, runner com a COM
   antes da janela, pgcrypto pelo migrador sem atributos; so o pg_restore na janela). Contagens e invariantes ja eram OK.
   Uma execucao intermediaria (22:43Z) passou com 741 itens, mas o filtro ainda deixava de fora a pertinencia
   pg_read_all_data -> backup_nekkora; corrigido o filtro, nao arquivada.
-execucao4-b11 (2026-10-27T22:44Z, H016_SOMENTE=B11, runner final): B11, B12 e SEGREDOS OK; 742 itens de catalogo IGUAIS
+execucao4-b11 (2026-10-27T22:44Z, H016_SOMENTE=B11, runner final): B11, B12 e SEGREDOS OK; 742 itens comparados IGUAIS, com a excecao declarada do concedente (GRANTED BY) das 5 pertinencias, normalizado na comparacao (nao e identidade de todo o catalogo de seguranca)
   (papeis, 5 pertinencias sem o concedente, banco, esquemas, 82 relacoes, 204 ACL de coluna, 135 politicas, 253 funcoes,
   3 extensoes, padroes); fotografias completas em b11_privilegios_origem.txt e b11_privilegios_restaurada.txt.
