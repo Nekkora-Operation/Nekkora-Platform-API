@@ -206,6 +206,44 @@ class AgentGatewayIT {
     }
 
     @Test
+    void repeticaoDoResgateNaoDesfazRotacaoNemReativaCredencialRevogadaNemRestauraAssociacao() {
+        UUID worker = fx.worker("W-repr");
+        String code = fx.pairingCode(worker, "Estacao repr", "15 minutes");
+        MachineClient m = client();
+        JsonNode first = m.pair(code);
+        String secret = m.secret;
+        UUID agent = UUID.fromString(first.get("agentId").asString());
+        String hb = "{\"agentVersion\":\"1\",\"contractVersion\":\"1.0\",\"capabilities\":[]}";
+        // rotacao feita: repetir o PAREAMENTO com o segredo antigo nao devolve o vinculo antigo
+        String rotation = fx.rotationCode(agent, worker);
+        String newSecret = Tokens.newToken();
+        MachineClient.Response rotated = m.redeem(rotation, newSecret);
+        assertThat(rotated.status()).isEqualTo(200);
+        MachineClient.Response oldRepeat = m.redeem(code, secret);
+        assertThat(oldRepeat.status()).isEqualTo(401);
+        assertThat(oldRepeat.raw()).isEqualTo("{\"error\":\"unauthenticated\"}");
+        // a repeticao da rotacao com o segredo novo ainda vale enquanto a credencial nova vale
+        assertThat(m.redeem(rotation, newSecret).status()).isEqualTo(200);
+        // revogacao do Agent (o que a Platform faz): nenhuma repeticao devolve vinculo nem muda nada
+        String newCredential = rotated.body().get("credentialId").asString();
+        DB.asSuperuser("UPDATE agent_credentials SET revoked_at = now(), revoked_by_membership_id = '" + fx.adminMembership
+                + "', revocation_reason = 3 WHERE credential_id = '" + newCredential + "'");
+        DB.asSuperuser("UPDATE worker_agent_assignments SET status = 2, ended_at = now(), ended_by_membership_id = '" + fx.adminMembership
+                + "' WHERE agent_id = '" + agent + "' AND status = 1");
+        DB.asSuperuser("UPDATE agents SET status = 4 WHERE agent_id = '" + agent + "'");
+        for (String[] attempt : List.of(new String[] {rotation, newSecret}, new String[] {code, secret})) {
+            MachineClient.Response r = client().redeem(attempt[0], attempt[1]);
+            assertThat(r.status()).isEqualTo(401);
+            assertThat(r.raw()).isEqualTo("{\"error\":\"unauthenticated\"}");
+        }
+        String fresh = MachineToken.credential(fx.org, UUID.fromString(newCredential), newSecret);
+        assertThat(client().post("/heartbeat", hb, fresh).status()).isEqualTo(401);
+        assertThat(fx.value("SELECT a.status || '|' || (SELECT count(*) FROM agent_credentials c WHERE c.agent_id = a.agent_id AND c.revoked_at IS NULL) || '|' "
+                + "|| (SELECT count(*) FROM worker_agent_assignments wa WHERE wa.agent_id = a.agent_id AND wa.status = 1) FROM agents a WHERE a.agent_id = '"
+                + agent + "'")).isEqualTo("4|0|0");
+    }
+
+    @Test
     void doisResgatesConcorrentesNoMesmoWorkerUmPassa() throws Exception {
         UUID worker = fx.worker("W-corrida");
         String c1 = fx.pairingCode(worker, "Estacao A", "15 minutes");

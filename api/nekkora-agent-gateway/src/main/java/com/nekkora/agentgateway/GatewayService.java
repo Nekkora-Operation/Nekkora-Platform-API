@@ -82,10 +82,11 @@ public final class GatewayService {
                 throw ApiException.unauthenticated("codigo");
             }
             if (e.consumed()) {
-                // repeticao: so o MESMO segredo devolve o mesmo resultado
-                String hash = j.sql("SELECT credential_hash FROM public.agent_credentials WHERE organization_id = ? AND credential_id = ?")
-                        .param(code.organization()).param(e.consumedCredential()).query(String.class).single();
-                if (!Tokens.constantTimeEquals(hash, secretHash)) {
+                // repeticao: so o MESMO segredo devolve o mesmo resultado, e so enquanto a credencial emitida ainda vale
+                // (nao revogada, nao vencida, Agent ativo e associado). Nao reativa, nao desfaz rotacao, nao restaura associacao.
+                try {
+                    auth.authenticate(j, new MachineToken(MachineToken.CREDENTIAL, code.organization(), e.consumedCredential(), credentialSecret, null));
+                } catch (ApiException refused) {
                     throw ApiException.unauthenticated("codigo_consumido");
                 }
                 return identity(j, code.organization(), e.consumedCredential());
