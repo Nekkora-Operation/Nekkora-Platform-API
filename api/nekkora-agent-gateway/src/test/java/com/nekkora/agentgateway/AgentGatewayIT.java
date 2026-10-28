@@ -276,6 +276,7 @@ class AgentGatewayIT {
         JsonNode auths = m.authorizations().body().get("items");
         assertThat(auths).hasSize(1);
         assertThat(auths.get(0).get("packageFingerprint").asString()).isEqualTo(AgentFixture.REAL_FINGERPRINT);
+        assertThat(auths.get(0).get("packageFingerprintRule").asString()).isEqualTo("nekkora-agent/package-fingerprint/1");
         String ex = executionOf("a1-sucesso");
         MachineClient.Response reg = m.register(ex, p.authorization().toString(), AgentFixture.REAL_FINGERPRINT, running());
         assertThat(reg.status()).isEqualTo(201);

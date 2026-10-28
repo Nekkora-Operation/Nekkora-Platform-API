@@ -147,6 +147,7 @@
 > col|local_run_authorizations|granted_at|timestamp with time zone|notnull=t|default=clock_timestamp()|gen=
 > col|local_run_authorizations|granted_by_membership_id|uuid|notnull=t|default=|gen=
 > col|local_run_authorizations|organization_id|uuid|notnull=t|default=|gen=
+> col|local_run_authorizations|package_fingerprint_rule|text|notnull=t|default='nekkora-agent/package-fingerprint/1'::text|gen=
 > col|local_run_authorizations|package_fingerprint|text|notnull=t|default=|gen=
 > col|local_run_authorizations|revoked_at|timestamp with time zone|notnull=f|default=|gen=
 > col|local_run_authorizations|revoked_by_membership_id|uuid|notnull=f|default=|gen=
@@ -246,6 +247,7 @@
 > con|local_run_authorizations|local_run_authorizations_organization_id_worker_id_workspa_fkey|FOREIGN KEY (organization_id, worker_id, workspace_id, worker_workspace_assignment_id) REFERENCES worker_workspace_assignments(organization_id, worker_id, workspace_id, assignment_id) ON DELETE RESTRICT
 > con|local_run_authorizations|local_run_authorizations_organization_id_workspace_id_auto_fkey|FOREIGN KEY (organization_id, workspace_id, automation_id, automation_version_id) REFERENCES automation_versions(organization_id, workspace_id, automation_id, automation_version_id) ON DELETE RESTRICT
 > con|local_run_authorizations|local_run_authorizations_package_fingerprint_check|CHECK ((package_fingerprint ~ '^[0-9a-f]{64}$'::text))
+> con|local_run_authorizations|local_run_authorizations_package_fingerprint_rule_check|CHECK ((package_fingerprint_rule = 'nekkora-agent/package-fingerprint/1'::text))
 > con|local_run_authorizations|local_run_authorizations_pkey|PRIMARY KEY (authorization_id)
 > fnacl|access_membership_effective(uuid,uuid)|nekkora_ingestion|EXECUTE|grant=f
 > fnacl|access_org_permission(uuid,uuid,text)|nekkora_ingestion|EXECUTE|grant=f

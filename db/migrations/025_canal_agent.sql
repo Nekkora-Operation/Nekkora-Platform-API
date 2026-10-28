@@ -10,7 +10,10 @@
 --     conferida na criacao E de novo no resgate (gatilho, mesma regra da 023: access_org_permission);
 --   * agent_presence: capacidades e versao de contrato informadas no heartbeat (o instante fica em agents.last_heartbeat_at);
 --   * local_run_authorizations: autorizacao de execucao local vinculada a organizacao, workspace, Worker AUTORIZADO no
---     workspace, versao PUBLICADA e pacote imutavel (package_fingerprint = command_json.artifact.sha256 da versao);
+--     workspace, versao PUBLICADA e pacote imutavel. O pacote e identificado pela impressao digital do Agent com regra
+--     explicita (package_fingerprint_rule = 'nekkora-agent/package-fingerprint/1', conteudo normalizado), declarada na versao
+--     em command_json.agent_package {fingerprint_rule, fingerprint}. NAO e command_json.artifact.sha256 (bytes do artefato
+--     distribuido): as duas medidas nao se confundem (contrato, sec. 6.4);
 --   * agent_runs: registro da execucao local (identidade local agent_execution_id unica por Agent; nunca uma linha de
 --     executions), com o estado do SUPERVISOR (vocabulario do Agent, inclusive TIMED_OUT, BLOCKED e OUTCOME_UNKNOWN) e a
 --     projecao da entrega dos eventos (stored_through/settled_through);
@@ -151,6 +154,8 @@ CREATE TABLE public.local_run_authorizations (
     automation_id                  UUID NOT NULL,
     automation_version_id          UUID NOT NULL,
     package_fingerprint            TEXT NOT NULL CHECK (package_fingerprint ~ '^[0-9a-f]{64}$'),
+    package_fingerprint_rule       TEXT NOT NULL DEFAULT 'nekkora-agent/package-fingerprint/1'
+                                       CHECK (package_fingerprint_rule IN ('nekkora-agent/package-fingerprint/1')),
     granted_by_membership_id       UUID NOT NULL,
     granted_at                     TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     valid_until                    TIMESTAMPTZ NOT NULL,
@@ -170,6 +175,7 @@ CREATE TABLE public.local_run_authorizations (
     CHECK (revoked_at IS NULL OR revoked_at >= granted_at)
 );
 CREATE INDEX ix_local_run_authorizations_worker ON public.local_run_authorizations (organization_id, worker_id);
+COMMENT ON COLUMN public.local_run_authorizations.package_fingerprint IS 'impressao do pacote pela regra package_fingerprint_rule (hex, sem o prefixo sha256:); nao e o sha256 dos bytes do artefato';
 
 CREATE TABLE public.agent_runs (
     agent_run_id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -407,8 +413,10 @@ BEGIN
     END IF;
     IF NOT EXISTS (SELECT 1 FROM public.automation_versions v
                     WHERE v.organization_id = NEW.organization_id AND v.automation_version_id = NEW.automation_version_id
-                      AND v.status = 2 AND (v.command_json -> 'artifact' ->> 'sha256') = NEW.package_fingerprint) THEN
-        RAISE EXCEPTION 'versao nao publicada ou pacote diferente do artefato da versao' USING ERRCODE = '23514';
+                      AND v.status = 2
+                      AND (v.command_json -> 'agent_package' ->> 'fingerprint_rule') = NEW.package_fingerprint_rule
+                      AND (v.command_json -> 'agent_package' ->> 'fingerprint') = NEW.package_fingerprint) THEN
+        RAISE EXCEPTION 'versao nao publicada ou pacote diferente da impressao declarada na versao' USING ERRCODE = '23514';
     END IF;
     IF NOT EXISTS (SELECT 1 FROM public.automations a JOIN public.workspaces w ON w.organization_id = a.organization_id AND w.workspace_id = a.workspace_id
                     WHERE a.organization_id = NEW.organization_id AND a.automation_id = NEW.automation_id AND a.status = 1 AND w.status = 1) THEN

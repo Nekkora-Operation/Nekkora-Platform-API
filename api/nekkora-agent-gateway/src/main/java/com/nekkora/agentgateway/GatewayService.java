@@ -200,7 +200,7 @@ public final class GatewayService {
     }
 
     public record Authorization(UUID authorizationId, UUID workspaceId, UUID automationId, UUID automationVersionId, String packageFingerprint,
-                                OffsetDateTime validUntil) {
+                                String packageFingerprintRule, OffsetDateTime validUntil) {
     }
 
     /** Autorizacoes ATIVAS do Worker da maquina (nao revogadas, no prazo, com o Worker ainda autorizado no workspace). */
@@ -208,7 +208,8 @@ public final class GatewayService {
         return tx.inOrganization(t.organization(), Mode.READ_WRITE, j -> {
             Machine m = auth.authenticate(j, t);
             return j.sql("""
-                    SELECT z.authorization_id, z.workspace_id, z.automation_id, z.automation_version_id, z.package_fingerprint, z.valid_until
+                    SELECT z.authorization_id, z.workspace_id, z.automation_id, z.automation_version_id, z.package_fingerprint,
+                           z.package_fingerprint_rule, z.valid_until
                       FROM public.local_run_authorizations z
                       JOIN public.worker_workspace_assignments x ON x.organization_id = z.organization_id
                                                                  AND x.assignment_id = z.worker_workspace_assignment_id AND x.status = 1
@@ -216,7 +217,7 @@ public final class GatewayService {
                      ORDER BY z.granted_at, z.authorization_id
                     """).param(m.organization()).param(m.workerId())
                     .query((rs, n) -> new Authorization(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getObject(3, UUID.class),
-                            rs.getObject(4, UUID.class), rs.getString(5), rs.getObject(6, OffsetDateTime.class)))
+                            rs.getObject(4, UUID.class), rs.getString(5), rs.getString(6), rs.getObject(7, OffsetDateTime.class)))
                     .list();
         });
     }

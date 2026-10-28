@@ -42,7 +42,7 @@ class AgentAdminIT extends PlatformTestBase {
                         + "', '" + o.id() + "', '" + ws + "', 'Biografias', 1, '" + o.adminMembership() + "')",
                 "INSERT INTO automation_versions (automation_version_id, organization_id, workspace_id, automation_id, status, command_json, created_by_membership_id) "
                         + "VALUES ('" + version + "', '" + o.id() + "', '" + ws + "', '" + automation + "', 1, jsonb_build_object('contract_version',1,'artifact',"
-                        + "jsonb_build_object('reference','biografias-python','sha256','" + FINGERPRINT + "'),'runtime','python3.12','entrypoint','main.py',"
+                        + "jsonb_build_object('reference','biografias-python','sha256','" + "ab".repeat(32) + "'),'agent_package',jsonb_build_object('fingerprint_rule','nekkora-agent/package-fingerprint/1','fingerprint','" + FINGERPRINT + "'),'runtime','python3.12','entrypoint','main.py',"
                         + "'arguments','[]'::jsonb,'parameters','{}'::jsonb,'secret_bindings','{}'::jsonb), '" + o.adminMembership() + "')",
                 "UPDATE automation_versions SET status = 2, published_at = now(), published_by_membership_id = '" + o.adminMembership()
                         + "' WHERE automation_version_id = '" + version + "'");
@@ -142,6 +142,11 @@ class AgentAdminIT extends PlatformTestBase {
         assertThat(value("SELECT cancelled_at IS NOT NULL FROM agent_enrollments WHERE enrollment_id = '" + rot.field("enrollmentId") + "'")).isEqualTo("t");
         assertThat(count("SELECT count(*) FROM agent_admin_events WHERE agent_id = '" + agent + "' AND act = 6 AND reason_code = 'COMPROMISED'")).isEqualTo(1);
         assertThat(s.admin().post(base + "/revoke", "{\"reason\":\"COMPROMISED\"}").status()).isEqualTo(409);
+        // maquina que perdeu a credencial: so um NOVO ato autorizado a recupera (revogacao + novo pareamento, outro agent_id);
+        // o Worker ficou livre com a revogacao
+        BrowserClient.Response repair = s.admin().post("/api/v1/o/" + s.org().id() + "/agent-enrollments",
+                "{\"workerId\":\"" + worker + "\",\"agentName\":\"Estacao reinstalada\"}");
+        assertThat(repair.status()).as(repair.body()).isEqualTo(201);
         // a listagem mostra o estado, sem hash de credencial
         BrowserClient.Response list = s.admin().get("/api/v1/o/" + s.org().id() + "/agents");
         assertThat(list.status()).isEqualTo(200);
@@ -173,6 +178,17 @@ class AgentAdminIT extends PlatformTestBase {
                 + "automation_version_id = '" + s.version() + "'");
         assertThat(s.admin().post(o + "/workspaces/" + s.workspace() + "/local-run-authorizations", req.replace(s.version().toString(), draft.toString())).status())
                 .isEqualTo(409);
+        // versao publicada sem impressao declarada (so o sha256 dos bytes do artefato, mesmo igual a impressao): recusada
+        UUID onlyArtifact = UUID.randomUUID();
+        DB.asSuperuser("INSERT INTO automation_versions (automation_version_id, organization_id, workspace_id, automation_id, status, command_json, created_by_membership_id) "
+                        + "SELECT '" + onlyArtifact + "', organization_id, workspace_id, automation_id, 1, (command_json - 'agent_package') || jsonb_build_object('artifact', "
+                        + "jsonb_build_object('reference', 'biografias-python', 'sha256', '" + FINGERPRINT + "')), created_by_membership_id FROM automation_versions WHERE "
+                        + "automation_version_id = '" + s.version() + "'",
+                "UPDATE automation_versions SET status = 2, published_at = now(), published_by_membership_id = created_by_membership_id WHERE automation_version_id = '"
+                        + onlyArtifact + "'");
+        BrowserClient.Response noPackage = s.admin().post(o + "/workspaces/" + s.workspace() + "/local-run-authorizations",
+                req.replace(s.version().toString(), onlyArtifact.toString()));
+        assertThat(noPackage.status()).as(noPackage.body()).isEqualTo(409);
         BrowserClient.Response list = s.admin().get(o + "/workspaces/" + s.workspace() + "/local-run-authorizations");
         assertThat(list.body()).contains(a.field("authorizationId"));
         assertThat(s.admin().post(o + "/workspaces/" + s.workspace() + "/local-run-authorizations/" + a.field("authorizationId") + "/revoke", null).status())

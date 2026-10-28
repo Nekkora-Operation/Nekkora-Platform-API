@@ -25,6 +25,8 @@ import com.nekkora.platform.session.ValidSession;
 public final class AgentAdminService {
 
     private static final Logger LOG = LoggerFactory.getLogger(AgentAdminService.class);
+    /** Regra da impressao do pacote aceita nesta versao (contrato, sec. 6.4). */
+    static final String FINGERPRINT_RULE = "nekkora-agent/package-fingerprint/1";
     static final Pattern NAME = Pattern.compile("[^\\p{Cntrl}]{1,80}");
 
     private final AccessActions actions;
@@ -218,7 +220,7 @@ public final class AgentAdminService {
                                      String packageFingerprint, OffsetDateTime grantedAt, OffsetDateTime validUntil, OffsetDateTime revokedAt) {
     }
 
-    private record Version(UUID automationId, short status, String artifact) {
+    private record Version(UUID automationId, short status, String packageFingerprint) {
     }
 
     public LocalAuthorization authorizeLocalRun(UUID org, ValidSession actor, String token, UUID workspaceId, UUID workerId, UUID versionId,
@@ -231,12 +233,14 @@ public final class AgentAdminService {
             access.requireWorkspace(j, org, actor.membershipId(), workspaceId, "automation.execute");
             actions.requireStepUp(j, actor);
             actions.lockOrganizationAndActor(j, org, actor.userId());
-            Version v = j.sql("SELECT automation_id, status, command_json -> 'artifact' ->> 'sha256' FROM public.automation_versions "
-                            + "WHERE organization_id = ? AND workspace_id = ? AND automation_version_id = ?").param(org).param(workspaceId).param(versionId)
-                    .query((rs, n) -> new Version(rs.getObject(1, UUID.class), rs.getShort(2), rs.getString(3))).optional()
+            // a impressao do pacote declarada na versao, com a regra (contrato, sec. 6.4); nunca o sha256 dos bytes do artefato
+            Version v = j.sql("SELECT automation_id, status, CASE WHEN command_json -> 'agent_package' ->> 'fingerprint_rule' = ? "
+                            + "THEN command_json -> 'agent_package' ->> 'fingerprint' END FROM public.automation_versions "
+                            + "WHERE organization_id = ? AND workspace_id = ? AND automation_version_id = ?").param(FINGERPRINT_RULE).param(org).param(workspaceId)
+                    .param(versionId).query((rs, n) -> new Version(rs.getObject(1, UUID.class), rs.getShort(2), rs.getString(3))).optional()
                     .orElseThrow(() -> AccessActions.refuse(Failure.TARGET_NOT_FOUND, "versao"));
-            if (v.status() != 2 || v.artifact() == null || !v.artifact().matches("[0-9a-f]{64}")) {
-                throw AccessActions.refuse(Failure.CONFLICT, "versao_nao_publicada_ou_sem_artefato");
+            if (v.status() != 2 || v.packageFingerprint() == null || !v.packageFingerprint().matches("[0-9a-f]{64}")) {
+                throw AccessActions.refuse(Failure.CONFLICT, "versao_nao_publicada_ou_sem_impressao_do_pacote");
             }
             UUID assignment = j.sql("SELECT assignment_id FROM public.worker_workspace_assignments WHERE organization_id = ? AND worker_id = ? "
                             + "AND workspace_id = ? AND status = 1").param(org).param(workerId).param(workspaceId).query(UUID.class).optional()
@@ -247,7 +251,7 @@ public final class AgentAdminService {
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     RETURNING authorization_id, workspace_id, worker_id, automation_id, automation_version_id, package_fingerprint, granted_at, valid_until,
                               revoked_at
-                    """).param(org).param(workspaceId).param(workerId).param(assignment).param(v.automationId()).param(versionId).param(v.artifact())
+                    """).param(org).param(workspaceId).param(workerId).param(assignment).param(v.automationId()).param(versionId).param(v.packageFingerprint())
                     .param(actor.membershipId()).param(validUntil).query((rs, n) -> authorization(rs)).single();
             audit(j, org, 10, actor.membershipId(), null, workerId, workspaceId, null, null, a.authorizationId(), null);
             return a;

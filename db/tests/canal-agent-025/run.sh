@@ -19,7 +19,8 @@
 #          status do Agent, nao le e-mail, nao apaga nem altera historico;
 #     C2 - RLS: sem contexto nada aparece; contexto de outra organizacao nao ve nem grava;
 #     C3 - gatilhos: codigo com validade acima de 60 min, consumo depois do vencimento, cancelamento sem autoridade, autorizacao
-#          com versao rascunho, pacote diferente do artefato ou sem automation.execute; registro divergente da autorizacao;
+#          com versao rascunho, pacote diferente da impressao declarada na versao (inclusive o sha256 dos bytes do artefato) ou
+#          sem automation.execute; registro divergente da autorizacao;
 #          transicao proibida; terminal alterado; contadores que voltam; sequence acima do limite;
 #     C5 - contraprovas das invariantes da 025 (cada uma em BEGIN ... ROLLBACK): controle passa; recusam DELETE concedido,
 #          papel de outro servico com acesso, RLS sem FORCE, gatilho desligado, funcao SECURITY DEFINER, EXECUTE extra e escrita
@@ -264,6 +265,7 @@ u() { consulta "$LIMPA" nekkora "SELECT gen_random_uuid()"; }
 O="$(u)"; O2="$(u)"; ADM="$(u)"; ADMM="$(u)"; MEM="$(u)"; MEMM="$(u)"; WS="$(u)"; AUT="$(u)"; VER="$(u)"; RASC="$(u)"
 WK="$(u)"; AG="$(u)"; WAA="$(u)"; WWA="$(u)"; CRED="$(u)"; AUTZ="$(u)"; RUN="$(u)"; ENR="$(u)"
 FP=5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d
+ART=$(printf 'ab%.0s' $(seq 32))  # sha256 dos bytes do artefato: OUTRA medida, nunca a impressao
 psqlc "$LIMPA" nekkora > "$SAIDA/C00_massa.txt" 2>&1 <<SQL || { cat "$SAIDA/C00_massa.txt"; falha "massa C"; }
 BEGIN;
 INSERT INTO organizations (organization_id, name, status) VALUES ('$O', 'Org canal', 1), ('$O2', 'Outra org', 1);
@@ -277,9 +279,11 @@ INSERT INTO organization_resource_limit_revisions (organization_id, resource_cod
 INSERT INTO workspaces (workspace_id, organization_id, name, status) VALUES ('$WS', '$O', 'WS', 1);
 INSERT INTO automations (automation_id, organization_id, workspace_id, name, status, created_by_membership_id) VALUES ('$AUT', '$O', '$WS', 'Biografias', 1, '$ADMM');
 INSERT INTO automation_versions (automation_version_id, organization_id, workspace_id, automation_id, status, command_json, created_by_membership_id) VALUES
-  ('$VER', '$O', '$WS', '$AUT', 1, jsonb_build_object('contract_version',1,'artifact',jsonb_build_object('reference','p','sha256','$FP'),'runtime','python3.12',
+  ('$VER', '$O', '$WS', '$AUT', 1, jsonb_build_object('contract_version',1,'artifact',jsonb_build_object('reference','p','sha256','$ART'),
+   'agent_package',jsonb_build_object('fingerprint_rule','nekkora-agent/package-fingerprint/1','fingerprint','$FP'),'runtime','python3.12',
    'entrypoint','main.py','arguments','[]'::jsonb,'parameters','{}'::jsonb,'secret_bindings','{}'::jsonb), '$ADMM'),
-  ('$RASC', '$O', '$WS', '$AUT', 1, jsonb_build_object('contract_version',1,'artifact',jsonb_build_object('reference','p','sha256','$FP'),'runtime','python3.12',
+  ('$RASC', '$O', '$WS', '$AUT', 1, jsonb_build_object('contract_version',1,'artifact',jsonb_build_object('reference','p','sha256','$ART'),
+   'agent_package',jsonb_build_object('fingerprint_rule','nekkora-agent/package-fingerprint/1','fingerprint','$FP'),'runtime','python3.12',
    'entrypoint','main.py','arguments','[]'::jsonb,'parameters','{}'::jsonb,'secret_bindings','{}'::jsonb), '$ADMM');
 UPDATE automation_versions SET status = 2, published_at = now(), published_by_membership_id = '$ADMM' WHERE automation_version_id = '$VER';
 INSERT INTO workers (worker_id, organization_id, name, status) VALUES ('$WK', '$O', 'W', 1);
@@ -332,6 +336,10 @@ recusa_sql "$LIMPA" "C3_autorizacao_rascunho" "versao nao publicada" "$(como nek
 recusa_sql "$LIMPA" "C3_autorizacao_pacote" "pacote diferente" "$(como nekkora_platform "$O" "INSERT INTO local_run_authorizations (organization_id, workspace_id, worker_id,
     worker_workspace_assignment_id, automation_id, automation_version_id, package_fingerprint, granted_by_membership_id, valid_until) VALUES ('$O', '$WS', '$WK', '$WWA',
     '$AUT', '$VER', repeat('0', 64), '$ADMM', now() + interval '30 days');")"
+# o sha256 dos BYTES do artefato nao e a impressao do pacote: a autorizacao com ele e recusada (contrato, sec. 6.4)
+recusa_sql "$LIMPA" "C3_autorizacao_sha_do_artefato" "pacote diferente" "$(como nekkora_platform "$O" "INSERT INTO local_run_authorizations (organization_id, workspace_id, worker_id,
+    worker_workspace_assignment_id, automation_id, automation_version_id, package_fingerprint, granted_by_membership_id, valid_until) VALUES ('$O', '$WS', '$WK', '$WWA',
+    '$AUT', '$VER', '$ART', '$ADMM', now() + interval '30 days');")"
 recusa_sql "$LIMPA" "C3_autorizacao_sem_permissao" "sem automation.execute" "$(como nekkora_platform "$O" "INSERT INTO local_run_authorizations (organization_id, workspace_id, worker_id,
     worker_workspace_assignment_id, automation_id, automation_version_id, package_fingerprint, granted_by_membership_id, valid_until) VALUES ('$O', '$WS', '$WK', '$WWA',
     '$AUT', '$VER', '$FP', '$MEMM', now() + interval '30 days');")"

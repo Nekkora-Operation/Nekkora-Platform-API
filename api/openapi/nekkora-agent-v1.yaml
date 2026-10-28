@@ -217,7 +217,8 @@ components:
               workspaceId: { type: string, format: uuid }
               automationId: { type: string, format: uuid }
               automationVersionId: { type: string, format: uuid }
-              packageFingerprint: { type: string, pattern: '^[0-9a-f]{64}$' }
+              packageFingerprint: { type: string, pattern: '^[0-9a-f]{64}$', description: 'Impressao do pacote pela regra packageFingerprintRule (contrato, sec. 6.4), sem o prefixo sha256:' }
+              packageFingerprintRule: { type: string, enum: ['nekkora-agent/package-fingerprint/1'] }
               validUntil: { type: string, format: date-time }
     SupervisorReport:
       type: object
@@ -240,7 +241,7 @@ components:
       properties:
         agentExecutionId: { type: string, pattern: '^ex-[0-9a-f]{32}$' }
         authorizationId: { type: string, format: uuid }
-        packageFingerprint: { type: string, pattern: '^[0-9a-f]{64}$', description: 'Impressao digital do pacote (sem o prefixo sha256:)' }
+        packageFingerprint: { type: string, pattern: '^[0-9a-f]{64}$', description: 'Impressao do pacote pela regra da autorizacao (contrato, sec. 6.4), sem o prefixo sha256:' }
         supervisor: { $ref: '#/components/schemas/SupervisorReport' }
     Registered:
       type: object

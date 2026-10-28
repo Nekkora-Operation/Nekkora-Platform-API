@@ -80,7 +80,7 @@ public final class AgentBench {
                         + ws + "', 'Biografias', 1, '" + adminM + "')",
                 "INSERT INTO automation_versions (automation_version_id, organization_id, workspace_id, automation_id, status, command_json, created_by_membership_id) "
                         + "VALUES ('" + ver + "', '" + org + "', '" + ws + "', '" + aut + "', 1, jsonb_build_object('contract_version',1,'artifact',jsonb_build_object("
-                        + "'reference','p','sha256','" + FP + "'),'runtime','python3.12','entrypoint','main.py','arguments','[]'::jsonb,'parameters','{}'::jsonb,"
+                        + "'reference','p','sha256','" + "ab".repeat(32) + "'),'agent_package',jsonb_build_object('fingerprint_rule','nekkora-agent/package-fingerprint/1','fingerprint','" + FP + "'),'runtime','python3.12','entrypoint','main.py','arguments','[]'::jsonb,'parameters','{}'::jsonb,"
                         + "'secret_bindings','{}'::jsonb), '" + adminM + "')",
                 "UPDATE automation_versions SET status = 2, published_at = now(), published_by_membership_id = '" + adminM + "' WHERE automation_version_id = '" + ver + "'");
         List<String[]> machines = new ArrayList<>();
