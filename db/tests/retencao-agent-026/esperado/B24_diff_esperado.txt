@@ -1,0 +1,40 @@
+< col|agent_run_events|envelope|jsonb|notnull=t|default=|gen=
+< con|organization_purge_runs|organization_purge_runs_category_check|CHECK ((category = ANY (ARRAY[1, 2])))
+< con|organization_retention_policy_revisions|organization_retention_policy_revisions_category_check|CHECK ((category = ANY (ARRAY[1, 2])))
+< con|organization_usage_daily|organization_usage_daily_resource_code_check|CHECK ((resource_code = ANY (ARRAY[4, 5])))
+< fn|close_usage_day(uuid,integer,date)|owner=nekkora_retention_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=void|md5=...
+< fn|enforce_redaction_or_reject()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, public, pg_temp"}|result=trigger|md5=...
+< fn|purge_expired_records(uuid,integer,uuid,integer)|owner=nekkora_retention_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=integer|md5=...
+< fn|reconsolidate_usage_day(uuid,integer,date)|owner=nekkora_retention_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(out_records_count bigint, out_bytes_count bigint, out_consolidated_at timestamp with time zone)|md5=...
+< trg|agent_run_events|trg_agent_run_events_prevent_update|enabled=O|CREATE TRIGGER trg_agent_run_events_prevent_update BEFORE UPDATE ON public.agent_run_events FOR EACH ROW EXECUTE FUNCTION prevent_update()
+> colacl|agent_run_events|envelope|nekkora_retention_owner|UPDATE|grant=f
+> colacl|agent_run_events|error_code|nekkora_retention_owner|UPDATE|grant=f
+> colacl|agent_run_events|purge_run_id|nekkora_retention_owner|UPDATE|grant=f
+> colacl|agent_run_events|purged_at|nekkora_retention_owner|UPDATE|grant=f
+> colacl|agent_run_events|purged_by_user_id|nekkora_retention_owner|UPDATE|grant=f
+> colacl|agent_run_events|step_id|nekkora_retention_owner|UPDATE|grant=f
+> colacl|agent_run_events|studio_step_id|nekkora_retention_owner|UPDATE|grant=f
+> colacl|agent_run_events|timestamp_utc|nekkora_retention_owner|UPDATE|grant=f
+> col|agent_run_events|envelope|jsonb|notnull=f|default=|gen=
+> col|agent_run_events|purge_category|smallint|notnull=t|default=3|gen=
+> col|agent_run_events|purge_run_id|uuid|notnull=f|default=|gen=
+> col|agent_run_events|purged_at|timestamp with time zone|notnull=f|default=|gen=
+> col|agent_run_events|purged_by_user_id|uuid|notnull=f|default=|gen=
+> con|agent_run_events|agent_run_events_envelope_purge_check|CHECK ((((purged_at IS NULL) AND (envelope IS NOT NULL)) OR ((purged_at IS NOT NULL) AND (envelope IS NULL) AND (step_id IS NULL) AND (studio_step_id IS NULL) AND (error_code IS NULL) AND (timestamp_utc IS NULL))))
+> con|agent_run_events|agent_run_events_purge_category_check|CHECK ((purge_category = 3))
+> con|agent_run_events|agent_run_events_purge_pair_check|CHECK ((((purged_at IS NULL) = (purged_by_user_id IS NULL)) AND ((purged_at IS NULL) = (purge_run_id IS NULL))))
+> con|agent_run_events|agent_run_events_purge_run_fkey|FOREIGN KEY (purge_run_id, organization_id, purge_category) REFERENCES organization_purge_runs(purge_run_id, organization_id, category) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED
+> con|agent_run_events|agent_run_events_purged_by_user_id_fkey|FOREIGN KEY (purged_by_user_id) REFERENCES users(user_id) ON DELETE RESTRICT
+> con|organization_purge_runs|organization_purge_runs_category_check|CHECK ((category = ANY (ARRAY[1, 2, 3])))
+> con|organization_retention_policy_revisions|organization_retention_policy_revisions_category_check|CHECK ((category = ANY (ARRAY[1, 2, 3])))
+> con|organization_usage_daily|organization_usage_daily_resource_code_check|CHECK ((resource_code = ANY (ARRAY[4, 5, 6])))
+> fnacl|agent_run_event_received_at()|migrador_nekkora|EXECUTE|grant=f
+> fn|agent_run_event_received_at()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=trigger|md5=...
+> fn|close_usage_day(uuid,integer,date)|owner=nekkora_retention_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=void|md5=...
+> fn|enforce_redaction_or_reject()|owner=migrador_nekkora|secdef=f|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, public, pg_temp"}|result=trigger|md5=...
+> fn|purge_expired_records(uuid,integer,uuid,integer)|owner=nekkora_retention_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=integer|md5=...
+> fn|reconsolidate_usage_day(uuid,integer,date)|owner=nekkora_retention_owner|secdef=t|vol=v|strict=f|lang=plpgsql|config={"search_path=pg_catalog, pg_temp"}|result=TABLE(out_records_count bigint, out_bytes_count bigint, out_consolidated_at timestamp with time zone)|md5=...
+> pol|agent_run_events|tenant_function_context|ALL|PERMISSIVE|{nekkora_retention_owner}|using=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)|check=(organization_id = (NULLIF(current_setting('nekkora.fn_organization_id'::text, true), ''::text))::uuid)
+> relacl|agent_run_events|nekkora_retention_owner|SELECT|grant=f
+> trg|agent_run_events|trg_agent_run_events_enforce_redaction_or_reject|enabled=O|CREATE TRIGGER trg_agent_run_events_enforce_redaction_or_reject BEFORE UPDATE ON public.agent_run_events FOR EACH ROW EXECUTE FUNCTION enforce_redaction_or_reject()
+> trg|agent_run_events|trg_agent_run_events_received_at|enabled=O|CREATE TRIGGER trg_agent_run_events_received_at BEFORE INSERT ON public.agent_run_events FOR EACH ROW EXECUTE FUNCTION agent_run_event_received_at()

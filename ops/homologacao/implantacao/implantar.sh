@@ -37,7 +37,7 @@ if [ -n "${HOMOLOG_ELEVACAO_ARQ:-}" ] && [[ ! "$HOMOLOG_ID" =~ ^ensaio- ]]; then
     echo "FALHA: lista de elevacao alternativa (HOMOLOG_ELEVACAO_ARQ) so em ambiente descartavel (id ensaio-*)" >&2; exit 3
 fi
 LISTA="${HOMOLOG_ELEVACAO_ARQ:-$DIR_IMPL/elevacao.txt}"
-# Versoes com VINCULO e PRE-VOO OFICIAL obrigatorios (VINCULO_OBRIGATORIO, de lib/lista_elevacao.sh: 016-020 e 022-024): a linha
+# Versoes com VINCULO e PRE-VOO OFICIAL obrigatorios (VINCULO_OBRIGATORIO, de lib/lista_elevacao.sh: 016-020, 022-024 e 026): a linha
 # precisa do id exato do ambiente e o pre-voo vem SO de implantacao/preflight/<versao>.sql (nunca da lista alternativa).
 # 011-013 seguem no formato legado.
 # A lista e validada ANTES de qualquer acao (trava, elevacao ou migration) pela gramatica de lib/lista_elevacao.sh
@@ -180,7 +180,7 @@ for f in "$HOMOLOG_MIGRACOES_HOST"/[0-9]*.sql; do
         if [ -n "$alvo" ]; then
             pf="$DIR_IMPL/preflight/$v.sql"
             # Pre-voo alternativo SO para versoes SINTETICAS de ensaio (9xx, fora do repositorio), com lista alternativa (so
-            # ensaio-*) e sem pre-voo oficial. Versao de vinculo obrigatorio (016-020, 022-024) nunca usa o alternativo: sem o oficial, recusa.
+            # ensaio-*) e sem pre-voo oficial. Versao de vinculo obrigatorio (016-020, 022-024, 026) nunca usa o alternativo: sem o oficial, recusa.
             if [ ! -f "$pf" ] && [ -n "${HOMOLOG_ELEVACAO_ARQ:-}" ] && [[ "$v" =~ ^9[0-9]{2}$ ]]; then pf="$(dirname "$LISTA")/preflight/$v.sql"; fi
             [ -f "$pf" ] || encerra_com_falha 2 "versao $v vinculada a $alvo sem pre-voo ($pf); elevacao RECUSADA antes de conceder"
             # as DUAS condicoes: consulta com codigo 0 E marcador final PREFLIGHT_OK

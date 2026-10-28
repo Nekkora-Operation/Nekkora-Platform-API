@@ -947,9 +947,10 @@ jornadas-api)
 # ==================================================================================================== atualizar
 # Atualizacao de um ensaio-* LIBERADO para versoes posteriores das migrations e das imagens (missao PLATFORM-API-V1-003,
 # revisao: prova da atualizacao 021 -> 022 numa base populada pelo caminho real de implantacao; missao de acessos de
-# 2026-10-27: 022 -> 023 e 023 -> 024; missao Platform-Agent de 2026-10-28: 024 -> 025, SEM janela). SO ensaio-*, UM passo
-# por vez: 021 -> 022, 022 -> 023, 023 -> 024 ou 024 -> 025. A 025 nao e de vinculo obrigatorio e nao pode ter linha na lista
-# (NUNCA_ELEVAR, lib/lista_elevacao.sh): o "implantar" a aplica com elevada=nao.
+# 2026-10-27: 022 -> 023 e 023 -> 024; missao Platform-Agent de 2026-10-28: 024 -> 025, SEM janela, e 025 -> 026, COM janela).
+# SO ensaio-*, UM passo por vez: 021 -> 022, 022 -> 023, 023 -> 024, 024 -> 025 ou 025 -> 026. A 025 nao e de vinculo
+# obrigatorio e nao pode ter linha na lista (NUNCA_ELEVAR, lib/lista_elevacao.sh): o "implantar" a aplica com elevada=nao. A
+# 026 e de vinculo obrigatorio (linha vinculada ao id e pre-voo oficial implantacao/preflight/026.sql).
 # Nada e aplicado no banco aqui: o "implantar" seguinte aplica as versoes novas com os controles de sempre (linha
 # vinculada, pre-voo, janela, retirada conferida), e o "subir" sobe os servicos com as imagens novas.
 #   1. recusa, ANTES de qualquer mudanca: ambiente BLOQUEADO; versao alvo fora do suportado; copia de migrations do
@@ -968,8 +969,8 @@ atualizar)
     ALVO="${HOMOLOG_ATUALIZAR_ATE:-}"
     [[ "$HOMOLOG_ID" =~ ^ensaio- ]] || falha "atualizar so em ambiente descartavel (id ensaio-*)"
     case "$HOMOLOG_ATE>$ALVO" in
-        "021>022"|"022>023"|"023>024"|"024>025") ;;
-        *) falha "atualizacao suportada: 021 -> 022, 022 -> 023, 023 -> 024 ou 024 -> 025, um passo por vez, com HOMOLOG_ATUALIZAR_ATE=<versao seguinte> (ambiente em $HOMOLOG_ATE, alvo '${ALVO}')";;
+        "021>022"|"022>023"|"023>024"|"024>025"|"025>026") ;;
+        *) falha "atualizacao suportada: 021 -> 022, 022 -> 023, 023 -> 024, 024 -> 025 ou 025 -> 026, um passo por vez, com HOMOLOG_ATUALIZAR_ATE=<versao seguinte> (ambiente em $HOMOLOG_ATE, alvo '${ALVO}')";;
     esac
     [ "${HOMOLOG_TRANSPORTE:-}" = homologacao ] || falha "atualizar exige o transporte de homologacao"
     novas=""

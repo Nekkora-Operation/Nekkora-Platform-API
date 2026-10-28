@@ -114,6 +114,16 @@ public final class AgentRunReads {
                  GROUP BY event_code ORDER BY event_code
                 """).param(runId).query((rs, n) -> tx.put(rs.getString(1), rs.getLong(2))).list();
         m.put("transactionsSeen", tx);
+        // retencao no servidor (026): dimensao propria; nunca muda a completude, que e a da entrega (contrato, sec. 9 e 11)
+        m.put("retention", j.sql("SELECT count(*) FILTER (WHERE purged_at IS NOT NULL), count(*) FROM public.agent_run_events WHERE agent_run_id = ?")
+                .param(runId).query((rs, n) -> {
+                    long purged = rs.getLong(1);
+                    long total = rs.getLong(2);
+                    Map<String, Object> r = new LinkedHashMap<>();
+                    r.put("state", purged == 0 ? "AVAILABLE" : purged == total ? "PURGED" : "PARTIALLY_PURGED");
+                    r.put("eventsPurged", purged);
+                    return r;
+                }).single());
         return m;
     }
 
@@ -123,6 +133,7 @@ public final class AgentRunReads {
         access.requireWorkspace(j, org, membership, workspace, READ);
         return j.sql("""
                 SELECT sequence, source, event_code, severity, category, step_id, studio_step_id, error_code, timestamp_utc, observed_utc, received_at,
+                       purged_at IS NOT NULL AS purged,
                        envelope ->> 'phase' AS phase, envelope ->> 'action' AS action, envelope ->> 'status' AS status, envelope -> 'attempt' AS attempt,
                        envelope -> 'elapsed_ms' AS elapsed_ms, envelope ->> 'transaction_ref' AS transaction_ref, (envelope -> 'counts')::text AS counts
                   FROM public.agent_run_events
@@ -148,6 +159,8 @@ public final class AgentRunReads {
             e.put("timestampUtc", rs.getObject("timestamp_utc", OffsetDateTime.class));
             e.put("observedUtc", rs.getObject("observed_utc", OffsetDateTime.class));
             e.put("receivedAt", rs.getObject("received_at", OffsetDateTime.class));
+            // expurgado pela retencao: so a classificacao e os instantes ficam; o conteudo da etapa vem nulo
+            e.put("purged", rs.getBoolean("purged"));
             return e;
         }).list();
     }

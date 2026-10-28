@@ -2423,6 +2423,12 @@ components:
             invalidRefused: { type: integer }
             stepsAvailable: { type: boolean, description: 'false: processo sem eventos do Framework (etapas indisponiveis; nada e inventado)' }
         transactionsSeen: { type: object, additionalProperties: { type: integer }, description: 'So no detalhe' }
+        retention:
+          type: object
+          description: 'So no detalhe. Retencao no servidor (026): dimensao propria; nunca muda history.completeness, que e a da entrega. Expurgo nao e perda na origem'
+          properties:
+            state: { type: string, enum: [AVAILABLE, PARTIALLY_PURGED, PURGED] }
+            eventsPurged: { type: integer }
     AgentRunPage:
       type: object
       required: [items, nextCursor]
@@ -2456,4 +2462,5 @@ components:
               timestampUtc: { type: [string, 'null'], format: date-time, description: 'Instante informado pela origem' }
               observedUtc: { type: string, format: date-time, description: 'Instante em que o Agent leu o evento' }
               receivedAt: { type: string, format: date-time }
+              purged: { type: boolean, description: 'Expurgado pela retencao do servidor: ficam a classificacao e os instantes; o conteudo da etapa vem nulo' }
         nextCursor: { type: [string, 'null'] }
