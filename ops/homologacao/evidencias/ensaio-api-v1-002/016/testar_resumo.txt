@@ -1,0 +1,10 @@
+cenario|resultado|detalhe
+B5|OK|37 funcoes ops_*, 21 tabelas em ops, 9 politicas ops_function_context e o bloco de invariantes da 016 (sec. 19) no ambiente
+B6|OK|certificado da CA operacional aceito; senha e CN diferente recusados na autenticacao (28xxx); CA estranha recusada no TLS (unknown_ca no cliente e certificate verify failed no servidor); op_* do .31 na regra explicita de recusa; disponibilidade antes e depois
+B7|OK|entrada registrada por nekkora_ops_intake (SCRAM, .33); servicos sem funcoes de operador nem leitura de tabelas
+B8a|OK|abertura por retorno, verificacao, pre-aprovacao, avisos ACEITE_SIMULADO, CONFIRMAR pelo gateway, aprovacao imediata recusada (ESPERA_NAO_CUMPRIDA)
+B10|PARCIAL|RECUSADO, ENFILEIRADO, INCERTO, EXCECAO e ACEITO simulados pelo caminho normal com as categorias esperadas (ACEITO tambem em B8a); VARREDURA pendente (sem gatilho no ambiente)
+B8b|NAO_EXECUTADO|so com H016_B8B=1 (fixture declarada de solicitacao)
+B11|PARCIAL|dump por backup_nekkora inclui as 21 tabelas de ops; restauracao num segundo cluster PENDENTE (P4)
+B12|OK|inventario COMPLETO por ID fora do ambiente (containers, redes, volumes, imagens) identico antes e depois
+SEGREDOS|OK|nenhum dos 40 valores secretos vistos aparece nas evidencias

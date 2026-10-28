@@ -1,0 +1,9 @@
+testar-016 no ensaio-api-v1-003 (021 revisao 3), duas execucoes:
+- execucao1 (2026-10-24, primeira do ambiente): B5, B6, B7, B8a OK; B10 e B11 PARCIAIS pelos motivos ja registrados no
+  ensaio-api-v1-002; B12 FALHA por um container e um volume NOVOS fora do ambiente, identificados no inventario como
+  Testcontainers (rotulo org.testcontainers=true, criados as 04:20:39 pela regressao Maven que rodava em paralelo noutra
+  arvore). A falha e do ambiente da maquina, nao do cenario: o B12 detectou o que deveria detectar.
+- execucao2 (sem nenhuma outra atividade Docker): B5, B6, B7 OK; B12 OK. B8a e B10 nao se repetem no mesmo ambiente: a
+  fixture declarada de contatos recusa uma segunda solicitacao na organizacao ("ja existe solicitacao na organizacao"),
+  sem alterar nada; por isso B8a/B10 da execucao2 aparecem como FALHA e nao valem como resultado do cenario.
+Resultado consolidado: B5-B8a OK, B10 e B11 PARCIAIS (preexistente), B12 OK, segredos OK nas duas.

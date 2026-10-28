@@ -1,0 +1,10 @@
+solicitacao=a43bde09-718a-4de5-8886-ed2044614caa resultado=RECUSA origem=BANCO estado=SOLICITADA motivo=ESTADO_INVALIDO
+desfecho=RECUSADO tentativa= esperado=5:RECUSA_SIMULADA
+solicitacao=a43bde09-718a-4de5-8886-ed2044614caa resultado=RECUSA origem=BANCO estado=SOLICITADA motivo=ESTADO_INVALIDO
+desfecho=ENFILEIRADO tentativa= esperado=3:FILA_SIMULADA
+solicitacao=a43bde09-718a-4de5-8886-ed2044614caa resultado=RECUSA origem=BANCO estado=SOLICITADA motivo=ESTADO_INVALIDO
+desfecho=INCERTO tentativa= esperado=6:INCERTO_SIMULADO
+solicitacao=a43bde09-718a-4de5-8886-ed2044614caa resultado=RECUSA origem=BANCO estado=SOLICITADA motivo=ESTADO_INVALIDO
+desfecho=EXCECAO tentativa= esperado=6:INCERTO_SIMULADO
+solicitacao=a43bde09-718a-4de5-8886-ed2044614caa resultado=RECUSA origem=BANCO estado=SOLICITADA motivo=ESTADO_INVALIDO
+desfecho=ACEITO tentativa= esperado=4:ACEITE_SIMULADO

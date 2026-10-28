@@ -1,0 +1,12 @@
+caso|resultado|detalhe
+J0|OK|022 no historico; 2 grupos estado|origem; 3 organizacoes AGUARDANDO escolhidas (A: ativacao e revisao, B: concorrencia, C: controle)
+J1|FALHA|ver J1_operador.txt
+J2|FALHA|ver J2_codigo.txt e J2_vinculo.txt
+J3|FALHA|ver J3_recusas.txt
+J4|FALHA|ver J4_ativacao.txt, J4_limites.txt e J4_auditoria.txt
+J5|FALHA|ver J5_repeticao.txt
+J6|FALHA|ver J6_concorrencia.txt (ok=0 ja=0)
+J7|FALHA|ver J7_revisao.txt
+J8|FALHA|ver J8_provisionamento_direto.txt
+J9|FALHA|ver J9_estados_pela_platform.txt
+J10|OK|auditoria das 3 organizacoes exportada (0 eventos); codigo de vinculo ausente da evidencia

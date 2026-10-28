@@ -1,0 +1,3 @@
+cenario|resultado|detalhe
+PREP|OK|organizacao sintetica, operadores (bootstrap + 3 cadastrados e habilitados), 2 contatos, MFA dos 2 ORG_ADMIN pelo gateway
+SEGREDOS|OK|nenhum dos 36 valores secretos vistos aparece nas evidencias

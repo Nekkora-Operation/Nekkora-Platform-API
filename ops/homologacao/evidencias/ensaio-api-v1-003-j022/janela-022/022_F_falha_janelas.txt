@@ -1,0 +1,2 @@
+2026-10-24T12:50:36.340Z inicio versao=022 SUPERUSER concedido (sha256 b752c7aa6fcfa4e3271e0561851164d43ff4e7b2c9a8d40bf3ecc4f0582bd63d autorizado)
+2026-10-24T12:50:41.224Z fim    versao=022 SUPERUSER revogado, sessoes encerradas, estado conferido (0|0|0) [falha]

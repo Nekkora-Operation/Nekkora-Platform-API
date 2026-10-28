@@ -1,0 +1,5 @@
+valores_vistos=238 (senhas, tokens, cookies, CSRF, segredos TOTP, codigos, e-mails)
+linhas_de_log_varridas=222 (platform, portal, gateway desde 2026-10-23T21:17:12Z)
+achados=0
+VARREDURA_OK
+controle_positivo=OK (id de organizacao no log do gateway)

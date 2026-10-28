@@ -11,9 +11,10 @@
 #   ops/homologacao/homologacao.sh destruir <id>   remove SO os recursos com o rotulo nekkora.homologacao=<id>
 #
 # Recuperacao emergencial de MFA - 016 (desenho P1a; SO ambientes ensaio-*):
-#   ops/homologacao/homologacao.sh criar <id> com HOMOLOG_ATE=016: aplica SO 001-015 e PARA (016 pendente, BLOQUEADO)
-#   HOMOLOG_AUTORIZA_ELEVACAO=1 ops/homologacao/homologacao.sh implantar <id>   aplica a 016 (pre-voo automatico)
-#   ops/homologacao/homologacao.sh concluir-criacao <id>    depois da 016 LIBERADA: senhas, volumes e servicos
+#   ops/homologacao/homologacao.sh criar <id> com HOMOLOG_ATE=016|021: aplica SO 001-015 e PARA (016+ pendentes, BLOQUEADO)
+#   HOMOLOG_AUTORIZA_ELEVACAO=1 ops/homologacao/homologacao.sh implantar <id>   aplica 016 (ou 016-021), pre-voo automatico
+#                                                            em cada versao de vinculo obrigatorio (016-020; 021 sem janela)
+#   ops/homologacao/homologacao.sh concluir-criacao <id>    depois da implantacao LIBERADA: senhas, volumes e servicos
 #   ops/homologacao/homologacao.sh preparar-016 <id>        senhas dos servicos da 016, operadores (DBA + bootstrap),
 #                                                            organizacao sintetica, credenciais e contatos
 #   ops/homologacao/homologacao.sh testar-016 <id>          cenarios B5-B8a, B10-B12 do plano (testes/h016.sh)
@@ -50,7 +51,8 @@
 # Variaveis (opcionais): HOMOLOG_HOST (nome da origem; padrao homologacao.nekkora.test), HOMOLOG_PORTA (55643),
 # HOMOLOG_BIND (interface publicada; padrao 127.0.0.1 - para a equipe, a interface da rede interna da empresa),
 # HOMOLOG_SEGREDOS (padrao $HOME/.nekkora/homologacao/<id>, fora do repositorio),
-# HOMOLOG_ATE (ultima migration: 015, padrao, o desenho anterior; ou 016, SO para id ensaio-* e com a linha de P3;
+# HOMOLOG_ATE (ultima migration: 015, padrao, o desenho anterior; 016, SO para id ensaio-* e com a linha de P3; ou 021
+# (missao PLATFORM-API-V1-003), SO para id ensaio-*, com as linhas 016-020 vinculadas ao id e o transporte de homologacao;
 # 015 com HOMOLOG_REDE_INTERNA/BORDA fora do padrao SO em id ensaio-*, com pg_hba/nginx gerados - compose.015-rede.yml),
 # HOMOLOG_REDE_INTERNA / HOMOLOG_REDE_BORDA (prefixos /24; padrao 10.252.10 / 10.252.11; com HOMOLOG_ATE=015 so o
 # padrao, salvo em ensaio-*), HOMOLOG_TRANSPORTE (vazio ou "homologacao": transporte de e-mail de homologacao, so ensaio-* com a 016).
@@ -67,6 +69,9 @@ REPO="$(cd "$AQUI/../.." && pwd)"
 ACAO="${1:?uso: homologacao.sh criar [id] | testar <id> | destruir <id>}"
 falha() { echo "ERRO: $*" >&2; exit 1; }
 mixed() { cygpath -m "$1" 2>/dev/null || echo "$1"; }
+# ambiente com a 016 ou depois (HOMOLOG_ATE 016 ou 021): mesma topologia (pg_hba/nginx gerados, CA operacional, job de
+# operacao, parada antes da 016). O desenho anterior (015) nao muda.
+com_016() { [ "$((10#${HOMOLOG_ATE:-015}))" -ge 16 ]; }
 
 carrega_ambiente() {
     HOMOLOG_ID="$1"
@@ -110,7 +115,7 @@ pos_implantacao() {
               -v verif_ops_intake="$(python "$AQUI/lib/segredos.py" scram "$SEG/senhas/ops_intake" | tr -d '\r')")
     fi
     admin_sql nekkora -v verif_platform="$VP" -v verif_portal="$VO" "${VOPS[@]}" < "$AQUI/sql/senhas_servicos.sql" > "$EVID/senhas_servicos.txt" 2>&1 || falha "senhas dos servicos"
-    if [ "$HOMOLOG_ATE" = 016 ]; then
+    if com_016; then
         # volumes EXCLUSIVOS do ensaio: dono e permissao aplicados e CONFERIDOS no Linux do Docker
         r="$(compose --profile operacao run --rm -T operadores-init 2>/dev/null | tr -d '\r' | tail -1)"
         [ "$r" = "nekkora 700" ] || falha "volume de operadores sem dono/permissao esperados (obtido: $r)"
@@ -196,10 +201,23 @@ criar)
              # 016 tem de estar VINCULADA exatamente a este id (sem a terceira coluna, ou com outro id, recusa)
              # gramatica de lib/lista_elevacao.sh (P4-R2a-C): legado "016 <sha> <id>" ou "016 <sha> tipo=superuser ambiente=<id>"
              . "$AQUI/lib/lista_elevacao.sh"
-             lista_elevacao_normalizada "${HOMOLOG_ELEVACAO_ARQ:-$AQUI/implantacao/elevacao.txt}" " 016 " 2>/dev/null \
+             lista_elevacao_normalizada "${HOMOLOG_ELEVACAO_ARQ:-$AQUI/implantacao/elevacao.txt}" "$VINCULO_OBRIGATORIO" 2>/dev/null \
                  | grep -qE "^016 [0-9a-f]{64} superuser $HOMOLOG_ID\$" \
                  || falha "a 016 exige a linha de elevacao autorizada em implantacao/elevacao.txt (etapa P3) para este id ($HOMOLOG_ID); para o desenho anterior, HOMOLOG_ATE=015";;
-        *) falha "HOMOLOG_ATE invalido (015 ou 016)";;
+        021) [[ "$HOMOLOG_ID" =~ ^ensaio- ]] || falha "a 021 na homologacao so em ambiente descartavel (id ensaio-*)"
+             # e-mail SIMULADO (caixa do ensaio): cadastro, recuperacao e avisos nunca saem do ambiente nesta forma
+             [ "$HOMOLOG_TRANSPORTE" = homologacao ] || falha "HOMOLOG_ATE=021 exige HOMOLOG_TRANSPORTE=homologacao (e-mail simulado na caixa do ensaio)"
+             # as cinco versoes de vinculo obrigatorio com linha VINCULADA exatamente a este id, na MESMA lista do runner;
+             # sem qualquer uma delas, recusa ANTES de criar qualquer recurso (o runner tambem recusa, sem efeito)
+             . "$AQUI/lib/lista_elevacao.sh"
+             LN="$(lista_elevacao_normalizada "${HOMOLOG_ELEVACAO_ARQ:-$AQUI/implantacao/elevacao.txt}" "$VINCULO_OBRIGATORIO" 2>/dev/null)" \
+                 || falha "lista de elevacao recusada pela gramatica (lib/lista_elevacao.sh)"
+             for v in $VINCULO_OBRIGATORIO; do
+                 [ "$((10#$v))" -le 21 ] || continue   # 022+: so pelo "atualizar" (linha conferida la)
+                 printf '%s\n' "$LN" | grep -qE "^$v [0-9a-f]{64} superuser $HOMOLOG_ID\$" \
+                     || falha "a $v exige a linha de elevacao autorizada e vinculada a este id ($HOMOLOG_ID) em implantacao/elevacao.txt"
+             done;;
+        *) falha "HOMOLOG_ATE invalido (015, 016 ou 021)";;
     esac
 
     # --- protecao: nada e criado antes destas conferencias ---
@@ -207,7 +225,7 @@ criar)
     # politica historica do ambiente (fotografada abaixo, antes de qualquer recurso; o H02 so usa a fotografia)
     LISTA_CRIACAO="${HOMOLOG_ELEVACAO_ARQ:-$AQUI/implantacao/elevacao.txt}"
     . "$AQUI/lib/lista_elevacao.sh"; . "$AQUI/lib/elevacao_historica.sh"
-    lista_elevacao_normalizada "$LISTA_CRIACAO" " 016 " > /dev/null || falha "lista de elevacao da criacao recusada ($LISTA_CRIACAO); nada foi criado"
+    lista_elevacao_normalizada "$LISTA_CRIACAO" "$VINCULO_OBRIGATORIO" > /dev/null || falha "lista de elevacao da criacao recusada ($LISTA_CRIACAO); nada foi criado"
     [ -e "$EVID" ] && falha "ja existe $EVID (id em uso)"
     [ -e "$SEG" ] && falha "ja existem segredos em $SEG (id em uso)"
     [ -z "$(docker ps -aq --filter "label=nekkora.homologacao=$HOMOLOG_ID")" ] || falha "ha containers com o rotulo $HOMOLOG_ID"
@@ -264,8 +282,8 @@ HOMOLOG_REDE_INTERNA=$HOMOLOG_REDE_INTERNA
 HOMOLOG_REDE_BORDA=$HOMOLOG_REDE_BORDA
 HOMOLOG_TRANSPORTE=$HOMOLOG_TRANSPORTE
 HOMOLOG_REDE_015_ENSAIO=$REDE_015_ENSAIO
-HOMOLOG_CONFIG="$({ [ "$HOMOLOG_ATE" = 016 ] || [ -n "$REDE_015_ENSAIO" ]; } && mixed "$EVID/config")"
-HOMOLOG_COMPOSE_EXTRA="$([ "$HOMOLOG_ATE" = 016 ] && echo compose.016.yml)$([ -n "$REDE_015_ENSAIO" ] && echo compose.015-rede.yml)$([ "$HOMOLOG_TRANSPORTE" = homologacao ] && echo " compose.caixa.yml")$([ -n "$FRONTEND_WEB" ] && echo " compose.frontend.yml")"
+HOMOLOG_CONFIG="$({ com_016 || [ -n "$REDE_015_ENSAIO" ]; } && mixed "$EVID/config")"
+HOMOLOG_COMPOSE_EXTRA="$(com_016 && echo compose.016.yml)$([ -n "$REDE_015_ENSAIO" ] && echo compose.015-rede.yml)$([ "$HOMOLOG_TRANSPORTE" = homologacao ] && echo " compose.caixa.yml")$([ -n "$FRONTEND_WEB" ] && echo " compose.frontend.yml")$([ "$HOMOLOG_ATE" = 021 ] && echo " compose.021.yml")"
 HOMOLOG_FRONTEND_DIST="$([ -n "$FRONTEND_WEB" ] && mixed "$EVID/frontend-dist")"
 HOMOLOG_FRONTEND_COMMIT=$FRONTEND_COMMIT
 HOMOLOG_FRONTEND_LIB_COMMIT=$FRONTEND_LIB_COMMIT
@@ -279,7 +297,7 @@ EOF
     docker inspect nekkora-postgres --format 'principal: {{.Name}} started={{.State.StartedAt}} restarts={{.RestartCount}}' > "$EVID/principal_antes.txt" 2>/dev/null || echo "principal: ausente" > "$EVID/principal_antes.txt"
 
     echo "== segredos e certificados (fora do Git: $SEG)"
-    if [ "$HOMOLOG_ATE" = 016 ]; then
+    if com_016; then
         python "$AQUI/lib/segredos.py" gerar "$SEG" "https://$HOMOLOG_HOST:$HOMOLOG_PORTA" "$HOMOLOG_REDE_INTERNA" "$HOMOLOG_ID"
     else
         # o prefixo da rede interna define o proxy confiavel (gateway .5); com o padrao, resultado identico ao anterior
@@ -299,14 +317,14 @@ EOF
             rm -f "$arq.csr" "$arq.ext"
         done
         rm -f ca.ext ca.srl
-        if [ "$HOMOLOG_ATE" = 016 ]; then
+        if com_016; then
             # CA OPERACIONAL descartavel (P-256), separada da CA do servidor: so ela valida certificados de operador
             openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 30 -subj "/O=Nekkora Homologacao/CN=Nekkora Ops CA $HOMOLOG_ID" \
                 -addext "basicConstraints=critical,CA:true" -addext "keyUsage=critical,keyCertSign,cRLSign" -keyout ops-ca.key -out ops-ca.crt 2>/dev/null
             chmod 600 ops-ca.key 2>/dev/null || true
         fi
     ) || falha "certificados"
-    if [ "$HOMOLOG_ATE" = 016 ]; then
+    if com_016; then
         echo "== configuracao gerada (pg_hba, pg_ident, nginx) para a rede $HOMOLOG_REDE_INTERNA.0/24"
         mkdir -p "$EVID/config"
         python "$AQUI/lib/redes.py" gerar "$AQUI/postgres/pg_hba.modelo" "$EVID/config/pg_hba.conf" INTERNA="$HOMOLOG_REDE_INTERNA" || falha "pg_hba gerado"
@@ -344,7 +362,7 @@ EOF
     echo "== build (jars e imagens identificados por $HOMOLOG_COMMIT)"
     (cd "$REPO/api" && ./mvnw -q -DskipTests package && ./mvnw -q -DskipTests test-compile -pl nekkora-platform) > "$EVID/build.txt" 2>&1 || falha "build (ver build.txt)"
     compose build platform portal >> "$EVID/build.txt" 2>&1 || falha "build das imagens"
-    if [ "$HOMOLOG_ATE" = 016 ]; then
+    if com_016; then
         (cd "$REPO/api" && ./mvnw -q -pl nekkora-ops dependency:copy-dependencies -DincludeScope=runtime -DoutputDirectory=target/dep-operacao \
             && ./mvnw -q -pl nekkora-ops test-compile) >> "$EVID/build.txt" 2>&1 || falha "build do job de operacao"
         compose --profile operacao build operacao >> "$EVID/build.txt" 2>&1 || falha "imagem do job de operacao"
@@ -358,20 +376,21 @@ EOF
     VB="$(python "$AQUI/lib/segredos.py" scram "$SEG/senhas/backup" | tr -d '\r')"
     admin_sql postgres -v verif_migrador="$VM" -v verif_backup="$VB" < "$AQUI/sql/bootstrap.sql" > "$EVID/bootstrap.txt" 2>&1 || { cat "$EVID/bootstrap.txt"; falha "bootstrap"; }
 
-    echo "== implantacao 001-$HOMOLOG_ATE pela identidade dedicada (elevacao so nas versoes declaradas; a 016 so com a linha de P3)"
-    if [ "$HOMOLOG_ATE" = 016 ]; then
-        # PARADA VERIFICAVEL (P3): so 001-015; a janela da 016 fica para "implantar", com o pre-voo automatico
+    echo "== implantacao 001-$HOMOLOG_ATE pela identidade dedicada (elevacao so nas versoes declaradas; 016-020 so com linha vinculada)"
+    if com_016; then
+        # PARADA VERIFICAVEL (P3): so 001-015; as janelas de 016+ ficam para "implantar", com o pre-voo automatico
         HOMOLOG_IMPLANTAR_ATE=015 HOMOLOG_AUTORIZA_ELEVACAO=1 bash "$AQUI/implantacao/implantar.sh"
         { echo "== PARADA ANTES DA 016 ($(date -u +%Y-%m-%dT%H:%M:%SZ))"; confere_liberacao "$TRAVA"; } > "$EVID/parada_antes_016.txt" 2>&1 || true
-        # a falta da 016 tem de ser o UNICO motivo de bloqueio: migrador recuperado, uma unica linha BLOQUEIO, exatamente a
-        # esperada, e BLOQUEADO ao final (outro motivo, inclusive consulta que falha, gera outra linha e recusa)
+        # a falta de 016..HOMOLOG_ATE tem de ser o UNICO motivo de bloqueio: migrador recuperado, uma unica linha BLOQUEIO,
+        # exatamente a esperada, e BLOQUEADO ao final (outro motivo, inclusive consulta que falha, gera outra linha e recusa)
         pb="$(grep -c '^BLOQUEIO:' "$EVID/parada_antes_016.txt")"
+        faltam_esp="$(for n in $(seq 16 "$((10#$HOMOLOG_ATE))"); do printf '%03d ' "$n"; done | sed 's/ $//')"
         { grep -q '^migrador recuperado: ' "$EVID/parada_antes_016.txt" && [ "$pb" = 1 ] \
-            && grep -qx 'BLOQUEIO: instalacao incompleta ou divergente (faltam: 016; nao esperadas: nenhuma)' "$EVID/parada_antes_016.txt" \
+            && grep -qx "BLOQUEIO: instalacao incompleta ou divergente (faltam: $faltam_esp; nao esperadas: nenhuma)" "$EVID/parada_antes_016.txt" \
             && [ "$(tail -1 "$EVID/parada_antes_016.txt")" = BLOQUEADO ]; } \
             || { cat "$EVID/parada_antes_016.txt"; falha "parada antes da 016 fora do esperado (ver parada_antes_016.txt)"; }
-        echo "PARADA: 001-015 aplicadas, 016 pendente, migrador 0|0|0 (parada_antes_016.txt). Proximos passos:"
-        echo "  HOMOLOG_AUTORIZA_ELEVACAO=1 homologacao.sh implantar $HOMOLOG_ID   (janela da 016, com pre-voo automatico)"
+        echo "PARADA: 001-015 aplicadas, $faltam_esp pendente(s), migrador 0|0|0 (parada_antes_016.txt). Proximos passos:"
+        echo "  HOMOLOG_AUTORIZA_ELEVACAO=1 homologacao.sh implantar $HOMOLOG_ID   (janelas com pre-voo automatico)"
         echo "  homologacao.sh concluir-criacao $HOMOLOG_ID"
         exit 0
     fi
@@ -491,7 +510,7 @@ recuperar)
 preparar-016)
     carrega_ambiente "${2:?id}"
     prepara_funcoes
-    [ "${HOMOLOG_ATE:-015}" = 016 ] || falha "ambiente sem a 016"
+    com_016 || falha "ambiente sem a 016"
     confere_liberacao "$TRAVA" > /dev/null || falha "ambiente BLOQUEADO (ver homologacao.sh estado $HOMOLOG_ID)"
     exec bash "$AQUI/testes/h016.sh" preparar
     ;;
@@ -501,7 +520,7 @@ preparar-016)
 # criacao que ficaram pendentes. Recusa ambiente BLOQUEADO ou com servicos ja criados.
 concluir-criacao)
     carrega_ambiente "${2:?id}"
-    [[ "$HOMOLOG_ID" =~ ^ensaio- ]] && [ "${HOMOLOG_ATE:-015}" = 016 ] || falha "concluir-criacao so para ensaio-* com a 016"
+    [[ "$HOMOLOG_ID" =~ ^ensaio- ]] && com_016 || falha "concluir-criacao so para ensaio-* com a 016 (ou 016-021)"
     prepara_funcoes
     SEG="$HOMOLOG_SEGREDOS_HOST"; EVID="$AQUI/saidas/$HOMOLOG_ID"
     [ -f "$EVID/parada_antes_016.txt" ] || falha "ambiente sem a parada antes da 016"
@@ -515,7 +534,7 @@ concluir-criacao)
 testar-016)
     carrega_ambiente "${2:?id}"
     prepara_funcoes
-    [ "${HOMOLOG_ATE:-015}" = 016 ] || falha "ambiente sem a 016"
+    com_016 || falha "ambiente sem a 016"
     confere_liberacao "$TRAVA" > /dev/null || falha "ambiente BLOQUEADO (ver homologacao.sh estado $HOMOLOG_ID)"
     exec bash "$AQUI/testes/h016.sh" testar
     ;;
@@ -526,7 +545,7 @@ testar-016)
 operacao)
     carrega_ambiente "${2:?id}"
     prepara_funcoes
-    [ "${HOMOLOG_ATE:-015}" = 016 ] || falha "ambiente sem a 016"
+    com_016 || falha "ambiente sem a 016"
     classe="${3:?cli|ferramenta}"; shift 3
     case "$classe" in
         ferramenta) MSYS_NO_PATHCONV=1 compose --profile operacao run --rm -T operacao com.nekkora.ops.homologacao.FerramentaHomologacao "$@" ;;
@@ -584,7 +603,7 @@ fixture)
     carrega_ambiente "${2:?id}"
     prepara_funcoes
     [[ "$HOMOLOG_ID" =~ ^ensaio- ]] || falha "fixture temporal so em ambiente ensaio-*"
-    [ "${HOMOLOG_ATE:-015}" = 016 ] || falha "ambiente sem a 016"
+    com_016 || falha "ambiente sem a 016"
     [ -n "$(docker ps -aq --filter "label=nekkora.homologacao=$HOMOLOG_ID" --filter "label=com.docker.compose.project=$HOMOLOG_PROJETO")" ] \
         || falha "projeto $HOMOLOG_PROJETO sem containers rotulados deste ambiente"
     ORG="$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['ids']['org'])" "$HOMOLOG_SEGREDOS_HOST/teste016/fixture.json" | tr -d '\r')" \
@@ -841,6 +860,190 @@ semear-f6a|validar-f6a)
         esac
         ;;
     esac
+    ;;
+
+# ========================================================================================================= parar
+# Para os containers DESTE ambiente (rotulo e projeto), sem remover nada: volumes, redes, imagens, segredos e evidencias
+# ficam. Os jobs efemeros nao tem container parado.
+parar)
+    carrega_ambiente "${2:?id}"
+    prepara_funcoes
+    compose stop 2>&1 | tail -n +1
+    echo "parado: $(docker ps -aq --filter "label=com.docker.compose.project=$HOMOLOG_PROJETO" | wc -l | tr -d ' ') container(es) de $HOMOLOG_PROJETO mantidos (docker compose stop)"
+    ;;
+
+# ========================================================================================================= subir
+# Sobe de novo um ambiente parado: banco e Redis primeiro; Platform, Portal e gateway SO com o ambiente LIBERADO (mesma
+# exigencia da criacao) e com a porta ainda apta.
+subir)
+    carrega_ambiente "${2:?id}"
+    prepara_funcoes
+    compose up -d --wait postgres redis > /dev/null 2>&1 || falha "postgres/redis nao subiram"
+    confere_liberacao "$TRAVA" || falha "ambiente BLOQUEADO: servicos nao iniciados (homologacao.sh estado $HOMOLOG_ID)"
+    python "$AQUI/lib/porta.py" elegivel "$HOMOLOG_BIND" "$HOMOLOG_PORTA" > /dev/null || falha "porta $HOMOLOG_BIND:$HOMOLOG_PORTA indisponivel"
+    compose up -d platform portal gateway > /dev/null 2>&1 || falha "servicos nao subiram"
+    CA="$HOMOLOG_SEGREDOS_HOST/tls/ca.crt"
+    for i in $(seq 1 90); do
+        a="$(curl -s --ssl-no-revoke -o /dev/null -w '%{http_code}' --cacert "$CA" --resolve "$HOMOLOG_HOST:$HOMOLOG_PORTA:127.0.0.1" "https://$HOMOLOG_HOST:$HOMOLOG_PORTA/api/v1/csrf" || true)"
+        [ "$a" = 200 ] && break
+        [ "$i" -lt 90 ] || falha "Platform nao respondeu pelo gateway (status $a)"
+        sleep 2
+    done
+    echo "AMBIENTE $HOMOLOG_ID NO AR: https://$HOMOLOG_HOST:$HOMOLOG_PORTA (publicado em $HOMOLOG_BIND)"
+    ;;
+
+# ================================================================================================= jornadas-api
+# Jornadas integradas da API v1 pelo gateway (missao PLATFORM-API-V1-003, item 7; testes/jornadas_api.py): SO ensaio-*
+# com 016-021 e o transporte de homologacao, ambiente LIBERADO. Tokens de e-mail lidos da caixa pela ferramenta restrita;
+# o que a API ainda nao cria vem da semeadura declarada sql/semear_api_v1.sql (PREP no relatorio). Ao fim, VARREDURA:
+# nenhum valor visto (senha, token, cookie, CSRF, segredo TOTP, codigo, e-mail) nos logs da Platform, do Portal e do
+# gateway nem na evidencia; os logs ficam no diretorio de segredos (fora do Git), a evidencia so com as contagens.
+jornadas-api)
+    carrega_ambiente "${2:?id}"
+    prepara_funcoes
+    [[ "$HOMOLOG_ID" =~ ^ensaio- ]] && [[ "${HOMOLOG_ATE:-015}" =~ ^02[12]$ ]] && [ "${HOMOLOG_TRANSPORTE:-}" = homologacao ] \
+        || falha "jornadas-api so em ensaio-* com HOMOLOG_ATE=021 (ou atualizado para 022) e o transporte de homologacao"
+    confere_liberacao "$TRAVA" > /dev/null || falha "ambiente BLOQUEADO (ver homologacao.sh estado $HOMOLOG_ID)"
+    export HOMOLOG_BASH="${HOMOLOG_BASH:-$(mixed "$(command -v bash)")}"
+    [ -f "C:/Program Files/Git/bin/bash.exe" ] && HOMOLOG_BASH="C:/Program Files/Git/bin/bash.exe"
+    jar="$(mixed "$REPO/api/nekkora-platform/target/nekkora-platform-0.1.0-SNAPSHOT.jar")"
+    tc="$(mixed "$REPO/api/nekkora-platform/target/test-classes")"
+    [ -f "$jar" ] && [ -f "$REPO/api/nekkora-platform/target/test-classes/com/nekkora/platform/auth/crypto/PhcTool.class" ] \
+        || falha "PhcTool indisponivel (jar e test-classes do build do criar)"
+    INICIO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    J="$AQUI/saidas/$HOMOLOG_ID/jornadas-api-$(date -u +%Y%m%dT%H%M%SZ)"; mkdir -p "$J"
+    SJ="$HOMOLOG_SEGREDOS_HOST/jornadas-api/$(basename "$J")"; mkdir -p "$SJ"
+    rc=0
+    python "$AQUI/testes/jornadas_api.py" --alvo "https://$HOMOLOG_HOST:$HOMOLOG_PORTA" --ca "$(mixed "$HOMOLOG_SEGREDOS_HOST/tls/ca.crt")" \
+        --evid "$(mixed "$J")" --vistos "$(mixed "$SJ/vistos.txt")" --psql "admin_sql nekkora" \
+        --phc "java -Dloader.path='$tc' -Dloader.main=com.nekkora.platform.auth.crypto.PhcTool -cp '$jar' org.springframework.boot.loader.launch.PropertiesLauncher 65536 3" \
+        --caixa "bash '$(mixed "$AQUI/homologacao.sh")' caixa $HOMOLOG_ID" --sql-semente "$(mixed "$AQUI/sql/semear_api_v1.sql")" "${@:3}" || rc=$?
+    # varredura: logs dos servicos desde o inicio desta execucao (fora do Git) e a evidencia, contra cada valor visto
+    compose logs --no-color --since "$INICIO" platform portal gateway > "$SJ/logs_servicos.txt" 2>&1 || falha "logs dos servicos nao coletados (varredura impossivel)"
+    n_vistos=0; achados=0
+    while IFS= read -r v; do
+        [ -n "$v" ] || continue
+        n_vistos=$((n_vistos + 1))
+        if grep -qF -- "$v" "$SJ/logs_servicos.txt" || grep -rqF -- "$v" "$J"; then achados=$((achados + 1)); fi
+    done < <(sort -u "$SJ/vistos.txt" 2>/dev/null)
+    { echo "valores_vistos=$n_vistos (senhas, tokens, cookies, CSRF, segredos TOTP, codigos, e-mails)"
+      echo "linhas_de_log_varridas=$(wc -l < "$SJ/logs_servicos.txt" | tr -d ' ') (platform, portal, gateway desde $INICIO)"
+      echo "achados=$achados"
+      [ "$achados" = 0 ] && echo "VARREDURA_OK" || echo "VARREDURA_FALHOU"; } | tee "$J/varredura.txt"
+    [ "$achados" = 0 ] || rc=1
+    [ "$n_vistos" -gt 0 ] || { echo "varredura sem valores vistos" | tee -a "$J/varredura.txt"; rc=1; }
+    # controle positivo: um valor NAO secreto que tem de estar nos logs coletados (id da organizacao do J6, no acesso do
+    # gateway); sem ele a coleta ou o detector nao provaram nada
+    if [ -s "$SJ/controle.txt" ]; then
+        if grep -qF -- "$(head -1 "$SJ/controle.txt")" "$SJ/logs_servicos.txt"; then echo "controle_positivo=OK (id de organizacao no log do gateway)" | tee -a "$J/varredura.txt"
+        else echo "controle_positivo=FALHOU" | tee -a "$J/varredura.txt"; rc=1; fi
+    else
+        echo "controle_positivo=NAO_EXECUTADO (J6 fora da selecao)" | tee -a "$J/varredura.txt"
+    fi
+    exit "$rc"
+    ;;
+
+# ==================================================================================================== atualizar
+# Atualizacao de um ensaio-* LIBERADO para versoes posteriores das migrations e das imagens (missao PLATFORM-API-V1-003,
+# revisao: prova da atualizacao 021 -> 022 numa base populada pelo caminho real de implantacao). SO ensaio-*, SO 021 -> 022.
+# Nada e aplicado no banco aqui: o "implantar" seguinte aplica as versoes novas com os controles de sempre (linha
+# vinculada, pre-voo, janela, retirada conferida), e o "subir" sobe os servicos com as imagens novas.
+#   1. recusa, ANTES de qualquer mudanca: ambiente BLOQUEADO; versao alvo fora do suportado; copia de migrations do
+#      ambiente com QUALQUER arquivo de bytes diferentes do repositorio (revisao anterior aplicada nesta base: o Flyway
+#      recusaria por checksum e o runner nao repara, IMPLANTACAO.md item 3); versao nova de vinculo obrigatorio sem a linha
+#      vinculada a este id com o sha256 do arquivo (na lista revisada ou, num laboratorio ensaio-*, na alternativa
+#      HOMOLOG_ELEVACAO_ARQ, a mesma que o "implantar" usara); entradas das imagens diferentes do commit;
+#   2. preserva a copia e o registro anteriores (migracoes-ate-<versao>-<instante>, somente leitura) e grava a nova copia
+#      (a anterior byte a byte, conferida, mais as versoes novas) e o novo registro;
+#   3. build das imagens do commit atual (tag = commit; as anteriores ficam) e parada de Platform, Portal e gateway (banco
+#      e Redis continuam no ar);
+#   4. ambiente.env com HOMOLOG_ATE e HOMOLOG_COMMIT novos (o anterior fica em atualizacao-<instante>/ambiente.env.antes).
+atualizar)
+    carrega_ambiente "${2:?id}"
+    prepara_funcoes
+    ALVO="${HOMOLOG_ATUALIZAR_ATE:-}"
+    [[ "$HOMOLOG_ID" =~ ^ensaio- ]] || falha "atualizar so em ambiente descartavel (id ensaio-*)"
+    [ "$HOMOLOG_ATE" = 021 ] && [ "$ALVO" = 022 ] || falha "atualizacao suportada: 021 -> 022 com HOMOLOG_ATUALIZAR_ATE=022 (ambiente em $HOMOLOG_ATE, alvo '${ALVO}')"
+    [ "${HOMOLOG_TRANSPORTE:-}" = homologacao ] || falha "atualizar exige o transporte de homologacao"
+    novas=""
+    for n in $(seq $((10#$HOMOLOG_ATE + 1)) $((10#$ALVO))); do
+        v="$(printf '%03d' "$n")"; f=("$REPO"/db/migrations/${v}_*.sql)
+        [ -f "${f[0]}" ] && [ ${#f[@]} -eq 1 ] || falha "migration $v ausente ou ambigua; nada alterado"
+        novas="$novas ${f[0]}"
+    done
+    . "$AQUI/lib/lista_elevacao.sh"
+    # a mesma lista que o "implantar" seguinte usara: a revisada ou, so em ensaio-* (ja exigido acima), a alternativa
+    # HOMOLOG_ELEVACAO_ARQ de um laboratorio (como no criar e no implantar). Conferencias SO DE ARQUIVO (versoes novas e
+    # lista) antes das que leem o banco e a copia do ambiente; todas antes de qualquer mudanca (testes/test_atualizar_lista.sh
+    # executa este trecho sem Docker)
+    LISTA_AT="${HOMOLOG_ELEVACAO_ARQ:-$AQUI/implantacao/elevacao.txt}"
+    [ -f "$LISTA_AT" ] || falha "lista de elevacao inexistente ($LISTA_AT); nada alterado"
+    LN="$(lista_elevacao_normalizada "$LISTA_AT" "$VINCULO_OBRIGATORIO" 2>/dev/null)" || falha "lista de elevacao recusada pela gramatica; nada alterado"
+    for f in $novas; do
+        v="$(basename "$f")"; v="${v%%_*}"
+        case "$VINCULO_OBRIGATORIO" in *" $v "*)
+            printf '%s\n' "$LN" | grep -qE "^$v $(sha256sum < "$f" | cut -c1-64) superuser $HOMOLOG_ID\$" \
+                || falha "a $v exige a linha de elevacao vinculada a este id ($HOMOLOG_ID) com o sha256 do arquivo; nada alterado";;
+        esac
+    done
+    EVID="$AQUI/saidas/$HOMOLOG_ID"; INST="$(date -u +%Y%m%dT%H%M%SZ)"; AT="$EVID/atualizacao-$INST"
+    confere_liberacao "$TRAVA" > /dev/null || falha "ambiente BLOQUEADO: nada alterado (homologacao.sh estado $HOMOLOG_ID)"
+    div=""
+    for f in "$EVID/migracoes"/*.sql; do
+        n="$(basename "$f")"; r="$REPO/db/migrations/$n"
+        if [ ! -f "$r" ]; then div="$div ${n%%_*}(ausente no repositorio)"
+        elif [ "$(sha256sum < "$f" | cut -c1-64)" != "$(sha256sum < "$r" | cut -c1-64)" ]; then
+            div="$div ${n%%_*}(ambiente $(sha256sum < "$f" | cut -c1-12)... repositorio $(sha256sum < "$r" | cut -c1-12)...)"
+        fi
+    done
+    [ -z "$div" ] || falha "copia de migrations do ambiente diferente do repositorio:$div. Revisao anterior aplicada nesta base: o Flyway recusaria por checksum e o runner nao repara (IMPLANTACAO.md, item 3). Nada alterado"
+    . "$AQUI/lib/fontes_imagens.sh"
+    guarda_fontes_imagens "$REPO" >&2 || falha "entradas das imagens da API diferentes do commit; nada alterado"
+    NOVO_COMMIT="$(commit_fontes_imagens "$REPO")"; [ -n "$NOVO_COMMIT" ] || falha "commit das imagens nao identificado; nada alterado"
+
+    echo "== copia nova das migrations (a anterior preservada, somente leitura)"
+    mkdir -p "$AT"
+    cp "$EVID/ambiente.env" "$AT/ambiente.env.antes"
+    ANT="$EVID/migracoes-ate-$HOMOLOG_ATE-$INST"
+    mv "$EVID/migracoes" "$ANT"; mv "$EVID/migracoes_sha256.txt" "$ANT.sha256.txt"
+    mkdir -p "$EVID/migracoes"; cp "$ANT"/*.sql "$EVID/migracoes/"
+    for f in $novas; do cp "$f" "$EVID/migracoes/"; done
+    chmod -R a-w "$ANT" "$ANT.sha256.txt" 2>/dev/null || true
+    (cd "$EVID/migracoes" && sha256sum *.sql) > "$EVID/migracoes_sha256.txt"
+    (cd "$EVID/migracoes" && sha256sum $(cd "$ANT" && ls *.sql)) | diff -q - "$ANT.sha256.txt" > /dev/null || falha "copia nova nao preserva a anterior byte a byte"
+    { echo "atualizacao=$INST de=$HOMOLOG_ATE para=$ALVO"
+      echo "commit_antes=$HOMOLOG_COMMIT commit_depois=$NOVO_COMMIT"
+      echo "lista_de_elevacao=$(basename "$LISTA_AT")${HOMOLOG_ELEVACAO_ARQ:+ (ALTERNATIVA DE ENSAIO)} sha256 $(sha256sum < "$LISTA_AT" | cut -c1-64)"
+      echo "copia_anterior=$(basename "$ANT") (somente leitura; registro $(basename "$ANT").sha256.txt)"
+      echo "versoes_novas:"; (cd "$EVID/migracoes" && for f in $novas; do sha256sum "$(basename "$f")"; done)
+    } > "$AT/registro.txt"
+
+    echo "== build (jars e imagens identificados por $NOVO_COMMIT)"
+    HOMOLOG_COMMIT="$NOVO_COMMIT"; export HOMOLOG_COMMIT
+    registro_fontes_imagens "$REPO" "$HOMOLOG_COMMIT" > "$AT/fontes_imagens.txt"
+    (cd "$REPO/api" && ./mvnw -q -DskipTests package && ./mvnw -q -DskipTests test-compile -pl nekkora-platform) > "$AT/build.txt" 2>&1 || falha "build (ver $AT/build.txt)"
+    compose build platform portal >> "$AT/build.txt" 2>&1 || falha "build das imagens"
+    (cd "$REPO/api" && ./mvnw -q -pl nekkora-ops dependency:copy-dependencies -DincludeScope=runtime -DoutputDirectory=target/dep-operacao \
+        && ./mvnw -q -pl nekkora-ops test-compile) >> "$AT/build.txt" 2>&1 || falha "build do job de operacao"
+    compose --profile operacao build operacao >> "$AT/build.txt" 2>&1 || falha "imagem do job de operacao"
+    compose stop platform portal gateway > "$AT/parada_servicos.txt" 2>&1 || falha "parada dos servicos"
+
+    sed -e "s/^HOMOLOG_ATE=.*/HOMOLOG_ATE=$ALVO/" -e "s/^HOMOLOG_COMMIT=.*/HOMOLOG_COMMIT=$NOVO_COMMIT/" "$AT/ambiente.env.antes" > "$EVID/ambiente.env"
+    echo "HOMOLOG_ATUALIZADO_EM=$INST" >> "$EVID/ambiente.env"
+    echo "ATUALIZADO: $HOMOLOG_ID copia e imagens de $HOMOLOG_ATE para $ALVO (commit $NOVO_COMMIT); servicos parados; base intacta ($AT). Proximos passos:"
+    echo "  HOMOLOG_AUTORIZA_ELEVACAO=1 homologacao.sh implantar $HOMOLOG_ID   (pre-voo e janela da $ALVO)"
+    echo "  homologacao.sh subir $HOMOLOG_ID"
+    ;;
+
+# ============================================================================================= jornada-ativacao
+# Jornada da ativacao e da revisao de capacidade numa base populada atualizada de 021 para 022 (testes/jornada_ativacao.sh):
+# SO ensaio-* com a 022 aplicada pelo runner, LIBERADO e com a 016 preparada.
+jornada-ativacao)
+    carrega_ambiente "${2:?id}"
+    prepara_funcoes
+    [[ "$HOMOLOG_ID" =~ ^ensaio- ]] && [ "${HOMOLOG_ATE:-015}" = 022 ] || falha "jornada-ativacao so em ensaio-* atualizado para a 022"
+    confere_liberacao "$TRAVA" > /dev/null || falha "ambiente BLOQUEADO (ver homologacao.sh estado $HOMOLOG_ID)"
+    exec bash "$AQUI/testes/jornada_ativacao.sh"
     ;;
 
 # =============================================================================================== validar-config

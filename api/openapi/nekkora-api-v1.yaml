@@ -550,7 +550,8 @@ paths:
       description: >
         Missao 1, desenho 6.4. Sessao de identidade (cookie __Host-nekkora_id), sem organizacao. A lista vem inteira de
         identity_organizations (017), com a mesma elegibilidade da emissao. Lista vazia e resposta legitima (identidade
-        recem-confirmada). canCreateOrganization (P2) e SO indicacao para a interface: chave da criacao de organizacao
+        recem-confirmada). activationState (022) indica, por organizacao, se ela ainda aguarda a ativacao (capacidade de
+        execucao zero) ou ja foi ativada pela operacao; e independente da situacao administrativa. canCreateOrganization (P2) e SO indicacao para a interface: chave da criacao de organizacao
         ligada, sessao nao restrita e identity_org_creation_allowed (R5 da 017) verdadeira (identidade ACTIVE e verificada,
         menos de 10 organizacoes criadas pelo cadastro). O step-up nao entra no calculo (e pedido na hora); a criacao
         reconfere tudo na funcao de escrita. Sessao restrita a recuperacao (DC-17.13): 403. R12. Mesma chave da entrada
@@ -676,7 +677,7 @@ paths:
     get:
       tags: [Identidade e sessao]
       operationId: getMe
-      summary: 'Conta autenticada (allowlist: tipo, nome, e-mail, organizacao)'
+      summary: 'Conta autenticada (allowlist: tipo, nome, e-mail, organizacao e o estado de ativacao dela)'
       parameters: [ { $ref: '#/components/parameters/Org' } ]
       responses:
         '200': { description: 'Conta', content: { application/json: { schema: { $ref: '#/components/schemas/Me' } } } }
@@ -1457,11 +1458,12 @@ components:
           type: array
           items:
             type: object
-            required: [organizationId, name, roles]
+            required: [organizationId, name, roles, activationState]
             properties:
               organizationId: { type: string, format: uuid }
               name: { type: string }
               roles: { type: array, items: { type: string }, description: 'codigos dos papeis ativos do vinculo interno, em ordem' }
+              activationState: { $ref: '#/components/schemas/OrganizationActivationState' }
         canCreateOrganization: { type: boolean, description: 'so indicacao para a interface (P2): chave da criacao ligada e identity_org_creation_allowed verdadeira; a criacao reconfere tudo' }
     OrganizationCreateRequest:
       type: object
@@ -1490,12 +1492,22 @@ components:
     SignupResendRequest: { type: object, required: [email], properties: { email: { type: string } } }
     Me:
       type: object
-      required: [accountType, displayName, email, organizationId]
+      required: [accountType, displayName, email, organizationId, organizationActivationState]
       properties:
         accountType: { type: string, enum: [internal, external] }
         displayName: { type: string }
         email: { type: string }
         organizationId: { type: string, format: uuid }
+        organizationActivationState: { $ref: '#/components/schemas/OrganizationActivationState' }
+    OrganizationActivationState:
+      type: string
+      enum: [AGUARDANDO_ATIVACAO, ATIVADA]
+      description: >
+        Ciclo de ativacao da organizacao (migration 022), INDEPENDENTE da situacao administrativa (ativa, suspensa,
+        encerrada). AGUARDANDO_ATIVACAO: capacidade de execucao zero (nenhum Worker registrado, nenhuma execucao simultanea
+        ou pendente) ate a ativacao pela operacao da Nekkora; toda organizacao criada nasce assim. ATIVADA: a operacao aplicou
+        limites explicitos. So indicacao para a interface: os valores dos limites nao sao expostos e a admissao de execucao
+        continua decidida no banco.
     MfaResetRequest: { type: object, required: [reason], properties: { reason: { type: string, enum: [DISPOSITIVO_PERDIDO, DISPOSITIVO_TROCADO, SUSPEITA_COMPROMETIMENTO, OUTRO] } } }
     OperationalLinkCode: { type: object, required: [code, expiresAt], properties: { code: { type: string }, expiresAt: { type: string, format: date-time } } }
     PortalWorkspaceList:

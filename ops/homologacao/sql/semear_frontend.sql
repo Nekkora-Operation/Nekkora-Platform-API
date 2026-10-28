@@ -149,6 +149,9 @@ BEGIN
         org_id := pg_temp.org(c->>'org');
         INSERT INTO users (user_id, organization_id, account_type, email, email_verified_at, status, display_name)
             VALUES ((c->>'user_id')::uuid, org_id, CASE c->>'tipo' WHEN 'interna' THEN 1 ELSE 2 END, c->>'email', now(), 2, c->>'nome');
+        -- credencial no contexto da organizacao da conta (desde a 017: refuse_local_entry_for_linked_account confere
+        -- nekkora.organization_id); local a transacao, como na aplicacao
+        PERFORM set_config('nekkora.organization_id', org_id::text, true);
         INSERT INTO user_credentials (user_id, password_hash) VALUES ((c->>'user_id')::uuid, c->>'phc');
         IF c->>'tipo' = 'interna' THEN
             INSERT INTO organization_memberships (membership_id, organization_id, user_id, account_type, status)

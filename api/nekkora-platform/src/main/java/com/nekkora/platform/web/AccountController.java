@@ -1,5 +1,7 @@
 package com.nekkora.platform.web;
 
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -16,6 +18,7 @@ import com.nekkora.core.db.OrgTransactions;
 import com.nekkora.core.db.OrgTransactions.Mode;
 import com.nekkora.core.web.ApiException;
 import com.nekkora.platform.admin.AdminService;
+import com.nekkora.platform.identity.IdentityOrgRepository;
 import com.nekkora.platform.session.ValidSession;
 
 /** {@code /me} e rotas internas do primeiro corte (contrato 8.7, §5.3). */
@@ -30,15 +33,24 @@ public class AccountController {
         this.admin = admin;
     }
 
-    /** Allowlist: tipo de conta, nome, e-mail e organizacao. */
+    /**
+     * Allowlist: tipo de conta, nome, e-mail, organizacao e o estado de ativacao dela (022: AGUARDANDO_ATIVACAO | ATIVADA, so
+     * indicacao; independente da situacao administrativa).
+     */
     @GetMapping("/api/v1/o/{org}/me")
     public Map<String, Object> me(@PathVariable UUID org, HttpServletRequest req) {
         ValidSession s = SessionFilter.principal(req);
-        return tx.inOrganization(org, Mode.READ_ONLY, j -> j.sql("SELECT display_name, email FROM public.users WHERE user_id = ?")
-                .param(s.userId())
-                .query((rs, n) -> Map.<String, Object>of("accountType", s.isInternal() ? "internal" : "external",
-                        "displayName", rs.getString("display_name"), "email", rs.getString("email"), "organizationId", org.toString()))
-                .optional().orElseThrow(() -> ApiException.unauthenticated("conta")));
+        return tx.inOrganization(org, Mode.READ_ONLY, j -> {
+            Map<String, Object> conta = j.sql("SELECT display_name, email FROM public.users WHERE user_id = ?")
+                    .param(s.userId())
+                    .query((rs, n) -> Map.<String, Object>of("accountType", s.isInternal() ? "internal" : "external",
+                            "displayName", rs.getString("display_name"), "email", rs.getString("email"), "organizationId", org.toString()))
+                    .optional().orElseThrow(() -> ApiException.unauthenticated("conta"));
+            Map<String, Object> r = new LinkedHashMap<>(conta);
+            r.put("organizationActivationState", IdentityOrgRepository.activationStates(j, List.of(org))
+                    .getOrDefault(org, IdentityOrgRepository.AGUARDANDO_ATIVACAO));
+            return r;
+        });
     }
 
     @PostMapping("/api/v1/o/{org}/users/{user}/suspend")

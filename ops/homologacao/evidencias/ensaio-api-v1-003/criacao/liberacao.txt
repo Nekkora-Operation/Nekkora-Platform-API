@@ -1,0 +1,3 @@
+migrador recuperado: sem trava local, trava no banco livre, migrador 0|0|0
+ambiente apto: versoes 001-021 todas com sucesso, conjunto integro, flyway validate OK
+LIBERADO

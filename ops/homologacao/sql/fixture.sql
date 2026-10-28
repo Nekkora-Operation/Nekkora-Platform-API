@@ -12,7 +12,13 @@ INSERT INTO users (user_id, organization_id, account_type, email, email_verified
     (:'int_a', :'org_a', 1, :'email_int_a', now(), 2, 'Interno A'),
     (:'ext_a', :'org_a', 2, :'email_ext_a', now(), 2, 'Externo A'),
     (:'ext_b', :'org_b', 2, :'email_ext_b', now(), 2, 'Externo B');
-INSERT INTO user_credentials (user_id, password_hash) VALUES (:'int_a', :'phc_int_a'), (:'ext_a', :'phc_ext_a'), (:'ext_b', :'phc_ext_b');
+-- credenciais no contexto da PROPRIA organizacao (desde a 017 a trigger refuse_local_entry_for_linked_account confere
+-- nekkora.organization_id; o caminho e o da aplicacao, na transacao, sem desligar protecao)
+SELECT set_config('nekkora.organization_id', :'org_a', true) IS NOT NULL AS fx_ctx_a \gset
+INSERT INTO user_credentials (user_id, password_hash) VALUES (:'int_a', :'phc_int_a'), (:'ext_a', :'phc_ext_a');
+SELECT set_config('nekkora.organization_id', :'org_b', true) IS NOT NULL AS fx_ctx_b \gset
+INSERT INTO user_credentials (user_id, password_hash) VALUES (:'ext_b', :'phc_ext_b');
+SELECT set_config('nekkora.organization_id', '', true) IS NOT NULL AS fx_ctx_limpo \gset
 INSERT INTO organization_memberships (membership_id, organization_id, user_id, account_type, status) VALUES
     (:'adm_a_m', :'org_a', :'adm_a', 1, 2), (:'adm_b_m', :'org_b', :'adm_b', 1, 2);
 INSERT INTO organization_memberships (organization_id, user_id, account_type, status) VALUES (:'org_a', :'int_a', 1, 2);

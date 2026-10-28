@@ -1,0 +1,9 @@
+servidor_versao_maior_16|OK|16.15
+historico_001_016_com_sucesso_sem_017_nem_posteriores_sem_falha|OK|001:true 002:true 003:true 004:true 005:true 006:true 007:true 008:true 009:true 010:true 011:true 012:true 013:true 014:true 015:true 016:true
+migrador_sem_atributo_nem_acl_de_parametro|OK|0 ACL de parametro no total
+migrador_dono_do_banco|OK|migrador_nekkora
+papel_nekkora_identity_owner_ausente_ou_compativel_sem_participacao|OK|ausente
+tabelas_de_identidade_ausentes|OK|-
+user_sessions_sem_identity_session_id|OK|-
+schema_ops_presente|OK|-
+PREFLIGHT_OK

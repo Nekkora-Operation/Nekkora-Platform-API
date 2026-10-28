@@ -3,6 +3,7 @@ package com.nekkora.ops.cli;
 import java.io.PrintStream;
 import java.nio.file.Path;
 import java.sql.DriverManager;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
@@ -20,9 +21,19 @@ import java.util.UUID;
  * Uso: {@code retorno <contato>} | {@code abrir <org> <alvo> <contato> entrada|retorno <id>}
  * | {@code verificar <solicitacao> <retorno-ok> <segundo-contato> <segundo-ok> NENHUM|TODOS_SEM_FATOR_E_CODIGOS_UTILIZAVEIS}
  * | {@code pre-aprovar|aprovar|executar|consultar <solicitacao>} | {@code reenviar-aviso <solicitacao> <destinatario>}
- * | {@code cancelar <solicitacao> <motivo>}.
+ * | {@code cancelar <solicitacao> <motivo>}
+ * | {@code vincular-conta <codigo>} (016: vinculo da conta da Platform que o operador controla, pelo codigo de uso unico que o
+ * titular emite na propria sessao; so o sha256 vai ao banco)
+ * | {@code ativar-organizacao <org> <responsavel> <workers> <simultaneas> <pendentes> <alerta-logs|-> <alerta-eventos|-> <motivo...>}
+ * | {@code revisar-capacidade <org> <responsavel> <workers> <simultaneas> <pendentes> <alerta-logs|-> <alerta-eventos|-> <motivo...>}
+ * (022: ativacao da organizacao e revisao da capacidade depois de ativada, com os limites explicitos; o motivo e o resto
+ * da linha).
  * Saida: {@code solicitacao=<uuid> resultado=... origem=... estado=... motivo=...}; em ABRIR, o UUID devolvido pelo
- * banco e o que o operador usa nos atos seguintes.
+ * banco e o que o operador usa nos atos seguintes. Em ATIVAR-ORGANIZACAO e REVISAR-CAPACIDADE: {@code organizacao=<uuid> resultado=... evento=<uuid>
+ * motivo=... limites_aplicados=trabalhadores=N,simultaneas=N,pendentes=N,alerta_logs=N|-,alerta_eventos=N|-} (evento = identificador
+ * do ato, a auditoria gravada pelo banco, OK ou RECUSA; limites_aplicados = os cinco limites que o ato OK aplicou, {@code -} quando
+ * nada foi aplicado). Revisoes concorrentes da mesma organizacao sao serializadas pelo banco: vale a ultima revisao aplicada com
+ * sucesso na ordem de serializacao, nao necessariamente a ultima requisicao recebida.
  * Codigo de saida: 0 OK, 2 recusa, 3 falha confirmada, 4 desconhecido, 64 uso invalido.
  */
 public final class OpsCli {
@@ -32,6 +43,15 @@ public final class OpsCli {
 
     public static void main(String[] args) {
         System.exit(executar(args, System.getenv(), System.out, System.err));
+    }
+
+    static String saidaCapacidade(ExecutorAtos.ResultadoAtivacao ra) {
+        ExecutorAtos.Limites l = ra.aplicados();
+        return "organizacao=" + ra.organizacao() + " resultado=" + ra.classe() + " evento=" + (ra.evento() == null ? "-" : ra.evento())
+                + " motivo=" + LogLocal.codigo(ra.motivo()) + " limites_aplicados=" + (l == null ? "-"
+                : "trabalhadores=" + l.trabalhadores() + ",simultaneas=" + l.simultaneas() + ",pendentes=" + l.pendentes()
+                + ",alerta_logs=" + (l.alertaLogs() == null ? "-" : l.alertaLogs())
+                + ",alerta_eventos=" + (l.alertaEventos() == null ? "-" : l.alertaEventos()));
     }
 
     static int executar(String[] a, Map<String, String> env, PrintStream out, PrintStream err) {
@@ -66,6 +86,34 @@ public final class OpsCli {
             out.println("retorno=" + (rr.retorno() == null ? "-" : rr.retorno()) + " resultado=" + rr.classe()
                     + " motivo=" + LogLocal.codigo(rr.motivo()));
             return codigo(rr.classe());
+        }
+        if ("vincular-conta".equals(a[0])) {
+            if (a.length != 2 || a[1].isBlank()) {
+                err.println("uso invalido");
+                return 64;
+            }
+            ExecutorAtos.VinculoConta v = ex.vincularConta(a[1]);
+            out.println("vinculo=conta resultado=" + v.classe() + " motivo=" + LogLocal.codigo(v.motivo()));
+            return codigo(v.classe());
+        }
+        if ("ativar-organizacao".equals(a[0]) || "revisar-capacidade".equals(a[0])) {
+            ExecutorAtos.ResultadoAtivacao ra;
+            try {
+                if (a.length < 9) {
+                    throw new IllegalArgumentException("argumentos");
+                }
+                String motivo = String.join(" ", Arrays.copyOfRange(a, 8, a.length));
+                ra = "ativar-organizacao".equals(a[0])
+                        ? ex.ativarOrganizacao(UUID.fromString(a[1]), UUID.fromString(a[2]), motivo, Long.parseLong(a[3]), Long.parseLong(a[4]),
+                                Long.parseLong(a[5]), limiar(a[6]), limiar(a[7]))
+                        : ex.revisarCapacidade(UUID.fromString(a[1]), UUID.fromString(a[2]), motivo, Long.parseLong(a[3]), Long.parseLong(a[4]),
+                                Long.parseLong(a[5]), limiar(a[6]), limiar(a[7]));
+            } catch (RuntimeException e) {
+                err.println("uso invalido");
+                return 64;
+            }
+            out.println(saidaCapacidade(ra));
+            return codigo(ra.classe());
         }
         ExecutorAtos.Resultado r;
         try {
@@ -105,6 +153,11 @@ public final class OpsCli {
             case FALHA_CONFIRMADA -> 3;
             case DESCONHECIDO -> 4;
         };
+    }
+
+    /** Limiar de alerta dos recursos 4-5: "-" = sem limiar (UNLIMITED); senao o valor (a validacao final e do banco). */
+    private static Long limiar(String s) {
+        return "-".equals(s) ? null : Long.valueOf(s);
     }
 
     private static String exigir(Map<String, String> env, String nome) {

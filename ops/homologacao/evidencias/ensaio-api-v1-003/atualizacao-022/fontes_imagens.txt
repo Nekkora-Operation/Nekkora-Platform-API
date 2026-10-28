@@ -1,0 +1,4 @@
+HOMOLOG_COMMIT=6280314 (62803144484fbfa326ee41997d34d9ff6c8cbb86)
+HEAD=c4c6b3e7fae5057ad597a6d59cad04b37fc96363
+arvore_api=759bc81be9d015bec3043a0caf7b6df7aaf86632
+FONTES_IMAGENS=api/pom.xml api/mvnw api/.mvn api/e2e/Dockerfile api/e2e/Dockerfile.operacao api/nekkora-ops/src/test api/nekkora-core/pom.xml api/nekkora-core/src/main api/nekkora-ops/pom.xml api/nekkora-ops/src/main api/nekkora-platform/pom.xml api/nekkora-platform/src/main api/nekkora-portal/pom.xml api/nekkora-portal/src/main

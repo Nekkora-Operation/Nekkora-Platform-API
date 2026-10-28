@@ -1,0 +1,1 @@
+organizacao=d15a7cfc-962c-4a76-898f-b742e2ef25f2 resultado=RECUSA evento=65522179-9b01-44a8-bf96-a51169c5d004 motivo=JA_ATIVADA

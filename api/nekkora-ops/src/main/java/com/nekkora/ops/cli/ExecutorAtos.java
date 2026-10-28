@@ -1,11 +1,15 @@
 package com.nekkora.ops.cli;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.HexFormat;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -131,6 +135,56 @@ public final class ExecutorAtos {
         }
     }
 
+    /** Desfecho do vinculo da conta da Platform provada pelo operador (016, contrato 4). */
+    public record VinculoConta(Classe classe, String motivo, String sqlstate) {
+    }
+
+    /**
+     * Vinculo da conta da Platform que o operador controla ({@code ops_link_platform_account}, 016): o titular da conta,
+     * autenticado, emite o codigo de uso unico ({@code POST /api/v1/o/{org}/me/operational-link-code}) e o entrega ao
+     * operador; so o sha256 do codigo vai ao banco. O vinculo e impeditivo para atos sobre aquela organizacao e e o que
+     * prova a conta responsavel da ativacao e da revisao de capacidade (022).
+     */
+    public VinculoConta vincularConta(String codigo) {
+        Connection c;
+        try {
+            c = abrirConexao();
+        } catch (SQLException e) {
+            log.registrar("VINCULAR_CONTA", null, "FALHA_CONFIRMADA", "CONEXAO_NAO_ESTABELECIDA", e.getSQLState(), "CONEXAO");
+            return new VinculoConta(Classe.FALHA_CONFIRMADA, "CONEXAO_NAO_ESTABELECIDA", e.getSQLState());
+        }
+        try (c) {
+            c.setAutoCommit(false);
+            String resultado;
+            String motivo;
+            try (PreparedStatement ps = c.prepareStatement("SELECT r_resultado, r_motivo FROM public.ops_link_platform_account(?)")) {
+                ps.setString(1, sha256Hex(codigo));
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    resultado = rs.getString(1);
+                    motivo = rs.getString(2);
+                }
+            }
+            c.commit();
+            Classe classe = "OK".equals(resultado) ? Classe.OK : Classe.RECUSA;
+            log.registrar("VINCULAR_CONTA", null, classe.name(), motivo, null, null);
+            return new VinculoConta(classe, motivo, null);
+        } catch (SQLException e) {
+            Classe classe = conexaoPerdida(e) ? Classe.DESCONHECIDO : Classe.FALHA_CONFIRMADA;
+            log.registrar("VINCULAR_CONTA", null, classe.name(), "FALHA_TECNICA", e.getSQLState(), null);
+            return new VinculoConta(classe, "FALHA_TECNICA", e.getSQLState());
+        }
+    }
+
+    private static String sha256Hex(String s) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(s.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     public Resultado verificar(UUID solicitacao, boolean retornoOk, UUID segundoContato, boolean segundoOk, DemaisAdmins demais) {
         return rodar("VERIFICAR", solicitacao, "SELECT r_resultado, r_motivo, r_solicitacao, r_estado FROM public.ops_mfa_verify(?, ?, ?, ?, ?)", ps -> {
             ps.setObject(1, solicitacao);
@@ -166,6 +220,111 @@ public final class ExecutorAtos {
             ps.setObject(1, solicitacao);
             ps.setString(2, motivo);
         });
+    }
+
+    /** Desfecho da ativacao ou da revisao de capacidade (022): o evento de auditoria gravado pelo banco (OK ou RECUSA). */
+    public record ResultadoAtivacao(UUID organizacao, Classe classe, String motivo, UUID evento, String sqlstate, Limites aplicados) {
+    }
+
+    /**
+     * Os cinco limites que um ato OK aplicou: as funcoes da 022 gravam exatamente os valores do ato (substituem os cinco, com
+     * as cinco revisoes e o evento de auditoria na mesma transacao). {@code null} nos alertas = sem limiar.
+     */
+    public record Limites(long trabalhadores, long simultaneas, long pendentes, Long alertaLogs, Long alertaEventos) {
+    }
+
+    /**
+     * Ativacao da organizacao (022, {@code org_activation_activate}): limites EXPLICITOS dos recursos 1-3 (inteiros >= 1) e
+     * limiares de alerta 4-5 ({@code null} = sem limiar), conta responsavel provada pelo operador e motivo. Estado, limites
+     * e auditoria numa transacao do banco.
+     *
+     * <p>Resultado incerto (conexao perdida na chamada ou no commit): DESCONHECIDO, com alerta, sem nova tentativa
+     * automatica. O operador pode repetir o mesmo ato com seguranca: o banco trava a organizacao e recusa com JA_ATIVADA se
+     * a primeira chamada confirmou; nada e aplicado duas vezes.
+     */
+    public ResultadoAtivacao ativarOrganizacao(UUID organizacao, UUID responsavel, String motivo, long workers, long simultaneas,
+                                               long pendentes, Long alertaLogs, Long alertaEventos) {
+        return atoDeCapacidade("ATIVAR_ORGANIZACAO", "org_activation_activate", organizacao, responsavel, motivo, workers, simultaneas,
+                pendentes, alertaLogs, alertaEventos);
+    }
+
+    /**
+     * Revisao da capacidade de organizacao ATIVADA (022, {@code org_activation_revise}): os mesmos controles e a mesma
+     * auditoria da ativacao, com os cinco limites sempre informados. Repetir uma revisao de resultado incerto e seguro: o
+     * banco recusa com SEM_MUDANCA se os limites pedidos ja sao os vigentes.
+     */
+    public ResultadoAtivacao revisarCapacidade(UUID organizacao, UUID responsavel, String motivo, long workers, long simultaneas,
+                                               long pendentes, Long alertaLogs, Long alertaEventos) {
+        return atoDeCapacidade("REVISAR_CAPACIDADE", "org_activation_revise", organizacao, responsavel, motivo, workers, simultaneas,
+                pendentes, alertaLogs, alertaEventos);
+    }
+
+    private ResultadoAtivacao atoDeCapacidade(String ato, String funcao, UUID organizacao, UUID responsavel, String motivo, long workers,
+                                              long simultaneas, long pendentes, Long alertaLogs, Long alertaEventos) {
+        Connection c;
+        try {
+            c = abrirConexao();
+        } catch (SQLException e) {
+            log.registrar(ato, organizacao, "FALHA_CONFIRMADA", "CONEXAO_NAO_ESTABELECIDA", e.getSQLState(), "CONEXAO");
+            return new ResultadoAtivacao(organizacao, Classe.FALHA_CONFIRMADA, "CONEXAO_NAO_ESTABELECIDA", null, e.getSQLState(), null);
+        }
+        try (c) {
+            String resultado;
+            String recusa;
+            UUID evento;
+            try {
+                c.setAutoCommit(false);
+                try (Statement st = c.createStatement()) {
+                    st.execute("SET LOCAL lock_timeout = '" + LOCK_TIMEOUT + "'");
+                }
+                try (PreparedStatement ps = c.prepareStatement(
+                        "SELECT r_resultado, r_motivo, r_evento FROM public." + funcao + "(?, ?, ?, ?, ?, ?, ?, ?)")) {
+                    ps.setObject(1, organizacao);
+                    ps.setObject(2, responsavel);
+                    ps.setString(3, motivo);
+                    ps.setLong(4, workers);
+                    ps.setLong(5, simultaneas);
+                    ps.setLong(6, pendentes);
+                    ps.setObject(7, alertaLogs);
+                    ps.setObject(8, alertaEventos);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        rs.next();
+                        resultado = rs.getString(1);
+                        recusa = rs.getString(2);
+                        evento = rs.getObject(3, UUID.class);
+                    }
+                }
+            } catch (SQLException e) {
+                if (conexaoPerdida(e)) {
+                    return desconhecida(ato, organizacao, "CHAMADA");
+                }
+                reverter(c);
+                log.registrar(ato, organizacao, "FALHA_CONFIRMADA", "FALHA_TECNICA", e.getSQLState(), "CHAMADA");
+                return new ResultadoAtivacao(organizacao, Classe.FALHA_CONFIRMADA, "FALHA_TECNICA", null, e.getSQLState(), null);
+            }
+            try {
+                c.commit();
+            } catch (SQLException e) {
+                if (conexaoPerdida(e)) {
+                    return desconhecida(ato, organizacao, "COMMIT");
+                }
+                log.registrar(ato, organizacao, "FALHA_CONFIRMADA", "FALHA_TECNICA", e.getSQLState(), "COMMIT");
+                return new ResultadoAtivacao(organizacao, Classe.FALHA_CONFIRMADA, "FALHA_TECNICA", null, e.getSQLState(), null);
+            }
+            Classe classe = "OK".equals(resultado) ? Classe.OK : Classe.RECUSA;
+            log.registrar(ato, organizacao, classe.name(), recusa, null, null);
+            // confirmado o OK, os limites aplicados sao os do ato; recusa nao aplica nada
+            Limites aplicados = classe == Classe.OK ? new Limites(workers, simultaneas, pendentes, alertaLogs, alertaEventos) : null;
+            return new ResultadoAtivacao(organizacao, classe, recusa, evento, null, aplicados);
+        } catch (SQLException e) {
+            return desconhecida(ato, organizacao, "CHAMADA");
+        }
+    }
+
+    private ResultadoAtivacao desconhecida(String ato, UUID organizacao, String etapa) {
+        log.registrar(ato, organizacao, "DESCONHECIDO", "RESULTADO_DESCONHECIDO", null, etapa);
+        log.alerta(ato, organizacao, "RESULTADO_DESCONHECIDO");
+        return new ResultadoAtivacao(organizacao, Classe.DESCONHECIDO, "RESULTADO_DESCONHECIDO", null, null, null);
     }
 
     /** Consulta com a trava da solicitacao (so leitura; tambem usada na reconciliacao). */

@@ -1,0 +1,1 @@
+ERRO: copia de migrations do ambiente diferente do repositorio: 021(ambiente bf85b95bdc83... repositorio 153c595a7ef9...). Revisao anterior aplicada nesta base: o Flyway recusaria por checksum e o runner nao repara (IMPLANTACAO.md, item 3). Nada alterado

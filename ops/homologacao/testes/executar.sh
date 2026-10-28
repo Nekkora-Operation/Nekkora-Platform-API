@@ -156,9 +156,9 @@ h02_janelas() {
 #   h02_esperadas <dir de migrations do ambiente> <lista> <id>  -> imprime as versoes esperadas, separadas por espaco
 h02_esperadas() {
     local mig="$1" lista="$2" id="$3" v esp="" n
-    for v in 011 012 013 016; do ls "$mig/${v}_"*.sql > /dev/null 2>&1 && esp="$esp $v"; done
+    for v in 011 012 013 016 017 018 019 020 022; do ls "$mig/${v}_"*.sql > /dev/null 2>&1 && esp="$esp $v"; done
     . "$AQUI/lib/lista_elevacao.sh"
-    n="$(lista_elevacao_normalizada "$lista" " 016 " 2>&1)" || { echo "lista de elevacao historica recusada ($lista): $n" >&2; return 1; }
+    n="$(lista_elevacao_normalizada "$lista" "$VINCULO_OBRIGATORIO" 2>&1)" || { echo "lista de elevacao historica recusada ($lista): $n" >&2; return 1; }
     if ls "$mig/014_"*.sql > /dev/null 2>&1 \
        && printf '%s\n' "$n" | awk -v id="$id" '$1 == "014" && $3 == "bypassrls" && ($4 == "-" || $4 == id) { f = 1 } END { exit !f }'; then
         esp="$esp 014"

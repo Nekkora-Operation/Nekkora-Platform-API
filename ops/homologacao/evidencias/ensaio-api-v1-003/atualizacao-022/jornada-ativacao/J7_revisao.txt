@@ -1,0 +1,2 @@
+organizacao=d15a7cfc-962c-4a76-898f-b742e2ef25f2 resultado=OK evento=b5efa73e-c19a-4af1-b41a-57d215b7a9df motivo=-
+organizacao=d15a7cfc-962c-4a76-898f-b742e2ef25f2 resultado=RECUSA evento=b9877a91-cf59-4546-9414-b4aeb72969b4 motivo=SEM_MUDANCA

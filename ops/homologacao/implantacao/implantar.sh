@@ -37,14 +37,14 @@ if [ -n "${HOMOLOG_ELEVACAO_ARQ:-}" ] && [[ ! "$HOMOLOG_ID" =~ ^ensaio- ]]; then
     echo "FALHA: lista de elevacao alternativa (HOMOLOG_ELEVACAO_ARQ) so em ambiente descartavel (id ensaio-*)" >&2; exit 3
 fi
 LISTA="${HOMOLOG_ELEVACAO_ARQ:-$DIR_IMPL/elevacao.txt}"
-# Versoes com VINCULO e PRE-VOO OFICIAL obrigatorios: a linha precisa da terceira coluna com o id exato do ambiente e o
-# pre-voo vem SO de implantacao/preflight/<versao>.sql (nunca da lista alternativa). 011-013 seguem no formato legado.
-VINCULO_OBRIGATORIO=" 016 "
+# Versoes com VINCULO e PRE-VOO OFICIAL obrigatorios (VINCULO_OBRIGATORIO, de lib/lista_elevacao.sh: 016-020 e 022): a linha
+# precisa do id exato do ambiente e o pre-voo vem SO de implantacao/preflight/<versao>.sql (nunca da lista alternativa).
+# 011-013 seguem no formato legado.
 # A lista e validada ANTES de qualquer acao (trava, elevacao ou migration) pela gramatica de lib/lista_elevacao.sh
 # (P4-R2a-C): legado "VVV <sha256> [<id>]" = SUPERUSER; forma nova "VVV <sha256> tipo=superuser|bypassrls [ambiente=<id>]";
 # 014 so bypassrls; versao de vinculo obrigatorio so superuser e com ambiente. Erro de leitura ou de formato recusa
 # (codigo 3); NUNCA equivale a "versao fora da lista". LISTA_NORMAL: "VVV SHA256 TIPO ALVO" (ALVO "-" sem vinculo).
-. "$DIR_IMPL/../lib/lista_elevacao.sh"
+. "$DIR_IMPL/../lib/lista_elevacao.sh"   # tambem define VINCULO_OBRIGATORIO
 LISTA_NORMAL="$(lista_elevacao_normalizada "$LISTA" "$VINCULO_OBRIGATORIO")" || { echo "FALHA: lista de elevacao recusada (acima); nada foi feito" >&2; exit 3; }
 TRAVA="${HOMOLOG_TRAVA:-$(cd "$DIR_IMPL/.." && pwd)/saidas/$HOMOLOG_ID/implantacao.trava}"
 LOG="$HOMOLOG_EVID/implantacao.txt"
@@ -162,6 +162,11 @@ for f in "$HOMOLOG_MIGRACOES_HOST"/[0-9]*.sql; do
     autorizado="$(printf '%s\n' "$LISTA_NORMAL" | awk -v v="$v" '$1 == v {print $2}')"
     tipo="$(printf '%s\n' "$LISTA_NORMAL" | awk -v v="$v" '$1 == v {print $3}')"
     alvo="$(printf '%s\n' "$LISTA_NORMAL" | awk -v v="$v" '$1 == v && $4 != "-" {print $4}')"
+    # versao de vinculo obrigatorio SEM linha na lista: a migration exige superusuario (medido) e, sem a janela, falharia
+    # dentro do Flyway (com BEGIN proprio, historico success=false). Recusa ANTES de chamar o Flyway, sem efeito.
+    if [ -z "$autorizado" ]; then
+        case "$VINCULO_OBRIGATORIO" in *" $v "*) encerra_com_falha 2 "versao $v exige elevacao vinculada e nao esta na lista de elevacao; nada aplicado";; esac
+    fi
     if [ -n "$autorizado" ]; then
         # terceira coluna: a elevacao desta versao so vale no ambiente com exatamente este id; OBRIGATORIA para as versoes
         # de VINCULO_OBRIGATORIO (defesa em profundidade: valida_lista ja recusou a linha sem id)
@@ -175,7 +180,7 @@ for f in "$HOMOLOG_MIGRACOES_HOST"/[0-9]*.sql; do
         if [ -n "$alvo" ]; then
             pf="$DIR_IMPL/preflight/$v.sql"
             # Pre-voo alternativo SO para versoes SINTETICAS de ensaio (9xx, fora do repositorio), com lista alternativa (so
-            # ensaio-*) e sem pre-voo oficial. Versao de vinculo obrigatorio (016) nunca usa o alternativo: sem o oficial, recusa.
+            # ensaio-*) e sem pre-voo oficial. Versao de vinculo obrigatorio (016-020, 022) nunca usa o alternativo: sem o oficial, recusa.
             if [ ! -f "$pf" ] && [ -n "${HOMOLOG_ELEVACAO_ARQ:-}" ] && [[ "$v" =~ ^9[0-9]{2}$ ]]; then pf="$(dirname "$LISTA")/preflight/$v.sql"; fi
             [ -f "$pf" ] || encerra_com_falha 2 "versao $v vinculada a $alvo sem pre-voo ($pf); elevacao RECUSADA antes de conceder"
             # as DUAS condicoes: consulta com codigo 0 E marcador final PREFLIGHT_OK

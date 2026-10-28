@@ -1,0 +1,29 @@
+== fixture declarada de contatos (unica fixture de B8a)
+psql:/sql/fixture_016_contatos.sql:49: ERROR:  fixture de contatos: ja existe solicitacao na organizacao
+classificacao=NAO_APLICADA execucao=89d6cca1-2802-41c7-8948-7fad6fb3147b
+ERRO: fixture recusada ANTES do COMMIT: transacao desfeita, nada foi alterado (ver /c/Users/nicol/nekkora/Nekkora-Platform-API/ops/homologacao/saidas/ensaio-api-v1-003/fixtures.txt)
+retorno=2f12bbb3-89a8-47fb-8379-61f405d4d3c1 resultado=OK motivo=-
+solicitacao=a43bde09-718a-4de5-8886-ed2044614caa resultado=OK origem=BANCO estado=SOLICITADA motivo=-
+solicitacao=a43bde09-718a-4de5-8886-ed2044614caa resultado=RECUSA origem=BANCO estado=SOLICITADA motivo=SOLICITACAO_VERIFICADA_ABERTA
+solicitacao=a43bde09-718a-4de5-8886-ed2044614caa resultado=RECUSA origem=BANCO estado=SOLICITADA motivo=ESTADO_INVALIDO
+== avisos pelo despachante real com o transporte de homologacao
+tentativas aceitas: TEMPO ESGOTADO
+
+ERRO: arquivo invalido
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "C:\Users\nicol\AppData\Local\Programs\Python\Python312\Lib\json\__init__.py", line 293, in load
+    return loads(fp.read(),
+           ^^^^^^^^^^^^^^^^
+  File "C:\Users\nicol\AppData\Local\Programs\Python\Python312\Lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\nicol\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 338, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\nicol\AppData\Local\Programs\Python\Python312\Lib\json\decoder.py", line 356, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+FALHA H016.confirmar pela rota esperado=204 obtido=400
+solicitacao=a43bde09-718a-4de5-8886-ed2044614caa resultado=RECUSA origem=BANCO estado=SOLICITADA motivo=ESTADO_INVALIDO
+estado=1

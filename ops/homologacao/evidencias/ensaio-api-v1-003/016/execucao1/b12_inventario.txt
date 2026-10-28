@@ -1,0 +1,8 @@
+containers: antes 50 (protegidos 45), depois 51 (protegidos 46), do ambiente 5
+redes: antes 23 (protegidos 21), depois 23 (protegidos 21), do ambiente 2
+volumes: antes 150 (protegidos 146), depois 151 (protegidos 147), do ambiente 4
+imagens: antes 49 (protegidos 46), depois 49 (protegidos 46), do ambiente 3
+objetos sem rotulo (ausencia legitima, lidos por completo): 26
+containers 41044952c17cbda3806dc45307a2d65db48fa35221e68284c4418d8553f5484a: protegido NOVO
+volumes bab28ae5f96389519f2814ba305241cffdf2f9afeeeaa397cf61ca4d646922bc: protegido NOVO
+B12 FALHA: diferenca em recurso protegido ou mudanca de classificacao

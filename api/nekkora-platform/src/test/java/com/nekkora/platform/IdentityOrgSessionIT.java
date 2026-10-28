@@ -62,8 +62,8 @@ class IdentityOrgSessionIT extends IdentityTestBase {
         BrowserClient.Response r = f.browser().get(LISTA);
         assertThat(r.status()).isEqualTo(200);
         assertThat(r.body()).isEqualTo("{\"organizations\":["
-                + "{\"organizationId\":\"" + a + "\",\"name\":\"Alfa\",\"roles\":[\"ORG_ADMIN\"]},"
-                + "{\"organizationId\":\"" + b + "\",\"name\":\"Beta\",\"roles\":[\"ORG_ADMIN\"]}],"
+                + "{\"organizationId\":\"" + a + "\",\"name\":\"Alfa\",\"roles\":[\"ORG_ADMIN\"],\"activationState\":\"AGUARDANDO_ATIVACAO\"},"
+                + "{\"organizationId\":\"" + b + "\",\"name\":\"Beta\",\"roles\":[\"ORG_ADMIN\"],\"activationState\":\"AGUARDANDO_ATIVACAO\"}],"
                 + "\"canCreateOrganization\":false}");
     }
 

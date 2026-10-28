@@ -87,7 +87,7 @@ class OrganizationCreationIT extends IdentityTestBase {
 
         BrowserClient.Response lista = f.browser().get(LISTA);
         assertThat(lista.status()).isEqualTo(200);
-        assertThat(lista.body()).isEqualTo("{\"organizations\":[{\"organizationId\":\"" + org + "\",\"name\":\"Clínica Ágata\",\"roles\":[\"ORG_ADMIN\"]}],"
+        assertThat(lista.body()).isEqualTo("{\"organizations\":[{\"organizationId\":\"" + org + "\",\"name\":\"Clínica Ágata\",\"roles\":[\"ORG_ADMIN\"],\"activationState\":\"AGUARDANDO_ATIVACAO\"}],"
                 + "\"canCreateOrganization\":true}");
         BrowserClient.Response troca = f.browser().post("/api/v1/sessions/organization", "{\"organizationId\":\"" + org + "\"}");
         assertThat(troca.status()).isEqualTo(200);
