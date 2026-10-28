@@ -81,6 +81,10 @@ nekkora:
   # tambem ligada. A entrega real de e-mail continua sendo gate de liberacao (PR 5)
   recuperacao-senha:
     enabled: ${NEKKORA_RECUPERACAO_SENHA:false}
+  # convites para organizacoes (023): emissao, consulta, revogacao, reenvio e aceite. DESLIGADOS por padrao; so abrem com a
+  # entrada geral tambem ligada (o aceite e da identidade)
+  convites:
+    enabled: ${NEKKORA_CONVITES:false}
   trusted-proxies: ${NEKKORA_PROXIES_CONFIAVEIS:127.0.0.1/32,::1/128}
   database:
     url: ${NEKKORA_DB_URL}

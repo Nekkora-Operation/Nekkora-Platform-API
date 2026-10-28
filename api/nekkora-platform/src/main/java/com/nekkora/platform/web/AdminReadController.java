@@ -38,6 +38,7 @@ public class AdminReadController {
     static final String ROUTE_MEMBERS = "listMembers";
     static final String ROUTE_GRANTS = "listClientGrants";
     static final String ROUTE_CLIENTS = "listClients";
+    static final String ROUTE_ACCESS_EVENTS = "listAccessEvents";
     static final String SORT_CREATED_ASC = "createdAt.asc+id.asc";
     static final String SORT_CREATED_DESC = "createdAt.desc+id.desc";
     static final String SORT_NAME48 = "name48.asc+id.asc";
@@ -259,6 +260,63 @@ public class AdminReadController {
             sql.append(" AND (left(c.name, :prefix) COLLATE \"C\", c.client_id) > (CAST(:afterKey AS text) COLLATE \"C\", :afterId)");
         }
         return sql.append(" ORDER BY left(c.name, :prefix) COLLATE \"C\", c.client_id LIMIT :max").toString();
+    }
+
+    // ------------------------------------------------------------------ auditoria de acesso (023)
+
+    /** Atos de acesso da organizacao (org.manage), do mais recente ao mais antigo. So identificadores e codigos. */
+    @GetMapping("/api/v1/o/{org}/access-events")
+    public Map<String, Object> accessEvents(@PathVariable UUID org, @RequestParam(required = false) String cursor,
+                                            @RequestParam(required = false) Integer limit, HttpServletRequest req) {
+        ValidSession s = SessionFilter.principal(req);
+        int pageSize = Paging.limit(limit);
+        CursorCodec.Scope scope = new CursorCodec.Scope(ROUTE_ACCESS_EVENTS, org, s.membershipId(), null, CursorCodec.filters(), SORT_CREATED_DESC);
+        CursorCodec.Position after = cursor == null ? null : cursors.decode(cursor, scope).expectSize(2);
+        internal(s);
+        List<Map<String, Object>> rows = tx.inOrganization(org, Mode.READ_ONLY, j -> {
+            access.requireAnyOrganizationPermission(j, org, s.membershipId(), "org.manage");
+            StringBuilder sql = new StringBuilder("""
+                    SELECT e.event_id, e.event_type, e.actor_user_id, e.actor_identity_id IS NOT NULL AS by_identity, e.target_user_id,
+                           r.code AS role, pr.code AS previous_role, e.workspace_id, e.invitation_id, e.assignment_id, e.grant_id, e.decision,
+                           e.correlation_id, e.created_at
+                      FROM public.access_events e
+                      LEFT JOIN public.roles r ON r.role_id = e.role_id
+                      LEFT JOIN public.roles pr ON pr.role_id = e.previous_role_id
+                     WHERE e.organization_id = :org
+                    """);
+            if (after != null) {
+                sql.append(" AND (e.created_at, e.event_id) < (:afterCreated, :afterId)");
+            }
+            sql.append(" ORDER BY e.created_at DESC, e.event_id DESC LIMIT :max");
+            JdbcClient.StatementSpec q = j.sql(sql.toString()).param("org", org).param("max", pageSize + 1);
+            if (after != null) {
+                q = q.param("afterCreated", after.instant(0)).param("afterId", after.uuid(1));
+            }
+            return q.query((rs, n) -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("eventId", rs.getObject("event_id", UUID.class).toString());
+                m.put("type", com.nekkora.platform.admin.AccessEvents.Type.of(rs.getInt("event_type")).name());
+                m.put("actorUserId", text(rs.getObject("actor_user_id", UUID.class)));
+                m.put("byInvitee", rs.getBoolean("by_identity"));
+                m.put("targetUserId", text(rs.getObject("target_user_id", UUID.class)));
+                m.put("role", rs.getString("role"));
+                m.put("previousRole", rs.getString("previous_role"));
+                m.put("workspaceId", text(rs.getObject("workspace_id", UUID.class)));
+                m.put("invitationId", text(rs.getObject("invitation_id", UUID.class)));
+                m.put("assignmentId", text(rs.getObject("assignment_id", UUID.class)));
+                m.put("grantId", text(rs.getObject("grant_id", UUID.class)));
+                Object d = rs.getObject("decision");
+                m.put("decision", d == null ? null : com.nekkora.platform.admin.GrantAdminService.Decision.values()[((Number) d).intValue() - 1].name());
+                m.put("correlationId", rs.getObject("correlation_id", UUID.class).toString());
+                m.put("createdAt", rs.getObject("created_at", OffsetDateTime.class));
+                return m;
+            }).list();
+        });
+        return page(rows, pageSize, last -> cursors.encode(scope, List.of(last.get("createdAt"), last.get("eventId"))));
+    }
+
+    private static String text(UUID u) {
+        return u == null ? null : u.toString();
     }
 
     // ------------------------------------------------------------------ comum

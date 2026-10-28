@@ -1,0 +1,2 @@
+H03 modelo: 024 sem perfil declarado (suportados: 015 016)
+FALHA: modelo de migrations nao determinado; H03 nao avalia nada (falha fechada)

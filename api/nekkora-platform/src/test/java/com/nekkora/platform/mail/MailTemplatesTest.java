@@ -25,6 +25,8 @@ class MailTemplatesTest {
         assertThat(t.render(MailSender.Kind.IDENTITY_SIGNUP_CONFIRMATION, null, TOKEN).body()).contains(ORIGEM + "/cadastro/confirmar#token=" + TOKEN);
         assertThat(t.render(MailSender.Kind.PASSWORD_RECOVERY, null, TOKEN).body()).contains(ORIGEM + "/recuperar-senha#token=" + TOKEN);
         assertThat(t.render(MailSender.Kind.PASSWORD_RECOVERY, org, TOKEN).body()).contains(ORIGEM + "/o/" + org + "/recuperar-senha#token=" + TOKEN);
+        assertThat(t.render(MailSender.Kind.ORG_INVITATION, org, TOKEN).body()).as("convite (023): pagina por organizacao, token no fragmento")
+                .contains(ORIGEM + "/o/" + org + "/convite#token=" + TOKEN).doesNotContain("?token");
         MailTemplates.Rendered e = t.renderEmergency(MailSender.Kind.NOTICE_MFA_EMERGENCY_HOLDER, org, "C".repeat(43), "D".repeat(43));
         assertThat(e.body()).contains(ORIGEM + "/o/" + org + "/mfa-emergencia/confirmar#token=" + "C".repeat(43))
                 .contains(ORIGEM + "/o/" + org + "/mfa-emergencia/contestar#token=" + "D".repeat(43));
@@ -36,7 +38,8 @@ class MailTemplatesTest {
 
     @Test
     void todoTipoTemModeloEOsAvisosNaoLevamTokenNemLink() {
-        Set<MailSender.Kind> comToken = EnumSet.of(MailSender.Kind.IDENTITY_SIGNUP_CONFIRMATION, MailSender.Kind.PASSWORD_RECOVERY);
+        Set<MailSender.Kind> comToken = EnumSet.of(MailSender.Kind.IDENTITY_SIGNUP_CONFIRMATION, MailSender.Kind.PASSWORD_RECOVERY,
+                MailSender.Kind.ORG_INVITATION);
         Set<MailSender.Kind> emergencia = EnumSet.of(MailSender.Kind.NOTICE_MFA_EMERGENCY_HOLDER, MailSender.Kind.NOTICE_MFA_EMERGENCY_ADMIN);
         for (MailSender.Kind k : MailSender.Kind.values()) {
             if (emergencia.contains(k)) {

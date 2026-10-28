@@ -1,0 +1,4 @@
+cenario|resultado|detalhe
+B11|FALHA|ver b11_backup.txt e b11_restauracao.txt
+B12|OK|inventario por ID fora do ambiente identico antes e depois (execucao so do B11)
+SEGREDOS|OK|nenhum dos 40 valores secretos vistos aparece nas evidencias

@@ -165,6 +165,12 @@ public class IdentityConfig {
     }
 
     @Bean
+    com.nekkora.platform.identity.InvitationAcceptService invitationAcceptService(IdentityTransactions tx, IdentityAuthRepository auth,
+                                                                                  IdentityHmac hmac, Limits limits) {
+        return new com.nekkora.platform.identity.InvitationAcceptService(tx, auth, hmac, limits);
+    }
+
+    @Bean
     IdentityOrgRepository identityOrgRepository() {
         return new IdentityOrgRepository();
     }
@@ -223,9 +229,10 @@ public class IdentityConfig {
                                                                   @Value("${nekkora.entrada-geral.enabled:false}") boolean entryEnabled,
                                                                   @Value("${nekkora.criacao-organizacao.enabled:false}") boolean creationEnabled,
                                                                   @Value("${nekkora.vinculacao.enabled:false}") boolean linkEnabled,
-                                                                  @Value("${nekkora.recuperacao-senha.enabled:false}") boolean recoveryEnabled) {
+                                                                  @Value("${nekkora.recuperacao-senha.enabled:false}") boolean recoveryEnabled,
+                                                                  @Value("${nekkora.convites.enabled:false}") boolean invitationsEnabled) {
         FilterRegistrationBean<IdentityRoutesGate> r = new FilterRegistrationBean<>(new IdentityRoutesGate(signupEnabled, entryEnabled, creationEnabled,
-                linkEnabled, recoveryEnabled));
+                linkEnabled, recoveryEnabled, invitationsEnabled));
         r.setOrder(Ordered.HIGHEST_PRECEDENCE + 2);
         r.addUrlPatterns("/api/*");
         return r;

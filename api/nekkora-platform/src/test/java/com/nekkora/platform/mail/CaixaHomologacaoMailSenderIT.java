@@ -68,6 +68,9 @@ class CaixaHomologacaoMailSenderIT {
     @Autowired
     EmergencyNotices notices;
 
+    @Autowired
+    com.nekkora.core.db.OrgTransactions tx;
+
     @DynamicPropertySource
     static void propriedades(DynamicPropertyRegistry r) {
         r.add("nekkora.database.url", DB::urlTls);
@@ -159,6 +162,28 @@ class CaixaHomologacaoMailSenderIT {
     }
 
     // ------------------------------------------------------------------ desfechos pelo despachante real
+
+    /**
+     * SEGURAR (B10): a entrega fica retida SEM publicar o aviso (a tentativa continua ENTREGANDO enquanto isso); sem queda
+     * do processo, o desfecho e INCERTO -> DESCONHECIDO, nunca aceite. A regra e consumida uma vez.
+     */
+    @Test
+    void segurarRetemSemPublicarESemQuedaViraDesconhecido() throws Exception {
+        UUID aviso = tentativaPendente();
+        regra("proximo SEGURAR");
+        EmergencyNotices curto = new EmergencyNotices(tx, new CaixaHomologacaoMailSender(CAIXA, AMBIENTE, java.time.Duration.ofSeconds(3)));
+        java.util.concurrent.CompletableFuture<Integer> envio = java.util.concurrent.CompletableFuture.supplyAsync(curto::dispatchPending);
+        for (int i = 0; i < 100 && !"2:-".equals(estadoECategoria(aviso)); i++) {
+            Thread.sleep(50);
+        }
+        assertThat(estadoECategoria(aviso)).as("retida: ENTREGANDO").isEqualTo("2:-");
+        assertThat(CAIXA.resolve("avisos/" + aviso + ".json")).as("nada publicado enquanto retida").doesNotExist();
+        assertThat(envio.get(30, java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(1);
+        assertThat(estadoECategoria(aviso)).as("sem queda: INCERTO, nunca aceite").isEqualTo("6:INCERTO_SIMULADO");
+        assertThat(CAIXA.resolve("avisos/" + aviso + ".json")).as("nunca publicado").doesNotExist();
+        assertThat(indice()).as("nada entregue, nada no indice").noneSatisfy(l -> assertThat(l).contains(aviso.toString()));
+        assertThat(Files.readAllLines(CAIXA.resolve("controle.conf"))).as("regra consumida").isEmpty();
+    }
 
     @Test
     void beanDaPlatformEOTransporteDeHomologacaoESimulado() {

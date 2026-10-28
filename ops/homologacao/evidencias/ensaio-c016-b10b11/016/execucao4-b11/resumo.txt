@@ -1,0 +1,4 @@
+cenario|resultado|detalhe
+B11|OK|dump por backup_nekkora com as 21 tabelas de ops; restaurado num segundo cluster DESCARTAVEL (fora do projeto, sem rede) com os papeis pre-criados sem senha; contagens de todas as tabelas de public e ops iguais; ver b11_restauracao.txt
+B12|OK|inventario por ID fora do ambiente identico antes e depois (execucao so do B11)
+SEGREDOS|OK|nenhum dos 40 valores secretos vistos aparece nas evidencias

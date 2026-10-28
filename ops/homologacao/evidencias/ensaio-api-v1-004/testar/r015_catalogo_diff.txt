@@ -1,0 +1,8 @@
+988c988
+< con|access_events|access_events_check3|CHECK ((((event_type < 1) OR (event_type > 4)) OR (invitation_id IS NOT NULL)))
+---
+> con|access_events|access_events_check3|CHECK (((event_type < 1) OR (event_type > 4) OR (invitation_id IS NOT NULL)))
+992c992
+< con|access_events|access_events_grant_check|CHECK ((((event_type < 9) OR (event_type > 14)) OR (grant_id IS NOT NULL)))
+---
+> con|access_events|access_events_grant_check|CHECK (((event_type < 9) OR (event_type > 14) OR (grant_id IS NOT NULL)))

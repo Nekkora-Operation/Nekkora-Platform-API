@@ -217,14 +217,67 @@ b8a() {
                || registra B8a FALHA "ver b8a_fluxo.txt"
 }
 
+# Varredura MANUAL de tentativas paradas (B10), com ESPERA REAL e sem fixture: a caixa SEGURA a entrega de um reenvio ao
+# outro admin; com a tentativa em ENTREGANDO (lida no banco), a Platform e DERRUBADA (SIGKILL: a entrega nunca termina) e
+# sobe de novo; a varredura (VarreduraAvisos, no container da Platform, com a identidade dela) e acionada ANTES dos 10 min
+# (controle: a tentativa continua ENTREGANDO) e DEPOIS de 10 min reais parada (DESCONHECIDO, nunca ACEITA; nada publicado).
+# H016_B10_ESPERA_S (padrao 630): segundos parada antes da segunda varredura; menos de 600 reprova (seria antes do criterio).
+varredura() { MSYS_NO_PATHCONV=1 compose exec -T platform java -Dloader.main=com.nekkora.platform.emergency.VarreduraAvisos -cp /app/app.jar \
+    org.springframework.boot.loader.launch.PropertiesLauncher 2>&1 | tr -d '\r' | grep -E '^varredura_avisos ' ; }
+b10_varredura() {
+    local f="$EV/b10_varredura.txt" ok=0 s adm2 a st i parada espera="${H016_B10_ESPERA_S:-630}"
+    s="$(cat "$T/solicitacao")"; adm2="$(fx "d['ids']['adm2']")"
+    [ "$espera" -ge 600 ] 2>/dev/null || { echo "espera=$espera abaixo do criterio de 10 min" > "$f"; return 1; }
+    {
+        bash "$H" caixa "$HOMOLOG_ID" controle proximo SEGURAR
+        cred op_hml_ver
+        op_cli op_hml_ver reenviar-aviso "$s" "$adm2"
+        for i in $(seq 1 60); do
+            st="$(sq "SELECT notice_id || ':' || state FROM ops.ops_mfa_notices WHERE request_id = '$s' AND recipient_user_id = '$adm2' ORDER BY seq DESC LIMIT 1")"
+            [ "${st##*:}" = 2 ] && break
+            sleep 2
+        done
+        a="${st%%:*}"
+        echo "tentativa=$a estado_inicial=${st##*:} (2 = ENTREGANDO, entrega segurada pela caixa)"
+        compose kill platform > /dev/null 2>&1 && echo "platform=DERRUBADA sinal=SIGKILL instante=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        compose up -d --no-deps platform > /dev/null 2>&1 && echo "platform=SUBIU"
+        for i in $(seq 1 60); do compose exec -T platform true > /dev/null 2>&1 && break; sleep 2; done
+        echo "estado_depois_da_queda=$(sq "SELECT state FROM ops.ops_mfa_notices WHERE notice_id = '$a'")"
+        echo "== varredura 1 (antes dos 10 min: controle)"
+        varredura
+        echo "estado_apos_varredura_1=$(sq "SELECT state FROM ops.ops_mfa_notices WHERE notice_id = '$a'")"
+        parada="$(sq "SELECT floor(extract(epoch FROM clock_timestamp() - state_at)) FROM ops.ops_mfa_notices WHERE notice_id = '$a'")"
+        echo "parada_ha_s=$parada espera_real_ate_s=$espera"
+        while [ "$(sq "SELECT floor(extract(epoch FROM clock_timestamp() - state_at)) FROM ops.ops_mfa_notices WHERE notice_id = '$a'")" -lt "$espera" ]; do sleep 15; done
+        echo "parada_ha_s=$(sq "SELECT floor(extract(epoch FROM clock_timestamp() - state_at)) FROM ops.ops_mfa_notices WHERE notice_id = '$a'") (espera REAL, sem fixture)"
+        echo "== varredura 2 (depois dos 10 min)"
+        varredura
+        echo "estado_apos_varredura_2=$(sq "SELECT state || ':' || coalesce(category, '-') FROM ops.ops_mfa_notices WHERE notice_id = '$a'")"
+        echo "publicado_na_caixa=$(bash "$H" caixa "$HOMOLOG_ID" listar 2>/dev/null | grep -c "$a")"
+        echo "fixtures_desta_tentativa=$(grep -c "$a" "$AQUI/saidas/$HOMOLOG_ID/fixtures.txt" 2>/dev/null || echo 0)"
+    } > "$f" 2>&1
+    grep -q '^tentativa=[0-9a-f-]\{36\} estado_inicial=2 ' "$f" || ok=1
+    grep -q '^platform=DERRUBADA sinal=SIGKILL' "$f" || ok=1
+    grep -q '^estado_depois_da_queda=2$' "$f" || ok=1
+    grep -q '^estado_apos_varredura_1=2$' "$f" || ok=1
+    [ "$(grep -c '^varredura_avisos executada recuperadas=' "$f")" = 2 ] || ok=1
+    grep -q '^estado_apos_varredura_2=6:' "$f" || ok=1
+    grep -q '^publicado_na_caixa=0$' "$f" || ok=1
+    grep -q '^fixtures_desta_tentativa=0$' "$f" || ok=1
+    return $ok
+}
+
 b10() {
-    # desfechos simulados pelo caminho normal, um por reenvio ao outro admin; o ultimo volta a ACEITO para que a vigente
-    # seja uma tentativa aceita (condicao 2 de B8b). A VARREDURA de tentativas paradas nao tem gatilho no ambiente
-    # (nao ha agendamento nem rota; a identidade da Platform so conecta do proprio container): fica PENDENTE.
-    local f="$EV/b10_desfechos.txt" ok=0 s adm2 d esperado st i
+    # desfechos simulados pelo caminho normal, um por reenvio ao outro admin; depois do EXCECAO, a VARREDURA manual com
+    # espera real (b10_varredura); o ultimo volta a ACEITO para que a vigente seja uma tentativa aceita (condicao 2 de B8b)
+    local f="$EV/b10_desfechos.txt" ok=0 vok=0 s adm2 d esperado st i
     s="$(cat "$T/solicitacao")"; adm2="$(fx "d['ids']['adm2']")"
     : > "$f"
-    for par in RECUSADO:5:RECUSA_SIMULADA ENFILEIRADO:3:FILA_SIMULADA INCERTO:6:INCERTO_SIMULADO EXCECAO:6:INCERTO_SIMULADO ACEITO:4:ACEITE_SIMULADO; do
+    for par in RECUSADO:5:RECUSA_SIMULADA ENFILEIRADO:3:FILA_SIMULADA INCERTO:6:INCERTO_SIMULADO EXCECAO:6:INCERTO_SIMULADO VARREDURA ACEITO:4:ACEITE_SIMULADO; do
+        if [ "$par" = VARREDURA ]; then
+            b10_varredura || vok=1
+            continue
+        fi
         d="${par%%:*}"; esperado="${par#*:}"
         {
             [ "$d" = ACEITO ] || bash "$H" caixa "$HOMOLOG_ID" controle proximo "$d"
@@ -239,8 +292,13 @@ b10() {
         } >> "$f" 2>&1
         grep -q "desfecho=$d tentativa=$esperado esperado=$esperado" "$f" || ok=1
     done
-    [ $ok = 0 ] && registra B10 PARCIAL "RECUSADO, ENFILEIRADO, INCERTO, EXCECAO e ACEITO simulados pelo caminho normal com as categorias esperadas (ACEITO tambem em B8a); VARREDURA pendente (sem gatilho no ambiente)" \
-               || registra B10 FALHA "ver b10_desfechos.txt"
+    if [ $ok = 0 ] && [ $vok = 0 ]; then
+        registra B10 OK "RECUSADO, ENFILEIRADO, INCERTO, EXCECAO e ACEITO simulados pelo caminho normal com as categorias esperadas (ACEITO tambem em B8a); VARREDURA manual com espera REAL: tentativa ENTREGANDO parada pela queda (SIGKILL) da Platform, intacta antes dos 10 min, DESCONHECIDO depois, nada publicado"
+    elif [ $ok = 0 ]; then
+        registra B10 FALHA "desfechos OK; varredura reprovada (ver b10_varredura.txt)"
+    else
+        registra B10 FALHA "ver b10_desfechos.txt e b10_varredura.txt"
+    fi
 }
 
 b8b() {
@@ -269,8 +327,112 @@ b11() {
         > "$T/backup016.dump" 2> "$f" || ok=1
     MSYS_NO_PATHCONV=1 compose run --rm -T backup pg_restore -l < "$T/backup016.dump" 2>>"$f" | grep -cE ' TABLE ops ' | sed 's/^/tabelas_ops_no_dump=/' >> "$f"
     grep -q '^tabelas_ops_no_dump=21$' "$f" || ok=1
-    [ $ok = 0 ] && registra B11 PARCIAL "dump por backup_nekkora inclui as 21 tabelas de ops; restauracao num segundo cluster PENDENTE (P4)" \
-               || registra B11 FALHA "ver b11_backup.txt"
+    [ $ok = 0 ] && b11_restauracao || ok=1
+    [ $ok = 0 ] && registra B11 OK "dump por backup_nekkora com as 21 tabelas de ops; restaurado num segundo cluster DESCARTAVEL (fora do projeto, sem rede) com os papeis pre-criados sem senha; contagens de todas as tabelas de public e ops iguais; ver b11_restauracao.txt" \
+               || registra B11 FALHA "ver b11_backup.txt e b11_restauracao.txt"
+}
+
+# Restauracao do dump do B11 num segundo cluster DESCARTAVEL (A7 da missao P4, "mini missao propria"; autorizada como teste
+# em ambiente descartavel e local na missao de consolidacao, acessos e recuperacao operacional): container proprio FORA do
+# projeto (sem rotulo do ambiente, --network none, sem porta, sem volume nomeado), removido no fim, antes da fotografia B12.
+# Papeis do cluster de origem SEM senhas (pg_dumpall --roles-only --no-role-passwords, pelo admin_cluster); restauracao
+# completa pelo superusuario DESSE cluster (sslinfo exige); comparacao das contagens de TODAS as tabelas de public e ops.
+# Mede a duracao e exige: pertinencias recriadas sem erro, janela do migrador retirada (0) e as invariantes da 016 (sec. 19)
+# na base restaurada.
+b11_restauracao() {
+    local f="$EV/b11_restauracao.txt" c="nekkora-b11-restauracao-$(date -u +%Y%m%d%H%M%S)" ok=0 su=b11_restaurador ini fim
+    local senha; senha="descartavel-$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+    {
+        docker run -d --name "$c" --network none -e POSTGRES_USER="$su" -e POSTGRES_PASSWORD="$senha" -e POSTGRES_DB=postgres \
+            "${HOMOLOG_IMG_POSTGRES:-postgres:16-alpine}" > /dev/null && echo "cluster_descartavel=$c rede=none porta=nenhuma"
+        for i in $(seq 1 60); do [ "$(docker logs "$c" 2>&1 | grep -c 'database system is ready to accept connections')" -ge 2 ] && break; sleep 1; done
+        compose exec -T -e PGPASSWORD postgres pg_dumpall -U admin_cluster --roles-only --no-role-passwords 2> /dev/null | tr -d '\r' \
+            | grep -v -E "^(CREATE|ALTER) ROLE $su( |;)" | sed -E 's/ GRANTED BY [^;]+;$/;/' > "$T/b11_papeis.sql"
+        # pertinencias sem GRANTED BY: o concedente do cluster de origem (admin_cluster) nao tem ADMIN no cluster novo e o
+        # GRANT seria recusado; o concedente passa a ser o superusuario da restauracao (o metadado do concedente nao e preservado)
+        echo "papeis_no_arquivo=$(grep -c '^CREATE ROLE ' "$T/b11_papeis.sql") (sem senhas: $(grep -ci 'PASSWORD ' "$T/b11_papeis.sql") linhas com PASSWORD) pertinencias=$(grep -c '^GRANT ' "$T/b11_papeis.sql") com_granted_by=$(grep -c 'GRANTED BY' "$T/b11_papeis.sql")"
+        docker exec -i "$c" psql -X -q -U "$su" -d postgres < "$T/b11_papeis.sql" > "$T/b11_papeis_saida.txt" 2>&1
+        echo "papeis_aplicados_erros=$(grep -c 'ERROR' "$T/b11_papeis_saida.txt")"
+        grep 'ERROR' "$T/b11_papeis_saida.txt" | sed -E 's/"[^"]*"/"..."/g' | sort | uniq -c | head -5
+        MSYS_NO_PATHCONV=1 docker cp "$(cygpath -w "$T/backup016.dump" 2>/dev/null || echo "$T/backup016.dump")" "$c:/tmp/backup016.dump" > /dev/null
+        # banco do migrador, como na origem; pgcrypto e extensao CONFIAVEL: criada pelo migrador SEM a janela (como na 001), os
+        # membros pertencem ao superusuario de bootstrap do cluster. Dentro da janela, o migrador seria dono das 36 funcoes da
+        # pgcrypto e continuaria dono delas depois da retirada (privilegio que a origem nao tem; achado da comparacao de
+        # privilegios em 2026-10-27). O pg_dump emite CREATE EXTENSION IF NOT EXISTS: a restauracao a encontra pronta.
+        ini="$(date +%s)"
+        docker exec -i "$c" psql -X -q -v ON_ERROR_STOP=1 -U "$su" -d postgres -c "CREATE DATABASE nekkora OWNER migrador_nekkora" > /dev/null \
+            && echo "banco=CRIADO dono=migrador_nekkora"
+        docker exec -i "$c" psql -X -q -v ON_ERROR_STOP=1 -U "$su" -d nekkora -c "SET ROLE migrador_nekkora; CREATE EXTENSION pgcrypto WITH SCHEMA public" > /dev/null \
+            && echo "pgcrypto=CRIADA_PELO_MIGRADOR_SEM_JANELA"
+        # o resto roda como migrador_nekkora (SET ROLE pelo --role) numa janela de SUPERUSER, como no modelo do migrador:
+        # a extensao sslinfo (nao confiavel; o pg_dump nao emite o dono dela) nasce do migrador, como na 016; janela retirada
+        # e conferida
+        docker exec -i "$c" psql -X -q -U "$su" -d postgres -c "ALTER ROLE migrador_nekkora SUPERUSER" > /dev/null && echo "janela_superuser_migrador=ABERTA"
+        MSYS_NO_PATHCONV=1 docker exec "$c" pg_restore -U "$su" --role=migrador_nekkora -d nekkora --exit-on-error /tmp/backup016.dump > "$T/b11_restore_saida.txt" 2>&1 \
+            && echo "pg_restore=OK" || echo "pg_restore=FALHA"
+        docker exec -i "$c" psql -X -q -U "$su" -d postgres -c "ALTER ROLE migrador_nekkora NOSUPERUSER" > /dev/null
+        echo "janela_superuser_migrador=RETIRADA atributos=$(docker exec -i "$c" psql -X -At -U "$su" -d postgres -c "SELECT rolsuper::int + rolcreaterole::int + rolcreatedb::int + rolbypassrls::int + rolreplication::int FROM pg_roles WHERE rolname = 'migrador_nekkora'")"
+        fim="$(date +%s)"
+        echo "duracao_restauracao_s=$((fim - ini))"
+        sed -E 's/"[^"]*"/"..."/g' "$T/b11_restore_saida.txt" | head -5
+        echo "== contagens (origem pelo admin_cluster; destino pelo superusuario do cluster descartavel)"
+        local q="SELECT string_agg(format('%s.%s', schemaname, relname), ',' ORDER BY schemaname, relname) FROM pg_stat_user_tables WHERE schemaname IN ('public', 'ops')"
+        local tabs; tabs="$(admin_sql nekkora -c "$q")"
+        echo "tabelas_comparadas=$(echo "$tabs" | tr ',' '\n' | grep -c .)"
+        local sqlc="" t
+        for t in $(echo "$tabs" | tr ',' ' '); do sqlc="$sqlc SELECT '$t' || '|' || count(*) FROM $t;"; done
+        printf '%s\n' "$sqlc" | admin_sql nekkora > "$T/b11_contagens_origem.txt" 2>&1
+        printf '%s\n' "$sqlc" | docker exec -i "$c" psql -X -q -At -U "$su" -d nekkora > "$T/b11_contagens_destino.txt" 2>&1
+        echo "linhas_origem=$(wc -l < "$T/b11_contagens_origem.txt" | tr -d ' ') linhas_destino=$(wc -l < "$T/b11_contagens_destino.txt" | tr -d ' ')"
+        diff "$T/b11_contagens_origem.txt" "$T/b11_contagens_destino.txt" > /dev/null && echo "contagens=IGUAIS" || echo "contagens=DIFERENTES"
+        echo "ops_linhas_origem=$(grep '^ops\.' "$T/b11_contagens_origem.txt" | awk -F'|' '{s+=$2} END {print s+0}')"
+        echo "== invariantes da 016 (sec. 19) na base restaurada (exigidas)"
+        awk '/^-- === 19\. /{f=1} f && /^COMMIT;/{exit} f' "$REPO/db/migrations/016_recuperacao_emergencial_mfa.sql" > "$T/b11_inv016.sql"
+        { echo "BEGIN;"; cat "$T/b11_inv016.sql"; echo "ROLLBACK;"; } | docker exec -i "$c" psql -X -q -At -v ON_ERROR_STOP=1 -U "$su" -d nekkora > "$T/b11_inv016_saida.txt" 2>&1 \
+            && echo "invariantes_016_restaurada=OK" || echo "invariantes_016_restaurada=FALHA motivo=$(grep -m1 -oE 'ERROR: .*' "$T/b11_inv016_saida.txt" | cut -c1-160)"
+        echo "== privilegios (catalogo: papeis, pertinencias sem o concedente, donos, ACL, RLS, politicas, funcoes, extensoes, padroes)"
+        # o superusuario de bootstrap de cada cluster (admin_cluster na origem, o descartavel no destino) vira o mesmo marcador:
+        # dono do plpgsql e dos membros da pgcrypto nos dois lados
+        admin_sql nekkora < "$REPO/ops/homologacao/testes/b11_privilegios.sql" 2>&1 | tr -d '\r' \
+            | sed -E 's/(^|[^A-Za-z0-9_])admin_cluster([^A-Za-z0-9_]|$)/\1<superusuario-do-cluster>\2/g' > "$T/b11_priv_origem.txt"
+        docker exec -i "$c" psql -X -q -At -v ON_ERROR_STOP=1 -U "$su" -d nekkora < "$REPO/ops/homologacao/testes/b11_privilegios.sql" 2>&1 \
+            | tr -d '\r' | sed -E "s/(^|[^A-Za-z0-9_])$su([^A-Za-z0-9_]|\$)/\1<superusuario-do-cluster>\2/g" > "$T/b11_priv_destino.txt"
+        echo "itens_origem=$(wc -l < "$T/b11_priv_origem.txt" | tr -d ' ') itens_destino=$(wc -l < "$T/b11_priv_destino.txt" | tr -d ' ')"
+        for k in PAPEL PERTINENCIA BANCO ESQUEMA RELACAO COLUNA POLITICA FUNCAO EXTENSAO PADRAO; do
+            printf '%s=%s ' "$k" "$(grep -c "^$k " "$T/b11_priv_origem.txt")"
+        done; echo
+        # fotografias na evidencia: so catalogo (nenhum dado, nenhuma senha)
+        cp "$T/b11_priv_origem.txt" "$EV/b11_privilegios_origem.txt"; cp "$T/b11_priv_destino.txt" "$EV/b11_privilegios_restaurada.txt"
+        if diff "$T/b11_priv_origem.txt" "$T/b11_priv_destino.txt" > "$T/b11_priv_diff.txt"; then
+            echo "privilegios=IGUAIS"
+        else
+            echo "privilegios=DIFERENTES ($(grep -c '^[<>]' "$T/b11_priv_diff.txt") linhas)"; head -20 "$T/b11_priv_diff.txt"
+        fi
+        # o que a restauracao NAO preserva, declarado: o concedente das pertinencias (origem x destino)
+        local qg="SELECT pg_get_userbyid(roleid) || ' -> ' || pg_get_userbyid(member) || ' concedente=' || pg_get_userbyid(grantor) FROM pg_auth_members m JOIN pg_roles a ON a.oid = m.roleid JOIN pg_roles b ON b.oid = m.member WHERE NOT a.rolsuper AND NOT b.rolsuper AND b.rolname !~ '^pg_' ORDER BY 1"
+        echo "concedentes_origem: $(admin_sql nekkora -c "$qg" | tr -d '\r' | paste -sd ';' -)"
+        echo "concedentes_destino: $(docker exec -i "$c" psql -X -q -At -U "$su" -d nekkora -c "$qg" | tr -d '\r' | paste -sd ';' - | sed "s/concedente=$su/concedente=<superusuario-da-restauracao>/g")"
+        local e
+        for e in sslinfo pgcrypto plpgsql; do
+            echo "extensao $e: origem $(grep "^EXTENSAO $e " "$T/b11_priv_origem.txt" | cut -d' ' -f3-) | destino $(grep "^EXTENSAO $e " "$T/b11_priv_destino.txt" | cut -d' ' -f3-)"
+        done
+        echo "donos_das_funcoes_origem: $(grep '^FUNCAO ' "$T/b11_priv_origem.txt" | grep -oE ' dono=[^ ]+' | sort | uniq -c | tr -s ' ' | paste -sd ';' -)"
+        echo "donos_das_funcoes_destino: $(grep '^FUNCAO ' "$T/b11_priv_destino.txt" | grep -oE ' dono=[^ ]+' | sort | uniq -c | tr -s ' ' | paste -sd ';' -)"
+        docker rm -f -v "$c" > /dev/null && echo "cluster_descartavel=REMOVIDO"
+        rm -f "$T/b11_papeis.sql"
+    } > "$f" 2>&1
+    grep -q '^pg_restore=OK$' "$f" || ok=1
+    grep -q '^pgcrypto=CRIADA_PELO_MIGRADOR_SEM_JANELA$' "$f" || ok=1
+    grep -q '^contagens=IGUAIS$' "$f" || ok=1
+    grep -qE '^tabelas_comparadas=[1-9][0-9]+$' "$f" || ok=1
+    grep -q '^papeis_aplicados_erros=0$' "$f" || ok=1
+    grep -q '^cluster_descartavel=REMOVIDO$' "$f" || ok=1
+    grep -q '(sem senhas: 0 linhas com PASSWORD) pertinencias=[0-9]* com_granted_by=0$' "$f" || ok=1
+    grep -q '^janela_superuser_migrador=RETIRADA atributos=0$' "$f" || ok=1
+    grep -q '^invariantes_016_restaurada=OK$' "$f" || ok=1
+    grep -q '^privilegios=IGUAIS$' "$f" || ok=1
+    grep -qE '^itens_origem=[1-9][0-9]+ itens_destino=[1-9][0-9]+$' "$f" || ok=1
+    return $ok
 }
 
 fotografia() {
@@ -282,6 +444,19 @@ fotografia() {
 testar() {
     [ -f "$T/fixture.json" ] || { echo "ERRO: rode antes homologacao.sh preparar-016 $HOMOLOG_ID" >&2; exit 1; }
     fotografia "$EV/inventario_b12_antes.jsonl"
+    # H016_SOMENTE=B11: so o B11 (dump e restauracao num cluster descartavel; somente leitura na origem), repetivel no mesmo
+    # ambiente, com a fotografia do B12 em volta. B8a e B10 nao se repetem no mesmo ambiente (fixture de contatos)
+    if [ "${H016_SOMENTE:-}" = B11 ]; then
+        b11
+        fotografia "$EV/inventario_b12_depois.jsonl"
+        if python "$AQUI/testes/inventario_b12.py" comparar "$HOMOLOG_ID" "$EV/inventario_b12_antes.jsonl" "$EV/inventario_b12_depois.jsonl" \
+            > "$EV/b12_inventario.txt" 2>&1; then
+            registra B12 OK "inventario por ID fora do ambiente identico antes e depois (execucao so do B11)"
+        else
+            registra B12 FALHA "ver b12_inventario.txt"
+        fi
+        return
+    fi
     b5; b6; b7
     if [ "${HOMOLOG_TRANSPORTE:-}" = homologacao ]; then
         b8a; b10

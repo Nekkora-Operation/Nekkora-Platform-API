@@ -345,9 +345,12 @@ confere "lista operacional normalizada: 011-013 legadas e 016-020 e 022 superuse
     "[ \"\$(lista_elevacao_normalizada '$AQUI/implantacao/elevacao.txt' \"\$VINCULO_OBRIGATORIO\" | awk '{print \$1, \$3, \$4}' | tr '\n' ' ')\" = '011 superuser - 012 superuser - 013 superuser - 016 superuser ensaio-api-v1-003 017 superuser ensaio-api-v1-003 018 superuser ensaio-api-v1-003 019 superuser ensaio-api-v1-003 020 superuser ensaio-api-v1-003 022 superuser ensaio-api-v1-003 ' ]"
 confere "lista operacional: sha256 de 016-020 = bytes LF de db/migrations; 021 sem linha" \
     "( for v in 016 017 018 019 020; do lista_elevacao_normalizada '$AQUI/implantacao/elevacao.txt' \"\$VINCULO_OBRIGATORIO\" | grep -q \"^\$v \$(sha256sum '$REPO'/db/migrations/\${v}_*.sql | cut -c1-64) \" || exit 1; done ) && ! grep -q '^021 ' '$AQUI/implantacao/elevacao.txt'"
-confere "runner: versao de vinculo obrigatorio SEM linha recusada antes do Flyway; pre-voo oficial existente para 016-020 e 022" \
+confere "runner: versao de vinculo obrigatorio SEM linha recusada antes do Flyway; pre-voo oficial existente para 016-020 e 022-024" \
     "grep -q 'exige elevacao vinculada e nao esta na lista de elevacao; nada aplicado' '$AQUI/implantacao/implantar.sh' \
-     && ( for v in 016 017 018 019 020 022; do [ -s '$AQUI/implantacao/preflight/'\$v.sql ] && grep -q PREFLIGHT_OK '$AQUI/implantacao/preflight/'\$v.sql || exit 1; done )"
+     && ( for v in 016 017 018 019 020 022 023 024; do [ -s '$AQUI/implantacao/preflight/'\$v.sql ] && grep -q PREFLIGHT_OK '$AQUI/implantacao/preflight/'\$v.sql || exit 1; done ) \
+     && [ \"\$VINCULO_OBRIGATORIO\" = ' 016 017 018 019 020 022 023 024 ' ]"
+confere "elevacao.txt operacional SEM linha da 023 nem da 024 (so propostas, sem aprovacao; o laboratorio usa lista alternativa fora do repositorio)" \
+    "! grep -qE '^02[34] ' '$AQUI/implantacao/elevacao.txt'"
 
 echo "== 7. classificacao e reconciliacao das fixtures (casos sinteticos, sem banco)"
 F="$AQUI/lib/fixture_conferencia.py"
@@ -410,6 +413,10 @@ confere "Dockerfile.operacao: da pasta homologacao so FerramentaHomologacao*.cla
 confere "fixture_016.sql: primeiro ORG_ADMIN so por provision_first_org_admin (sem INSERT sem responsavel)" "grep -q 'provision_first_org_admin(' '$AQUI/sql/fixture_016.sql' && [ \"\$(grep -c 'INSERT INTO organization_role_assignments' '$AQUI/sql/fixture_016.sql')\" = 1 ] && grep -A1 'INSERT INTO organization_role_assignments' '$AQUI/sql/fixture_016.sql' | grep -q assigned_by_membership_id"
 confere "sonda ca-estranha: apresenta o certificado (fabrica propria) e le o alerta antes de escrever" "grep -q 'CertificadoForcado.class.getName()' '$FJ' && grep -q 'ssl.startHandshake();' '$FJ' && grep -q 'ssl.setSoTimeout(2000);' '$FJ'"
 confere "B6: avaliacao separada (avalia_b6) usada pelo b6 e exposta em 'h016.sh avaliar-b6'" "grep -q 'avalia_b6 \"\$f\" || ok=1' '$H16' && grep -q 'avaliar-b6' '$H16'"
+confere "B10: varredura manual com espera real (SEGURAR, SIGKILL, controle antes dos 10 min, espera >= 600 s, sem fixture)" "grep -qF 'controle proximo SEGURAR' '$H16' && grep -qF 'compose kill platform' '$H16' && grep -qF -e '-ge 600' '$H16' && grep -qF 'estado_apos_varredura_1=2' '$H16' && grep -qF 'fixtures_desta_tentativa=0' '$H16' && grep -qF 'Dloader.main=com.nekkora.platform.emergency.VarreduraAvisos' '$H16'"
+confere "caixa: SEGURAR so como regra 'proximo' (nunca por destinatario)" "grep -qF 'EXCECAO|SEGURAR)|destinatario' '$AQUI/homologacao.sh' && [ \"\$(grep -c 'SEGURAR' '$AQUI/homologacao.sh')\" = 2 ]"
+confere "B11: restauracao em cluster DESCARTAVEL fora do projeto (sem rede, papeis sem senha, removido antes do B12)" "grep -qF -e '--network none' '$H16' && grep -qF -e '--roles-only --no-role-passwords' '$H16' && grep -qF 'cluster_descartavel=REMOVIDO' '$H16' && grep -qF 'contagens=IGUAIS' '$H16' && grep -qF 'b11_restauracao || ok=1' '$H16'"
+confere "B11: privilegios do catalogo comparados (exigidos) e pgcrypto criada pelo migrador antes da janela" "grep -qF 'b11_privilegios.sql' '$H16' && grep -qF \"grep -q '^privilegios=IGUAIS\$'\" '$H16' && grep -qF 'pgcrypto=CRIADA_PELO_MIGRADOR_SEM_JANELA' '$H16' && [ -f '$AQUI/testes/b11_privilegios.sql' ]"
 
 echo "== 10. guarda e identificacao das imagens (FONTES_IMAGENS; G1/G1b) em repositorio Git temporario, sem Docker"
 if bash "$AQUI/testes/guarda_fontes_imagens.sh" > "$TMP/guarda.txt" 2>&1; then ok "guarda_fontes_imagens.sh: $(tail -1 "$TMP/guarda.txt")"; else nok "guarda_fontes_imagens.sh: $(tail -1 "$TMP/guarda.txt")"; grep '^FALHA' "$TMP/guarda.txt"; fi
@@ -749,7 +756,7 @@ confere "atualizacao do frontend: coleta do gateway pelo selecao_gateway.sh; ref
 confere "runner: pre-voo da pasta da lista alternativa SO para versao sintetica 9xx sem pre-voo oficial (022 e 016-020 sempre pelo oficial)" \
     "[ \"\$(grep -c 'pf=\"\$(dirname \"\$LISTA\")/preflight/\$v.sql\"' '$AQUI/implantacao/implantar.sh')\" = 1 ] \
      && grep -qF '[ ! -f \"\$pf\" ] && [ -n \"\${HOMOLOG_ELEVACAO_ARQ:-}\" ] && [[ \"\$v\" =~ ^9[0-9]{2}\$ ]]; then pf=' '$AQUI/implantacao/implantar.sh'"
-confere "atualizar 021 -> 022 com lista alternativa: recusa fora de ensaio-* e nas conferencias de existencia, gramatica, versao, sha256 e vinculo, sem alterar o ambiente; lista correta so para na liberacao: testes/test_atualizar_lista.sh" \
+confere "atualizar 021 -> 022, 022 -> 023 e 023 -> 024 (um passo) com lista alternativa: recusa fora de ensaio-* e nas conferencias de existencia, gramatica, versao, sha256 e vinculo, sem alterar o ambiente; lista correta so para na liberacao: testes/test_atualizar_lista.sh" \
     "bash '$AQUI/testes/test_atualizar_lista.sh' > '$TMP/atz.txt' 2>&1 && grep -q '^RESULTADO: atualizar com lista alternativa OK' '$TMP/atz.txt'"
 confere "procedimento da atualizacao do frontend com compose controlado (preparo, recusas sem escrita nem up, falhas pedindo reverter, caminho valido e reversao): testes/test_frontend_atualizar.sh" \
     "bash '$AQUI/testes/test_frontend_atualizar.sh' > '$TMP/fa.txt' 2>&1 && grep -q '^RESULTADO: atualizacao do frontend OK' '$TMP/fa.txt'"
