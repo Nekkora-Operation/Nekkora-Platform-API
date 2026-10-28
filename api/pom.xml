@@ -33,6 +33,7 @@
         <module>nekkora-ops</module>
         <module>nekkora-platform</module>
         <module>nekkora-portal</module>
+        <module>nekkora-agent-gateway</module>
     </modules>
 
     <properties>
