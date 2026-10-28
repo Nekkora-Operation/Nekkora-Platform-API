@@ -345,10 +345,10 @@ confere "lista operacional normalizada: 011-013 legadas e 016-020 e 022 superuse
     "[ \"\$(lista_elevacao_normalizada '$AQUI/implantacao/elevacao.txt' \"\$VINCULO_OBRIGATORIO\" | awk '{print \$1, \$3, \$4}' | tr '\n' ' ')\" = '011 superuser - 012 superuser - 013 superuser - 016 superuser ensaio-api-v1-003 017 superuser ensaio-api-v1-003 018 superuser ensaio-api-v1-003 019 superuser ensaio-api-v1-003 020 superuser ensaio-api-v1-003 022 superuser ensaio-api-v1-003 ' ]"
 confere "lista operacional: sha256 de 016-020 = bytes LF de db/migrations; 021 sem linha" \
     "( for v in 016 017 018 019 020; do lista_elevacao_normalizada '$AQUI/implantacao/elevacao.txt' \"\$VINCULO_OBRIGATORIO\" | grep -q \"^\$v \$(sha256sum '$REPO'/db/migrations/\${v}_*.sql | cut -c1-64) \" || exit 1; done ) && ! grep -q '^021 ' '$AQUI/implantacao/elevacao.txt'"
-confere "runner: versao de vinculo obrigatorio SEM linha recusada antes do Flyway; pre-voo oficial existente para 016-020, 022-024 e 026" \
+confere "runner: versao de vinculo obrigatorio SEM linha recusada antes do Flyway; pre-voo oficial existente para 016-020, 022-024, 026 e 027" \
     "grep -q 'exige elevacao vinculada e nao esta na lista de elevacao; nada aplicado' '$AQUI/implantacao/implantar.sh' \
-     && ( for v in 016 017 018 019 020 022 023 024 026; do [ -s '$AQUI/implantacao/preflight/'\$v.sql ] && grep -q PREFLIGHT_OK '$AQUI/implantacao/preflight/'\$v.sql || exit 1; done ) \
-     && [ \"\$VINCULO_OBRIGATORIO\" = ' 016 017 018 019 020 022 023 024 026 ' ]"
+     && ( for v in 016 017 018 019 020 022 023 024 026 027; do [ -s '$AQUI/implantacao/preflight/'\$v.sql ] && grep -q PREFLIGHT_OK '$AQUI/implantacao/preflight/'\$v.sql || exit 1; done ) \
+     && [ \"\$VINCULO_OBRIGATORIO\" = ' 016 017 018 019 020 022 023 024 026 027 ' ]"
 S025V="$(sha256sum < "$REPO"/db/migrations/025_*.sql | cut -c1-64)"
 echo "025 $S025V tipo=superuser ambiente=ensaio-validacao-l" > "$TMP/l025.txt"
 echo "025 $S025V" > "$TMP/l025_legado.txt"
@@ -356,8 +356,8 @@ lista_recusada "025 com linha vinculada (aplica sem elevacao: NUNCA_ELEVAR)" "$T
 lista_recusada "025 com linha legada" "$TMP/l025_legado.txt" "a 025 aplica sem elevacao e nao pode ter linha na lista"
 confere "lista de elevacao: 021 e 025 NUNCA elevadas (NUNCA_ELEVAR); nenhuma linha delas na lista operacional" \
     "[ \"\$NUNCA_ELEVAR\" = ' 021 025 ' ] && ! grep -qE '^0(21|25) ' '$AQUI/implantacao/elevacao.txt'"
-confere "elevacao.txt operacional SEM linha da 023, da 024 nem da 026 (so propostas, sem aprovacao; o laboratorio usa lista alternativa fora do repositorio)" \
-    "! grep -qE '^02[346] ' '$AQUI/implantacao/elevacao.txt'"
+confere "elevacao.txt operacional SEM linha da 023, da 024, da 026 nem da 027 (so propostas, sem aprovacao; o laboratorio usa lista alternativa fora do repositorio)" \
+    "! grep -qE '^02[3467] ' '$AQUI/implantacao/elevacao.txt'"
 
 echo "== 7. classificacao e reconciliacao das fixtures (casos sinteticos, sem banco)"
 F="$AQUI/lib/fixture_conferencia.py"
