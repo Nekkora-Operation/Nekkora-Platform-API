@@ -22,6 +22,8 @@
 #   ops/homologacao/homologacao.sh caixa <id> listar|ler <arquivo>|controle <regra>|exportar-indice|liberar-trava
 #   ops/homologacao/homologacao.sh fixture <id> contatos <uuid,uuid,...> | solicitacao <uuid> [horas] | conferir <execucao>
 #   ops/homologacao/homologacao.sh validar-config          validacao ESTATICA (sem criar recursos)
+#   ops/homologacao/homologacao.sh agente <id> ligar|conferir|desligar   canal do Agent (025, E-AP-1; SO ensaio-* com a 025):
+#                                                    processo nekkora-agent-gateway, rota /agent/api/v1/ e provas da rota
 # Semeadura pre-014 (R2b-0; SO ensaio-*, com o runner pausado por HOMOLOG_ENSAIO_PAUSA=antes-de-elevar@014:<arquivo>):
 #   ops/homologacao/homologacao.sh semear-pre014 <id>                 18 sessoes sinteticas (sql/fixture_014_pre.sql)
 #   ops/homologacao/homologacao.sh conferir-semente014 <id> antes|depois   conferencia somente leitura (testes/semente_014.sh)
@@ -1317,6 +1319,154 @@ PY
         esac
         ;;
     *) falha "subcomando invalido";;
+    esac
+    ;;
+
+# ========================================================================================================= agente
+# Canal do Agent (025) na homologacao (E-AP-1): processo nekkora-agent-gateway e rota /agent/api/v1/ no gateway, SO em
+# ambiente ensaio-* LIBERADO com a 025 aplicada. Nao aplica migration, nao abre janela, nao muda atributo de papel: so a
+# senha (verificador SCRAM) do nekkora_ingestion, que a 012 cria com LOGIN e sem senha, como as dos outros servicos.
+#   homologacao.sh agente <id> ligar      segredos (fora do Git), pg_hba, ACL do Redis, imagem do commit do ambiente,
+#                                         sobreposicao compose.agente.yml, rota no nginx; confere 400 unsupported_contract
+#   homologacao.sh agente <id> conferir   rota sem cabecalho, contrato errado, sem credencial, prefixo vizinho, Platform
+#                                         intacta e varredura de segredos nos logs (gateway e agent-gateway)
+#   homologacao.sh agente <id> desligar   remove o processo, restaura pg_hba, nginx, ACL e ambiente.env da copia feita no
+#                                         ligar e devolve o papel ao estado sem senha
+# Evidencias em saidas/<id>/agente/<acao>-<instante>/ (sem segredo).
+agente)
+    carrega_ambiente "${2:?id}"
+    sub="${3:?ligar|conferir|desligar}"
+    prepara_funcoes
+    case "$HOMOLOG_ID" in ensaio-*) ;; *) falha "canal do Agent so em ambiente ensaio-*; nada alterado";; esac
+    [ "$((10#$HOMOLOG_ATE))" -ge 25 ] || falha "ambiente sem a 025 (versoes ate $HOMOLOG_ATE); nada alterado"
+    SEGH="$HOMOLOG_SEGREDOS_HOST"; EVA="$AQUI/saidas/$HOMOLOG_ID/agente"; INST="$(date -u +%Y%m%dT%H%M%SZ)"
+    AT="$EVA/$sub-$INST"; mkdir -p "$AT"
+    CA="$SEGH/tls/ca.crt"; BASE="https://$HOMOLOG_HOST:$HOMOLOG_PORTA"
+    req() {   # req <metodo> <caminho> [cabecalhos...]: imprime "status corpo" (corpo curto, sem cabecalhos de resposta)
+        local m="$1" p="$2"; shift 2
+        local h=() x; for x in "$@"; do h+=(-H "$x"); done
+        curl -s --ssl-no-revoke --max-time 10 -X "$m" "${h[@]}" -w ' %{http_code}' --cacert "$CA" \
+            --resolve "$HOMOLOG_HOST:$HOMOLOG_PORTA:127.0.0.1" "$BASE$p" | tr -d '\r\n' | sed -E 's/^(.*) ([0-9]{3})$/\2 \1/' | cut -c1-200
+    }
+    ligado() { case " $HOMOLOG_COMPOSE_EXTRA " in *" compose.agente.yml "*) return 0;; esac; return 1; }
+    case "$sub" in
+    ligar)
+        ligado && falha "canal do Agent ja ligado neste ambiente; nada alterado"
+        git -C "$REPO" cat-file -e "$HOMOLOG_COMMIT:api/nekkora-agent-gateway/pom.xml" 2>/dev/null \
+            || falha "imagens do ambiente ($HOMOLOG_COMMIT) sem o modulo nekkora-agent-gateway: rode email-real $HOMOLOG_ID imagens; nada alterado"
+        . "$AQUI/lib/fontes_imagens.sh"
+        guarda_fontes_imagens "$REPO" >&2 || falha "entradas das imagens da API diferentes do commit; nada alterado"
+        [ "$(commit_fontes_imagens "$REPO")" = "$HOMOLOG_COMMIT" ] \
+            || falha "o repositorio identifica as imagens por $(commit_fontes_imagens "$REPO"), o ambiente por $HOMOLOG_COMMIT: o jar do canal nao seria o das outras imagens; nada alterado"
+        for f in "$HOMOLOG_CONFIG/pg_hba.conf" "$HOMOLOG_CONFIG/nginx.conf" "$SEGH/redis/users.acl"; do
+            [ -f "$f" ] || falha "configuracao gerada ausente ($f): so ambientes com pg_hba/nginx gerados; nada alterado"
+        done
+        compose up -d --wait postgres redis > /dev/null 2>&1 || falha "postgres/redis nao subiram"
+        confere_liberacao "$TRAVA" > /dev/null || falha "ambiente BLOQUEADO: nada alterado (homologacao.sh estado $HOMOLOG_ID)"
+        [ "$(admin_sql nekkora -c "SELECT count(*) FROM public.flyway_schema_history WHERE version = '025' AND success" | tr -d '\r')" = 1 ] \
+            || falha "a 025 nao consta aplicada no historico do banco; nada alterado"
+        papel() { admin_sql nekkora -c "SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls, rolinherit, rolpassword IS NOT NULL FROM pg_authid WHERE rolname = 'nekkora_ingestion'" | tr -d '\r'; }
+        P0="$(papel)"; [ "$P0" = "t|f|f|f|f|f|t|f" ] || [ "$P0" = "t|f|f|f|f|f|f|f" ] \
+            || falha "nekkora_ingestion fora do estado esperado (LOGIN, sem atributos, SEM senha): obtido $P0; nada alterado"
+        echo "== copia do estado anterior (desligar = restaurar estas copias)"
+        cp "$ESTADO" "$AT/ambiente.env.antes"; cp "$HOMOLOG_CONFIG/pg_hba.conf" "$AT/pg_hba.conf.antes"
+        cp "$HOMOLOG_CONFIG/nginx.conf" "$AT/nginx.conf.antes"; (umask 077; cp "$SEGH/redis/users.acl" "$SEGH/redis/users.acl.antes-agente")
+        echo "$AT" > "$EVA/ligado.txt"
+        { echo "ligar=$INST commit=$HOMOLOG_COMMIT versoes_ate=$HOMOLOG_ATE rede=$HOMOLOG_REDE_INTERNA.0/24"
+          echo "papel_antes=$P0 (rolcanlogin|super|createdb|createrole|replication|bypassrls|inherit|tem_senha)"; } > "$AT/registro.txt"
+        echo "== segredos do canal (fora do Git: $SEGH)"
+        python "$AQUI/lib/agente.py" segredos "$SEGH" "$HOMOLOG_REDE_INTERNA" >> "$AT/registro.txt" || falha "segredos do canal"
+        VI="$(python "$AQUI/lib/segredos.py" scram "$SEGH/senhas/agent_gateway" | tr -d '\r')"
+        admin_sql nekkora -v verif_ingestion="$VI" < "$AQUI/sql/senha_ingestao.sql" >> "$AT/registro.txt" 2>&1 || falha "senha do nekkora_ingestion"
+        P1="$(papel)"; echo "papel_depois=$P1" >> "$AT/registro.txt"
+        [ "${P1%|*}" = "${P0%|*}" ] && [ "${P1##*|}" = t ] || falha "atributos do nekkora_ingestion mudaram ($P0 -> $P1)"
+        echo "== pg_hba (recarregado, regras conferidas pelo servidor)"
+        python "$AQUI/lib/agente.py" pg_hba "$HOMOLOG_CONFIG/pg_hba.conf" "$HOMOLOG_REDE_INTERNA" >> "$AT/registro.txt" || falha "pg_hba"
+        admin_sql nekkora -c "SELECT pg_reload_conf()" > /dev/null || falha "recarga do pg_hba"
+        sleep 1
+        [ "$(admin_sql nekkora -c "SELECT count(*) FROM pg_hba_file_rules WHERE error IS NOT NULL" | tr -d '\r')" = 0 ] || falha "pg_hba com erro depois da edicao"
+        admin_sql nekkora -c "SELECT line_number, type, database, user_name, address, netmask, auth_method FROM pg_hba_file_rules WHERE 'nekkora_ingestion' = ANY(user_name)" \
+            | tr -d '\r' | sed 's/^/pg_hba_regra=/' >> "$AT/registro.txt"
+        echo "== Redis com a ACL nova (usuario agent, so ~agent:*)"
+        compose up -d --wait --force-recreate --no-deps redis > /dev/null 2>&1 || falha "Redis nao voltou com a ACL nova"
+        echo "== build do canal (jar e imagem do commit $HOMOLOG_COMMIT)"
+        (cd "$REPO/api" && ./mvnw -q -DskipTests -pl nekkora-agent-gateway -am package) > "$AT/build.txt" 2>&1 || falha "build do canal (ver $AT/build.txt)"
+        EXTRA_AG="$HOMOLOG_COMPOSE_EXTRA compose.agente.yml"
+        CF="-f $COMPOSE_ARQ"; for x in $EXTRA_AG; do CF="$CF -f $(mixed "$AQUI/$x")"; done
+        docker compose $CF config -q 2>/dev/null || falha "sobreposicao compose.agente.yml nao renderiza"
+        COMPOSE_F="$CF"; export COMPOSE_F
+        compose build agent-gateway >> "$AT/build.txt" 2>&1 || falha "imagem do canal"
+        docker image inspect "nekkora-homologacao-agent-gateway:$HOMOLOG_COMMIT" --format 'imagem={{.Id}} rotulo={{index .Config.Labels "nekkora.homologacao"}}' >> "$AT/registro.txt"
+        sed -e "s#^HOMOLOG_COMPOSE_EXTRA=.*#HOMOLOG_COMPOSE_EXTRA=\"$EXTRA_AG\"#" "$AT/ambiente.env.antes" > "$ESTADO"
+        echo "== nginx com a rota /agent/api/v1/"
+        python "$AQUI/lib/agente.py" nginx "$HOMOLOG_CONFIG/nginx.conf" "$HOMOLOG_REDE_INTERNA" >> "$AT/registro.txt" || falha "nginx"
+        python "$AQUI/lib/porta.py" elegivel "$HOMOLOG_BIND" "$HOMOLOG_PORTA" > /dev/null || falha "porta $HOMOLOG_BIND:$HOMOLOG_PORTA indisponivel"
+        INI="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        compose up -d agent-gateway platform portal > /dev/null 2>&1 || falha "servicos nao subiram"
+        compose up -d --force-recreate --no-deps gateway > /dev/null 2>&1 || falha "gateway nao subiu"
+        r=""
+        for i in $(seq 1 90); do
+            r="$(req GET /agent/api/v1/authorizations)"
+            case "$r" in 400*unsupported_contract*) break;; esac
+            [ "$i" -lt 90 ] || { compose logs --no-color --since "$INI" agent-gateway gateway > "$AT/falha.txt" 2>&1; falha "canal nao respondeu (ultimo: ${r:0:60}; ver falha.txt, sem segredo)"; }
+            sleep 2
+        done
+        echo "rota_sem_cabecalho=$r" >> "$AT/registro.txt"
+        echo "CANAL DO AGENT LIGADO em $HOMOLOG_ID: $BASE/agent/api/v1/ ($r). Conferir: homologacao.sh agente $HOMOLOG_ID conferir"
+        ;;
+    conferir)
+        ligado || falha "canal do Agent nao esta ligado neste ambiente"
+        INI="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        ok=0; total=0
+        caso() {   # caso <nome> <padrao esperado (glob)> <resultado>
+            total=$((total + 1))
+            case "$3" in $2) echo "PASS $1: $3"; ok=$((ok + 1));; *) echo "FAIL $1: esperado $2, obtido $3";; esac
+        }
+        {
+        caso A1-sem-cabecalho '400*unsupported_contract*' "$(req GET /agent/api/v1/authorizations)"
+        caso A2-contrato-2 '400*unsupported_contract*' "$(req GET /agent/api/v1/authorizations 'Nekkora-Agent-Contract: 2.0')"
+        caso A3-sem-credencial '401*' "$(req GET /agent/api/v1/authorizations 'Nekkora-Agent-Contract: 1.0')"
+        caso A4-credencial-invalida '401*' "$(req POST /agent/api/v1/heartbeat 'Nekkora-Agent-Contract: 1.0' 'Authorization: Bearer nka_invalido' 'Content-Type: application/json')"
+        caso A5-prefixo-vizinho '404*' "$(req GET /agent/api/v2/authorizations 'Nekkora-Agent-Contract: 1.0')"
+        caso A6-rota-da-maquina-pela-platform '40[134]*' "$(req GET /api/v1/agent/api/v1/authorizations 'Nekkora-Agent-Contract: 1.0')"
+        caso A7-platform-intacta '200*' "$(req GET /api/v1/csrf)"
+        } | tee "$AT/casos.txt"
+        ok="$(grep -c '^PASS' "$AT/casos.txt" || true)"; total="$(grep -c '^PASS\|^FAIL' "$AT/casos.txt" || true)"
+        sleep 2
+        compose logs --no-color --since "$INI" agent-gateway gateway > "$AT/.logs.txt" 2>&1 || true
+        grep -E '"(GET|POST) /agent/' "$AT/.logs.txt" | sed -E 's/^[^|]*\| //' | sed -E 's/^[0-9.]+ /<ip> /' > "$AT/acesso_gateway.txt" || true
+        v=0; python "$AQUI/lib/agente.py" varrer "$SEGH" "$AT/.logs.txt" "$AT/casos.txt" "$AT/acesso_gateway.txt" > "$AT/varredura.txt" || v=$?
+        echo "linhas_de_log_varridas=$(wc -l < "$AT/.logs.txt" | tr -d ' ') (agent-gateway, gateway desde $INI)" >> "$AT/varredura.txt"
+        rm -f "$AT/.logs.txt"
+        cat "$AT/varredura.txt"
+        echo "conferir=$INST casos=$ok/$total varredura=$([ "$v" = 0 ] && echo limpa || echo SEGREDO)" | tee "$AT/registro.txt"
+        [ "$ok" = "$total" ] && [ "$v" = 0 ]
+        ;;
+    desligar)
+        ligado || falha "canal do Agent nao esta ligado neste ambiente"
+        AL="$(cat "$EVA/ligado.txt" 2>/dev/null)"; [ -d "$AL" ] || falha "copias do ligar ausentes ($EVA/ligado.txt): restaure a mano"
+        compose stop agent-gateway > /dev/null 2>&1 || true
+        compose rm -f agent-gateway > /dev/null 2>&1 || true
+        [ "$(docker ps -q --filter "label=nekkora.homologacao=$HOMOLOG_ID" --filter "label=com.docker.compose.service=agent-gateway" | grep -c . || true)" = 0 ] \
+            || falha "agent-gateway CONTINUA no ar: pare o container a mano antes de qualquer outra acao"
+        cp "$AL/ambiente.env.antes" "$ESTADO"; set -a; . "$ESTADO"; set +a; prepara_funcoes
+        cp "$AL/pg_hba.conf.antes" "$HOMOLOG_CONFIG/pg_hba.conf"; cp "$AL/nginx.conf.antes" "$HOMOLOG_CONFIG/nginx.conf"
+        cp "$SEGH/redis/users.acl.antes-agente" "$SEGH/redis/users.acl"
+        compose up -d --wait postgres redis > /dev/null 2>&1 || falha "postgres/redis nao subiram"
+        admin_sql nekkora -c "ALTER ROLE nekkora_ingestion PASSWORD NULL" > /dev/null || falha "senha do nekkora_ingestion nao retirada"
+        admin_sql nekkora -c "SELECT pg_reload_conf()" > /dev/null || falha "recarga do pg_hba"
+        compose up -d --wait --force-recreate --no-deps redis > /dev/null 2>&1 || falha "Redis nao voltou com a ACL anterior"
+        if [ "$(docker ps -q --filter "label=nekkora.homologacao=$HOMOLOG_ID" --filter "label=com.docker.compose.service=gateway" | grep -c . || true)" != 0 ]; then
+            compose up -d --force-recreate --no-deps gateway > /dev/null 2>&1 || falha "gateway nao voltou com o nginx anterior"
+        fi
+        rm -f "$SEGH/senhas/agent_gateway" "$SEGH/senhas/redis_agent" "$SEGH/agent-gateway.env" "$SEGH/redis/users.acl.antes-agente" "$EVA/ligado.txt"
+        { echo "desligar=$INST copias_de=$(basename "$AL")"
+          echo "pg_hba_igual=$(cmp -s "$AL/pg_hba.conf.antes" "$HOMOLOG_CONFIG/pg_hba.conf" && echo sim || echo NAO) nginx_igual=$(cmp -s "$AL/nginx.conf.antes" "$HOMOLOG_CONFIG/nginx.conf" && echo sim || echo NAO)"
+          echo "papel_depois=$(admin_sql nekkora -c "SELECT rolcanlogin, rolpassword IS NOT NULL FROM pg_authid WHERE rolname = 'nekkora_ingestion'" | tr -d '\r') (login|tem_senha)"
+          echo "ingestao_no_pg_hba=$(admin_sql nekkora -c "SELECT count(*) FROM pg_hba_file_rules WHERE 'nekkora_ingestion' = ANY(user_name)" | tr -d '\r')"; } | tee "$AT/registro.txt"
+        echo "CANAL DO AGENT DESLIGADO em $HOMOLOG_ID (processo removido, configuracao restaurada, segredos do canal apagados)"
+        ;;
+    *) falha "use ligar, conferir ou desligar";;
     esac
     ;;
 

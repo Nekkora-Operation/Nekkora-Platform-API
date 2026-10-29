@@ -1,0 +1,9 @@
+ligar=20261029T152710Z commit=f324b7e versoes_ate=027 rede=10.252.120.0/24
+papel_antes=t|f|f|f|f|f|t|f (rolcanlogin|super|createdb|createrole|replication|bypassrls|inherit|tem_senha)
+segredos do canal gerados (agent_gateway, redis_agent) e usuario agent na ACL do Redis
+papel_depois=t|f|f|f|f|f|t|t
+pg_hba: nekkora_ingestion so de 10.252.120.22/32 (SCRAM e TLS), antes da recusa final
+pg_hba_regra=31|hostssl|{nekkora}|{nekkora_ingestion}|10.252.120.22|255.255.255.255|scram-sha-256
+imagem=sha256:89c389b6df14ca6dbad439544e0f7200b9cb53d6ff8b86be32899595e325b32c rotulo=ensaio-agent-026
+nginx: rota /agent/api/v1/ -> 10.252.120.22:8083 (zona de taxa propria, corpo ate 2 MiB)
+rota_sem_cabecalho=400 {"error":"unsupported_contract"}

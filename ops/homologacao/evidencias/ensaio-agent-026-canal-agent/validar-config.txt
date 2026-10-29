@@ -1,0 +1,335 @@
+== 1. sintaxe
+OK    bash -n homologacao.sh
+OK    bash -n mapa_privilegios.sh
+OK    bash -n implantar.sh
+OK    bash -n executar.sh
+OK    bash -n guarda_fontes_imagens.sh
+OK    bash -n h016.sh
+OK    bash -n h03_perfis.sh
+OK    bash -n instalacao_incompleta.sh
+OK    bash -n interrupcao.sh
+OK    bash -n janela_022.sh
+OK    bash -n janela_023_024.sh
+OK    bash -n janela_026.sh
+OK    bash -n janela_027.sh
+OK    bash -n janelas_016_020.sh
+OK    bash -n jornada_ativacao.sh
+OK    bash -n p1c_caixa.sh
+OK    bash -n p2_privilegios.sh
+OK    bash -n p3it_runner.sh
+OK    bash -n prevoo_023_024.sh
+OK    bash -n prova_proxy_m365.sh
+OK    bash -n semente_014.sh
+OK    bash -n test_atualizar_lista.sh
+OK    bash -n test_elevacao_historica.sh
+OK    bash -n test_frontend_atualizar.sh
+OK    bash -n test_gateway_frontend.sh
+OK    bash -n test_gateway_tipos.sh
+OK    bash -n test_h03_perfis.sh
+OK    bash -n test_m365_aws.sh
+OK    bash -n test_preflight_016_020.sh
+OK    bash -n test_selecao_gateway.sh
+OK    bash -n test_semear_f6a_banco.sh
+OK    bash -n test_semear_frontend_banco.sh
+OK    bash -n test_trava_caixa.sh
+OK    bash -n validar_config.sh
+OK    sintaxe python agente.py
+OK    sintaxe python catalogo.py
+OK    sintaxe python credencial_navegacao.py
+OK    sintaxe python email_real.py
+OK    sintaxe python fixture_conferencia.py
+OK    sintaxe python fontes_maven.py
+OK    sintaxe python gateway_frontend.py
+OK    sintaxe python indice_caixa.py
+OK    sintaxe python porta.py
+OK    sintaxe python redes.py
+OK    sintaxe python segredos.py
+OK    sintaxe python semear_f6a.py
+OK    sintaxe python semear_frontend.py
+OK    sintaxe python cliente.py
+OK    sintaxe python contraprovas_f6a.py
+OK    sintaxe python contraprovas_frontend.py
+OK    sintaxe python inventario_b12.py
+OK    sintaxe python jornada_email_real.py
+OK    sintaxe python jornadas_api.py
+OK    sintaxe python jornadas_frontend.py
+OK    sintaxe python test_agente.py
+OK    sintaxe python test_credencial_navegacao.py
+OK    sintaxe python test_email_real.py
+OK    sintaxe python test_fontes_maven.py
+OK    sintaxe python test_frontend_ferramentas.py
+OK    sintaxe python test_inventario_b12.py
+OK    sintaxe python test_porta.py
+OK    sintaxe python test_validar_f6a.py
+OK    sintaxe python validar_f6a.py
+== 2. sobreposicao de CIDR (casos sinteticos, sem Docker)
+OK    sem sobreposicao: 10.252.20/24 e 10.252.21/24 x redes da hml03
+OK    igualdade recusada
+OK    rede MAIOR existente contendo a candidata recusada
+OK    rede MENOR existente dentro da candidata recusada
+OK    candidatas sobrepostas entre si recusadas
+OK    IPv6 existente nao interfere
+OK    linha ilegivel recusada por seguranca
+OK    prefixo valido 10.252.20
+OK    prefixo invalido 10.252 recusado
+OK    prefixo invalido 10.252.020 recusado
+OK    prefixo invalido 10.256.1 recusado
+OK    prefixo invalido a.b.c recusado
+OK    prefixo invalido 10.252.20.0 recusado
+== 3. configuracao gerada (diretorio temporario)
+OK    nenhum marcador restante
+OK    nenhum IP da rede padrao no pg_hba/nginx gerados
+OK    pg_hba gerado = regras anteriores (com o prefixo novo) + linhas da 016
+OK    op_* so por certificado, so do .33
+OK    linhas da 016 antes dos reject finais
+OK    pg_ident: CN = papel op_*
+OK    nginx gerado = original com o prefixo novo
+== 4. docker compose config (so renderiza; valores de exemplo, sem segredo)
+OK    base renderiza
+OK    base + 016 renderiza
+OK    base + 016 + caixa renderiza
+OK    base + 016 + caixa + 021 renderiza
+OK    base + 016 + caixa + 021 + agente renderiza
+OK    agente: agent-gateway so na interna (.22), somente leitura, sem porta, so as variaveis do canal (nada da Platform); gateway depende de platform, portal e agent-gateway
+OK    base + 016 + 021 + m365 renderiza
+OK    m365: Platform so na rede interna; proxy na interna e na saida propria; transporte m365 com o proxy, o tenant do Entra, o segredo da AWS (sa-east-1) e a lista de destinatarios
+OK    m365: variaveis de platform.env, m365/aws.env e m365/fila.env juntas na Platform (a sobreposicao acrescenta, nao troca)
+OK    m365: sem lista de destinatarios a sobreposicao nao renderiza
+OK    m365: politica do proxy so CONNECT 443 para Entra, Graph e Secrets Manager sa-east-1 (tudo o mais negado)
+OK    m365: tmpfs do proxy do usuario proxy (uid 13), sem o que o squid nao sobe com a raiz somente leitura
+OK    m365: teto global de tentativas na Platform (20, diretorio montado de m365/tentativas; fila e prova no mesmo container)
+OK    m365: runner confere o teto antes de ligar e de cada prova, exige o evento de teto na partida e tem tentativas/autenticacao
+OK    m365: m365-aws.sh so apaga a chave no confirmar (publicar sem trap de remocao)
+OK    m365: com o transporte real, a lista de destinatarios vale para todo comando compose (prova, autenticacao, desligar)
+OK    m365: desligar confere pelo Docker que o proxy parou e para pelo rotulo se o compose falhar
+OK    m365: prova e autenticacao sem conversao de caminho do Git Bash no docker exec
+OK    m365: regiao do segredo igual no compose e no proxy
+OK    m365: sobreposicao usada SO pela acao email-real do runner (troca com a caixa)
+OK    m365: email-real so em ensaio-*, recusa sem credenciais/lista/fila vazia ANTES de mudar o ambiente, desligar corta o proxy primeiro
+OK    m365: testes/test_email_real.py (credenciais temporarias, lista, chave da fila, cabecalhos recebidos)
+OK    m365: aws/m365-aws.sh (W1-W3, certificado e confirmar) contra AWS CLI falsa: nada secreto na linha de comando, chave so sai depois da leitura utilizavel
+OK    m365: politicas da AWS so GetSecretValue no segredo da homologacao, funcao so com MFA
+OK    sub-redes pelo prefixo
+OK    job operacao em .33, so no perfil
+OK    chave da CA operacional montada so no job operacao
+OK    postgres com ssl_ca_file e ident_file so com a 016
+OK    021: chaves da identidade ligadas SO com a sobreposicao da 021, transporte continua o de homologacao
+OK    transporte de homologacao so com a sobreposicao da caixa
+OK    caixa e volume Docker rotulado (nao pasta do host)
+OK    ferramenta da caixa sem rede e somente leitura
+OK    015 ensaio: pg_hba e nginx gerados (6 e 2 enderecos trocados), sem 10.252.10 restante
+OK    015 ensaio: regras identicas aos estaticos, exceto o prefixo
+OK    015 ensaio: nada da 016 no pg_hba gerado (sem nekkora_ops, cert, map, ident)
+OK    base + 015-rede renderiza
+OK    015 ensaio: postgres e gateway montam SO os gerados (os estaticos nao sao montados)
+OK    015 ensaio: sem recursos da 016 (ssl_ca_file, ident_file, operacao, transporte)
+OK    015 ensaio: sub-redes e IPs pelo prefixo
+== 5. elevacao e migrations
+OK    base fixada (bf977d7) com o conteudo 011-013 aprovado
+OK    elevacao.txt operacional com conteudo aprovado (011-013 + 016-020 e 022 vinculadas ao ensaio-api-v1-003)
+OK    copia proposta com a 016 vinculada (patch aplicado so na copia temporaria) reconhecida como aprovada
+OK    copia proposta em CRLF tambem reconhecida (conteudo, nao fim de linha)
+OK    lista adulterada recusada (adult_id)
+OK    lista adulterada recusada (adult_hash)
+OK    lista adulterada recusada (adult_011)
+OK    lista adulterada recusada (adult_extra)
+OK    lista adulterada recusada (adult_sem_vinculo)
+OK    migration 016 com o sha256 revisado (revisao 5)
+== 6. recusas do criar ANTES de qualquer recurso (combinacoes invalidas; nada e criado)
+OK    016 fora de ensaio-*: ERRO: a 016 na homologacao so em ambiente descartavel (id ensaio-*)
+OK    016 sem a linha de elevacao (P3): ERRO: a 016 exige a linha de elevacao autorizada em implantacao/elevacao.txt (etapa P3) para este id (ensaio-v
+OK    015 em ensaio-* com SO a interna fora do padrao: ERRO: HOMOLOG_ATE=015 em sub-rede de ensaio exige HOMOLOG_REDE_INTERNA e HOMOLOG_REDE_BORDA fora do padrao
+OK    015 em sub-redes alternativas FORA de ensaio-*: ERRO: HOMOLOG_ATE=015 fora das sub-redes padrao so em ambiente descartavel (id ensaio-*)
+OK    015 em ensaio-* com as duas sub-redes iguais (sobreposicao): ERRO: sub-rede do ambiente sobrepoe rede Docker existente (ver acima)
+OK    015 em ensaio-* com prefixo invalido: ERRO: HOMOLOG_REDE_INTERNA invalido (a.b.c)
+OK    transporte sem a 016: ERRO: transporte de homologacao exige a 016
+OK    transporte desconhecido: ERRO: HOMOLOG_TRANSPORTE invalido (vazio ou homologacao)
+OK    prefixo invalido: ERRO: HOMOLOG_REDE_INTERNA invalido (a.b.c)
+OK    ultima migration invalida: ERRO: HOMOLOG_ATE invalido (015, 016 ou 021)
+OK    021 fora de ensaio-*: ERRO: a 021 na homologacao so em ambiente descartavel (id ensaio-*)
+OK    021 sem o transporte de homologacao (e-mail simulado): ERRO: HOMOLOG_ATE=021 exige HOMOLOG_TRANSPORTE=homologacao (e-mail simulado na caixa do ensaio)
+OK    021 com a lista operacional, vinculada a OUTRO id (ensaio-api-v1-003): ERRO: a 016 exige a linha de elevacao autorizada e vinculada a este id (ensaio-validacao-s) em implantacao/ele
+OK    016 com linha SEM vinculo ao id: ERRO: a 016 exige a linha de elevacao autorizada em implantacao/elevacao.txt (etapa P3) para este id (ensaio-v
+OK    016 com linha vinculada a OUTRO id: ERRO: a 016 exige a linha de elevacao autorizada em implantacao/elevacao.txt (etapa P3) para este id (ensaio-v
+OK    lista alternativa inexistente: ERRO: lista de elevacao alternativa inexistente
+OK    lista alternativa fora de ensaio-*: ERRO: lista de elevacao alternativa (HOMOLOG_ELEVACAO_ARQ) so em ambiente descartavel (id ensaio-*)
+OK    implantar: lista inexistente (codigo 3, antes de qualquer acao)
+OK    implantar: 016 sem vinculo (codigo 3, antes de qualquer acao)
+OK    implantar: linha fora do formato (codigo 3, antes de qualquer acao)
+OK    implantar: versao repetida (codigo 3, antes de qualquer acao)
+OK    lista: base 011-013 normalizada sem mudanca de significado (011-013 superuser, sem vinculo)
+OK    lista: legado 016 vinculado
+OK    lista: forma nova 014 bypassrls
+OK    lista: forma nova 014 bypassrls vinculada
+OK    lista: forma nova 016 superuser vinculada (ordem livre)
+OK    lista: tipo desconhecido recusada
+OK    lista: chave desconhecida recusada
+OK    lista: chave repetida recusada
+OK    lista: forma nova sem tipo recusada
+OK    lista: mistura de id posicional com chave=valor recusada
+OK    lista: 014 legado (superuser implicito) recusada
+OK    lista: 014 tipo=superuser recusada
+OK    lista: 016 forma nova sem ambiente recusada
+OK    lista: 016 tipo=bypassrls recusada
+OK    lista: ambiente invalido recusada
+OK    implantar: 014 com tipo=superuser (codigo 3, antes de qualquer acao)
+OK    implantar: tipo de elevacao desconhecido (codigo 3, antes de qualquer acao)
+OK    016 em forma nova vinculada a OUTRO id: ERRO: a 016 exige a linha de elevacao autorizada em implantacao/elevacao.txt (etapa P3) para este id (ensaio-v
+OK    021 com lista alternativa SEM a linha da 019: ERRO: a 019 exige a linha de elevacao autorizada e vinculada a este id (ensaio-validacao-t) em implantacao/ele
+OK    021 com lista alternativa e a 018 SEM vinculo: ERRO: lista de elevacao recusada pela gramatica (lib/lista_elevacao.sh)
+OK    implantar: 018 sem vinculo (versao de vinculo obrigatorio) (codigo 3, antes de qualquer acao)
+OK    implantar: 017 com tipo=bypassrls (vinculo obrigatorio so superuser) (codigo 3, antes de qualquer acao)
+OK    lista operacional normalizada: 011-013 legadas e 016-020 e 022 superuser vinculadas SO ao ensaio-api-v1-003
+OK    lista operacional: sha256 de 016-020 = bytes LF de db/migrations; 021 sem linha
+OK    runner: versao de vinculo obrigatorio SEM linha recusada antes do Flyway; pre-voo oficial existente para 016-020, 022-024, 026 e 027
+OK    implantar: 025 com linha vinculada (aplica sem elevacao: NUNCA_ELEVAR) (codigo 3, antes de qualquer acao)
+OK    implantar: 025 com linha legada (codigo 3, antes de qualquer acao)
+OK    lista de elevacao: 021 e 025 NUNCA elevadas (NUNCA_ELEVAR); nenhuma linha delas na lista operacional
+OK    elevacao.txt operacional SEM linha da 023, da 024, da 026 nem da 027 (so propostas, sem aprovacao; o laboratorio usa lista alternativa fora do repositorio)
+== 7. classificacao e reconciliacao das fixtures (casos sinteticos, sem banco)
+OK    APLICADA: codigo 0, marca e verificacoes=OK
+OK    falha DEPOIS do COMMIT nao e 'nada alterado'
+OK    erro do servidor antes do COMMIT -> NAO_APLICADA
+OK    conexao perdida (codigo 2, sem marca) -> INDETERMINADA
+OK    job falhou sem saida do psql -> INDETERMINADA
+OK    codigo 3 sem erro do servidor -> INDETERMINADA
+OK    reconciliacao: estado igual ao de partida -> NAO_APLICADA
+OK    reconciliacao: partida - 25 h -> APLICADA
+OK    reconciliacao: outro valor -> DIVERGENTE (codigo 1)
+OK    reconciliacao: linha alvo faltando -> DIVERGENTE
+OK    reconciliacao: sem linhas ANTES -> SEM_ESTADO_DE_PARTIDA
+OK    fixture_016_contatos: estado de partida (ANTES) antes do BEGIN
+OK    fixture_016_contatos: marca IMEDIATAMENTE depois do COMMIT
+OK    fixture_016_solicitacao: estado de partida (ANTES) antes do BEGIN
+OK    fixture_016_solicitacao: marca IMEDIATAMENTE depois do COMMIT
+OK    runner: psql das fixtures SEM --single-transaction (so em comentario)
+OK    runner: solicitacao registrada como impropria para B9 ANTES de executar
+== 8. B6: expectativas coerentes com o pg_hba e com a causa da recusa TLS
+OK    pg_hba gerado termina nas regras EXPLICITAS de recusa (IPv4 e IPv6)
+OK    B6 (.31) espera a mensagem da regra explicita de recusa
+OK    B6 (CA estranha) exige unknown_ca no cliente E 'certificate verify failed' no servidor
+OK    ferramenta: RECUSADA_TLS so para unknown_ca (alerta generico = FALHA_TECNICA)
+== 9. achados do P1c (execucao em recursos descartaveis): travas contra regressao
+OK    Dockerfile.operacao: nenhum '$' em caminho de COPY (o Dockerfile expandiria como variavel, ex.: Pki$Ca)
+OK    Dockerfile.operacao: da pasta homologacao so FerramentaHomologacao*.class (testes do P1c fora da imagem)
+OK    fixture_016.sql: primeiro ORG_ADMIN so por provision_first_org_admin (sem INSERT sem responsavel)
+OK    sonda ca-estranha: apresenta o certificado (fabrica propria) e le o alerta antes de escrever
+OK    B6: avaliacao separada (avalia_b6) usada pelo b6 e exposta em 'h016.sh avaliar-b6'
+OK    B10: varredura manual com espera real (SEGURAR, SIGKILL, controle antes dos 10 min, espera >= 600 s, sem fixture)
+OK    caixa: SEGURAR so como regra 'proximo' (nunca por destinatario)
+OK    B11: restauracao em cluster DESCARTAVEL fora do projeto (sem rede, papeis sem senha, removido antes do B12)
+OK    B11: privilegios do catalogo comparados (exigidos) e pgcrypto criada pelo migrador antes da janela
+== 10. guarda e identificacao das imagens (FONTES_IMAGENS; G1/G1b) em repositorio Git temporario, sem Docker
+OK    guarda_fontes_imagens.sh: RESULTADO: 106 caso(s), 0 falha(s)
+== 11. script do modelo do migrador e configuracao de desenvolvimento (P4-R2a-C2)
+OK    script do modelo em db/bootstrap/ (e nao mais em db/tests/lib/)
+OK    consumidores apontam para db/bootstrap/aplicar_como_migrador.sh (RealDatabase, OpsBanco, suite da 016, compose do modelo)
+OK    nenhuma referencia ao caminho antigo db/tests/lib/ em codigo (api, db/tests, ops/homologacao, compose)
+OK    compose do modelo isolado da stack principal (projeto, container, volume e porta proprios)
+== 12. pre-voo da 014, semeadura pre-014 e sua conferencia (R2b-0: T1, T2, T3)
+OK    T1: implantacao/preflight/014.sql existe, e somente leitura e termina em PREFLIGHT_OK/PREFLIGHT_FALHOU (7 itens)
+OK    T3: sql/semente_014_estado.sql e somente leitura
+OK    T2: a semeadura reconfere ambiente ensaio-*, historico 001-013, ausencia da 014, migrador sem atributo e semente anterior
+OK    T2: semear-pre014 recusado fora de ensaio-* (antes de ler qualquer ambiente)
+OK    T3: conferir-semente014 recusado fora de ensaio-*
+OK    T2: semear-pre014 exige a pausa antes-de-elevar@014 do runner, a chegada nela, pausa nao liberada, trava e 0|0|0
+OK    ganchos de pausa e largada do runner continuam recusados fora de ensaio-*
+OK    elevacao.txt operacional sem linha da 014; 016-020 e 022 SO vinculadas ao ensaio-api-v1-003 (nenhuma sem vinculo ou de outro id)
+== 13. H02: janela BYPASSRLS da 014 esperada pela lista de elevacao em vigor (R2b-0b; h02_esperadas do executar.sh)
+OK    H02 usa h02_esperadas (sem a lista fixa 011 012 013 016 no h02)
+OK    H02: lista sem 014 -> 011 012 013 016 (comportamento anterior)
+OK    H02: 014 bypassrls vinculada a este id -> 014 esperada
+OK    H02: 014 vinculada a outro id -> 014 nao esperada
+OK    H02: lista fora do formato -> recusa (nunca 'sem 014')
+== 14. elegibilidade da porta publicada (R2b-1a, F-R2b1-1: listener, bind real e faixas reservadas do Windows)
+OK    testes de lib/porta.py (parser do netsh, falha fechada, sockets reais em portas efemeras, decisao)
+OK    porta.py: bind exclusivo de verdade, tabela excludedportrange e falha fechada no Windows
+OK    criar confere a porta antes de qualquer recurso (linha 247 < guarda 251 e < saida/segredos 255)
+OK    concluir-criacao confere a porta antes de subir os servicos (linha 136 < 138)
+OK    criar recusa porta reservada pelo sistema e sem listener (49152, limite de faixa) antes de qualquer recurso
+== 15. H03 por perfil do modelo de migrations (missao H03 pos-016, F-R2b1c-1)
+OK    testes de testes/h03_perfis.sh (modelo com falha fechada, perfis 015/016, invariantes e troca exata da regra da 014)
+OK    h03 sem a lista fixa de papeis do desenho 015 (papeis com senha vem do perfil)
+OK    h03 sem a regra fixa de 1 politica: invariantes so por h03_invariantes_sql do perfil (sem extrair blocos das migrations no h03)
+OK    perfil 016 inclui a sec. 19 da 016 e a troca da regra da 014; perfil 015 mantem a regra original
+OK    referencia pelo modelo suportado (aplicar_como_migrador.sh + marcador da versao), sem migrations no initdb.d
+OK    modelo nao determinado = FALHA fechada (h03 para antes de avaliar)
+== 16. evidencia de fontes da regressao Maven (manifesto antes e depois; missao manifesto de fontes Maven)
+OK    bash -n regressao_maven.sh
+OK    testes de lib/fontes_maven.py e regressao_maven.sh (repositorio sintetico, mvnw falso; estavel, mutacao/adicao/remocao durante, depois, adulteracao)
+OK    manifesto das fontes ANTES do Maven e de novo DEPOIS (linhas 32 < 60 < 64), com comparacao
+OK    reaproveitamento PERMITIDO so sem motivo; fontes instaveis, testes com falha ou nenhum teste = PROIBIDO; falha do manifesto inicial impede o Maven
+OK    fontes_maven.py sem mtime, ordem por bytes, conjunto declarado (modulos do pom, db, ops/homologacao) e recusa de caminho nao representavel
+OK    diretorio de saida existente recusado (evidencia nunca sobrescrita)
+== 17. H02 pela lista HISTORICA da criacao (fotografia imutavel; missao H02 x lista historica)
+OK    testes de lib/elevacao_historica.sh (fotografia, ancoras, adulteracao, legado explicito, falha fechada; legado hml03 versionado)
+   (laboratorio opcional, nao conta como OK) PULADO 9a0 (laboratorio legado opcional ausente: HOMOLOG_LAB_LEGADO_P4)
+   (laboratorio opcional, nao conta como OK) PULADO 9a (laboratorio legado opcional ausente: HOMOLOG_LAB_LEGADO_P4)
+   (laboratorio opcional, nao conta como OK) PULADO 9b (laboratorio legado opcional ausente: HOMOLOG_LAB_LEGADO_R2B1C)
+OK    H02 so pela lista historica (eh_lista_h02); nunca a lista vigente (HOMOLOG_ELEVACAO_ARQ ou implantacao/elevacao.txt)
+OK    sem fallback silencioso: eh_lista_h02 nao le a lista vigente; ambiente com proveniencia e sem fotografia falha; legado so com fonte explicita
+OK    integridade da fotografia: lista x proveniencia x ambiente.env x log de criacao do runner
+OK    criar: lista validada antes de tudo e fotografada logo apos os diretorios vazios, ANTES de segredos, configuracao e de qualquer recurso Docker (linhas 230 < 255 < 258 < 260 < 366), sha no ambiente.env
+OK    fotografia nunca sobrescrita (eh_registrar recusa diretorio existente) e gravada somente leitura
+== 18. aquisicao da trava da caixa (WIN-TRANSPORT-1; controle leve, o estresse fica so como prova do portao)
+OK    testes/test_trava_caixa.sh: adquirirTrava real cumpre o contrato e 4 copias adulteradas sao detectadas (sem Windows, sem caminho exato, prazo reiniciado, causa trocada)
+OK    desfecho adquire a trava SO pelo adquirirTrava, com o prazo existente e Files::createDirectory; nenhum createDirectory direto da trava
+OK    AccessDeniedException tratado UMA vez, so na aquisicao, com Windows + caminho exato; demais IOException falham
+OK    prazo unico (limite nunca reatribuido), causa AccessDeniedException preservada e sem heuristica de mensagem/existencia
+OK    escritor externo do IT com a mesma regra (Windows + caminho exato; senao falha) e testes unitarios da aquisicao presentes
+OK    ferramenta do runner (Linux) com o protocolo inalterado: mkdir da trava, anexa, rmdir
+== 19. aplicacao web no gateway (ensaio-frontend, F1.5 P-A; a prova de roteamento e testes/test_gateway_frontend.sh)
+OK    modelo do nginx com a ancora 'location / { return 404; }' exatamente uma vez
+OK    nginx da aplicacao = gerado + bloco, e mais nada (rotas /api/v1/ e /portal/api/v1/ do modelo intactas)
+OK    aplicar de novo sobre o ja aplicado e recusado
+OK    bloco sem error_page, sem proxy_intercept_errors e sem proxy_pass novo
+OK    base + 016 + frontend renderiza
+OK    build montado SO no gateway, em /spa, somente leitura
+OK    sem HOMOLOG_FRONTEND_DIST a sobreposicao nao renderiza (falha fechada)
+OK    aplicacao web fora de ensaio-*: ERRO: aplicacao web no gateway so em ambiente descartavel (id ensaio-*)
+OK    aplicacao web com HOMOLOG_ATE=015: ERRO: aplicacao web no gateway exige HOMOLOG_ATE=016 (nginx gerado do modelo)
+OK    aplicacao web sem o commit da lib: ERRO: aplicacao web exige HOMOLOG_FRONTEND_COMMIT e HOMOLOG_FRONTEND_LIB_COMMIT (par validado)
+OK    commit do web sem HOMOLOG_FRONTEND_WEB: ERRO: HOMOLOG_FRONTEND_COMMIT/HOMOLOG_FRONTEND_LIB_COMMIT sem HOMOLOG_FRONTEND_WEB
+OK    commit abreviado: ERRO: aplicacao web recusada: commits do par web/lib devem ser sha completos (40 hexadecimais)
+OK    web com HEAD diferente do declarado: ERRO: aplicacao web recusada: aplicacao web: HEAD 2e84615f5fb88f4dfc42a974a3dfea56401275b3 diferente do commit
+OK    lib com HEAD diferente do declarado: ERRO: aplicacao web recusada: lib ligada: HEAD a60344576219888931ef4cdb38fa2d3654c572ee diferente do commit de
+OK    diretorio do web que nao e repositorio: ERRO: aplicacao web recusada: aplicacao web: /tmp/tmp.zXp5zAwOHU/mig nao e repositorio Git
+OK    web com arquivo nao ignorado: ERRO: aplicacao web recusada: aplicacao web: copia de trabalho com alteracoes ou arquivos nao ignorados
+OK    lib com alteracao: ERRO: aplicacao web recusada: lib ligada: copia de trabalho com alteracoes ou arquivos nao ignorados
+OK    par web/lib conferido passa e a criacao para na lista da 016: ERRO: a 016 exige a linha de elevacao autorizada em implantacao/elevacao.txt (etapa P3) para este id (ensaio-v
+OK      (a recusa acima foi a da lista da 016, nao a do par)
+OK    criar compila e copia o build DEPOIS da fotografia da lista e ANTES dos segredos
+== 20. semeadura, jornadas e sessao do ensaio-frontend (F1.5 P-A; banco real: testes/test_semear_frontend_banco.sh)
+OK    acoes do frontend SO em ensaio-* criado com a aplicacao web e LIBERADO
+OK    jornadas pelo runner SO pelo gateway com TLS conferido (--alvo + --ca); o modo --teste-http nunca e usado pelo runner
+OK    frontend-sessao so com 'absoluta' (inatividade so com o relogio real)
+OK    sessao: SO a conta exclusiva expira@ da Nekkora Demo, SO 'absoluta', e o UPDATE so encurta expires_at
+OK    semeadura: recusa de semeadura existente ANTES da primeira escrita; conferencia ANTES do COMMIT; um BEGIN e um COMMIT
+OK    semeadura: primeiro ORG_ADMIN so pelo provision_first_org_admin (012); nenhum dado real (dominio sintetico)
+OK    orquestrador: plano com as credenciais gravado (atomico e EXCLUSIVO) ANTES de enviar a transacao ao banco
+OK    orquestrador (P-A-R1): trava obtida ANTES do estado; promocao confere a identidade, grava o mapa e SO DEPOIS renomeia
+OK    seletor (P-B-C1): so sessoes-pos-revogacao e expiracao-absoluta sao selecionaveis; O5 limitada a 2
+OK    seletor: validado ANTES de qualquer requisicao ou arquivo (valida_selecao antes do OpenAPI, do alvo e do relatorio)
+OK    runner (P-B-C1-R1): com --somente, jornadas SO por selecao_executa (guardas do gateway); sem --somente, exec direto; UMA definicao do comando
+OK    guardas: coleta do gateway verificada SEPARADA da contagem (ps em execucao, logs e filtro com codigo conferido; nada de || true nem 2>/dev/null na coleta)
+OK    guardas: pre-condicao ANTES da unica chamada; conferencia final desde o MESMO inicio; inconclusiva = codigo 3; funcional e conferencia em arquivos separados
+OK    credenciais de navegacao (P-C-T): so contas uso=navegacao; entrega pela area de transferencia fora do historico; nenhum valor na saida; TOTP com passo posterior registrado antes
+OK    procedimento do gateway (P-C-R2): referencia do preparo reconferida antes de escrever; coleta verificada (selecao_gateway.sh); falhas sem escrita nem reload: testes/test_gateway_tipos.sh
+OK    guardas da selecao com compose controlado (coleta falha, trafego recente, uma chamada, final inconclusiva, sucesso): testes/test_selecao_gateway.sh
+OK    OpenAPI convertido para as jornadas (OpenAPI convertido: yaml sha256=ff8b19dff58b6bd2c6c4d716a7b30b440f25c6bbbdbc0d2a5474e28dd2)
+OK    testes unitarios das ferramentas (validador com controles, date-time, TOTP RFC 6238, catalogo, estados do orquestrador, gateway, modo de teste; contrato real sem restricao fora do escopo)
+== 21. validacao administrativa da F6a (F6a-V-T; banco real: testes/test_semear_f6a_banco.sh)
+OK    bloco da F1.5 com o rotulo aprovado; acoes da F6a num bloco PROPRIO, com as mesmas exigencias (ensaio-*, aplicacao web, LIBERADO)
+OK    validar-f6a preparar/conferir SO por selecao_executa (pre-condicao de 31 s, UMA chamada, conferencia de trafego), pelo gateway com TLS conferido
+OK    semeadura complementar: MESMA trava da F1.5; base da F1.5 CONCLUIDA exigida antes do estado; plano gravado (atomico e EXCLUSIVO) antes da transacao; promocao confere a identidade, grava o mapa e SO DEPOIS renomeia
+OK    SQL complementar: recusa de f6av-* existente ANTES da primeira escrita; conferencia ANTES do COMMIT; um BEGIN e um COMMIT; so INSERT (nenhum UPDATE/DELETE)
+OK    contas complementares: prefixo f6av-, dominio sintetico, uso f6a-alvo (fora da navegacao e das jornadas)
+OK    credencial totp-reuso: SO com a autorizacao de uso unico (removida ANTES da entrega), passo = ultimo entregue e <= last_used_step; nenhum passo novo
+OK    verificador: so SELECT no banco (nenhum INSERT/UPDATE/DELETE nas consultas); nada sensivel na foto (colunas sensiveis fora do JSON)
+OK    atualizacao do frontend: coleta do gateway pelo selecao_gateway.sh; referencia ANTES da coleta; copia de seguranca ANTES de escrever; recria SO o gateway; falha depois da escrita pede reverter (sem nova tentativa)
+OK    runner: pre-voo da pasta da lista alternativa SO para versao sintetica 9xx sem pre-voo oficial (022 e 016-020 sempre pelo oficial)
+OK    atualizar 021 -> 022, 022 -> 023, 023 -> 024, 024 -> 025, 025 -> 026 e 026 -> 027 (um passo; a 025 sem janela) com lista alternativa: recusa fora de ensaio-* e nas conferencias de existencia, gramatica, versao, sha256 e vinculo, sem alterar o ambiente; lista correta so para na liberacao: testes/test_atualizar_lista.sh
+OK    procedimento da atualizacao do frontend com compose controlado (preparo, recusas sem escrita nem up, falhas pedindo reverter, caminho valido e reversao): testes/test_frontend_atualizar.sh
+OK    verificador e reuso de TOTP (docker, regras da atora, anti-replay, totp-reuso, intencoes, ritmo, fases): testes/test_validar_f6a.py
+
+RESULTADO: validacao estatica OK
