@@ -1,0 +1,35 @@
+# SOBREPOSICAO da homologacao: canal do Agent (025, E-AP-1). Usada SO em ambiente ensaio-* com a 025 aplicada, ligada e
+# desligada por `homologacao.sh agente <id> ligar|desligar` (registrada em ambiente.env, HOMOLOG_COMPOSE_EXTRA). Nenhum
+# valor secreto neste arquivo: agent-gateway.env fica em HOMOLOG_SEGREDOS, fora do Git.
+#
+# Mesmo desenho do E2E (api/e2e/compose.e2e.yml): processo, datasource e papel PROPRIOS (nekkora_ingestion), nenhuma
+# variavel da Platform ou do Portal. So na rede "interna" (internal: true), sem porta publicada: a maquina chega pelo
+# gateway TLS, rota /agent/api/v1/. Imagem identificada pelo mesmo commit das outras (FONTES_IMAGENS inclui o modulo).
+services:
+  agent-gateway:
+    image: nekkora-homologacao-agent-gateway:${HOMOLOG_COMMIT:?}
+    build:
+      context: ../../api
+      dockerfile: e2e/Dockerfile
+      args:
+        JAR: nekkora-agent-gateway/target/nekkora-agent-gateway-0.1.0-SNAPSHOT.jar
+      labels:
+        nekkora.homologacao: ${HOMOLOG_ID:?}
+    labels:
+      nekkora.homologacao: ${HOMOLOG_ID:?}
+    env_file: ${HOMOLOG_SEGREDOS:?}/agent-gateway.env
+    read_only: true
+    tmpfs: [/tmp]
+    volumes:
+      - ${HOMOLOG_SEGREDOS:?}/tls/ca.crt:/tls/ca.crt:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    networks:
+      interna:
+        ipv4_address: ${HOMOLOG_REDE_INTERNA:-10.252.10}.22
+    cpus: 1.0
+    mem_limit: 768m
+
+  gateway:
+    depends_on: [agent-gateway]

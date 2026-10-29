@@ -67,6 +67,24 @@ if render -f "$B" > "$TMP/base.yml"; then ok "base renderiza"; else nok "base na
 if render -f "$B" -f "$O16" --profile operacao > "$TMP/016.yml"; then ok "base + 016 renderiza"; else nok "016 nao renderiza: $(head -3 "$TMP/compose.err")"; fi
 if render -f "$B" -f "$O16" -f "$CX" --profile operacao --profile caixa > "$TMP/caixa.yml"; then ok "base + 016 + caixa renderiza"; else nok "caixa nao renderiza: $(head -3 "$TMP/compose.err")"; fi
 if render -f "$B" -f "$O16" -f "$CX" -f "$O21" --profile operacao --profile caixa > "$TMP/021.yml"; then ok "base + 016 + caixa + 021 renderiza"; else nok "021 nao renderiza: $(head -3 "$TMP/compose.err")"; fi
+# canal do Agent (E-AP-1, compose.agente.yml): processo proprio so na interna, raiz somente leitura, sem porta publicada,
+# so o agent-gateway.env (nada da Platform/Portal); o gateway continua dependendo da Platform e do Portal
+AG="$AQUI/compose.agente.yml"; echo NEKKORA_SENTINELA_AGENTE=1 > "$S/agent-gateway.env"; echo NEKKORA_SENTINELA_PLATFORM=1 > "$S/platform.env"
+if docker compose -f "$B" -f "$O16" -f "$CX" -f "$O21" -f "$AG" --profile operacao --profile caixa config --format json > "$TMP/agente.json" 2>"$TMP/compose.err"; then
+    ok "base + 016 + caixa + 021 + agente renderiza"
+else nok "agente nao renderiza: $(head -3 "$TMP/compose.err")"; fi
+confere "agente: agent-gateway so na interna (.22), somente leitura, sem porta, so as variaveis do canal (nada da Platform); gateway depende de platform, portal e agent-gateway" "python - '$TMP/agente.json' <<'PY'
+import json, sys
+c = json.load(open(sys.argv[1], encoding='utf-8'))
+a, g = c['services']['agent-gateway'], c['services']['gateway']
+env = a.get('environment') or {}
+ok = (set(a['networks']) == {'interna'} and a['networks']['interna'].get('ipv4_address') == '10.252.20.22'
+      and a.get('read_only') is True and not a.get('ports') and env.get('NEKKORA_SENTINELA_AGENTE') == '1' and 'NEKKORA_SENTINELA_PLATFORM' not in env
+      and a['image'] == 'nekkora-homologacao-agent-gateway:0000000' and a['labels'].get('nekkora.homologacao') == 'ensaio-validacao'
+      and {'platform', 'portal', 'agent-gateway'} <= set(g.get('depends_on') or {}))
+sys.exit(0 if ok else 1)
+PY"
+: > "$S/platform.env"
 # transporte REAL (missao do e-mail real em homologacao): renderiza com valores de exemplo; a Platform continua so na
 # interna, o unico caminho de saida e o proxy-m365 (Entra, Graph e o Secrets Manager da regiao), cliente e certificado SO
 # do segredo da AWS (nenhum arquivo de chave), credenciais temporarias e chave da fila por arquivo de segredos, lista de
