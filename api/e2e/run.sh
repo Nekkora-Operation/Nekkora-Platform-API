@@ -8,7 +8,9 @@
 # migrador_nekkora, elevado so nas versoes que exigem, e o log e conferido (sem FALHA, fim 0|0|0, invariantes da 016
 # depois da retirada).
 #
-# Sobe uma stack Compose NOVA e ISOLADA (projeto, rede 10.251.47.0/24 e portas proprias; sem volume nomeado).
+# Sobe uma stack Compose NOVA e ISOLADA (projeto, rede E2E_REDE.0/24 - padrao 10.251.47 - e portas proprias; sem volume
+# nomeado). A sub-rede e recusada antes de qualquer recurso se sobrepuser a QUALQUER rede Docker existente (E-AP-5: dois
+# laboratorios ao mesmo tempo, cada um com E2E_PROJETO, portas e E2E_REDE proprios).
 # Nunca toca a stack principal (nekkora-platform / nekkora-postgres / volume principal / porta 5432) nem as
 # stacks de teste existentes; nunca executa "down -v" nem limpeza global. Segredos (senha do superusuario e
 # dos papeis, chaves AES/HMAC) sao ALEATORIOS por execucao, so em variaveis de ambiente deste processo; o
@@ -17,7 +19,7 @@
 # no ar ao final; o comando de remocao e impresso.
 #
 # Uso: api/e2e/run.sh
-#      E2E_PROJETO=nekkora-e2e-b E2E_PORTA=55453 E2E_PG_PORTA=55454 api/e2e/run.sh
+#      E2E_PROJETO=nekkora-e2e-b E2E_PORTA=55453 E2E_PG_PORTA=55454 E2E_REDE=10.251.57 api/e2e/run.sh
 set -euo pipefail
 
 AQUI="$(cd "$(dirname "$0")" && pwd)"
@@ -26,6 +28,7 @@ REPO="$(cd "$API/.." && pwd)"
 export E2E_PROJETO="${E2E_PROJETO:-nekkora-e2e}"
 export E2E_PORTA="${E2E_PORTA:-55443}"
 export E2E_PG_PORTA="${E2E_PG_PORTA:-55444}"
+export E2E_REDE="${E2E_REDE:-10.251.47}"
 RODADA="$(date -u +%Y-%m-%dT%H%M%SZ)_${E2E_PROJETO}"
 SAIDA="$AQUI/saidas/$RODADA"
 
@@ -48,6 +51,12 @@ for p in "$E2E_PORTA" "$E2E_PG_PORTA"; do
 done
 [ -z "$(docker ps -aq --filter "label=com.docker.compose.project=$E2E_PROJETO")" ] || falha "projeto $E2E_PROJETO ja tem containers"
 docker network inspect "${E2E_PROJETO}_e2e" >/dev/null 2>&1 && falha "rede ${E2E_PROJETO}_e2e ja existe"
+# sub-rede propria: prefixo /24 valido e sem sobreposicao com nenhuma rede Docker existente (mesma regra do runner de
+# homologacao, ops/homologacao/lib/redes.py); recusa antes de criar qualquer recurso
+python "$REPO/ops/homologacao/lib/redes.py" prefixo "$E2E_REDE" || falha "E2E_REDE invalida: $E2E_REDE (tres octetos, ex.: 10.251.57)"
+docker network ls -q | xargs -r docker network inspect -f '{{range .IPAM.Config}}{{println .Subnet}}{{end}}' \
+    | python "$REPO/ops/homologacao/lib/redes.py" sobreposicao "$E2E_REDE.0/24" \
+    || falha "sub-rede $E2E_REDE.0/24 sobreposta a uma rede Docker existente (escolha outra E2E_REDE); nada foi criado"
 
 mkdir -p "$SAIDA/migracoes_montadas/migracoes" "$SAIDA/migracoes_montadas/bootstrap" "$SAIDA/tls"
 # Migrations: 001-025 escolhidas explicitamente (instalacao limpa), numa subpasta (o entrypoint so executa o primeiro
