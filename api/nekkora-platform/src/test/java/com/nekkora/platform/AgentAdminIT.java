@@ -322,6 +322,88 @@ class AgentAdminIT extends PlatformTestBase {
                 + "AND usage_date = '" + day + "'")).isEqualTo("3|2");
     }
 
+    /**
+     * E-AP-3 (INTEGRATION-CONSOLIDATION-001): a consulta de eventos pagina por cursor opaco e assinado com limit de 1 a 100
+     * (nao existe afterSequence). Percorrida inteira: cada sequence uma vez, em ordem, sem perda nem repeticao, a ausencia
+     * declarada fora; um evento que chega no meio da leitura aparece adiante; o cursor vale so para a execucao e a pessoa que o
+     * receberam; outra organizacao nao ve a execucao.
+     */
+    @Test
+    void eventosPaginadosPorCursorSemPerdaNemRepeticaoComLimiteEIsolamento() throws Exception {
+        Setup s = setup();
+        UUID worker = workerRow(s.org(), "W-pag");
+        UUID agent = agentOn(s.org(), worker);
+        UUID wwa = UUID.fromString(value("INSERT INTO worker_workspace_assignments (organization_id, worker_id, workspace_id, status, authorized_by_membership_id) "
+                + "VALUES ('" + s.org().id() + "', '" + worker + "', '" + s.workspace() + "', 1, '" + s.org().adminMembership() + "') RETURNING assignment_id"));
+        UUID authorization = UUID.fromString(value("INSERT INTO local_run_authorizations (organization_id, workspace_id, worker_id, worker_workspace_assignment_id, "
+                + "automation_id, automation_version_id, package_fingerprint, granted_by_membership_id, valid_until) VALUES ('" + s.org().id() + "', '" + s.workspace()
+                + "', '" + worker + "', '" + wwa + "', '" + s.automation() + "', '" + s.version() + "', '" + FINGERPRINT + "', '" + s.org().adminMembership()
+                + "', now() + interval '30 days') RETURNING authorization_id"));
+        String waa = value("SELECT assignment_id FROM worker_agent_assignments WHERE agent_id = '" + agent + "'");
+        UUID run = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        String ex = "ex-" + "ab".repeat(16);
+        String ex2 = "ex-" + "ef".repeat(16);
+        java.util.List<String> sqls = new java.util.ArrayList<>();
+        for (String[] r : new String[][] {{run.toString(), ex}, {other.toString(), ex2}}) {
+            sqls.add("INSERT INTO agent_runs (agent_run_id, organization_id, workspace_id, automation_id, automation_version_id, authorization_id, agent_id, worker_id, "
+                    + "worker_agent_assignment_id, agent_execution_id, package_fingerprint, authorization_state_at_registration, supervisor_state) VALUES ('" + r[0]
+                    + "', '" + s.org().id() + "', '" + s.workspace() + "', '" + s.automation() + "', '" + s.version() + "', '" + authorization + "', '" + agent + "', '"
+                    + worker + "', '" + waa + "', '" + r[1] + "', '" + FINGERPRINT + "', 1, 3)");
+        }
+        java.util.List<Long> expected = new java.util.ArrayList<>();
+        for (int seq = 1; seq <= 230; seq++) {
+            if (seq >= 101 && seq <= 110) continue; // ausencia declarada: nao vira evento
+            sqls.add(event(s.org().id(), run, ex, seq, "AGENT", "STEP_COMPLETED", "ACTIVITY", "passo." + seq));
+            expected.add((long) seq);
+        }
+        sqls.add("INSERT INTO agent_run_missing (organization_id, agent_run_id, seq_from, seq_to) VALUES ('" + s.org().id() + "', '" + run + "', 101, 110)");
+        sqls.add(event(s.org().id(), other, ex2, 1, "AGENT", "RUNNING", "LIFECYCLE", null));
+        assertThat(asIngestion(s.org().id(), sqls.toArray(String[]::new))).isEqualTo("OK");
+        String base = "/api/v1/o/" + s.org().id() + "/agent-runs/" + run + "/events";
+
+        java.util.List<Long> seen = new java.util.ArrayList<>();
+        java.util.List<Integer> sizes = new java.util.ArrayList<>();
+        String cursor = null;
+        String firstCursor = null;
+        for (int page = 0; page < 10; page++) {
+            BrowserClient.Response r = s.admin().get(base + "?limit=100" + (cursor == null ? "" : "&cursor=" + cursor));
+            assertThat(r.status()).as(r.body()).isEqualTo(200);
+            java.util.List<Long> got = new java.util.ArrayList<>();
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"sequence\":(\\d+)").matcher(r.body());
+            while (m.find()) got.add(Long.parseLong(m.group(1)));
+            sizes.add(got.size());
+            seen.addAll(got);
+            cursor = r.field("nextCursor");
+            if (page == 0) {
+                firstCursor = cursor;
+                // chega um evento novo no meio da leitura: aparece numa pagina adiante, sem reler nem pular
+                assertThat(asIngestion(s.org().id(), event(s.org().id(), run, ex, 231, "AGENT", "SUCCEEDED", "LIFECYCLE", null))).isEqualTo("OK");
+                expected.add(231L);
+            }
+            if (cursor == null) break;
+        }
+        assertThat(seen).as("cada sequence uma vez, em ordem, sem a ausencia declarada").isEqualTo(expected);
+        assertThat(sizes).containsExactly(100, 100, 21);
+
+        // limite: 1-100; fora disso 400 (sem pagina parcial)
+        assertThat(s.admin().get(base + "?limit=101").status()).isEqualTo(400);
+        assertThat(s.admin().get(base + "?limit=0").status()).isEqualTo(400);
+        // afterSequence nao e parametro desta rota: ignorado, a resposta e a primeira pagina (nao ha paginacao paralela)
+        BrowserClient.Response ignored = s.admin().get(base + "?afterSequence=150&limit=3");
+        assertThat(ignored.body()).contains("\"sequence\":1,").contains("\"sequence\":3,").doesNotContain("\"sequence\":151,");
+        // o cursor e da execucao e da consulta que o emitiu: em outra execucao, ou adulterado, 400
+        assertThat(s.admin().get("/api/v1/o/" + s.org().id() + "/agent-runs/" + other + "/events?limit=100&cursor=" + firstCursor).status()).isEqualTo(400);
+        String tampered = firstCursor.substring(0, firstCursor.length() - 2) + (firstCursor.endsWith("AA") ? "BB" : "AA");
+        assertThat(s.admin().get(base + "?limit=100&cursor=" + tampered).status()).isEqualTo(400);
+        // outra organizacao: a execucao nao existe para ela, nem com o cursor desta
+        Setup foreign = setup();
+        assertThat(foreign.admin().get("/api/v1/o/" + foreign.org().id() + "/agent-runs/" + run + "/events").status()).isEqualTo(404);
+        assertThat(foreign.admin().get("/api/v1/o/" + foreign.org().id() + "/agent-runs/" + run + "/events?cursor=" + firstCursor).status()).isIn(400, 404);
+        // a sessao e da organizacao que a emitiu: na rota de outra, nem autenticada (401), nunca os eventos
+        assertThat(foreign.admin().get(base).status()).as("rota da outra organizacao com a sessao desta").isIn(401, 403, 404);
+    }
+
     private static String event(UUID org, UUID run, String ex, int seq, String source, String code, String category, String step) {
         String env = "{\"schema\":\"nekkora-agent/observability\",\"version\":\"1.0.0\",\"agent_execution_id\":\"" + ex + "\",\"sequence\":" + seq
                 + ",\"observed_utc\":\"2026-10-28T12:35:06.0Z\",\"source\":\"" + source + "\",\"event_code\":\"" + code + "\",\"severity\":\"INFO\",\"category\":\""

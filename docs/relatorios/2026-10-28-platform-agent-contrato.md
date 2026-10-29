@@ -342,8 +342,12 @@ Sob `automation.read` no workspace da execução, com paginação por cursor est
   `platformExecutionId`, `agentId`, `workerId`, `workspaceId`, `automationId`, `automationVersionId`, `authorizationId`),
   origem (`LOCAL_AUTHORIZED`), estado do supervisor e código, as quatro dimensões do §9 com os motivos, último contato,
   contagens do supervisor e das transações vistas nos eventos, e conflitos;
-- `GET /api/v1/o/{org}/agent-runs/{runId}/events?afterSequence=&limit=`: etapas reais em ordem de `sequence`, só com os campos
-  do envelope (que já não tem texto livre);
+- `GET /api/v1/o/{org}/agent-runs/{runId}/events?cursor=&limit=`: etapas reais em ordem de `sequence`, só com os campos
+  do envelope (que já não tem texto livre). Paginação como as demais leituras: `cursor` opaco e assinado (o `nextCursor` da
+  página anterior, válido só para esta execução e para a pessoa que o recebeu) e `limit` de 1 a 100 (padrão 25; fora disso,
+  `400`). Não existe `afterSequence` (parâmetro desconhecido é ignorado). Os números declarados ausentes não viram evento;
+  um evento gravado durante a leitura aparece numa página adiante. *(Texto alinhado à implementação e à OpenAPI pela
+  INTEGRATION-CONSOLIDATION-001, E-AP-3; a versão anterior deste item citava `afterSequence`, que nunca foi implementado.)*
 - administração: `GET /api/v1/o/{org}/agents`, `/agents/{id}`, `/workers`, `/workspaces/{ws}/local-run-authorizations`.
 
 **Não expostos:** stdout e stderr (o Agent nem os guarda), segredos, caminhos, conteúdo de negócio e o hash da credencial.
