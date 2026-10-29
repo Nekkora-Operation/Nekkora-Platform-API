@@ -8,7 +8,7 @@ networks:
   e2e:
     ipam:
       config:
-        - subnet: 10.251.47.0/24
+        - subnet: ${E2E_REDE:-10.251.47}.0/24
 
 services:
   postgres:
@@ -24,7 +24,7 @@ services:
       - "127.0.0.1:${E2E_PG_PORTA:-55444}:5432"
     networks:
       e2e:
-        ipv4_address: 10.251.47.20
+        ipv4_address: ${E2E_REDE:-10.251.47}.20
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U nekkora -d nekkora"]
       interval: 2s
@@ -36,7 +36,7 @@ services:
     command: ["redis-server", "--save", "", "--appendonly", "no"]
     networks:
       e2e:
-        ipv4_address: 10.251.47.21
+        ipv4_address: ${E2E_REDE:-10.251.47}.21
 
   platform:
     build:
@@ -49,7 +49,7 @@ services:
       NEKKORA_DB_SENHA: ${E2E_PLATFORM_SENHA:?}
       NEKKORA_REDIS_HOST: redis
       NEKKORA_ORIGEM_PUBLICA: https://localhost:${E2E_PORTA:-55443}
-      NEKKORA_PROXIES_CONFIAVEIS: 10.251.47.10/32
+      NEKKORA_PROXIES_CONFIAVEIS: ${E2E_REDE:-10.251.47}.10/32
       NEKKORA_MFA_CHAVE_ID: k1
       NEKKORA_MFA_CHAVES: ${E2E_MFA_CHAVES:?}
       NEKKORA_HMAC_ID: h1
@@ -65,7 +65,7 @@ services:
       NEKKORA_CONVITES: "true"
     networks:
       e2e:
-        ipv4_address: 10.251.47.30
+        ipv4_address: ${E2E_REDE:-10.251.47}.30
 
   # Processo, datasource e papel PROPRIOS (nekkora_portal): nenhuma variavel da Platform chega aqui.
   portal:
@@ -78,10 +78,10 @@ services:
       NEKKORA_PORTAL_DB_URL: jdbc:postgresql://postgres:5432/nekkora
       NEKKORA_PORTAL_DB_SENHA: ${E2E_PORTAL_SENHA:?}
       NEKKORA_REDIS_HOST: redis
-      NEKKORA_PROXIES_CONFIAVEIS: 10.251.47.10/32
+      NEKKORA_PROXIES_CONFIAVEIS: ${E2E_REDE:-10.251.47}.10/32
     networks:
       e2e:
-        ipv4_address: 10.251.47.31
+        ipv4_address: ${E2E_REDE:-10.251.47}.31
 
   # Canal da maquina (025): processo, datasource e papel PROPRIOS (nekkora_ingestion); nenhuma variavel da Platform ou do Portal.
   agent-gateway:
@@ -94,10 +94,10 @@ services:
       NEKKORA_GATEWAY_DB_URL: jdbc:postgresql://postgres:5432/nekkora
       NEKKORA_GATEWAY_DB_SENHA: ${E2E_INGESTAO_SENHA:?}
       NEKKORA_REDIS_HOST: redis
-      NEKKORA_PROXIES_CONFIAVEIS: 10.251.47.10/32
+      NEKKORA_PROXIES_CONFIAVEIS: ${E2E_REDE:-10.251.47}.10/32
     networks:
       e2e:
-        ipv4_address: 10.251.47.32
+        ipv4_address: ${E2E_REDE:-10.251.47}.32
 
   nginx:
     image: nginx:1.29-alpine
@@ -112,4 +112,4 @@ services:
       - agent-gateway
     networks:
       e2e:
-        ipv4_address: 10.251.47.10
+        ipv4_address: ${E2E_REDE:-10.251.47}.10
