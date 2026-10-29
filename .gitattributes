@@ -2,3 +2,5 @@
 *.sh text eol=lf
 # Migrations: conteudo LF no repositorio e no disco (o hash revisado de cada migration refere-se ao LF).
 db/migrations/*.sql text eol=lf
+# pacote real do Studio (vetor 5664f1a5...): bytes como gerados
+api/nekkora-platform/src/test/resources/pacote-studio-real/** -text

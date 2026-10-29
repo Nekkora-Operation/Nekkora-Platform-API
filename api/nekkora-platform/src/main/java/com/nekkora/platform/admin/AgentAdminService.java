@@ -225,7 +225,8 @@ public final class AgentAdminService {
 
     public LocalAuthorization authorizeLocalRun(UUID org, ValidSession actor, String token, UUID workspaceId, UUID workerId, UUID versionId,
                                                 OffsetDateTime validUntil) {
-        if (validUntil == null) {
+        // a mesma faixa do gatilho da 025 ((agora, agora + 366 dias]): fora dela, 400 em vez do 23514 do banco
+        if (validUntil == null || !validUntil.isAfter(OffsetDateTime.now()) || validUntil.isAfter(OffsetDateTime.now().plusDays(366))) {
             throw ApiException.invalid("validade");
         }
         return actions.write(org, j -> {
@@ -241,6 +242,12 @@ public final class AgentAdminService {
                     .orElseThrow(() -> AccessActions.refuse(Failure.TARGET_NOT_FOUND, "versao"));
             if (v.status() != 2 || v.packageFingerprint() == null || !v.packageFingerprint().matches("[0-9a-f]{64}")) {
                 throw AccessActions.refuse(Failure.CONFLICT, "versao_nao_publicada_ou_sem_impressao_do_pacote");
+            }
+            // automacao e workspace ativos (o gatilho da 025 tambem confere; aqui a recusa vira 409 em vez de 500)
+            if (!Boolean.TRUE.equals(j.sql("SELECT a.status = 1 AND w.status = 1 FROM public.automations a JOIN public.workspaces w "
+                    + "ON w.organization_id = a.organization_id AND w.workspace_id = a.workspace_id WHERE a.organization_id = ? AND a.automation_id = ?")
+                    .param(org).param(v.automationId()).query(Boolean.class).optional().orElse(false))) {
+                throw AccessActions.refuse(Failure.CONFLICT, "automacao_ou_workspace_inativo");
             }
             UUID assignment = j.sql("SELECT assignment_id FROM public.worker_workspace_assignments WHERE organization_id = ? AND worker_id = ? "
                             + "AND workspace_id = ? AND status = 1").param(org).param(workerId).param(workspaceId).query(UUID.class).optional()
