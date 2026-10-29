@@ -1,0 +1,10 @@
+PASS A1-sem-cabecalho: 400 {"error":"unsupported_contract"}
+PASS A2-contrato-2: 400 {"error":"unsupported_contract"}
+PASS A3-sem-credencial: 401 {"error":"unauthenticated"}
+PASS A4-credencial-invalida: 401 {"error":"unauthenticated"}
+PASS A5-prefixo-vizinho: 404 <html><head><title>404 Not Found</title></head><body><center><h1>404 Not Found</h1></center><hr><center>nginx</center></body></html>
+PASS A6-rota-da-maquina-pela-platform: 401 {"error":"unauthenticated"}
+PASS A7-platform-intacta: 200 {"csrfToken":"<omitido>"}
+varredura: 10 senhas x 3 arquivos, 0 ocorrencias
+linhas_de_log_varridas=9 (agent-gateway, gateway desde 2026-10-29T15:28:18Z)
+conferir=20261029T152818Z casos=7/7 varredura=limpa

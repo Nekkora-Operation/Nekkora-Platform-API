@@ -1424,11 +1424,11 @@ agente)
         }
         {
         caso A1-sem-cabecalho '400*unsupported_contract*' "$(req GET /agent/api/v1/authorizations)"
-        caso A2-contrato-2 '400*unsupported_contract*' "$(req GET /agent/api/v1/authorizations 'Nekkora-Agent-Contract: 2')"
-        caso A3-sem-credencial '401*' "$(req GET /agent/api/v1/authorizations 'Nekkora-Agent-Contract: 1')"
-        caso A4-credencial-invalida '401*' "$(req POST /agent/api/v1/heartbeat 'Nekkora-Agent-Contract: 1' 'Authorization: Bearer nka_invalido' 'Content-Type: application/json')"
-        caso A5-prefixo-vizinho '404*' "$(req GET /agent/api/v2/authorizations 'Nekkora-Agent-Contract: 1')"
-        caso A6-rota-da-maquina-pela-platform '40[134]*' "$(req GET /api/v1/agent/api/v1/authorizations 'Nekkora-Agent-Contract: 1')"
+        caso A2-contrato-2 '400*unsupported_contract*' "$(req GET /agent/api/v1/authorizations 'Nekkora-Agent-Contract: 2.0')"
+        caso A3-sem-credencial '401*' "$(req GET /agent/api/v1/authorizations 'Nekkora-Agent-Contract: 1.0')"
+        caso A4-credencial-invalida '401*' "$(req POST /agent/api/v1/heartbeat 'Nekkora-Agent-Contract: 1.0' 'Authorization: Bearer nka_invalido' 'Content-Type: application/json')"
+        caso A5-prefixo-vizinho '404*' "$(req GET /agent/api/v2/authorizations 'Nekkora-Agent-Contract: 1.0')"
+        caso A6-rota-da-maquina-pela-platform '40[134]*' "$(req GET /api/v1/agent/api/v1/authorizations 'Nekkora-Agent-Contract: 1.0')"
         caso A7-platform-intacta '200*' "$(req GET /api/v1/csrf)"
         } | tee "$AT/casos.txt"
         ok="$(grep -c '^PASS' "$AT/casos.txt" || true)"; total="$(grep -c '^PASS\|^FAIL' "$AT/casos.txt" || true)"

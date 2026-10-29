@@ -1,0 +1,5 @@
+desligar=20261029T152944Z copias_de=ligar-20261029T152710Z
+pg_hba_igual=sim nginx_igual=sim
+papel_depois=t|f (login|tem_senha)
+ingestao_no_pg_hba=0
+CANAL DO AGENT DESLIGADO em ensaio-agent-026 (processo removido, configuracao restaurada, segredos do canal apagados)

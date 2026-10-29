@@ -1,0 +1,4 @@
+B1 credencial bem formada e inexistente (heartbeat): 401
+B2 codigo de pareamento bem formado e inexistente (resgate): {"error":"unauthenticated"} 401
+B3 linhas de log do agent-gateway desde 2026-10-29T15:28:50Z: 2; erros/excecoes: 0
+B4 conexoes do nekkora_ingestion vistas pelo banco (pg_stat_activity, agora): 10

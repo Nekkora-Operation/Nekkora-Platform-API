@@ -1,0 +1,7 @@
+== copia do estado anterior (desligar = restaurar estas copias)
+== segredos do canal (fora do Git: ~/.nekkora/homologacao/ensaio-agent-026)
+== pg_hba (recarregado, regras conferidas pelo servidor)
+== Redis com a ACL nova (usuario agent, so ~agent:*)
+== build do canal (jar e imagem do commit f324b7e)
+== nginx com a rota /agent/api/v1/
+CANAL DO AGENT LIGADO em ensaio-agent-026: https://homologacao.nekkora.test:55791/agent/api/v1/ (400 {"error":"unsupported_contract"}). Conferir: homologacao.sh agente ensaio-agent-026 conferir
