@@ -154,7 +154,7 @@ a credencial da máquina não vale na Platform.
     `command_json.agent_package {fingerprint_rule, fingerprint}` (§6.4). A autorização copia os dois valores, e o banco confere
     a igualdade. **Não** é `command_json.artifact.sha256`, que mede os bytes do artefato distribuído. Uma versão sem
     `agent_package` não recebe autorização local (`409`).
-  - validade (`validUntil`, até 365 dias) e revogação (`…/{id}/revoke`).
+  - validade (`validUntil`, posterior a agora e até 366 dias, como o banco confere) e revogação (`…/{id}/revoke`).
 - O gatilho do banco reconfere tudo isso na inserção (autoridade de quem autoriza, versão publicada, artefato, Worker
   autorizado). A autorização é imutável, exceto pela revogação.
 - `GET /agent/api/v1/authorizations`: o Agent baixa as autorizações ativas **do seu Worker** e as guarda para uso offline.
@@ -207,7 +207,7 @@ chamada sobre as classes compiladas sem alterar o repositório, a referência Ja
 **O que ela não é:** `command_json.artifact.sha256` (005) mede os **bytes** do artefato que `artifact.reference` aponta. Um
 ZIP do mesmo pacote tem outro sha256 a cada compactação, e a impressão continua a mesma. As duas medidas não são comparadas
 entre si. Quem publica a versão (hoje, só por operação; o fluxo de publicação ainda não existe na API) declara as duas.
-A API não recebe o pacote, então não calcula a impressão: ela guarda e compara.
+A API não recebe o pacote, então não calcula a impressão: ela guarda e compara. *(Revisão da PLATFORM-AUTOMATION-LIFECYCLE-001: pelo ciclo de vida das automações a API passou a RECEBER o pacote enviado por uma pessoa e calcula as duas medidas pela mesma regra; ver `2026-10-29-automation-lifecycle-contrato.md`. Versões com referência declarada continuam como acima.)*
 
 ## 7. Relatório do supervisor (desfecho)
 

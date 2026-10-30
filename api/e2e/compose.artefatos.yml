@@ -1,0 +1,11 @@
+# SOBREPOSICAO do E2E: armazenamento local dos artefatos recebidos pela Platform (PLATFORM-AUTOMATION-LIFECYCLE-001).
+# Volume nomeado proprio da stack (descartavel com ela); sem esta sobreposicao, as rotas de artefato respondem 503.
+volumes:
+  artefatos: {}
+
+services:
+  platform:
+    environment:
+      NEKKORA_ARTEFATOS_DIR: /var/lib/nekkora/artefatos
+    volumes:
+      - artefatos:/var/lib/nekkora/artefatos

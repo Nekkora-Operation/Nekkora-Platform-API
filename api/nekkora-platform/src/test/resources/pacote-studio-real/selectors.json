@@ -1,0 +1,103 @@
+{
+  "schema": "nekkora-rpa/selectors",
+  "version": "1.1.0",
+  "system": "process",
+  "targets": {
+    "process.search.search_term_field": {
+      "preferred": {
+        "strategy": "css",
+        "expression": "header input[name=\"search\"]"
+      },
+      "expected": {
+        "tag": "input"
+      },
+      "provenance": {
+        "studioStepId": "1df6e024-181d-4ebc-85d1-5eb0ab6558ef"
+      }
+    },
+    "process.profile.title": {
+      "preferred": {
+        "strategy": "css",
+        "expression": "h1#firstHeading"
+      },
+      "expected": {
+        "tag": "h1"
+      },
+      "provenance": {
+        "studioStepId": "89b1d539-ac93-4178-bb25-82bee6f3777e"
+      }
+    },
+    "process.profile.full_name": {
+      "preferred": {
+        "strategy": "xpath",
+        "expression": "//tr[th[normalize-space(.)=\"Nome completo\"]]//td"
+      },
+      "expected": {
+        "tag": "td"
+      },
+      "provenance": {
+        "studioStepId": "e44deade-7a8c-4bd0-9b14-9c6bca76f307"
+      }
+    },
+    "process.profile.birth_date": {
+      "preferred": {
+        "strategy": "xpath",
+        "expression": "//tr[th[normalize-space(.)=\"Nascimento\"]]//td"
+      },
+      "expected": {
+        "tag": "td"
+      },
+      "provenance": {
+        "studioStepId": "e09b0588-a875-4257-b12c-9822100b2332"
+      }
+    },
+    "process.profile.death_date": {
+      "preferred": {
+        "strategy": "xpath",
+        "expression": "//tr[th[normalize-space(.)=\"Morte\"]]//td"
+      },
+      "expected": {
+        "tag": "td"
+      },
+      "provenance": {
+        "studioStepId": "edc0adc1-3b03-4d2a-a7cc-7dfc34b6ae8e"
+      }
+    },
+    "process.profile.nationality": {
+      "preferred": {
+        "strategy": "xpath",
+        "expression": "//tr[th[normalize-space(.)=\"Nacionalidade\"]]//td"
+      },
+      "expected": {
+        "tag": "td"
+      },
+      "provenance": {
+        "studioStepId": "07570e19-e19e-46e2-97e4-6eb14efd06e2"
+      }
+    },
+    "process.profile.occupation": {
+      "preferred": {
+        "strategy": "xpath",
+        "expression": "//tr[th[normalize-space(.)=\"Ocupação\"]]//td"
+      },
+      "expected": {
+        "tag": "td"
+      },
+      "provenance": {
+        "studioStepId": "75729a26-3cdf-4b09-804c-bef1adda42e9"
+      }
+    },
+    "process.profile.fields": {
+      "preferred": {
+        "strategy": "xpath",
+        "expression": "//tr[th[normalize-space(.)=\"Campo(s)\"]]//td"
+      },
+      "expected": {
+        "tag": "td"
+      },
+      "provenance": {
+        "studioStepId": "8e5d57c0-1651-4688-b883-1faf2eafa4d9"
+      }
+    }
+  }
+}

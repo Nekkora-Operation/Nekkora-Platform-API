@@ -107,7 +107,9 @@ public class PlatformConfig {
 
     @Bean
     FilterRegistrationBean<BodyLimitFilter> bodyLimitFilter() {
-        FilterRegistrationBean<BodyLimitFilter> r = new FilterRegistrationBean<>(new BodyLimitFilter(4096));
+        FilterRegistrationBean<BodyLimitFilter> r = new FilterRegistrationBean<>(new BodyLimitFilter(4096, "PUT",
+                java.util.regex.Pattern.compile("/api/v1/o/[0-9a-f-]{36}/automation-versions/[0-9a-f-]{36}/artifact"),
+                com.nekkora.platform.artifact.PackageInspector.MAX_ZIP_BYTES));
         r.setOrder(Ordered.HIGHEST_PRECEDENCE + 1);
         r.addUrlPatterns("/api/*");
         return r;
@@ -277,5 +279,24 @@ public class PlatformConfig {
     com.nekkora.platform.admin.AgentAdminService agentAdminService(com.nekkora.platform.admin.AccessActions actions,
                                                                   com.nekkora.platform.access.WorkspaceAccess access) {
         return new com.nekkora.platform.admin.AgentAdminService(actions, access);
+    }
+
+    /**
+     * Armazenamento dos artefatos recebidos (PLATFORM-AUTOMATION-LIFECYCLE-001): pasta local SO se NEKKORA_ARTEFATOS_DIR estiver
+     * definida (laboratorio); sem ela, as rotas de artefato respondem 503 e nada e gravado.
+     */
+    @Bean
+    com.nekkora.platform.artifact.ArtifactStore artifactStore(org.springframework.core.env.Environment env) throws java.io.IOException {
+        String dir = env.getProperty("NEKKORA_ARTEFATOS_DIR", env.getProperty("nekkora.artefatos.dir", ""));
+        return dir.isBlank() ? com.nekkora.platform.artifact.ArtifactStore.NONE
+                : new com.nekkora.platform.artifact.LocalArtifactStore(java.nio.file.Path.of(dir));
+    }
+
+    /** Ciclo de vida das automacoes (workspace, automacao, versao, artefato, publicacao). */
+    @Bean
+    com.nekkora.platform.admin.AutomationLifecycleService automationLifecycleService(com.nekkora.platform.admin.AccessActions actions,
+                                                                                    com.nekkora.platform.access.WorkspaceAccess access,
+                                                                                    com.nekkora.platform.artifact.ArtifactStore store) {
+        return new com.nekkora.platform.admin.AutomationLifecycleService(actions, access, store);
     }
 }

@@ -31,6 +31,8 @@ tags:
     description: 'Convites, papeis, retirada de vinculo, concessoes e auditoria (contrato de 2026-10-27; 023)'
   - name: Canal do Agent
     description: 'Pareamento, credencial, Worker no workspace, autorizacao de execucao local e consultas das execucoes do Agent (contrato Platform-Agent 1.0; 025). O lado da maquina e o openapi/nekkora-agent-v1.yaml'
+  - name: Ciclo de vida das automacoes
+    description: 'Workspace, automacao, versao DRAFT, artefato (pacote do Studio) recebido e conferido pela API e publicacao com step-up (PLATFORM-AUTOMATION-LIFECYCLE-001; 028). Publicar nao autoriza nem dispara execucao'
   - name: Portal externo
 
 paths:
@@ -1253,6 +1255,23 @@ paths:
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   /api/v1/o/{org}/workspaces:
+    post:
+      tags: [Ciclo de vida das automacoes]
+      operationId: createWorkspace
+      summary: 'Cria um workspace interno da organizacao'
+      description: >
+        Exige workspace.lifecycle (permissao da organizacao). Nasce ACTIVE. Auditado (automation_admin_events, ato 1).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/WorkspaceCreateRequest' } } } }
+      responses:
+        '201': { description: 'Workspace criado', content: { application/json: { schema: { $ref: '#/components/schemas/LifecycleWorkspace' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
     get:
       tags: [GAP-06 leitura interna]
       operationId: listWorkspaces
@@ -1290,6 +1309,24 @@ paths:
         '500': { $ref: '#/components/responses/CatalogInconsistent' }
 
   /api/v1/o/{org}/workspaces/{workspaceId}/automations:
+    post:
+      tags: [Ciclo de vida das automacoes]
+      operationId: createAutomation
+      summary: 'Cadastra uma automacao no workspace'
+      description: >
+        Exige automation.manage no workspace (papel da organizacao ou do proprio workspace); workspace ACTIVE, senao 409. Sem acesso: 404. Auditado (ato 2).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: workspaceId, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AutomationCreateRequest' } } } }
+      responses:
+        '201': { description: 'Automacao criada', content: { application/json: { schema: { $ref: '#/components/schemas/LifecycleAutomation' } } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
     get:
       tags: [GAP-06 leitura interna]
       operationId: listAutomations
@@ -1330,6 +1367,24 @@ paths:
         '500': { $ref: '#/components/responses/CatalogInconsistent' }
 
   /api/v1/o/{org}/automations/{automationId}/versions:
+    post:
+      tags: [Ciclo de vida das automacoes]
+      operationId: createAutomationVersion
+      summary: 'Cria uma versao DRAFT (numero atribuido pelo banco)'
+      description: >
+        Exige automation.manage no workspace da automacao; automacao e workspace ACTIVE, senao 409. O numero e MAX+1 com a automacao travada (005): criacoes concorrentes nunca repetem numero. command_json nasce com contract_version 1, runtime, entrypoint main.py, arguments, parameters e secret_bindings vazios; o artefato vem pelo PUT do artefato. Auditado (ato 3).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: automationId, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      requestBody: { required: false, content: { application/json: { schema: { $ref: '#/components/schemas/VersionDraftRequest' } } } }
+      responses:
+        '201': { description: 'Versao DRAFT criada', content: { application/json: { schema: { $ref: '#/components/schemas/LifecycleVersion' } } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
     get:
       tags: [GAP-06 leitura interna]
       operationId: listAutomationVersions
@@ -1632,7 +1687,7 @@ paths:
       operationId: createLocalRunAuthorization
       summary: 'Autoriza execucao local de uma versao publicada num Worker (step-up)'
       description: >
-        Exige automation.execute no workspace e step-up. Vincula organizacao, workspace, Worker AUTORIZADO no workspace, versao PUBLICADA e o pacote imutavel (packageFingerprint = command_json.artifact.sha256 da versao). validUntil ate 366 dias. Versao rascunho ou sem artefato, ou Worker sem autorizacao no workspace: 409. A 025 reconfere tudo no banco. Auditoria (agent_admin_events 10).
+        Exige automation.execute no workspace e step-up. Vincula organizacao, workspace, Worker AUTORIZADO no workspace, versao PUBLICADA e o pacote imutavel (packageFingerprint = command_json.agent_package.fingerprint da versao, com agent_package.fingerprint_rule = nekkora-agent/package-fingerprint/1; NAO e command_json.artifact.sha256, que mede os bytes do artefato). validUntil posterior a agora e ate 366 dias (fora disso, 400); automacao ou workspace inativo, 409. Versao rascunho ou sem artefato, ou Worker sem autorizacao no workspace: 409. A 025 reconfere tudo no banco. Auditoria (agent_admin_events 10).
       security: [ { sessionCookie: [], csrfHeader: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' }, { name: workspace, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/LocalRunAuthorizationRequest' } } } }
@@ -1727,6 +1782,99 @@ paths:
       parameters: [ { $ref: '#/components/parameters/Org' }, { name: run, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }, { $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/Limit' } ]
       responses:
         '200': { description: 'Pagina de eventos', content: { application/json: { schema: { $ref: '#/components/schemas/AgentRunEventPage' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/automation-versions/{version}:
+    get:
+      tags: [Ciclo de vida das automacoes]
+      operationId: getAutomationVersion
+      summary: 'Versao com estado, comando, artefato e impressao do pacote'
+      description: >
+        Exige automation.read no workspace. artifact.sha256 (bytes do ZIP) e agentPackage.fingerprint (regra nekkora-agent/package-fingerprint/1) sao medidas diferentes. provenance=DECLARED: o gerador vem do manifesto, nao e prova de origem.
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: version, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      responses:
+        '200': { description: 'Versao', content: { application/json: { schema: { $ref: '#/components/schemas/LifecycleVersion' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    patch:
+      tags: [Ciclo de vida das automacoes]
+      operationId: updateAutomationVersionDraft
+      summary: 'Altera runtime e argumentos de uma versao DRAFT'
+      description: >
+        Exige automation.manage. Versao PUBLISHED e imutavel: 409 (uma mudanca exige nova versao). Auditado (ato 4).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: version, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/VersionDraftRequest' } } } }
+      responses:
+        '200': { description: 'Versao alterada', content: { application/json: { schema: { $ref: '#/components/schemas/LifecycleVersion' } } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/o/{org}/automation-versions/{version}/artifact:
+    put:
+      tags: [Ciclo de vida das automacoes]
+      operationId: putAutomationVersionArtifact
+      summary: 'Recebe o pacote do Studio (ZIP) de uma versao DRAFT e o confere'
+      description: >
+        Exige automation.manage; corpo application/zip ate 50 MiB com Content-Length. O servidor nao executa nada: le o ZIP pelo diretorio central (sem cifragem, ZIP64, ligacao simbolica, caminho absoluto ou com .., nome repetido), confere o manifesto nekkora-studio/codegen-manifest 1.4+ e cada arquivo listado pelo hash declarado, recusa pacote que pede segredo, calcula o sha256 dos bytes e a impressao package-fingerprint/1 e grava os bytes no armazenamento da API (chave = sha256). A versao passa a referenciar 'nekkora-artifact:<artifactId>' (nunca caminho ou URL do cliente). Os mesmos bytes de novo: idempotente. Recusa do pacote: 422 com motivo de vocabulario fechado. Versao publicada: 409. Armazenamento nao configurado: 503. Auditado (ato 5).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: version, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      requestBody: { required: true, content: { application/zip: { schema: { type: string, format: binary } } } }
+      responses:
+        '200': { description: 'Artefato aceito', content: { application/json: { schema: { $ref: '#/components/schemas/LifecycleVersion' } } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { description: 'Pacote recusado', content: { application/json: { schema: { $ref: '#/components/schemas/PackageRejected' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/o/{org}/automation-versions/{version}/artifact/content:
+    get:
+      tags: [Ciclo de vida das automacoes]
+      operationId: getAutomationVersionArtifactContent
+      summary: 'Bytes preservados do artefato da versao (conferidos pelo sha256)'
+      description: >
+        Exige automation.manage. Bytes relidos e conferidos: ausente ou corrompido no armazenamento, 409. Cache-Control no-store; X-Artifact-Sha256.
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: version, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      responses:
+        '200': { description: 'ZIP', content: { application/zip: { schema: { type: string, format: binary } } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/o/{org}/automation-versions/{version}/publish:
+    post:
+      tags: [Ciclo de vida das automacoes]
+      operationId: publishAutomationVersion
+      summary: 'Publica a versao DRAFT (step-up; irreversivel)'
+      description: >
+        Exige automation.publish no workspace e step-up recente na mesma sessao. A pessoa confirma o que conferiu (expectedArtifactSha256 e expectedPackageFingerprint): diferente do rascunho atual, 409. Os bytes guardados sao relidos e conferidos (hash e impressao) antes da transacao; ausentes ou corrompidos, 409. Na mesma transacao: DRAFT -> PUBLISHED com autoria e instante do servidor, e o gatilho da 028 reconfere o vinculo com o artefato e a autoridade de quem publica. Repeticao com a mesma expectativa (resposta perdida): 200 com a versao ja publicada; outra expectativa: 409. Concorrentes: uma publica, as demais veem a mesma publicacao. Publicar NAO autoriza nem dispara execucao (a autorizacao de execucao local e outro ato). Auditado (ato 6).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: version, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PublishRequest' } } } }
+      responses:
+        '200': { description: 'Versao publicada', content: { application/json: { schema: { $ref: '#/components/schemas/LifecycleVersion' } } } }
+        '409': { $ref: '#/components/responses/Conflict' }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -2360,6 +2508,81 @@ components:
         grantedAt: { type: string, format: date-time }
         validUntil: { type: string, format: date-time }
         revokedAt: { type: [string, 'null'], format: date-time }
+    WorkspaceCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: [string, 'null'], maxLength: 500 }
+    AutomationCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+    VersionDraftRequest:
+      type: object
+      properties:
+        runtime: { type: string, pattern: '^python3\.[0-9]{1,2}$', description: 'padrao python3.12' }
+        arguments: { type: array, maxItems: 20, items: { type: string, minLength: 1, maxLength: 200 } }
+    PublishRequest:
+      type: object
+      required: [expectedArtifactSha256, expectedPackageFingerprint]
+      properties:
+        expectedArtifactSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        expectedPackageFingerprint: { type: string, pattern: '^[0-9a-f]{64}$' }
+    PackageRejected:
+      type: object
+      required: [error, reason]
+      properties:
+        error: { type: string, enum: [package_rejected] }
+        reason: { type: string, enum: [vazio, tamanho_excedido, zip_malformado, zip_nao_suportado, zip_cifrado, zip_ambiguo, zip_corrompido, ligacao_simbolica, caminho_inseguro, nome_repetido, arquivos_demais, manifesto_ausente, manifesto_grande, manifesto_malformado, manifesto_fora_do_contrato, modo_de_execucao_invalido, framework_invalido, linha_de_comando_invalida, segredos_nao_suportados, lista_de_arquivos_ausente, hash_declarado_invalido, entrada_ausente, arquivo_listado_ausente, hash_divergente] }
+    LifecycleWorkspace:
+      type: object
+      properties:
+        workspaceId: { type: string, format: uuid }
+        name: { type: string }
+        status: { type: string, enum: [ACTIVE, SUSPENDED, ARCHIVED] }
+        createdAt: { type: string, format: date-time }
+    LifecycleAutomation:
+      type: object
+      properties:
+        automationId: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        name: { type: string }
+        status: { type: string, enum: [ACTIVE, SUSPENDED, ARCHIVED] }
+        createdAt: { type: string, format: date-time }
+    LifecycleArtifact:
+      type: object
+      properties:
+        artifactId: { type: string, format: uuid }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$', description: 'SHA-256 dos BYTES do ZIP recebido (calculado pelo servidor)' }
+        sizeBytes: { type: integer }
+        fingerprintRule: { type: string, enum: ['nekkora-agent/package-fingerprint/1'] }
+        fingerprint: { type: string, pattern: '^[0-9a-f]{64}$', description: 'impressao do pacote (calculada pelo servidor; a mesma do Agent)' }
+        filesCount: { type: integer }
+        manifestVersion: { type: string }
+        framework: { type: string }
+        executionMode: { type: string, enum: [single, list, tabular] }
+        declaredGenerator: { type: [string, 'null'] }
+        provenance: { type: string, enum: [DECLARED], description: 'procedencia declarada no manifesto; nao verificada criptograficamente' }
+        receivedAt: { type: string, format: date-time }
+    LifecycleVersion:
+      type: object
+      properties:
+        automationVersionId: { type: string, format: uuid }
+        automationId: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        versionNumber: { type: integer }
+        status: { type: string, enum: [DRAFT, PUBLISHED] }
+        runtime: { type: [string, 'null'] }
+        entrypoint: { type: [string, 'null'] }
+        arguments: { type: array, items: { type: string } }
+        artifactReference: { type: [string, 'null'], description: "'nekkora-artifact:<artifactId>' (artefato recebido) ou a referencia declarada de versoes anteriores" }
+        artifact: { oneOf: [ { $ref: '#/components/schemas/LifecycleArtifact' }, { type: 'null' } ] }
+        agentPackage: { oneOf: [ { type: object, properties: { fingerprintRule: { type: string }, fingerprint: { type: string } } }, { type: 'null' } ] }
+        createdAt: { type: string, format: date-time }
+        publishedAt: { type: [string, 'null'], format: date-time }
+        publishedByMembershipId: { type: [string, 'null'], format: uuid }
     LocalRunAuthorizationList:
       type: object
       required: [items]
