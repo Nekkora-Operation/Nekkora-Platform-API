@@ -129,8 +129,9 @@ public final class AccessActions {
 
     /** Step-up de TOTP nos ultimos minutos NA MESMA sessao, lido do banco com a hora atual. */
     void requireStepUp(JdbcClient j, ValidSession actor) {
-        Boolean recent = j.sql("SELECT mfa_step_up_at IS NOT NULL AND mfa_step_up_at > clock_timestamp() - ?::interval FROM public.user_sessions WHERE session_id = ?")
-                .param(SessionRepository.interval(stepUpWindow)).param(actor.sessionId()).query(Boolean.class).optional().orElse(false);
+        Boolean recent = j.sql(SessionRepository.RECENT_STEP_UP_SQL)
+                .param(SessionRepository.interval(stepUpWindow)).param(SessionRepository.interval(stepUpWindow)).param(actor.sessionId())
+                .query(Boolean.class).optional().orElse(false);
         if (!recent) {
             throw refuse(Failure.STEP_UP, "step_up");
         }

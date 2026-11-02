@@ -21,6 +21,7 @@ import com.nekkora.core.web.RequestContextFilter;
 import com.nekkora.platform.config.PlatformProperties;
 import com.nekkora.platform.identity.IdentityCredentialService;
 import com.nekkora.platform.identity.IdentityLoginService;
+import com.nekkora.platform.identity.IdentityOptionalMfaService;
 import com.nekkora.platform.identity.IdentityPasswordRecoveryService;
 import com.nekkora.platform.identity.IdentityStepUpService;
 
@@ -52,6 +53,10 @@ public class IdentityAuthController {
     public static final String RECOVERY_CODES = "/api/v1/auth/mfa/recovery-codes";
     public static final String PASSWORD_RESET_REQUEST = "/api/v1/auth/password-reset/request";
     public static final String PASSWORD_RESET_CONFIRM = "/api/v1/auth/password-reset/confirm";
+    /** 029: reconfirmacao da senha (sessao sem MFA) e ativacao voluntaria do MFA pela sessao de identidade. */
+    public static final String PASSWORD_CONFIRM = "/api/v1/auth/password-confirm";
+    public static final String ACTIVATE_START = "/api/v1/auth/mfa/activate/start";
+    public static final String ACTIVATE_CONFIRM = "/api/v1/auth/mfa/activate/confirm";
 
     public record Login(String email, char[] password) {
     }
@@ -75,23 +80,30 @@ public class IdentityAuthController {
     public record StepUpRequest(String code) {
     }
 
+    /** 029: reconfirmacao da senha; zerada depois do uso. */
+    public record PasswordConfirm(char[] password) {
+    }
+
     private final IdentityLoginService logins;
     private final IdentityStepUpService stepUps;
     private final IdentityCredentialService credentials;
     private final IdentityPasswordRecoveryService recoveries;
+    private final IdentityOptionalMfaService optionalMfa;
     private final PreAuthCsrf csrfPre;
     private final PlatformProperties.Session cfg;
     private final boolean enabled;
     private final boolean recoveryEnabled;
 
     public IdentityAuthController(IdentityLoginService logins, IdentityStepUpService stepUps, IdentityCredentialService credentials,
-                                  IdentityPasswordRecoveryService recoveries, PreAuthCsrf csrfPre, PlatformProperties.Session cfg,
+                                  IdentityPasswordRecoveryService recoveries, IdentityOptionalMfaService optionalMfa, PreAuthCsrf csrfPre,
+                                  PlatformProperties.Session cfg,
                                   @Value("${nekkora.entrada-geral.enabled:false}") boolean enabled,
                                   @Value("${nekkora.recuperacao-senha.enabled:false}") boolean recoveryEnabled) {
         this.logins = logins;
         this.stepUps = stepUps;
         this.credentials = credentials;
         this.recoveries = recoveries;
+        this.optionalMfa = optionalMfa;
         this.recoveryEnabled = recoveryEnabled;
         this.csrfPre = csrfPre;
         this.cfg = cfg;
@@ -112,7 +124,12 @@ public class IdentityAuthController {
             IdentityLoginService.LoginResult r = logins.login(body == null ? null : body.email(), password, RequestContextFilter.ip(req));
             csrfPre.discard(Cookies.read(req, Cookies.PRE));
             Cookies.expire(res, Cookies.PRE, "Strict");
-            Cookies.identityChallenge(res, r.challengeToken(), cfg.challenge());
+            if (r.session() != null) {
+                // 029: identidade que nunca confirmou fator - sessao direto, sem desafio
+                issueSession(res, r.session());
+            } else {
+                Cookies.identityChallenge(res, r.challengeToken(), cfg.challenge());
+            }
             return Map.of("status", r.status(), "csrfToken", r.csrfToken());
         } finally {
             if (password != null) {
@@ -190,6 +207,58 @@ public class IdentityAuthController {
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("restricted", p.restricted());
         r.put("csrfToken", p.csrfToken());
+        // 029: fator ativo e como esta sessao prova a identidade nas acoes sensiveis (totp | password)
+        IdentityOptionalMfaService.FactorState f = optionalMfa.state(p, IdentityFilter.token(req));
+        r.put("mfaEnabled", f.mfaEnabled());
+        r.put("stepUpMethod", f.stepUpMethod());
+        return r;
+    }
+
+    /**
+     * 029: reconfirmacao da senha na sessao de identidade sem MFA (vale 5 min, substitui o step-up por TOTP SO para quem
+     * nunca confirmou fator). 204; senha ausente: 400; senha errada, identidade com fator ou sessao com MFA: 403.
+     */
+    @PostMapping(PASSWORD_CONFIRM)
+    public ResponseEntity<Void> confirmPassword(@RequestBody(required = false) PasswordConfirm body, HttpServletRequest req) {
+        char[] password = body == null ? null : body.password();
+        try {
+            requireEnabled();
+            if (password == null) {
+                throw ApiException.invalid("senha");
+            }
+            optionalMfa.confirmPassword(IdentityFilter.principalOrNull(req), IdentityFilter.token(req), password, RequestContextFilter.ip(req));
+            return ResponseEntity.noContent().build();
+        } finally {
+            if (password != null) {
+                Arrays.fill(password, ' ');
+            }
+        }
+    }
+
+    /** 029: ativacao voluntaria do MFA, inicio (senha reconfirmada ha ate 5 min): a URI otpauth do fator pendente. */
+    @PostMapping(ACTIVATE_START)
+    public Map<String, String> startActivation(HttpServletRequest req) {
+        requireEnabled();
+        return Map.of("otpauthUri", optionalMfa.startActivation(IdentityFilter.principalOrNull(req), IdentityFilter.token(req), RequestContextFilter.ip(req)));
+    }
+
+    /**
+     * 029: ativacao voluntaria do MFA, conclusao: TOTP do pendente. Todas as sessoes anteriores sao revogadas; a resposta
+     * traz o cookie da sessao NOVA (com MFA), o CSRF dela e os codigos de recuperacao (uma unica vez).
+     */
+    @PostMapping(ACTIVATE_CONFIRM)
+    public Map<String, Object> confirmActivation(@RequestBody(required = false) StepUpRequest body, HttpServletRequest req, HttpServletResponse res) {
+        requireEnabled();
+        if (body == null || body.code() == null) {
+            throw ApiException.invalid("codigo");
+        }
+        IdentityOptionalMfaService.Activated a = optionalMfa.confirmActivation(IdentityFilter.principalOrNull(req), IdentityFilter.token(req),
+                body.code(), RequestContextFilter.ip(req));
+        Cookies.identitySession(res, a.token(), a.expiresAt());
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("recoveryCodes", List.copyOf(a.recoveryCodes()));
+        r.put("csrfToken", a.csrfToken());
+        r.put("restricted", false);
         return r;
     }
 

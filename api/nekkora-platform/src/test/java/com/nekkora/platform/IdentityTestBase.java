@@ -90,8 +90,32 @@ abstract class IdentityTestBase extends PlatformTestBase {
         return r;
     }
 
-    /** Cadastra o primeiro fator; guarda o segredo em SECRETS[identity] para code(identity). */
+    /**
+     * Cadastra o primeiro fator; guarda o segredo em SECRETS[identity] para code(identity). 029: o login de quem nunca
+     * confirmou fator ja abre a sessao (sem desafio); o primeiro fator e a ATIVACAO VOLUNTARIA pela sessao (senha
+     * reconfirmada + activate/start + activate/confirm), que revoga a sessao sem MFA e devolve a sessao nova com MFA.
+     */
     protected BrowserClient.Response enroll(BrowserClient b, UUID identity) {
+        return enroll(b, identity, SENHA);
+    }
+
+    protected BrowserClient.Response enroll(BrowserClient b, UUID identity, String senha) {
+        BrowserClient.Response pc = b.post("/api/v1/auth/password-confirm", "{\"password\":" + q(senha) + "}");
+        assertThat(pc.status()).as("password-confirm " + pc.body()).isEqualTo(204);
+        BrowserClient.Response start = b.post("/api/v1/auth/mfa/activate/start", null);
+        assertThat(start.status()).as("activate/start " + start.body()).isEqualTo(200);
+        String uri = start.field("otpauthUri");
+        String secret = URI.create(uri).getRawQuery().replaceAll(".*secret=([A-Z2-7]+).*", "$1");
+        SECRETS.put(identity, Base32.decode(secret));
+        BrowserClient.Response r = b.post("/api/v1/auth/mfa/activate/confirm", "{\"code\":\"" + code(identity) + "\"}");
+        if (r.status() == 200) {
+            b.csrf = r.field("csrfToken");
+        }
+        return r;
+    }
+
+    /** 029: cadastro do primeiro fator pelo DESAFIO de login (fluxo anterior), ainda exposto; so alcancavel sem sessao. */
+    protected BrowserClient.Response enrollByChallenge(BrowserClient b, UUID identity) {
         BrowserClient.Response start = b.post("/api/v1/auth/mfa/enroll/start", null);
         assertThat(start.status()).as("enroll/start").isEqualTo(200);
         String uri = start.field("otpauthUri");
@@ -108,7 +132,7 @@ abstract class IdentityTestBase extends PlatformTestBase {
         String e = email();
         UUID id = confirmed(e, SENHA);
         BrowserClient b = client();
-        assertThat(login(b, e, SENHA).field("status")).isEqualTo("mfa_enrollment_required");
+        assertThat(login(b, e, SENHA).field("status")).isEqualTo("authenticated");
         BrowserClient.Response r = enroll(b, id);
         assertThat(r.status()).isEqualTo(200);
         b.csrf = r.field("csrfToken");
@@ -142,7 +166,7 @@ abstract class IdentityTestBase extends PlatformTestBase {
     /** Sessao de identidade com primeiro fator pela ENTRADA GERAL (login + cadastro do fator), para identidade ja ACTIVE. */
     protected BrowserClient sessaoPelaEntradaGeral(String email, UUID identity) {
         BrowserClient b = client();
-        assertThat(login(b, email, SENHA).field("status")).isEqualTo("mfa_enrollment_required");
+        assertThat(login(b, email, SENHA).field("status")).isEqualTo("authenticated");
         BrowserClient.Response r = enroll(b, identity);
         assertThat(r.status()).isEqualTo(200);
         b.csrf = r.field("csrfToken");

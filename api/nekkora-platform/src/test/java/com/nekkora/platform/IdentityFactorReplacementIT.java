@@ -329,7 +329,7 @@ class IdentityFactorReplacementIT extends IdentityTestBase {
         String e = email();
         UUID id = confirmed(e, SENHA);
         BrowserClient b = client();
-        assertThat(login(b, e, SENHA).field("status")).isEqualTo("mfa_enrollment_required");
+        assertThat(login(b, e, SENHA).field("status")).isEqualTo("authenticated");
         BrowserClient.Response r = enroll(b, id);
         assertThat(r.status()).isEqualTo(200);
         assertThat(r.body()).contains("\"restricted\":false").contains("csrfToken").contains("recoveryCodes");
@@ -341,17 +341,18 @@ class IdentityFactorReplacementIT extends IdentityTestBase {
     }
 
     /**
-     * Modo desafio: recusa da funcao (identidade suspensa depois do login, desafio ainda vivo) e 401 sem efeito, como o
-     * contrato diz. Antes desta correcao, o NULL da funcao virava 500 (TypeMismatchDataAccessException no single()).
+     * 029: recusa da funcao na ATIVACAO (identidade suspensa depois do login, sessao ainda no cookie): 401 sem efeito,
+     * como a recusa do modo desafio anterior.
      */
     @Test
-    void recusaDaFuncaoNoModoDesafioE401() throws Exception {
+    void recusaDaFuncaoNaAtivacaoComIdentidadeSuspensaE401() throws Exception {
         String e = email();
         UUID id = confirmed(e, SENHA);
         BrowserClient b = client();
-        assertThat(login(b, e, SENHA).field("status")).isEqualTo("mfa_enrollment_required");
+        assertThat(login(b, e, SENHA).field("status")).isEqualTo("authenticated");
+        assertThat(b.post("/api/v1/auth/password-confirm", "{\"password\":" + q(SENHA) + "}").status()).isEqualTo(204);
         exec("UPDATE identities SET status = 3 WHERE identity_id = '" + id + "'");
-        BrowserClient.Response r = b.post(START, null);
+        BrowserClient.Response r = b.post("/api/v1/auth/mfa/activate/start", null);
         assertThat(r.status()).as(r.body()).isEqualTo(401);
         assertThat(count("SELECT count(*) FROM identity_mfa_factors WHERE identity_id = '" + id + "'")).isZero();
     }

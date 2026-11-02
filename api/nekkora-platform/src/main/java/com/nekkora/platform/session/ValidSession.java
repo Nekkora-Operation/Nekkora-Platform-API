@@ -10,7 +10,8 @@ import java.util.UUID;
  * do login por organizacao.
  */
 public record ValidSession(UUID sessionId, UUID organizationId, UUID userId, short accountType, UUID membershipId,
-                           String csrfToken, OffsetDateTime stepUpAt, OffsetDateTime expiresAt, UUID identitySessionId) {
+                           String csrfToken, OffsetDateTime stepUpAt, OffsetDateTime expiresAt, UUID identitySessionId,
+                           boolean withoutSecondFactor) {
 
     public static final short INTERNAL = 1;
     public static final short EXTERNAL = 2;
@@ -22,5 +23,13 @@ public record ValidSession(UUID sessionId, UUID organizationId, UUID userId, sho
     /** Sessao de conta vinculada, nascida da troca pela sessao de identidade (desenho §6.5). */
     public boolean isLinked() {
         return identitySessionId != null;
+    }
+
+    /**
+     * 029: como esta sessao prova a pessoa nas acoes sensiveis. {@code password} so na sessao vinculada nascida de sessao de
+     * identidade sem MFA (identidade que nunca confirmou fator); senao {@code totp}.
+     */
+    public String stepUpMethod() {
+        return withoutSecondFactor ? "password" : "totp";
     }
 }

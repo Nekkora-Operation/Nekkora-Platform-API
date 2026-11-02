@@ -45,20 +45,24 @@ class IdentityLoginIT extends IdentityTestBase {
 
     // ------------------------------------------------------------------ passo 1
 
+    /** 029: quem nunca confirmou fator entra so com a senha - sessao direto, desafio consumido na mesma transacao. */
     @Test
-    void loginSemFatorAbreDesafioDeCadastro() throws Exception {
+    void loginSemFatorEmiteSessaoSemSegundoFator() throws Exception {
         String e = email();
         UUID id = confirmed(e, SENHA);
         BrowserClient b = client();
         BrowserClient.Response r = login(b, e.toUpperCase(), SENHA);
         assertThat(r.status()).isEqualTo(200);
-        assertThat(r.field("status")).isEqualTo("mfa_enrollment_required");
-        String c = cookie(r, "__Host-nekkora_id_mfa");
-        assertThat(c).as("cookie do desafio").contains("Path=/").contains("Secure").contains("HttpOnly").contains("SameSite=Strict");
-        assertThat(cookie(r, "__Host-nekkora_id")).as("nenhuma sessao no passo 1").isNull();
-        assertThat(value("SELECT purpose || '|' || (credential_hash IS NOT NULL) FROM identity_auth_challenges WHERE identity_id = '" + id + "'"))
-                .isEqualTo("2|true");
-        assertThat(sessoesAtivas(id)).isZero();
+        assertThat(r.field("status")).isEqualTo("authenticated");
+        assertThat(cookie(r, "__Host-nekkora_id_mfa")).as("nenhum desafio: o cookie, se vier, so expira").satisfiesAnyOf(
+                x -> assertThat(x).isNull(), x -> assertThat(x).contains("Max-Age=0"));
+        String c = cookie(r, "__Host-nekkora_id");
+        assertThat(c).as("cookie da sessao").contains("Path=/").contains("Secure").contains("HttpOnly").contains("SameSite=Lax");
+        assertThat(value("SELECT purpose || '|' || (consumed_at IS NOT NULL) || '|' || (credential_hash IS NULL) FROM identity_auth_challenges WHERE identity_id = '" + id + "'"))
+                .as("desafio de finalidade 2 consumido, hashes limpos").isEqualTo("2|true|true");
+        assertThat(sessoesAtivas(id)).isEqualTo(1);
+        assertThat(value("SELECT mfa_verified_at IS NULL FROM identity_sessions WHERE identity_id = '" + id + "'")).isEqualTo("t");
+        assertThat(count("SELECT count(*) FROM identity_events WHERE identity_id = '" + id + "' AND event_type = 18")).isEqualTo(1);
     }
 
     @Test
@@ -98,42 +102,47 @@ class IdentityLoginIT extends IdentityTestBase {
 
     // ------------------------------------------------------------------ primeiro fator
 
+    /** 029: o primeiro fator e a ativacao voluntaria pela sessao (senha reconfirmada); emite a sessao nova e os codigos. */
     @Test
-    void cadastroDoPrimeiroFatorEmiteSessaoECodigos() throws Exception {
+    void ativacaoDoPrimeiroFatorEmiteSessaoECodigos() throws Exception {
         String e = email();
         UUID id = confirmed(e, SENHA);
         BrowserClient b = client();
-        login(b, e, SENHA);
+        assertThat(login(b, e, SENHA).field("status")).isEqualTo("authenticated");
+        String antiga = b.cookies().get("__Host-nekkora_id");
         String csrf = b.csrf;
         b.csrf = null;
-        assertThat(b.post("/api/v1/auth/mfa/enroll/start", null).status()).as("sem CSRF do desafio").isEqualTo(403);
+        assertThat(b.post("/api/v1/auth/mfa/activate/start", null).status()).as("sem CSRF da sessao").isEqualTo(403);
         b.csrf = csrf;
-        BrowserClient.Response start = b.post("/api/v1/auth/mfa/enroll/start", null);
+        assertThat(b.post("/api/v1/auth/mfa/activate/start", null).status()).as("sem a senha reconfirmada").isEqualTo(403);
+        assertThat(b.post("/api/v1/auth/password-confirm", "{\"password\":" + q(SENHA) + "}").status()).isEqualTo(204);
+        BrowserClient.Response start = b.post("/api/v1/auth/mfa/activate/start", null);
         assertThat(start.field("otpauthUri")).startsWith("otpauth://totp/").contains("issuer=Nekkora");
         String secret = URI.create(start.field("otpauthUri")).getRawQuery().replaceAll(".*secret=([A-Z2-7]+).*", "$1");
         SECRETS.put(id, Base32.decode(secret));
         assertThat(value("SELECT count(*) FROM identity_mfa_factors WHERE identity_id = '" + id + "' AND confirmed_at IS NULL AND disabled_at IS NULL"))
                 .as("fator pendente pela funcao").isEqualTo("1");
 
-        BrowserClient.Response errado = b.post("/api/v1/auth/mfa/enroll/confirm", "{\"code\":\"000000\"}");
-        assertThat(errado.status()).isEqualTo(401);
-        assertThat(value("SELECT attempts FROM identity_auth_challenges WHERE identity_id = '" + id + "'")).as("tentativa registrada").isEqualTo("1");
+        BrowserClient.Response errado = b.post("/api/v1/auth/mfa/activate/confirm", "{\"code\":\"000000\"}");
+        assertThat(errado.status()).isEqualTo(403);
 
-        BrowserClient.Response ok = b.post("/api/v1/auth/mfa/enroll/confirm", "{\"code\":\"" + code(id) + "\"}");
+        BrowserClient.Response ok = b.post("/api/v1/auth/mfa/activate/confirm", "{\"code\":\"" + code(id) + "\"}");
         assertThat(ok.status()).isEqualTo(200);
         assertThat(ok.listField("recoveryCodes")).hasSize(10);
         assertThat(ok.field("csrfToken")).isNotBlank();
         String sc = cookie(ok, "__Host-nekkora_id");
         assertThat(sc).contains("SameSite=Lax").contains("HttpOnly").contains("Secure").contains("Path=/");
-        assertThat(value("SELECT (confirmed_at IS NOT NULL) || '|' || key_id FROM identity_mfa_factors WHERE identity_id = '" + id + "' AND disabled_at IS NULL"))
-                .startsWith("true|");
+        assertThat(b.cookies().get("__Host-nekkora_id")).isNotEqualTo(antiga);
+        assertThat(value("SELECT (confirmed_at IS NOT NULL) || '|' || (last_used_step IS NOT NULL) FROM identity_mfa_factors WHERE identity_id = '" + id + "' AND disabled_at IS NULL"))
+                .isEqualTo("true|true");
         assertThat(count("SELECT count(*) FROM identity_mfa_recovery_codes WHERE identity_id = '" + id + "' AND used_at IS NULL")).isEqualTo(10);
-        assertThat(sessoesAtivas(id)).isEqualTo(1);
-        assertThat(value("SELECT consumed_at IS NOT NULL FROM identity_auth_challenges WHERE identity_id = '" + id + "'")).isEqualTo("t");
-        assertThat(count("SELECT count(*) FROM identity_events WHERE identity_id = '" + id + "' AND event_type = 3")).as("MFA_ENROLLED").isEqualTo(1);
+        assertThat(sessoesAtivas(id)).as("so a sessao nova").isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM identity_sessions WHERE session_token_hash = '" + Tokens.sha256Hex(antiga) + "' AND revoked_at IS NOT NULL"))
+                .as("a sessao sem MFA foi revogada").isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM identity_events WHERE identity_id = '" + id + "' AND event_type = 20")).as("MFA_ACTIVATED").isEqualTo(1);
         String hashSessao = Tokens.sha256Hex(b.cookies().get("__Host-nekkora_id"));
-        assertThat(count("SELECT count(*) FROM identity_sessions WHERE session_token_hash = '" + hashSessao + "' AND recovery_used_at IS NULL"))
-                .as("so o hash do token da sessao no banco").isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM identity_sessions WHERE session_token_hash = '" + hashSessao + "' AND mfa_verified_at IS NOT NULL"))
+                .as("so o hash do token da sessao nova no banco, com MFA").isEqualTo(1);
     }
 
     @Test
@@ -422,28 +431,29 @@ class IdentityLoginIT extends IdentityTestBase {
                 + "' AND confirmed_at IS NOT NULL AND disabled_at IS NULL")).as("fator nao avancou").isEqualTo(String.valueOf(ultimo));
     }
 
-    /** O mesmo intervalo no PRIMEIRO cadastro do fator: identity_mfa_confirm_first espera o desafio depois da validacao. */
+    /** 029: o mesmo intervalo na ATIVACAO: identity_mfa_activate espera o fator pendente depois da validacao do passo. */
     @Test
-    void passoTotpVencidoNaEsperaPeloDesafioNoPrimeiroCadastroERecusado() throws Exception {
+    void passoTotpVencidoNaEsperaPeloFatorNaAtivacaoERecusado() throws Exception {
         String e = email();
         UUID id = confirmed(e, SENHA);
         BrowserClient b = client();
-        assertThat(login(b, e, SENHA).field("status")).isEqualTo("mfa_enrollment_required");
-        BrowserClient.Response start = b.post("/api/v1/auth/mfa/enroll/start", null);
+        assertThat(login(b, e, SENHA).field("status")).isEqualTo("authenticated");
+        assertThat(b.post("/api/v1/auth/password-confirm", "{\"password\":" + q(SENHA) + "}").status()).isEqualTo(204);
+        BrowserClient.Response start = b.post("/api/v1/auth/mfa/activate/start", null);
         String segredo = URI.create(start.field("otpauthUri")).getRawQuery().replaceAll(".*secret=([A-Z2-7]+).*", "$1");
         byte[] s = Base32.decode(segredo);
-        String desafio = value("SELECT challenge_id FROM identity_auth_challenges WHERE identity_id = '" + id + "' AND consumed_at IS NULL AND invalidated_at IS NULL");
+        String fator = value("SELECT factor_id FROM identity_mfa_factors WHERE identity_id = '" + id + "' AND confirmed_at IS NULL AND disabled_at IS NULL");
         long passo = passoNovoMaisAntigo(null);
         String codigo = com.nekkora.platform.auth.crypto.Totp.code(s, passo);
-        BrowserClient.Response r = comLinhaTravada("SELECT 1 FROM identity_auth_challenges WHERE challenge_id = '" + desafio + "' FOR UPDATE",
-                () -> postLongo(b, "/api/v1/auth/mfa/enroll/confirm", "{\"code\":\"" + codigo + "\"}"), c -> ateOPassoVencer(passo));
-        assertThat(r.status()).as("passo vencido durante a espera dentro da funcao").isEqualTo(401);
-        assertThat(sessoesAtivas(id)).as("nenhuma sessao").isZero();
-        assertThat(value("SELECT (consumed_at IS NULL) || '|' || (expires_at > clock_timestamp()) FROM identity_auth_challenges WHERE challenge_id = '" + desafio + "'"))
-                .as("desafio nao consumido e ainda valido").isEqualTo("true|true");
-        assertThat(value("SELECT (confirmed_at IS NULL) || '|' || (last_used_step IS NULL) FROM identity_mfa_factors WHERE identity_id = '" + id + "' AND disabled_at IS NULL"))
+        BrowserClient.Response r = comLinhaTravada("SELECT 1 FROM identity_mfa_factors WHERE factor_id = '" + fator + "' FOR UPDATE",
+                () -> postLongo(b, "/api/v1/auth/mfa/activate/confirm", "{\"code\":\"" + codigo + "\"}"), c -> ateOPassoVencer(passo));
+        assertThat(r.status()).as("passo vencido durante a espera dentro da funcao").isEqualTo(403);
+        assertThat(sessoesAtivas(id)).as("a sessao sem MFA continua; nenhuma nova").isEqualTo(1);
+        assertThat(value("SELECT mfa_verified_at IS NULL FROM identity_sessions WHERE identity_id = '" + id + "' AND revoked_at IS NULL")).isEqualTo("t");
+        assertThat(value("SELECT (confirmed_at IS NULL) || '|' || (last_used_step IS NULL) FROM identity_mfa_factors WHERE factor_id = '" + fator + "'"))
                 .as("fator continua pendente, sem passo").isEqualTo("true|true");
         assertThat(count("SELECT count(*) FROM identity_mfa_recovery_codes WHERE identity_id = '" + id + "'")).as("nenhum codigo gravado").isZero();
+        assertThat(count("SELECT count(*) FROM identity_events WHERE identity_id = '" + id + "' AND event_type = 20")).isZero();
     }
 
     /** Suspensao entre a primeira leitura (e o Argon2) e a emissao do desafio: resposta generica, nenhum desafio. */

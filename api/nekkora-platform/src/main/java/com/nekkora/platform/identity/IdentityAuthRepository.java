@@ -27,6 +27,10 @@ public final class IdentityAuthRepository {
     public static final short EV_STEP_UP = 13;
     /** Step-up por organizacao em sessao vinculada (P4), com a organizacao alvo. */
     public static final short EV_ORG_STEP_UP = 14;
+    /** 029: login sem segundo fator, reconfirmacao da senha e ativacao voluntaria do MFA (gravados pelas funcoes da 029). */
+    public static final short EV_LOGIN_WITHOUT_SECOND_FACTOR = 18;
+    public static final short EV_PASSWORD_RECONFIRMED = 19;
+    public static final short EV_MFA_ACTIVATED = 20;
     /** CHECK da 017: tentativas entre 0 e 5. */
     public static final int MAX_ATTEMPTS = 5;
 
@@ -79,9 +83,13 @@ public final class IdentityAuthRepository {
             return Optional.empty();
         }
         return j.sql("""
-                SELECT revoked_at IS NULL AND expires_at > clock_timestamp() AND mfa_verified_at IS NOT NULL,
+                SELECT revoked_at IS NULL AND expires_at > clock_timestamp()
+                       -- 029: a sessao sem MFA vale enquanto a identidade nunca confirmou fator (o step-up por TOTP dela
+                       -- segue e e recusado por falta de fator: 403, nao 401)
+                       AND (mfa_verified_at IS NOT NULL OR NOT EXISTS (SELECT 1 FROM public.identity_mfa_factors f
+                                                                        WHERE f.identity_id = s.identity_id AND f.confirmed_at IS NOT NULL)),
                        (recovery_used_at IS NOT NULL AND recovery_cleared_at IS NULL)
-                  FROM public.identity_sessions WHERE identity_session_id = ?
+                  FROM public.identity_sessions s WHERE identity_session_id = ?
                 """).param(sessionId)
                 .query((rs, n) -> new LockedSession(rs.getBoolean(1), rs.getBoolean(2))).optional();
     }
@@ -224,6 +232,47 @@ public final class IdentityAuthRepository {
     public boolean regenerateRecoveryCodes(JdbcClient j, String sessionToken, List<String> codeHashes) {
         return Boolean.TRUE.equals(j.sql("SELECT public.identity_recovery_codes_regenerate(?, ?::text[])")
                 .param(sessionToken).param(pgArray(codeHashes)).query(Boolean.class).single());
+    }
+
+    // ------------------------------------------------------------------ 029: segundo fator opcional
+
+    /**
+     * {@code identity_login_password} (029): conclui o desafio de finalidade 2 de identidade que NUNCA confirmou fator, sem
+     * QR. Status SESSAO_CRIADA, ou FATOR_EXIGIDO (ja teve fator: nada escrito, o desafio segue para o cadastro do fator),
+     * DESAFIO_INVALIDO, SENHA_OBSOLETA, PARAMETRO_INVALIDO.
+     */
+    public Completion loginWithoutSecondFactor(JdbcClient j, String challengeToken, String sessionHash, String csrf, OffsetDateTime expires) {
+        return j.sql("SELECT o_status, o_identity_session_id FROM public.identity_login_password(?, ?, ?, ?)")
+                .param(challengeToken).param(sessionHash).param(csrf).param(expires)
+                .query((rs, n) -> new Completion(rs.getString(1), rs.getObject(2, UUID.class))).single();
+    }
+
+    /**
+     * {@code identity_password_reconfirm} (029): grava a reconfirmacao da senha na sessao de identidade (organizacao nula) ou
+     * na sessao de organizacao vinculada indicada, se a credencial vigente ainda for {@code expectedHash} (o que o Argon2
+     * conferiu) e a identidade nunca confirmou fator. {@code false} = recusa sem efeito.
+     */
+    public boolean reconfirmPassword(JdbcClient j, String sessionToken, String expectedHash, UUID organizationId, UUID orgSessionId) {
+        return Boolean.TRUE.equals(j.sql("SELECT public.identity_password_reconfirm(?, ?, ?, ?)")
+                .param(sessionToken).param(expectedHash).param(organizationId).param(orgSessionId).query(Boolean.class).single());
+    }
+
+    /**
+     * {@code identity_mfa_activate} (029): confirma o pendente {@code factorId} com o passo aceito, grava os codigos, revoga
+     * TODAS as sessoes da identidade e cria a sessao nova com MFA. A funcao NAO confere TOTP: quem chama confere o passo no
+     * segredo deste mesmo fator.
+     */
+    public Completion activateMfa(JdbcClient j, String sessionToken, UUID factorId, List<String> codeHashes, long step,
+                                  String sessionHash, String csrf, OffsetDateTime expires) {
+        return j.sql("SELECT o_status, o_identity_session_id FROM public.identity_mfa_activate(?, ?, ?::text[], ?, ?, ?, ?)")
+                .param(sessionToken).param(factorId).param(pgArray(codeHashes)).param(step).param(sessionHash).param(csrf).param(expires)
+                .query((rs, n) -> new Completion(rs.getString(1), rs.getObject(2, UUID.class))).single();
+    }
+
+    /** Sessao de identidade nascida so da senha (marcador de MFA nulo). Vazio se a linha nao aparece no contexto. */
+    public Optional<Boolean> sessionWithoutMfa(JdbcClient j, UUID sessionId) {
+        return j.sql("SELECT mfa_verified_at IS NULL FROM public.identity_sessions WHERE identity_session_id = ?")
+                .param(sessionId).query(Boolean.class).optional();
     }
 
     /** Prazo de uma sessao nova pelo relogio do BANCO e da transacao ({@code now()}), para caber no CHECK de 12 h da 017. */

@@ -47,7 +47,10 @@ public final class SessionRepository {
         }
         Optional<Evaluation> a = j.sql("""
                 SELECT s.session_id, s.user_id, s.csrf_token, s.mfa_step_up_at, s.expires_at, s.identity_session_id, u.account_type, t.agora,
-                       (s.revoked_at IS NULL AND s.mfa_verified_at IS NOT NULL AND s.csrf_token IS NOT NULL
+                       (s.mfa_verified_at IS NULL) AS sem_segundo_fator,
+                       -- 029: sem marcador de MFA SO na sessao vinculada (a trigger da 029 exige o marcador da sessao de
+                       -- identidade de origem; a auxiliar abaixo exige identidade que nunca confirmou fator)
+                       (s.revoked_at IS NULL AND (s.mfa_verified_at IS NOT NULL OR s.identity_session_id IS NOT NULL) AND s.csrf_token IS NOT NULL
                         AND s.expires_at > t.agora
                         AND s.last_seen_at > t.agora - CASE WHEN u.account_type = 1 THEN ?::interval ELSE ?::interval END
                         AND u.status = 2 AND u.email_verified_at IS NOT NULL AND o.status = 1
@@ -75,7 +78,7 @@ public final class SessionRepository {
                         ? new ValidSession(rs.getObject("session_id", UUID.class), org, rs.getObject("user_id", UUID.class),
                                 rs.getShort("account_type"), rs.getObject("vinculo_id", UUID.class), rs.getString("csrf_token"),
                                 rs.getObject("mfa_step_up_at", OffsetDateTime.class), rs.getObject("expires_at", OffsetDateTime.class),
-                                rs.getObject("identity_session_id", UUID.class))
+                                rs.getObject("identity_session_id", UUID.class), rs.getBoolean("sem_segundo_fator"))
                         : null, rs.getObject("agora", OffsetDateTime.class)))
                 .optional();
         if (a.isEmpty() || a.get().session() == null) {
@@ -170,6 +173,17 @@ public final class SessionRepository {
                 """).param(currentTime).param(user).param(org).param(currentTime).param(currentTime).param(interval(inactivity))
                 .param(cfg.maxPerAccount() - 1).update();
     }
+
+    /**
+     * Prova recente NA MESMA sessao de organizacao para as acoes sensiveis (dois parametros: a janela, duas vezes): step-up
+     * por TOTP (014) ou, 029, so na sessao vinculada sem MFA (identidade que nunca confirmou fator, conferida pela
+     * validacao da sessao), a reconfirmacao da senha. A senha nunca vale em sessao com MFA.
+     */
+    public static final String RECENT_STEP_UP_SQL = """
+            SELECT (mfa_step_up_at IS NOT NULL AND mfa_step_up_at > clock_timestamp() - ?::interval)
+                OR (mfa_verified_at IS NULL AND identity_session_id IS NOT NULL
+                    AND password_step_up_at IS NOT NULL AND password_step_up_at > clock_timestamp() - ?::interval)
+              FROM public.user_sessions WHERE session_id = ?""";
 
     public static String interval(Duration d) {
         return d.toSeconds() + " seconds";
