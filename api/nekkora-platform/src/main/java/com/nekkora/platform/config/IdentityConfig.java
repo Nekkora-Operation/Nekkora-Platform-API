@@ -26,6 +26,7 @@ import com.nekkora.platform.identity.IdentityOrganizationsService;
 import com.nekkora.platform.identity.IdentityPasswordRecoveryService;
 import com.nekkora.platform.identity.IdentityRepository;
 import com.nekkora.platform.identity.IdentitySessionResolver;
+import com.nekkora.platform.identity.IdentityOptionalMfaService;
 import com.nekkora.platform.identity.IdentityStepUpService;
 import com.nekkora.platform.identity.LegacyAccountPort;
 import com.nekkora.platform.identity.LinkedOrgSessionPort;
@@ -81,6 +82,15 @@ public class IdentityConfig {
     IdentityStepUpService identityStepUpService(IdentityTransactions tx, IdentityAuthRepository auth, SecretCipher cipher, IdentityHmac hmac,
                                                 Limits limits) {
         return new IdentityStepUpService(tx, auth, cipher, hmac, limits);
+    }
+
+    /**
+     * 029: segundo fator opcional - reconfirmacao da senha (so para quem nunca confirmou fator) e ativacao voluntaria do MFA.
+     */
+    @Bean
+    IdentityOptionalMfaService identityOptionalMfaService(IdentityTransactions tx, IdentityAuthRepository auth, PasswordHasher hasher,
+                                                          SecretCipher cipher, IdentityHmac hmac, Limits limits, PlatformProperties p) {
+        return new IdentityOptionalMfaService(tx, auth, hasher, cipher, hmac, limits, p.session().absolute());
     }
 
     /**

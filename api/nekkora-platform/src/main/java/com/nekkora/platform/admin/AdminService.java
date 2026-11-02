@@ -168,8 +168,9 @@ public final class AdminService {
             if (f != null) {
                 throw new FailureRollback(f);
             }
-            Boolean recent = j.sql("SELECT mfa_step_up_at IS NOT NULL AND mfa_step_up_at > clock_timestamp() - ?::interval FROM public.user_sessions WHERE session_id = ?")
-                    .param(SessionRepository.interval(stepUpWindow)).param(actor.sessionId()).query(Boolean.class).single();
+            Boolean recent = j.sql(SessionRepository.RECENT_STEP_UP_SQL)
+                    .param(SessionRepository.interval(stepUpWindow)).param(SessionRepository.interval(stepUpWindow)).param(actor.sessionId())
+                    .query(Boolean.class).single();
             if (!recent) {
                 throw new FailureRollback(Failure.STEP_UP);
             }

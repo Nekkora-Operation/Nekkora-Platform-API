@@ -54,7 +54,15 @@ public final class IdentityLoginService {
 
     private static final Logger LOG = LoggerFactory.getLogger(IdentityLoginService.class);
 
-    public record LoginResult(String status, String challengeToken, String csrfToken) {
+    /**
+     * Desfecho do passo 1. {@code session} preenchida (029) = login concluido so com a senha, para identidade que nunca
+     * confirmou fator: status {@code authenticated}, sem desafio; {@code csrfToken} e o da sessao nova.
+     */
+    public record LoginResult(String status, String challengeToken, String csrfToken, NewSession session) {
+    }
+
+    /** Desafio aberto na transacao do passo 1 e, na finalidade 2, a tentativa de concluir sem segundo fator (029). */
+    private record Opened(short purpose, IdentityAuthRepository.Completion completion, OffsetDateTime expires) {
     }
 
     public record NewSession(String token, String csrfToken, OffsetDateTime expiresAt, List<String> recoveryCodes, boolean restricted) {
@@ -111,7 +119,9 @@ public final class IdentityLoginService {
         String candidate = hasher.needsRehash(l.passwordHash()) ? hasher.generate(password) : null;
         String token = Tokens.newToken();
         String csrf = Tokens.newToken();
-        Optional<Short> purpose = tx.inIdentity(new EmailCadastro(normalized), Mode.READ_WRITE, (id, j) -> {
+        String sessionToken = Tokens.newToken();
+        String sessionCsrf = Tokens.newToken();
+        Optional<Opened> opened = tx.inIdentity(new EmailCadastro(normalized), Mode.READ_WRITE, (id, j) -> {
             if (!id.identityId().equals(l.identityId()) || !auth.lockIdentity(j, l.identityId())) {
                 return null;
             }
@@ -124,13 +134,29 @@ public final class IdentityLoginService {
             }
             short p = now.get().hasConfirmedFactor() ? IdentityAuthRepository.PURPOSE_VERIFY : IdentityAuthRepository.PURPOSE_ENROLL;
             auth.createChallenge(j, l.identityId(), Tokens.sha256Hex(token), p, l.passwordHash(), candidate, csrf, challengeValidity);
-            return p;
+            if (p != IdentityAuthRepository.PURPOSE_ENROLL) {
+                return new Opened(p, null, null);
+            }
+            // 029: sem fator confirmado ativo. A funcao conclui SO se a identidade nunca confirmou fator (consome o desafio,
+            // aplica o re-hash, cria a sessao sem MFA e grava o evento 18); se ja teve fator (reset operacional), nada
+            // escreve e o desafio segue para o cadastro do fator, como antes
+            OffsetDateTime e = auth.sessionExpiry(j, sessionAbsolute);
+            return new Opened(p, auth.loginWithoutSecondFactor(j, token, Tokens.sha256Hex(sessionToken), sessionCsrf, e), e);
         });
-        if (purpose.isEmpty()) {
+        if (opened.isEmpty()) {
             throw denied("reconferencia", identity, ip);
         }
+        Opened o = opened.get();
+        if (o.completion() != null && o.completion().created()) {
+            limits.identityFullLogin(identity, ip);
+            LOG.info("evento=identidade.autenticada metodo=senha identidade={} ip={}", identity, ClientIpResolver.truncated(ip));
+            return new LoginResult("authenticated", null, sessionCsrf, new NewSession(sessionToken, sessionCsrf, o.expires(), null, false));
+        }
+        if (o.completion() != null && !"FATOR_EXIGIDO".equals(o.completion().status())) {
+            throw denied("conclusao_" + o.completion().status(), identity, ip);
+        }
         LOG.info("evento=identidade.desafio_emitido identidade={} ip={}", identity, ClientIpResolver.truncated(ip));
-        return new LoginResult(purpose.get() == IdentityAuthRepository.PURPOSE_VERIFY ? "mfa_required" : "mfa_enrollment_required", token, csrf);
+        return new LoginResult(o.purpose() == IdentityAuthRepository.PURPOSE_VERIFY ? "mfa_required" : "mfa_enrollment_required", token, csrf, null);
     }
 
     // ------------------------------------------------------------------ MFA: cadastro do primeiro fator

@@ -69,7 +69,7 @@ class IdentityIntentFinalChecksIT extends IdentityTestBase {
         String email = "finais-" + UUID.randomUUID().toString().substring(0, 8) + "@exemplo.test";
         UUID id = identidadeAtiva(email, SENHA);
         BrowserClient primeira = client();
-        assertThat(login(primeira, email, SENHA).field("status")).isEqualTo("mfa_enrollment_required");
+        assertThat(login(primeira, email, SENHA).field("status")).isEqualTo("authenticated");
         BrowserClient.Response e = enroll(primeira, id);
         assertThat(e.status()).isEqualTo(200);
         List<String> codigos = e.listField("recoveryCodes");

@@ -93,6 +93,8 @@ public final class Routes {
                  "/api/v1/links/start", "/api/v1/links/confirm", "/api/v1/invitations/accept" -> Context.IDENTITY_SESSION;
             // credenciais da identidade (missao 002): troca de senha e regeneracao dos codigos, com a sessao de identidade
             case "/api/v1/auth/password", "/api/v1/auth/mfa/recovery-codes" -> Context.IDENTITY_SESSION;
+            // 029: reconfirmacao da senha e ativacao voluntaria do MFA, com a sessao de identidade
+            case "/api/v1/auth/password-confirm", "/api/v1/auth/mfa/activate/start", "/api/v1/auth/mfa/activate/confirm" -> Context.IDENTITY_SESSION;
             case "/auth/mfa/enroll/start", "/auth/mfa/enroll/confirm", "/auth/mfa/verify" -> Context.CHALLENGE;
             case "/auth/logout" -> Context.LOGOUT;
             default -> Context.SESSION;

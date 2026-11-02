@@ -153,6 +153,27 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /api/v1/o/{org}/auth/password-confirm:
+    post:
+      tags: [Autenticacao]
+      operationId: orgPasswordConfirm
+      summary: '029: reconfirma a senha na sessao de organizacao VINCULADA sem segundo fator (vale 5 min, so nesta sessao)'
+      description: >
+        Sessao de organizacao nascida da troca a partir de sessao de identidade sem MFA (identidade que nunca confirmou fator),
+        com o cookie __Host-nekkora_id da sessao de identidade de origem EXATA em adicao ao CSRF desta sessao (como o step-up
+        vinculado). Grava password_step_up_at nesta sessao de organizacao e o evento 19 com a organizacao. Substitui o step-up
+        por TOTP nesta sessao para as acoes sensiveis (convites, papeis, concessoes, Agent e Workers, autorizacao de execucao,
+        publicacao, reset administrativo). Sessao do login por organizacao, sessao com MFA, senha errada ou cookie de outra
+        sessao de identidade: 403, sem efeito.
+      parameters: [ { $ref: '#/components/parameters/Org' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PasswordConfirmRequest' } } } }
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { description: 'CSRF invalido; senha errada; sessao nao vinculada ou com MFA; sessao de identidade de origem divergente', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
   /api/v1/o/{org}/auth/logout:
     post:
       tags: [Identidade e sessao]
@@ -313,14 +334,16 @@ paths:
       description: >
         Missao 1, desenho 6.3. Fora de /o/{org}. Identidade inexistente, senha errada, identidade nao confirmada ou nao
         ACTIVE: 401 identico, com verificacao contra hash ficticio. Sucesso: desafio de 5 min no cookie
-        __Host-nekkora_id_mfa (SameSite=Strict) e o CSRF do desafio no corpo; mfa_enrollment_required se a identidade nunca
-        confirmou fator. Estado, verificacao do e-mail e credencial vigente sao reconferidos sob o lock da identidade antes
+        __Host-nekkora_id_mfa (SameSite=Strict) e o CSRF do desafio no corpo. 029 (segundo fator opcional): identidade que
+        NUNCA confirmou fator recebe status authenticated e a sessao de identidade direto no cookie __Host-nekkora_id
+        (SameSite=Lax), sem desafio e sem QR (evento 18); csrfToken e o da sessao. mfa_enrollment_required so para identidade
+        sem fator ativo que ja teve um (reset operacional): o cadastro do fator continua obrigatorio no login. Estado, verificacao do e-mail e credencial vigente sao reconferidos sob o lock da identidade antes
         de emitir o desafio. R8 (identidade global + IP) e R12. Chave propria, separada da do cadastro
         (nekkora.entrada-geral.enabled, desligada por padrao): desligada, 404.
       security: [ { preAuthCookie: [], csrfHeader: [] } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/LoginRequest' } } } }
       responses:
-        '200': { description: 'Desafio de identidade aberto (cookie __Host-nekkora_id_mfa)', content: { application/json: { schema: { $ref: '#/components/schemas/LoginResponse' } } } }
+        '200': { description: 'Desafio de identidade aberto (cookie __Host-nekkora_id_mfa) ou, 029, sessao sem segundo fator (cookie __Host-nekkora_id)', content: { application/json: { schema: { $ref: '#/components/schemas/LoginResponse' } } } }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/CsrfForbidden' }
         '404': { $ref: '#/components/responses/SignupDisabled' }
@@ -439,6 +462,70 @@ paths:
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { description: 'Origin/CSRF da sessao de identidade invalido; codigo errado, ja usado ou vencido; ou sessao restrita a recuperacao (DC-17.13)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
+        '404': { $ref: '#/components/responses/SignupDisabled' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/auth/password-confirm:
+    post:
+      tags: [Entrada geral (identidade)]
+      operationId: identityPasswordConfirm
+      summary: '029: reconfirma a senha na sessao sem segundo fator (vale 5 min, so nesta sessao; substitui o step-up por TOTP)'
+      description: >
+        Politica aprovada pela titular em 2026-11-02 (relatorio docs/relatorios/2026-11-02-mfa-opcional.md). Sessao de
+        identidade sem MFA de identidade que NUNCA confirmou fator, nao restrita, CSRF dela. A aplicacao confere o Argon2
+        contra o hash vigente e identity_password_reconfirm (029) exige, sob o lock da identidade, que ele ainda seja a
+        credencial vigente; grava password_step_up_at nesta sessao e o evento 19. Vale para tudo que hoje pede step-up
+        recente na sessao de identidade (criar organizacao, aceitar convite, vincular conta, trocar senha) e para iniciar a
+        ativacao do MFA. Senha errada (conta em R8), identidade com fator, sessao com MFA ou senha trocada no intervalo: 403,
+        sem efeito. Sessao que caiu: 401. Mesma chave da entrada geral: desligada, 404.
+      security: [ { identitySessionCookie: [], csrfHeader: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PasswordConfirmRequest' } } } }
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { description: 'Origin/CSRF invalido; senha errada; identidade com fator, sessao com MFA ou sessao restrita', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
+        '404': { $ref: '#/components/responses/SignupDisabled' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/auth/mfa/activate/start:
+    post:
+      tags: [Entrada geral (identidade)]
+      operationId: identityMfaActivationStart
+      summary: '029: ativacao voluntaria do MFA pelas configuracoes da conta - cria o TOTP pendente e devolve a URI otpauth'
+      description: >
+        Sessao de identidade sem MFA de identidade que nunca confirmou fator, com a senha reconfirmada ha ate 5 min (prova
+        ativacao de identity_mfa_enroll_pending, 029); descarta o pendente anterior. Sem a prova, identidade com fator ou
+        sessao com MFA: 403, sem efeito. Sessao que caiu: 401.
+      security: [ { identitySessionCookie: [], csrfHeader: [] } ]
+      responses:
+        '200': { description: 'URI otpauth do fator pendente', content: { application/json: { schema: { $ref: '#/components/schemas/OtpauthUri' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { description: 'Origin/CSRF invalido; sem a senha reconfirmada; identidade com fator', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
+        '404': { $ref: '#/components/responses/SignupDisabled' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/auth/mfa/activate/confirm:
+    post:
+      tags: [Entrada geral (identidade)]
+      operationId: identityMfaActivationConfirm
+      summary: '029: conclui a ativacao do MFA com o TOTP do pendente; revoga TODAS as sessoes e emite a sessao nova com MFA'
+      description: >
+        So o TOTP (recoveryCode nao e alternativa). Com a senha reconfirmada ha ate 15 min nesta sessao, identity_mfa_activate
+        (029) confirma o fator com o passo aceito (anti-replay), grava os codigos de recuperacao, revoga todas as sessoes da
+        identidade (as sessoes de organizacao nascidas delas deixam de valer) e cria a sessao nova COM MFA, no cookie
+        __Host-nekkora_id; evento 20. A partir dai o login pede o codigo e a senha nao substitui mais o TOTP. Codigo errado
+        (conta em R8m), sem pendente ou sem a prova: 403. Sessao que caiu: 401.
+      security: [ { identitySessionCookie: [], csrfHeader: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TotpCodeRequest' } } } }
+      responses:
+        '200': { description: 'Fator ativo; sessao nova no cookie', content: { application/json: { schema: { $ref: '#/components/schemas/MfaActivated' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { description: 'Origin/CSRF invalido; codigo errado; sem pendente ou sem a senha reconfirmada', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
         '404': { $ref: '#/components/responses/SignupDisabled' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
@@ -2156,7 +2243,7 @@ components:
     ExecutionEventPage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/ExecutionEvent' } }, nextCursor: { type: [string, 'null'] } } }
     CsrfToken: { type: object, required: [csrfToken], properties: { csrfToken: { type: string } } }
     LoginRequest: { type: object, required: [email, password], properties: { email: { type: string }, password: { type: string, format: password } } }
-    LoginResponse: { type: object, required: [status, csrfToken], properties: { status: { type: string, enum: [mfa_required, mfa_enrollment_required] }, csrfToken: { type: string, description: 'CSRF do desafio' } } }
+    LoginResponse: { type: object, required: [status, csrfToken], properties: { status: { type: string, enum: [mfa_required, mfa_enrollment_required, authenticated], description: 'authenticated (029, so na entrada geral): sessao de identidade sem segundo fator ja emitida' }, csrfToken: { type: string, description: 'CSRF do desafio; em authenticated, o da sessao' } } }
     OtpauthUri: { type: object, required: [otpauthUri], properties: { otpauthUri: { type: string } } }
     TotpCodeRequest:
       type: object
@@ -2176,7 +2263,10 @@ components:
     IdentityFactorReplacement: { type: object, required: [recoveryCodes, restricted], properties: { recoveryCodes: { type: array, items: { type: string }, description: 'Conjunto novo; o anterior foi invalidado. Mostrado uma unica vez' }, restricted: { type: boolean, enum: [false] } } }
     IdentitySessionIssued: { type: object, required: [csrfToken, restricted], properties: { csrfToken: { type: string }, restricted: { type: boolean, description: 'true: sessao nascida de codigo de recuperacao (DC-17.13), restrita ate concluir a troca do fator' } } }
     RecoveryCodes: { type: object, required: [recoveryCodes], properties: { recoveryCodes: { type: array, items: { type: string }, description: 'Conjunto novo; o anterior foi invalidado. Mostrado uma unica vez' } } }
-    IdentitySessionState: { type: object, required: [restricted, csrfToken], properties: { restricted: { type: boolean }, csrfToken: { type: string } } }
+    IdentitySessionState: { type: object, required: [restricted, csrfToken, mfaEnabled, stepUpMethod], properties: { restricted: { type: boolean }, csrfToken: { type: string }, mfaEnabled: { type: boolean, description: '029: a identidade tem fator confirmado ativo' }, stepUpMethod: { $ref: '#/components/schemas/StepUpMethod' } } }
+    StepUpMethod: { type: string, enum: [totp, password], description: '029: como ESTA sessao prova a pessoa nas acoes sensiveis. password so em sessao sem segundo fator de identidade que nunca confirmou fator (POST .../password-confirm, vale 5 min); totp em todas as demais (POST .../step-up). A senha nunca substitui o codigo de quem tem fator.' }
+    PasswordConfirmRequest: { type: object, required: [password], properties: { password: { type: string, format: password } } }
+    MfaActivated: { type: object, required: [recoveryCodes, csrfToken, restricted], properties: { recoveryCodes: { type: array, items: { type: string }, description: 'Mostrados uma unica vez' }, csrfToken: { type: string, description: 'CSRF da sessao NOVA (com MFA)' }, restricted: { type: boolean, enum: [false] } } }
     EnrollmentConfirmation: { type: object, required: [recoveryCodes, csrfToken], properties: { recoveryCodes: { type: array, items: { type: string } }, csrfToken: { type: string } } }
     PasswordChange: { type: object, required: [currentPassword, newPassword], properties: { currentPassword: { type: string, format: password }, newPassword: { type: string, format: password, description: '12 a 128 pontos de codigo' } } }
     RecoveryRequest: { type: object, required: [email], properties: { email: { type: string } } }
@@ -2375,13 +2465,14 @@ components:
               createdAt: { type: string, format: date-time }
     Me:
       type: object
-      required: [accountType, displayName, email, organizationId, organizationActivationState]
+      required: [accountType, displayName, email, organizationId, organizationActivationState, stepUpMethod]
       properties:
         accountType: { type: string, enum: [internal, external] }
         displayName: { type: string }
         email: { type: string }
         organizationId: { type: string, format: uuid }
         organizationActivationState: { $ref: '#/components/schemas/OrganizationActivationState' }
+        stepUpMethod: { $ref: '#/components/schemas/StepUpMethod' }
     OrganizationActivationState:
       type: string
       enum: [AGUARDANDO_ATIVACAO, ATIVADA]

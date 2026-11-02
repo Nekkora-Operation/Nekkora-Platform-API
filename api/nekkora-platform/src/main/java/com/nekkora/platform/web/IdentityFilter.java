@@ -34,7 +34,8 @@ public final class IdentityFilter extends OncePerRequestFilter {
     /** Rotas autenticadas pela sessao de identidade (desenho §6.4 a §6.6; step-up, P1; criacao, P2; vinculacao, P3; aceite de convite, 023). A sessao restrita e recusada pelo servico (403). */
     static final Set<String> SESSION_ROUTES = Set.of(IdentityOrganizationsController.MY_ORGANIZATIONS, IdentityOrganizationsController.ORG_SESSION,
             IdentityAuthController.STEP_UP, IdentityOrganizationsController.ORGANIZATIONS, AccountLinkController.START, AccountLinkController.CONFIRM,
-            IdentityAuthController.ME_SESSION, IdentityAuthController.PASSWORD, IdentityAuthController.RECOVERY_CODES, InvitationAcceptController.ACCEPT);
+            IdentityAuthController.ME_SESSION, IdentityAuthController.PASSWORD, IdentityAuthController.RECOVERY_CODES, InvitationAcceptController.ACCEPT,
+            IdentityAuthController.PASSWORD_CONFIRM, IdentityAuthController.ACTIVATE_START, IdentityAuthController.ACTIVATE_CONFIRM);
 
     private final IdentitySessionResolver resolver;
 
