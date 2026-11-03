@@ -2637,7 +2637,7 @@ components:
               lastHeartbeatAt: { type: [string, 'null'], format: date-time }
               connectivity: { type: string, enum: [CONNECTED, DISCONNECTED] }
               contractVersion: { type: [string, 'null'] }
-              capabilities: { type: array, items: { type: string, enum: [RUN_LOCAL, OBS_1_0, SUPERVISOR_REPORT_1_0] } }
+              capabilities: { type: array, items: { type: string, enum: [RUN_LOCAL, OBS_1_0, SUPERVISOR_REPORT_1_0, EXTERNAL_PYTHON_1_0, RUN_REQUEST_1_0] } }
               credentialExpiresAt: { type: [string, 'null'], format: date-time }
     WorkerList:
       type: object
