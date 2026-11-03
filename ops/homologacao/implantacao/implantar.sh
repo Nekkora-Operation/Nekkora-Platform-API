@@ -37,7 +37,7 @@ if [ -n "${HOMOLOG_ELEVACAO_ARQ:-}" ] && [[ ! "$HOMOLOG_ID" =~ ^ensaio- ]]; then
     echo "FALHA: lista de elevacao alternativa (HOMOLOG_ELEVACAO_ARQ) so em ambiente descartavel (id ensaio-*)" >&2; exit 3
 fi
 LISTA="${HOMOLOG_ELEVACAO_ARQ:-$DIR_IMPL/elevacao.txt}"
-# Versoes com VINCULO e PRE-VOO OFICIAL obrigatorios (VINCULO_OBRIGATORIO, de lib/lista_elevacao.sh: 016-020, 022-024 e 026): a linha
+# Versoes com VINCULO e PRE-VOO OFICIAL obrigatorios (VINCULO_OBRIGATORIO, de lib/lista_elevacao.sh: 016-020, 022-024, 026, 027 e 029): a linha
 # precisa do id exato do ambiente e o pre-voo vem SO de implantacao/preflight/<versao>.sql (nunca da lista alternativa).
 # 011-013 seguem no formato legado.
 # A lista e validada ANTES de qualquer acao (trava, elevacao ou migration) pela gramatica de lib/lista_elevacao.sh
