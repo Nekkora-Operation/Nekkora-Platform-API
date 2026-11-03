@@ -38,6 +38,7 @@ M ?=
 .PHONY: help build test test-modulo verify clean e2e bench \
         db-tests db-test db-tests-lista \
         dev-up dev-senhas dev-platform dev-portal dev-status dev-down \
+        lab-subir lab-front lab-estado lab-caixa lab-link lab-convite lab-parar \
         stack-up stack-down stack-logs validar-016
 
 help: ## Lista os alvos
@@ -158,6 +159,38 @@ dev-status: ## Mostra os containers de desenvolvimento e confere as rotas basica
 
 dev-down: ## Remove SO os containers do dev-up (nekkora-dev-postgres e nekkora-dev-redis)
 	-docker rm -f $(DEV_PG) $(DEV_REDIS)
+
+# --- laboratorio local completo (frontend + API real), do repositorio Nekkora-Platform-Web ---------------------------
+# Camada fina sobre tools/lab/local.sh do frontend (guia: $(WEB)/docs/USO-LOCAL.md): PG com todas as migrations pelo
+# migrador, Redis, Platform, Portal, canal do Agent, nginx com TLS e caixa de e-mail local (nada sai da maquina).
+
+WEB ?= ../Nekkora-Platform-Web
+LAB := cd $(WEB) && bash tools/lab/local.sh
+E ?=
+
+lab-subir: ## Laboratorio: sobe o ambiente ja instalado (dados preservados)
+	@[ -f "$(WEB)/tools/lab/local.sh" ] || { echo "ERRO: frontend nao encontrado em $(WEB) (use WEB=<pasta>)" >&2; exit 2; }
+	$(LAB) subir
+
+lab-front: ## Laboratorio: frontend em http://localhost:5173 (Ctrl+C encerra)
+	$(LAB) front
+
+lab-estado: ## Laboratorio: containers, resposta da API e certificado
+	$(LAB) estado
+
+lab-caixa: ## Laboratorio: lista as mensagens da caixa de e-mail local (sem links)
+	$(LAB) caixa
+
+lab-link: ## Laboratorio: link da ultima confirmacao de cadastro: make lab-link E=voce@local.test
+	@[ -n "$(E)" ] || { echo "ERRO: informe E=<e-mail>" >&2; exit 2; }
+	$(LAB) link "$(E)"
+
+lab-convite: ## Laboratorio: link do ultimo convite: make lab-convite E=pessoa@local.test
+	@[ -n "$(E)" ] || { echo "ERRO: informe E=<e-mail>" >&2; exit 2; }
+	$(LAB) convite "$(E)"
+
+lab-parar: ## Laboratorio: para tudo SEM apagar dados
+	$(LAB) parar
 
 # --- stack principal (docker-compose.yml, volume PERSISTENTE) ------------------------------------------------------
 
