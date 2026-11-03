@@ -1087,7 +1087,7 @@ email-real)
     prepara_funcoes
     sub="${3:?fila|tentativas|imagens|ligar|autenticacao|desligar|prova|conferir-eml|jornada|saida|platform}"
     [[ "$HOMOLOG_ID" =~ ^ensaio- ]] || falha "email-real so em ambiente descartavel (id ensaio-*)"
-    [[ "${HOMOLOG_ATE:-015}" =~ ^02[12]$ ]] || falha "email-real exige ambiente com 021 ou 022 (fila de e-mail)"
+    [[ "${HOMOLOG_ATE:-015}" =~ ^02[1-9]$ ]] || falha "email-real exige ambiente com a fila de e-mail (021 a 029)"
     M="$HOMOLOG_SEGREDOS_HOST/m365"; EVM="$AQUI/saidas/$HOMOLOG_ID/email-real"
     mkdir -p "$EVM"; (umask 077; mkdir -p "$M/entrada")
     INST="$(date -u +%Y%m%dT%H%M%SZ)"
