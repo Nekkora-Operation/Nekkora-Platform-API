@@ -45,6 +45,10 @@ public final class PackageInspector {
 
     public static final String RULE = "nekkora-agent/package-fingerprint/1";
     public static final String MANIFEST = "manifest.json";
+    /** Pacote Python externo (AGENT-PYTHON-001): descritor e regra PROPRIOS; a regra /1 do Studio nao muda. */
+    public static final String EXTERNAL_DESCRIPTOR = "nekkora-external.json";
+    public static final String EXTERNAL_SCHEMA = "nekkora-agent/external-python-package";
+    public static final String EXTERNAL_RULE = "nekkora-agent/external-python-fingerprint/1";
     public static final long MAX_ZIP_BYTES = 50L * 1024 * 1024;
     static final long MAX_CONTENT_BYTES = 50L * 1024 * 1024;
     static final int MAX_FILES = 500;
@@ -56,6 +60,13 @@ public final class PackageInspector {
     private static final Pattern OPTION = Pattern.compile("--[a-z][a-z-]{0,30}");
     private static final Pattern FRAMEWORK = Pattern.compile("nekkora-rpa(\\[excel])?==([0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3})");
     private static final Pattern MANIFEST_VERSION = Pattern.compile("1\\.[4-9]\\.[0-9]{1,3}");
+    private static final Pattern EXTERNAL_VERSION = Pattern.compile("1\\.0\\.[0-9]{1,3}");
+    private static final Pattern PACKAGE_NAME = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,79}");
+    private static final Pattern SEMVER = Pattern.compile("[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,6}");
+    private static final Pattern PYTHON = Pattern.compile("(>=|==|~=)[0-9]{1,2}\\.[0-9]{1,2}(\\.\\*)?(,<[0-9]{1,2}\\.[0-9]{1,2})?");
+    /** Dependencia com versao EXATA ({@code nome==x.y.z}, extras opcionais): o que entra e verificavel. */
+    private static final Pattern DEPENDENCY = Pattern.compile("([A-Za-z0-9][A-Za-z0-9._-]{0,79})(\\[[A-Za-z0-9,._-]{1,80}])?==([0-9][0-9A-Za-z.+!-]{0,40})");
+    static final int MAX_DEPENDENCIES = 200;
     private static final Pattern GENERATOR = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._:/+-]{0,79}");
     private static final JsonMapper JSON = JsonMapper.builder(JsonFactory.builder().enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION).build()).build();
 
@@ -75,7 +86,14 @@ public final class PackageInspector {
 
     /** Resultado da conferencia. {@code declaredGenerator}: procedencia DECLARADA no manifesto, nunca verificada. */
     public record Inspection(String sha256, long sizeBytes, String fingerprint, int filesCount, int ignoredFiles, String manifestVersion,
-                             String framework, String executionMode, String declaredGenerator) {
+                             String framework, String executionMode, String declaredGenerator, int packageKind, String rule, String entry,
+                             String pythonRequirement, List<String> dependencies, String packageName, String packageVersion) {
+        /** Pacote do formato Studio (tipo 1, regra /1). */
+        Inspection(String sha256, long sizeBytes, String fingerprint, int filesCount, int ignoredFiles, String manifestVersion, String framework,
+                   String executionMode, String declaredGenerator) {
+            this(sha256, sizeBytes, fingerprint, filesCount, ignoredFiles, manifestVersion, framework, executionMode, declaredGenerator, 1, RULE, "main.py",
+                    null, null, null, null);
+        }
     }
 
     private record Entry(String name, int method, int flags, long compressedSize, long size, long crc, long localOffset) {
@@ -95,6 +113,12 @@ public final class PackageInspector {
         String prefix = root(content.keySet());
         Map<String, byte[]> files = new TreeMap<>();
         content.forEach((k, v) -> files.put(k.substring(prefix.length()), v));
+        if (files.containsKey(EXTERNAL_DESCRIPTOR)) {
+            if (files.containsKey(MANIFEST)) {
+                throw new Rejected("descritor_ambiguo"); // um pacote nao passa por dois tipos
+            }
+            return external(zip, files);
+        }
         byte[] manifestBytes = files.get(MANIFEST);
         if (manifestBytes == null) {
             throw new Rejected("manifesto_ausente");
@@ -181,6 +205,117 @@ public final class PackageInspector {
         return hex(sha256(b.toString().getBytes(StandardCharsets.UTF_8)));
     }
 
+    // ------------------------------------------------------------------ pacote Python externo (AGENT-PYTHON-001)
+
+    /** Segmentos e nomes que NUNCA entram no pacote externo (ambiente virtual, cache, controle de versao, credenciais). */
+    static boolean forbidden(String rel) {
+        for (String seg : rel.split("/")) {
+            String l = seg.toLowerCase(java.util.Locale.ROOT);
+            if (List.of(".venv", "venv", "env", "__pycache__", ".git", ".hg", ".svn", ".idea", ".vscode", "node_modules").contains(l)
+                    || l.startsWith(".env") || l.endsWith(".pem") || l.endsWith(".key") || l.endsWith(".pfx") || l.endsWith(".p12")
+                    || l.startsWith("id_rsa") || l.startsWith("id_ed25519") || l.equals(".netrc") || l.equals(".pypirc") || l.endsWith(".pyc")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Pacote externo: descritor {@code nekkora-external.json} 1.0.x com nome, versao, entrada relativa {@code .py} listada,
+     * versao de Python, dependencias com versao exata e a lista de arquivos com hash. Nada e executado; nenhum texto do
+     * pacote vai para a resposta.
+     */
+    private static Inspection external(byte[] zip, Map<String, byte[]> files) throws Rejected {
+        byte[] descriptor = files.get(EXTERNAL_DESCRIPTOR);
+        if (descriptor.length > MAX_MANIFEST_BYTES) {
+            throw new Rejected("manifesto_grande");
+        }
+        JsonNode m;
+        try {
+            m = JSON.readTree(descriptor);
+        } catch (Exception e) {
+            throw new Rejected("manifesto_malformado");
+        }
+        if (m == null || !m.isObject()) {
+            throw new Rejected("manifesto_malformado");
+        }
+        String version = text(m, "version");
+        if (!EXTERNAL_SCHEMA.equals(text(m, "schema")) || version == null || !EXTERNAL_VERSION.matcher(version).matches()) {
+            throw new Rejected("manifesto_fora_do_contrato");
+        }
+        String name = text(m, "name");
+        String pkgVersion = text(m, "packageVersion");
+        if (name == null || !PACKAGE_NAME.matcher(name).matches() || pkgVersion == null || !SEMVER.matcher(pkgVersion).matches()) {
+            throw new Rejected("manifesto_fora_do_contrato");
+        }
+        String python = text(m, "python");
+        if (python == null || !PYTHON.matcher(python).matches()) {
+            throw new Rejected("python_invalido");
+        }
+        JsonNode deps = m.get("dependencies");
+        if (deps == null || !deps.isArray() || deps.size() > MAX_DEPENDENCIES) {
+            throw new Rejected("dependencia_invalida");
+        }
+        List<String> dependencies = new java.util.ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (JsonNode d : deps) {
+            Matcher dm = d.isString() ? DEPENDENCY.matcher(d.asString()) : null;
+            if (dm == null || !dm.matches()) {
+                throw new Rejected("dependencia_sem_versao_exata");
+            }
+            if (!seen.add(dm.group(1).toLowerCase(java.util.Locale.ROOT).replace('_', '-').replace('.', '-'))) {
+                throw new Rejected("dependencia_repetida");
+            }
+            dependencies.add(d.asString());
+        }
+        Map<String, String> declared = declared(m.get("files"));
+        if (declared.containsKey(EXTERNAL_DESCRIPTOR) || declared.containsKey(MANIFEST)) {
+            throw new Rejected("caminho_inseguro");
+        }
+        for (String rel : declared.keySet()) {
+            if (forbidden(rel)) {
+                throw new Rejected("arquivo_proibido");
+            }
+        }
+        String entry = text(m, "entry");
+        if (entry == null || !safeName(entry) || !entry.endsWith(".py")) {
+            throw new Rejected("entrada_fora_da_raiz");
+        }
+        if (!declared.containsKey(entry)) {
+            throw new Rejected("entrada_ausente");
+        }
+        long total = 0;
+        for (Map.Entry<String, String> e : declared.entrySet()) {
+            byte[] data = files.get(e.getKey());
+            if (data == null) {
+                throw new Rejected("arquivo_listado_ausente");
+            }
+            total += data.length;
+            if (total > MAX_CONTENT_BYTES) {
+                throw new Rejected("tamanho_excedido");
+            }
+            if (!e.getValue().equals(fileHash(data))) {
+                throw new Rejected("hash_divergente");
+            }
+        }
+        String fingerprint = externalFingerprint(descriptor, declared);
+        int ignored = (int) files.keySet().stream().filter(k -> !k.equals(EXTERNAL_DESCRIPTOR) && !declared.containsKey(k)).count();
+        String generator = text(m, "generator");
+        if (generator != null && !GENERATOR.matcher(generator).matches()) {
+            generator = null;
+        }
+        return new Inspection(hex(sha256(zip)), zip.length, fingerprint, declared.size(), ignored, version, null, null, generator, 2, EXTERNAL_RULE, entry,
+                python, List.copyOf(dependencies), name, pkgVersion);
+    }
+
+    /** Impressao do pacote externo: mesmo algoritmo da /1, texto canonico com a regra e o tipo PROPRIOS. */
+    public static String externalFingerprint(byte[] descriptor, Map<String, String> declared) {
+        StringBuilder b = new StringBuilder(EXTERNAL_RULE).append('\n').append("EXTERNAL_PYTHON").append('\n');
+        b.append(EXTERNAL_DESCRIPTOR).append('\t').append(fileHash(descriptor)).append('\n');
+        new TreeMap<>(declared).forEach((k, v) -> b.append(k).append('\t').append(v).append('\n'));
+        return hex(sha256(b.toString().getBytes(StandardCharsets.UTF_8)));
+    }
+
     private static void options(JsonNode m, String mode) throws Rejected {
         JsonNode opts = m.path("cli").path("options");
         if (!opts.isObject() || opts.isEmpty()) {
@@ -226,7 +361,7 @@ public final class PackageInspector {
 
     /** Prefixo comum quando o ZIP traz a pasta do pacote (um unico nivel) em vez dos arquivos na raiz. */
     private static String root(Set<String> names) throws Rejected {
-        if (names.contains(MANIFEST)) {
+        if (names.contains(MANIFEST) || names.contains(EXTERNAL_DESCRIPTOR)) {
             return "";
         }
         String first = names.iterator().hasNext() ? names.iterator().next() : "";

@@ -117,10 +117,33 @@ public class GatewayController {
         MachineToken t = machine(req);
         JsonNode n = parse(body);
         UUID authorization = uuid(text(n, "authorizationId"));
+        String request = text(n, "runRequestId");
+        UUID runRequest = request == null ? null : uuid(request);
         SupervisorReport report = SupervisorReport.parse(n.get("supervisor"));
         GatewayService.Registered r = authenticated(req, () -> service.register(t, text(n, "agentExecutionId"), authorization,
-                text(n, "packageFingerprint"), report));
+                text(n, "packageFingerprint"), runRequest, report));
         return ResponseEntity.status(r.created() ? HttpStatus.CREATED : HttpStatus.OK).body(r);
+    }
+
+    // ------------------------------------------------------------------ pedido de execucao (030)
+
+    @GetMapping("/agent/api/v1/run-requests")
+    public ResponseEntity<Map<String, List<GatewayService.PendingRequest>>> runRequests(HttpServletRequest req) {
+        MachineToken t = machine(req);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(Map.of("items", authenticated(req, () -> service.runRequests(t))));
+    }
+
+    @PostMapping("/agent/api/v1/run-requests/{runRequestId}/decision")
+    public ResponseEntity<GatewayService.DecisionResult> decide(@PathVariable String runRequestId, @RequestBody(required = false) String body,
+                                                                HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(runRequestId);
+        JsonNode n = parse(body);
+        GatewayService.DecisionResult r = authenticated(req, () -> service.decide(t, id, text(n, "decision"), text(n, "reason"),
+                text(n, "agentExecutionId")));
+        // EXPIRED, REVOKED e CONFLICT: nada foi decidido agora; o corpo diz o estado (como o CONFLICT do supervisor)
+        boolean ok = "APPLIED".equals(r.outcome()) || "UNCHANGED".equals(r.outcome());
+        return ResponseEntity.status(ok ? HttpStatus.OK : HttpStatus.CONFLICT).body(r);
     }
 
     @PostMapping("/agent/api/v1/runs/{agentExecutionId}/supervisor")

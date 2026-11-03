@@ -102,6 +102,44 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /agent/api/v1/run-requests:
+    get:
+      tags: [Maquina]
+      operationId: listRunRequests
+      summary: 'Pedidos de execucao desta maquina ainda sem desfecho de decisao (030)'
+      description: >
+        REQUESTED/DELIVERED no prazo e ACCEPTED (para a maquina reconciliar). A primeira leitura marca DELIVERED; cada leitura conta
+        uma entrega. Os vencidos sem decisao passam a EXPIRED aqui (instante do servidor). Entregar NAO e iniciar. Ate 50 itens.
+      parameters: [ { $ref: '#/components/parameters/Contract' } ]
+      responses:
+        '200': { description: 'Pedidos', content: { application/json: { schema: { $ref: '#/components/schemas/RunRequestList' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/run-requests/{runRequestId}/decision:
+    post:
+      tags: [Maquina]
+      operationId: decideRunRequest
+      summary: 'Decisao da maquina sobre um pedido seu (030): ACCEPTED, REFUSED ou NOT_STARTED'
+      description: >
+        ACCEPTED so no prazo e sem revogacao (senao 409 EXPIRED/REVOKED). Repetir a mesma decisao: 200 UNCHANGED (confirmacao
+        perdida). Decisao diferente da registrada: 409 CONFLICT, nada muda. NOT_STARTED: aceito e o processo comprovadamente nao
+        criado. Pedido de outra maquina ou inexistente: 404 (sem revelar).
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: runRequestId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RunRequestDecision' } } } }
+      responses:
+        '200': { description: 'APPLIED ou UNCHANGED', content: { application/json: { schema: { $ref: '#/components/schemas/RunRequestDecisionResult' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: 'EXPIRED, REVOKED ou CONFLICT: nada foi decidido agora', content: { application/json: { schema: { $ref: '#/components/schemas/RunRequestDecisionResult' } } } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /agent/api/v1/runs/{agentExecutionId}/supervisor:
     post:
       tags: [Maquina]
@@ -198,7 +236,7 @@ components:
       properties:
         agentVersion: { type: string, pattern: '^[0-9A-Za-z.+-]{1,40}$' }
         contractVersion: { type: string, pattern: '^1\.[0-9]{1,3}$' }
-        capabilities: { type: array, maxItems: 8, items: { type: string, enum: [RUN_LOCAL, OBS_1_0, SUPERVISOR_REPORT_1_0] } }
+        capabilities: { type: array, maxItems: 8, items: { type: string, enum: [RUN_LOCAL, OBS_1_0, SUPERVISOR_REPORT_1_0, EXTERNAL_PYTHON_1_0, RUN_REQUEST_1_0] } }
     Presence:
       type: object
       properties:
@@ -216,10 +254,17 @@ components:
               authorizationId: { type: string, format: uuid }
               workspaceId: { type: string, format: uuid }
               automationId: { type: string, format: uuid }
-              automationVersionId: { type: string, format: uuid }
-              packageFingerprint: { type: string, pattern: '^[0-9a-f]{64}$', description: 'Impressao do pacote pela regra packageFingerprintRule (contrato, sec. 6.4), sem o prefixo sha256:' }
-              packageFingerprintRule: { type: string, enum: ['nekkora-agent/package-fingerprint/1'] }
+              automationVersionId: { type: [string, 'null'], format: uuid, description: 'Nulo em EXTERNAL_MONITORED (sem versao)' }
+              packageFingerprint: { type: [string, 'null'], pattern: '^[0-9a-f]{64}$', description: 'Impressao do pacote pela regra packageFingerprintRule (contrato, sec. 6.4), sem o prefixo sha256:. Nula em EXTERNAL_MONITORED: nenhuma impressao e inventada para o monitoramento' }
+              packageFingerprintRule: { type: [string, 'null'], enum: ['nekkora-agent/package-fingerprint/1', 'nekkora-agent/external-python-fingerprint/1', null] }
               validUntil: { type: string, format: date-time }
+              sourceKind:
+                type: string
+                enum: [STUDIO_PACKAGE, EXTERNAL_PACKAGE, EXTERNAL_MONITORED]
+                description: >
+                  Origem explicita (030). STUDIO_PACKAGE: regra package-fingerprint/1 (inalterada). EXTERNAL_PACKAGE: pacote Python
+                  externo, regra external-python-fingerprint/1. EXTERNAL_MONITORED: Python do cliente disparado pelo agendador dele,
+                  sem versao e sem impressao (um Agent anterior recusa o item por nao ter impressao: falha fechada).
     SupervisorReport:
       type: object
       additionalProperties: false
@@ -237,12 +282,53 @@ components:
         locks: { type: [integer, 'null'], minimum: 0 }
     RegisterRequest:
       type: object
-      required: [agentExecutionId, authorizationId, packageFingerprint, supervisor]
+      required: [agentExecutionId, authorizationId, supervisor]
       properties:
         agentExecutionId: { type: string, pattern: '^ex-[0-9a-f]{32}$' }
         authorizationId: { type: string, format: uuid }
-        packageFingerprint: { type: string, pattern: '^[0-9a-f]{64}$', description: 'Impressao do pacote pela regra da autorizacao (contrato, sec. 6.4), sem o prefixo sha256:' }
+        packageFingerprint: { type: string, pattern: '^[0-9a-f]{64}$', description: 'Impressao do pacote pela regra da autorizacao (contrato, sec. 6.4), sem o prefixo sha256:. AUSENTE se e somente se a autorizacao for EXTERNAL_MONITORED (030); divergencia = 403' }
+        runRequestId: { type: string, format: uuid, description: 'Execucao de um pedido (030) ACEITO por esta maquina com o mesmo agentExecutionId; o pedido passa a RUN_LINKED' }
         supervisor: { $ref: '#/components/schemas/SupervisorReport' }
+    RunRequestList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/PendingRunRequest' }
+    PendingRunRequest:
+      type: object
+      description: 'So identificadores, validade e o pacote esperado. Nenhum comando, caminho, argumento ou segredo.'
+      properties:
+        runRequestId: { type: string, format: uuid }
+        authorizationId: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        automationId: { type: string, format: uuid }
+        automationVersionId: { type: string, format: uuid }
+        sourceKind: { type: string, enum: [STUDIO_PACKAGE, EXTERNAL_PACKAGE] }
+        packageFingerprint: { type: string, pattern: '^[0-9a-f]{64}$' }
+        packageFingerprintRule: { type: string, enum: ['nekkora-agent/package-fingerprint/1', 'nekkora-agent/external-python-fingerprint/1'] }
+        requestedAt: { type: string, format: date-time }
+        validUntil: { type: string, format: date-time }
+        state: { type: string, enum: [DELIVERED, ACCEPTED], description: 'DELIVERED: aguardando decisao. ACCEPTED: decisao ja registrada (a maquina reconcilia com o registro local)' }
+        agentExecutionId: { type: [string, 'null'], pattern: '^ex-[0-9a-f]{32}$' }
+    RunRequestDecision:
+      type: object
+      additionalProperties: false
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [ACCEPTED, REFUSED, NOT_STARTED] }
+        agentExecutionId: { type: string, pattern: '^ex-[0-9a-f]{32}$', description: 'Obrigatorio em ACCEPTED (reservado e gravado pelo Agent ANTES do envio) e em NOT_STARTED' }
+        reason:
+          type: string
+          enum: [PACKAGE_NOT_PRESENT, PACKAGE_NOT_APPROVED, AUTHORIZATION_UNUSABLE, ENVIRONMENT_INCOMPATIBLE, BUSY, EXPIRED, LAUNCH_NOT_ATTEMPTED]
+          description: 'Obrigatorio em REFUSED (sem LAUNCH_NOT_ATTEMPTED); em NOT_STARTED so LAUNCH_NOT_ATTEMPTED (opcional)'
+    RunRequestDecisionResult:
+      type: object
+      properties:
+        runRequestId: { type: string, format: uuid }
+        outcome: { type: string, enum: [APPLIED, UNCHANGED, EXPIRED, REVOKED, CONFLICT] }
+        state: { type: string, enum: [REQUESTED, DELIVERED, ACCEPTED, REFUSED, NOT_STARTED, RUN_LINKED, EXPIRED, REVOKED] }
+        agentExecutionId: { type: [string, 'null'] }
     Registered:
       type: object
       properties:

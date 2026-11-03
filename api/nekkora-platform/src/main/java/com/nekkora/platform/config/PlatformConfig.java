@@ -281,6 +281,13 @@ public class PlatformConfig {
         return new com.nekkora.platform.admin.AgentAdminService(actions, access);
     }
 
+    /** Pedido de execucao (030): a pessoa pede; a maquina puxa pelo gateway e decide. */
+    @Bean
+    com.nekkora.platform.admin.RunRequestService runRequestService(com.nekkora.platform.admin.AccessActions actions,
+                                                                  com.nekkora.platform.access.WorkspaceAccess access) {
+        return new com.nekkora.platform.admin.RunRequestService(actions, access);
+    }
+
     /**
      * Armazenamento dos artefatos recebidos (PLATFORM-AUTOMATION-LIFECYCLE-001): pasta local SO se NEKKORA_ARTEFATOS_DIR estiver
      * definida (laboratorio); sem ela, as rotas de artefato respondem 503 e nada e gravado.

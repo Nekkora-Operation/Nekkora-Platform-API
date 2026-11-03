@@ -68,7 +68,8 @@ public final class AutomationLifecycleService {
     /** {@code provenance}: DECLARED (o manifesto diz quem gerou; nao e prova de origem). */
     public record Artifact(UUID artifactId, String sha256, long sizeBytes, String fingerprintRule, String fingerprint, int filesCount,
                            String manifestVersion, String framework, String executionMode, String declaredGenerator, String provenance,
-                           OffsetDateTime receivedAt) {
+                           OffsetDateTime receivedAt, String packageKind, String pythonRequirement, List<String> dependencies, String packageName,
+                           String packageVersion) {
     }
 
     public record AgentPackage(String fingerprintRule, String fingerprint) {
@@ -229,19 +230,22 @@ public final class AutomationLifecycleService {
             UUID artifact = existing.orElseGet(() -> j.sql("""
                     INSERT INTO public.automation_artifacts (organization_id, workspace_id, automation_id, automation_version_id, sha256, size_bytes,
                         package_kind, fingerprint_rule, fingerprint, files_count, manifest_version, framework, execution_mode, declared_generator,
-                        storage_key, received_by_membership_id)
-                    VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING artifact_id
+                        storage_key, received_by_membership_id, python_requirement, dependencies, package_name, package_version)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?) RETURNING artifact_id
                     """).param(org).param(t.workspaceId()).param(t.automationId()).param(versionId).param(in.sha256()).param(in.sizeBytes())
-                    .param(PackageInspector.RULE).param(in.fingerprint()).param(in.filesCount()).param(in.manifestVersion()).param(in.framework())
-                    .param(in.executionMode()).param(in.declaredGenerator()).param(in.sha256()).param(actor.membershipId()).query(UUID.class).single());
+                    .param((short) in.packageKind()).param(in.rule()).param(in.fingerprint()).param(in.filesCount()).param(in.manifestVersion())
+                    .param(in.framework()).param(in.executionMode()).param(in.declaredGenerator()).param(in.sha256()).param(actor.membershipId())
+                    .param(in.pythonRequirement()).param(in.dependencies() == null ? null : JSON.writeValueAsString(in.dependencies()))
+                    .param(in.packageName()).param(in.packageVersion()).query(UUID.class).single());
             ObjectNode patch = JSON.createObjectNode();
             patch.put("contract_version", 1);
-            patch.put("entrypoint", "main.py");
+            // Studio: main.py; externo: a entrada relativa declarada e conferida (030)
+            patch.put("entrypoint", in.entry());
             ObjectNode art = patch.putObject("artifact");
             art.put("reference", REFERENCE_PREFIX + artifact);
             art.put("sha256", in.sha256());
             ObjectNode pkg = patch.putObject("agent_package");
-            pkg.put("fingerprint_rule", PackageInspector.RULE);
+            pkg.put("fingerprint_rule", in.rule());
             pkg.put("fingerprint", in.fingerprint());
             j.sql("UPDATE public.automation_versions SET command_json = command_json || ?::jsonb WHERE organization_id = ? AND automation_version_id = ? AND status = 1")
                     .param(JSON.writeValueAsString(patch)).param(org).param(versionId).update();
@@ -396,11 +400,12 @@ public final class AutomationLifecycleService {
             UUID id = UUID.fromString(ref.substring(REFERENCE_PREFIX.length()));
             artifact = j.sql("""
                     SELECT artifact_id, sha256, size_bytes, fingerprint_rule, fingerprint, files_count, manifest_version, framework, execution_mode,
-                           declared_generator, received_at
+                           declared_generator, received_at, package_kind, python_requirement, dependencies::text, package_name, package_version
                       FROM public.automation_artifacts WHERE organization_id = ? AND artifact_id = ?
                     """).param(org).param(id).query((r, n) -> new Artifact(r.getObject(1, UUID.class), r.getString(2), r.getLong(3), r.getString(4),
                     r.getString(5), r.getInt(6), r.getString(7), r.getString(8), r.getString(9), r.getString(10), "DECLARED",
-                    r.getObject(11, OffsetDateTime.class))).optional().orElse(null);
+                    r.getObject(11, OffsetDateTime.class), r.getShort(12) == 2 ? "EXTERNAL_PYTHON" : "STUDIO_PYTHON", r.getString(13),
+                    dependencies(r.getString(14)), r.getString(15), r.getString(16))).optional().orElse(null);
         }
         JsonNode pkg = cmd.path("agent_package");
         AgentPackage agentPackage = pkg.path("fingerprint").isString()
@@ -408,6 +413,15 @@ public final class AutomationLifecycleService {
         return new Version(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getObject(3, UUID.class), rs.getInt(4),
                 rs.getShort(5) == 2 ? "PUBLISHED" : "DRAFT", str(cmd.path("runtime")), str(cmd.path("entrypoint")), args, ref, artifact,
                 agentPackage, rs.getObject(7, OffsetDateTime.class), rs.getObject(8, OffsetDateTime.class), rs.getObject(9, UUID.class));
+    }
+
+    private static List<String> dependencies(String json) {
+        if (json == null) {
+            return null;
+        }
+        List<String> out = new ArrayList<>();
+        JSON.readTree(json).forEach(d -> out.add(d.asString()));
+        return List.copyOf(out);
     }
 
     private static String str(JsonNode n) {
