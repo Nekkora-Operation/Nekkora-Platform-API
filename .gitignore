@@ -4,3 +4,12 @@
 # bytecode do Python
 __pycache__/
 *.pyc
+# saidas das suites de banco declaradas "nao versionadas" nos respectivos README
+db/tests/relogio-018/saidas/
+db/tests/codigos-019/saidas/
+db/tests/recuperacao-020/saidas/
+db/tests/correio-021/saidas/
+db/tests/ativacao-022/saidas/
+db/tests/acessos-023/saidas/
+db/tests/acessos-024/saidas/
+db/tests/canal-agent-025/saidas/
