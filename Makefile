@@ -95,13 +95,21 @@ dev-up: ## Sobe PG 16 (migrations 001..DEV_MIG_ATE) e Redis descartaveis e defin
 	MSYS_NO_PATHCONV=1 docker create --name $(DEV_PG) \
 	  -e POSTGRES_DB=nekkora -e POSTGRES_USER=nekkora -e POSTGRES_PASSWORD=$(DEV_SUPER_SENHA) \
 	  -p 127.0.0.1:$(DEV_PG_PORTA):5432 postgres:16-alpine >/dev/null
-	@set -e; ate=$$((10#$(DEV_MIG_ATE))); \
+	@# Modelo do migrador (como o api/e2e/run.sh): as migrations NAO vao para o initdb.d (seriam aplicadas pelo
+	@# superusuario, e a 016 em diante recusa); o 000_ chama db/bootstrap/aplicar_como_migrador.sh sobre /nekkora/migracoes.
+	@set -e; ate=$$((10#$(DEV_MIG_ATE))); t="$$(mktemp -d)"; trap 'rm -rf "$$t"' EXIT; \
+	mkdir -p "$$t/nekkora/migracoes" "$$t/init"; \
 	for f in db/migrations/[0-9][0-9][0-9]_*.sql; do \
 	  n="$$(basename "$$f" | cut -c1-3)"; \
 	  [ "$$((10#$$n))" -le "$$ate" ] || continue; \
-	  MSYS_NO_PATHCONV=1 docker cp "$$f" "$(DEV_PG):/docker-entrypoint-initdb.d/$$(basename "$$f")"; \
-	  echo "  montada $$(basename "$$f")"; \
-	done
+	  cp "$$f" "$$t/nekkora/migracoes/"; echo "  montada $$(basename "$$f")"; \
+	done; \
+	cp db/bootstrap/aplicar_como_migrador.sh "$$t/nekkora/"; \
+	printf '#!/bin/sh\nset -e\nNEKKORA_MIGRACOES=/nekkora/migracoes sh /nekkora/aplicar_como_migrador.sh\n' > "$$t/init/000_aplicar_como_migrador.sh"; \
+	chmod 0755 "$$t/init/000_aplicar_como_migrador.sh"; \
+	hp="$$(cygpath -m "$$t" 2>/dev/null || echo "$$t")"; \
+	MSYS_NO_PATHCONV=1 docker cp "$$hp/nekkora/." "$(DEV_PG):/nekkora"; \
+	MSYS_NO_PATHCONV=1 docker cp "$$hp/init/." "$(DEV_PG):/docker-entrypoint-initdb.d"
 	docker start $(DEV_PG) >/dev/null
 	docker run -d --name $(DEV_REDIS) -p 127.0.0.1:$(DEV_REDIS_PORTA):6379 redis:7-alpine \
 	  redis-server --save "" --appendonly no >/dev/null
@@ -111,7 +119,11 @@ dev-up: ## Sobe PG 16 (migrations 001..DEV_MIG_ATE) e Redis descartaveis e defin
 	  if [ "$$(docker inspect -f '{{.State.Running}}' $(DEV_PG))" != true ]; then docker logs --tail 40 $(DEV_PG) >&2; echo "ERRO: o PostgreSQL parou" >&2; exit 1; fi; \
 	  sleep 1; \
 	  [ "$$i" -lt 120 ] || { echo "ERRO: tempo esgotado esperando o PostgreSQL" >&2; exit 1; }; \
-	done
+	done; \
+	reg="$$(docker logs $(DEV_PG) 2>&1 | grep 'aplicar_como_migrador' || true)"; \
+	if echo "$$reg" | grep -q 'aplicar_como_migrador: FALHA' || ! echo "$$reg" | grep -Eq 'aplicar_como_migrador: fim db=nekkora aplicadas=[0-9]+ estado=0\|0\|0'; then \
+	  echo "$$reg" | tail -20 >&2; echo "ERRO: o migrador nao terminou em 0|0|0 (docker logs $(DEV_PG))" >&2; exit 1; fi; \
+	echo "$$reg" | grep 'aplicar_como_migrador: fim db='
 	@$(MAKE) --no-print-directory dev-senhas
 	@echo "Pronto: PG em 127.0.0.1:$(DEV_PG_PORTA), Redis em 127.0.0.1:$(DEV_REDIS_PORTA). Agora: make dev-platform / make dev-portal"
 
