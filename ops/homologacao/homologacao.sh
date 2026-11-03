@@ -953,7 +953,8 @@ jornadas-api)
 # SO ensaio-*, UM passo por vez: 021 -> 022, 022 -> 023, 023 -> 024, 024 -> 025 ou 025 -> 026. A 025 nao e de vinculo
 # obrigatorio e nao pode ter linha na lista (NUNCA_ELEVAR, lib/lista_elevacao.sh): o "implantar" a aplica com elevada=nao. A
 # 026 e de vinculo obrigatorio (linha vinculada ao id e pre-voo oficial implantacao/preflight/026.sql), assim como a 027 (D-RET-2,
-# preflight/027.sql), no passo 026 -> 027.
+# preflight/027.sql), no passo 026 -> 027. Desde 2026-11-03: 027 -> 028, SEM janela (a 028 em NUNCA_ELEVAR, como a 025), e
+# 028 -> 029, COM janela (vinculo obrigatorio e pre-voo oficial implantacao/preflight/029.sql).
 # Nada e aplicado no banco aqui: o "implantar" seguinte aplica as versoes novas com os controles de sempre (linha
 # vinculada, pre-voo, janela, retirada conferida), e o "subir" sobe os servicos com as imagens novas.
 #   1. recusa, ANTES de qualquer mudanca: ambiente BLOQUEADO; versao alvo fora do suportado; copia de migrations do
@@ -972,8 +973,8 @@ atualizar)
     ALVO="${HOMOLOG_ATUALIZAR_ATE:-}"
     [[ "$HOMOLOG_ID" =~ ^ensaio- ]] || falha "atualizar so em ambiente descartavel (id ensaio-*)"
     case "$HOMOLOG_ATE>$ALVO" in
-        "021>022"|"022>023"|"023>024"|"024>025"|"025>026"|"026>027") ;;
-        *) falha "atualizacao suportada: 021 -> 022, 022 -> 023, 023 -> 024, 024 -> 025, 025 -> 026 ou 026 -> 027, um passo por vez, com HOMOLOG_ATUALIZAR_ATE=<versao seguinte> (ambiente em $HOMOLOG_ATE, alvo '${ALVO}')";;
+        "021>022"|"022>023"|"023>024"|"024>025"|"025>026"|"026>027"|"027>028"|"028>029") ;;
+        *) falha "atualizacao suportada: 021 -> 022, 022 -> 023, 023 -> 024, 024 -> 025, 025 -> 026, 026 -> 027, 027 -> 028 ou 028 -> 029, um passo por vez, com HOMOLOG_ATUALIZAR_ATE=<versao seguinte> (ambiente em $HOMOLOG_ATE, alvo '${ALVO}')";;
     esac
     [ "${HOMOLOG_TRANSPORTE:-}" = homologacao ] || falha "atualizar exige o transporte de homologacao"
     novas=""
