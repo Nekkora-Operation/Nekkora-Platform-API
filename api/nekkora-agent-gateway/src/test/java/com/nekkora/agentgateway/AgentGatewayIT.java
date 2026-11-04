@@ -148,8 +148,12 @@ class AgentGatewayIT {
         }
         String valid = fx.pairingCode(worker, "Estacao troca", "15 minutes");
         String swappedOrg = valid.replace(fx.org.toString(), other.org.toString());
+        // adulterado: o último caractere SEMPRE muda (antes virava "A", e o código continuava válido quando já terminava em "A")
+        char last = valid.charAt(valid.length() - 1);
+        String tampered = valid.substring(0, valid.length() - 1) + (last == 'A' ? 'B' : 'A');
+        assertThat(tampered).isNotEqualTo(valid);
         MachineClient m = client();
-        for (String code : List.of(expired, cancelled, swappedOrg, "nkp1.lixo", valid.substring(0, valid.length() - 1) + "A")) {
+        for (String code : List.of(expired, cancelled, swappedOrg, "nkp1.lixo", tampered)) {
             MachineClient.Response r = m.redeem(code, Tokens.newToken());
             assertThat(r.status()).as(code.length() > 20 ? "codigo" : code).isEqualTo(401);
             assertThat(r.raw()).isEqualTo("{\"error\":\"unauthenticated\"}");

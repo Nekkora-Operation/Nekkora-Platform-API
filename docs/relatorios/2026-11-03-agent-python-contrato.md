@@ -70,6 +70,12 @@ As transições são conferidas no gatilho, com o instante do servidor:
 Os testes existentes do canal (`AgentGatewayIT`, `AgentAdminIT`, `AutomationLifecycleIT`, `PackageInspectorTest`, contratos)
 continuam verdes.
 
-**Achado (sem relação com a missão):** `AgentGatewayIT.codigoVencidoCanceladoMalformadoOuComOrganizacaoTrocadaEUmSo401` é
-instável. O código "adulterado" troca o último caractere por `A`; quando ele já é `A`, o código fica válido, o que acontece em
-1 de cada 64 vezes.
+**Achado corrigido (teste, sem relação com a missão):** `AgentGatewayIT.codigoVencidoCanceladoMalformadoOuComOrganizacaoTrocadaEUmSo401`
+era instável. O código "adulterado" trocava o último caractere por `A`; quando ele já era `A`, o código continuava válido, o que
+acontece em 1 de cada 64 vezes (o segredo tem 43 caracteres base64url e a Platform compara o SHA-256 da string inteira). Agora o
+último caractere sempre muda (`A`, ou `B` quando já era `A`), e o teste confere que o código adulterado é diferente do válido.
+
+**Ocorrência registrada, causa não demonstrada:** na suíte completa de 03/11/2026, `PgHbaHomologacaoIT.semAFabricaDaSondaOPgjdbcNaoApresentaOCertificadoDeCaEstranha`
+(módulo `nekkora-ops`, que esta missão não altera) falhou uma vez em `logEntre` (`Expecting actual: -1 to be greater than: 70467`,
+isto é, o trecho esperado não foi encontrado no log depois da posição marcada). O mesmo teste passou isolado e na rodada completa
+seguinte (734 testes, 0 falhas). Não houve investigação da causa; fica registrada para acompanhamento.
