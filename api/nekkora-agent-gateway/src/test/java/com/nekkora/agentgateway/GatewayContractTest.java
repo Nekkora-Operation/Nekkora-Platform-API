@@ -46,7 +46,7 @@ class GatewayContractTest {
         Map<String, Object> paths = (Map<String, Object>) spec.get("paths");
         Set<String> publicadas = new TreeSet<>();
         paths.forEach((path, ops) -> ((Map<String, Object>) ops).keySet().forEach(method -> publicadas.add(method + " " + path)));
-        assertThat(mapeadas).isEqualTo(publicadas).hasSize(6);
+        assertThat(mapeadas).isEqualTo(publicadas).hasSize(8); // 030: + run-requests e decision
 
         Map<String, Set<String>> exercitados = Map.of(
                 "post /agent/api/v1/enrollments/redeem", Set.of("200", "401", "409"),

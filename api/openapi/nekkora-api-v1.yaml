@@ -32,7 +32,9 @@ tags:
   - name: Canal do Agent
     description: 'Pareamento, credencial, Worker no workspace, autorizacao de execucao local e consultas das execucoes do Agent (contrato Platform-Agent 1.0; 025). O lado da maquina e o openapi/nekkora-agent-v1.yaml'
   - name: Ciclo de vida das automacoes
-    description: 'Workspace, automacao, versao DRAFT, artefato (pacote do Studio) recebido e conferido pela API e publicacao com step-up (PLATFORM-AUTOMATION-LIFECYCLE-001; 028). Publicar nao autoriza nem dispara execucao'
+    description: 'Workspace, automacao, versao DRAFT, artefato (pacote do Studio ou pacote Python externo, 030) recebido e conferido pela API e publicacao com step-up (PLATFORM-AUTOMATION-LIFECYCLE-001; 028). Publicar nao autoriza nem dispara execucao'
+  - name: Pedido de execucao
+    description: 'Pedido duravel de uma pessoa para uma versao autorizada rodar num Agent (AGENT-PYTHON-001; 030). A maquina puxa pelo gateway e decide; entregar ou aceitar nao prova inicio; inicio e desfecho vem do supervisor da execucao ligada'
   - name: Portal externo
 
 paths:
@@ -1774,7 +1776,7 @@ paths:
       operationId: createLocalRunAuthorization
       summary: 'Autoriza execucao local de uma versao publicada num Worker (step-up)'
       description: >
-        Exige automation.execute no workspace e step-up. Vincula organizacao, workspace, Worker AUTORIZADO no workspace, versao PUBLICADA e o pacote imutavel (packageFingerprint = command_json.agent_package.fingerprint da versao, com agent_package.fingerprint_rule = nekkora-agent/package-fingerprint/1; NAO e command_json.artifact.sha256, que mede os bytes do artefato). validUntil posterior a agora e ate 366 dias (fora disso, 400); automacao ou workspace inativo, 409. Versao rascunho ou sem artefato, ou Worker sem autorizacao no workspace: 409. A 025 reconfere tudo no banco. Auditoria (agent_admin_events 10).
+        AGENT-PYTHON-001 (030): com sourceKind = EXTERNAL_MONITORED o corpo leva automationId (e nao automationVersionId) e a autorizacao e de MONITORAMENTO de Python externo, sem versao e sem impressao (a Platform nao conhece codigo, caminho nem argumento); sourceKind de pacote no corpo e 400 (a origem de pacote vem da regra da versao: package-fingerprint/1 = STUDIO_PACKAGE, external-python-fingerprint/1 = EXTERNAL_PACKAGE). Exige automation.execute no workspace e step-up. Vincula organizacao, workspace, Worker AUTORIZADO no workspace, versao PUBLICADA e o pacote imutavel (packageFingerprint = command_json.agent_package.fingerprint da versao, com agent_package.fingerprint_rule = nekkora-agent/package-fingerprint/1; NAO e command_json.artifact.sha256, que mede os bytes do artefato). validUntil posterior a agora e ate 366 dias (fora disso, 400); automacao ou workspace inativo, 409. Versao rascunho ou sem artefato, ou Worker sem autorizacao no workspace: 409. A 025 reconfere tudo no banco. Auditoria (agent_admin_events 10).
       security: [ { sessionCookie: [], csrfHeader: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' }, { name: workspace, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/LocalRunAuthorizationRequest' } } } }
@@ -1819,6 +1821,85 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/workspaces/{workspace}/run-requests:
+    post:
+      tags: [Pedido de execucao]
+      operationId: createRunRequest
+      summary: 'Pede que uma versao autorizada rode num Agent (step-up) - 030'
+      description: >
+        Exige automation.execute no workspace e step-up. A autorizacao precisa estar ATIVA e ser de pacote (monitoramento: 409); o
+        Agent, ativo e associado ao Worker da autorizacao (409). Validade de 60 s a 24 h (400). A mesma requestKey devolve o
+        mesmo pedido (200); com outro conteudo, 409. A requisicao nao transporta comando, caminho nem segredo. Auditoria
+        (agent_admin_events 12).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: workspace, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RunRequestCreate' } } } }
+      responses:
+        '200': { description: 'Mesma chave: o pedido ja registrado', content: { application/json: { schema: { $ref: '#/components/schemas/RunRequest' } } } }
+        '201': { description: 'Pedido registrado', content: { application/json: { schema: { $ref: '#/components/schemas/RunRequest' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    get:
+      tags: [Pedido de execucao]
+      operationId: listRunRequests
+      summary: 'Pedidos de execucao mais recentes do workspace'
+      description: 'Exige automation.read no workspace. Ordem: mais recente primeiro; limit de 1 a 100.'
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: workspace, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        '200': { description: 'Pedidos', content: { application/json: { schema: { $ref: '#/components/schemas/RunRequestList' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/run-requests/{runRequest}:
+    get:
+      tags: [Pedido de execucao]
+      operationId: getRunRequest
+      summary: 'Estado do pedido e da execucao ligada'
+      description: 'Exige automation.read no workspace do pedido. REQUESTED/DELIVERED vencido e lido como EXPIRED.'
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: runRequest, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200': { description: 'Pedido', content: { application/json: { schema: { $ref: '#/components/schemas/RunRequest' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/run-requests/{runRequest}/revoke:
+    post:
+      tags: [Pedido de execucao]
+      operationId: revokeRunRequest
+      summary: 'Revoga o pedido antes da decisao da maquina (step-up)'
+      description: >
+        So REQUESTED ou DELIVERED no prazo; depois da decisao (ou vencido): 409 (cancelamento remoto esta fora). Exige
+        automation.execute no workspace e step-up. Auditoria (agent_admin_events 13).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: runRequest, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200': { description: 'Revogado', content: { application/json: { schema: { $ref: '#/components/schemas/RunRequest' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
@@ -2556,7 +2637,7 @@ components:
               lastHeartbeatAt: { type: [string, 'null'], format: date-time }
               connectivity: { type: string, enum: [CONNECTED, DISCONNECTED] }
               contractVersion: { type: [string, 'null'] }
-              capabilities: { type: array, items: { type: string, enum: [RUN_LOCAL, OBS_1_0, SUPERVISOR_REPORT_1_0] } }
+              capabilities: { type: array, items: { type: string, enum: [RUN_LOCAL, OBS_1_0, SUPERVISOR_REPORT_1_0, EXTERNAL_PYTHON_1_0, RUN_REQUEST_1_0] } }
               credentialExpiresAt: { type: [string, 'null'], format: date-time }
     WorkerList:
       type: object
@@ -2582,11 +2663,13 @@ components:
     LocalRunAuthorizationRequest:
       type: object
       additionalProperties: false
-      required: [workerId, automationVersionId, validUntil]
+      required: [workerId, validUntil]
       properties:
         workerId: { type: string, format: uuid }
-        automationVersionId: { type: string, format: uuid }
+        automationVersionId: { type: string, format: uuid, description: 'Obrigatorio sem sourceKind (pacote); proibido com EXTERNAL_MONITORED' }
         validUntil: { type: string, format: date-time, description: 'Com fuso; ate 366 dias' }
+        sourceKind: { type: string, enum: [EXTERNAL_MONITORED], description: 'So para o monitoramento de Python externo (030)' }
+        automationId: { type: string, format: uuid, description: 'Obrigatorio com EXTERNAL_MONITORED' }
     LocalRunAuthorization:
       type: object
       properties:
@@ -2594,11 +2677,85 @@ components:
         workspaceId: { type: string, format: uuid }
         workerId: { type: string, format: uuid }
         automationId: { type: string, format: uuid }
-        automationVersionId: { type: string, format: uuid }
-        packageFingerprint: { type: string, pattern: '^[0-9a-f]{64}$' }
+        automationVersionId: { type: [string, 'null'], format: uuid, description: 'Nulo em EXTERNAL_MONITORED' }
+        packageFingerprint: { type: [string, 'null'], pattern: '^[0-9a-f]{64}$', description: 'Nulo em EXTERNAL_MONITORED' }
         grantedAt: { type: string, format: date-time }
         validUntil: { type: string, format: date-time }
         revokedAt: { type: [string, 'null'], format: date-time }
+        sourceKind: { $ref: '#/components/schemas/SourceKind' }
+        packageFingerprintRule: { type: [string, 'null'], enum: ['nekkora-agent/package-fingerprint/1', 'nekkora-agent/external-python-fingerprint/1', null] }
+    SourceKind:
+      type: string
+      enum: [STUDIO_PACKAGE, EXTERNAL_PACKAGE, EXTERNAL_MONITORED]
+      description: >
+        Origem explicita do codigo (030). STUDIO_PACKAGE: pacote do formato Studio, regra package-fingerprint/1 (inalterada).
+        EXTERNAL_PACKAGE: pacote Python externo, regra external-python-fingerprint/1. EXTERNAL_MONITORED: Python do cliente
+        disparado pelo agendador dele, sem versao e sem impressao.
+    RunRequestCreate:
+      type: object
+      additionalProperties: false
+      required: [authorizationId, agentId, requestKey]
+      properties:
+        authorizationId: { type: string, format: uuid, description: 'Autorizacao ATIVA de pacote (STUDIO_PACKAGE ou EXTERNAL_PACKAGE)' }
+        agentId: { type: string, format: uuid, description: 'Agent ativo associado ao Worker da autorizacao' }
+        validForSeconds: { type: integer, minimum: 60, maximum: 86400, default: 900 }
+        requestKey: { type: string, format: uuid, description: 'Gerado pelo navegador: a repeticao com a mesma chave devolve o mesmo pedido (200)' }
+    RunRequest:
+      type: object
+      description: >
+        Pedido de execucao. state: REQUESTED (registrado, aguardando a maquina), DELIVERED (entregue, aguardando decisao; entregar
+        nao prova inicio), ACCEPTED (aceito; inicio ainda nao confirmado), REFUSED, NOT_STARTED (aceito e o processo comprovadamente
+        nao criado), RUN_LINKED (execucao registrada; iniciada so com run.startedAt; desfecho em run), EXPIRED (vencido sem decisao),
+        REVOKED. Maquina desconectada: continua aguardando ate voltar ou vencer; nunca "em execucao" por inferencia.
+      properties:
+        runRequestId: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        automationId: { type: string, format: uuid }
+        automationName: { type: string }
+        automationVersionId: { type: string, format: uuid }
+        versionNumber: { type: integer }
+        authorizationId: { type: string, format: uuid }
+        workerId: { type: string, format: uuid }
+        agentId: { type: string, format: uuid }
+        agentName: { type: string }
+        sourceKind: { $ref: '#/components/schemas/SourceKind' }
+        packageFingerprint: { type: string, pattern: '^[0-9a-f]{64}$' }
+        packageFingerprintRule: { type: string }
+        requestedAt: { type: string, format: date-time }
+        validUntil: { type: string, format: date-time }
+        state: { type: string, enum: [REQUESTED, DELIVERED, ACCEPTED, REFUSED, NOT_STARTED, RUN_LINKED, EXPIRED, REVOKED] }
+        deliveredAt: { type: [string, 'null'], format: date-time }
+        deliveries: { type: integer }
+        decidedAt: { type: [string, 'null'], format: date-time }
+        decisionReason: { type: [string, 'null'], enum: [PACKAGE_NOT_PRESENT, PACKAGE_NOT_APPROVED, AUTHORIZATION_UNUSABLE, ENVIRONMENT_INCOMPATIBLE, BUSY, EXPIRED, LAUNCH_NOT_ATTEMPTED, null] }
+        agentExecutionId: { type: [string, 'null'] }
+        notStartedAt: { type: [string, 'null'], format: date-time }
+        linkedAt: { type: [string, 'null'], format: date-time }
+        expiredAt: { type: [string, 'null'], format: date-time }
+        revokedAt: { type: [string, 'null'], format: date-time }
+        machine:
+          type: object
+          properties:
+            connectivity: { type: string, enum: [CONNECTED, DISCONNECTED] }
+            lastHeartbeatAt: { type: [string, 'null'], format: date-time }
+        run:
+          oneOf:
+            - type: 'null'
+            - type: object
+              properties:
+                runId: { type: string, format: uuid }
+                registeredAt: { type: string, format: date-time }
+                state: { $ref: '#/components/schemas/AgentSupervisorState' }
+                code: { type: [string, 'null'] }
+                exitCode: { type: [integer, 'null'] }
+                startedAt: { type: [string, 'null'], format: date-time, description: 'Relogio do Agent (RUNNING); sem ele o inicio nao esta provado' }
+                endedAt: { type: [string, 'null'], format: date-time }
+                process: { type: string, enum: [NOT_STARTED, STARTING, RUNNING, ENDED] }
+                outcome: { type: string, enum: [PENDING, KNOWN, UNKNOWN] }
+    RunRequestList:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/RunRequest' } }
     WorkspaceCreateRequest:
       type: object
       required: [name]
@@ -2648,12 +2805,17 @@ components:
         artifactId: { type: string, format: uuid }
         sha256: { type: string, pattern: '^[0-9a-f]{64}$', description: 'SHA-256 dos BYTES do ZIP recebido (calculado pelo servidor)' }
         sizeBytes: { type: integer }
-        fingerprintRule: { type: string, enum: ['nekkora-agent/package-fingerprint/1'] }
-        fingerprint: { type: string, pattern: '^[0-9a-f]{64}$', description: 'impressao do pacote (calculada pelo servidor; a mesma do Agent)' }
+        fingerprintRule: { type: string, enum: ['nekkora-agent/package-fingerprint/1', 'nekkora-agent/external-python-fingerprint/1'] }
+        fingerprint: { type: string, pattern: '^[0-9a-f]{64}$', description: 'impressao do pacote (calculada pelo servidor; a mesma do Agent). Regra por tipo: STUDIO_PYTHON = package-fingerprint/1, EXTERNAL_PYTHON = external-python-fingerprint/1' }
         filesCount: { type: integer }
         manifestVersion: { type: string }
-        framework: { type: string }
-        executionMode: { type: string, enum: [single, list, tabular] }
+        framework: { type: [string, 'null'], description: 'So STUDIO_PYTHON' }
+        executionMode: { type: [string, 'null'], enum: [single, list, tabular, null], description: 'So STUDIO_PYTHON' }
+        packageKind: { type: string, enum: [STUDIO_PYTHON, EXTERNAL_PYTHON] }
+        pythonRequirement: { type: [string, 'null'], description: 'So EXTERNAL_PYTHON (ex.: >=3.10,<3.14)' }
+        dependencies: { type: [array, 'null'], items: { type: string }, description: 'So EXTERNAL_PYTHON: nome==versao exata' }
+        packageName: { type: [string, 'null'] }
+        packageVersion: { type: [string, 'null'] }
         declaredGenerator: { type: [string, 'null'] }
         provenance: { type: string, enum: [DECLARED], description: 'procedencia declarada no manifesto; nao verificada criptograficamente' }
         receivedAt: { type: string, format: date-time }
@@ -2694,9 +2856,13 @@ components:
             workerId: { type: string, format: uuid }
             workspaceId: { type: string, format: uuid }
             automationId: { type: string, format: uuid }
-            automationVersionId: { type: string, format: uuid }
+            automationVersionId: { type: [string, 'null'], format: uuid, description: 'Nulo em EXTERNAL_MONITORED' }
             authorizationId: { type: string, format: uuid }
-        origin: { type: string, enum: [LOCAL_AUTHORIZED] }
+            runRequestId: { type: [string, 'null'], format: uuid, description: 'Pedido de execucao (030) que originou a execucao' }
+        origin: { type: string, enum: [LOCAL_AUTHORIZED, PLATFORM_REQUEST] }
+        sourceKind: { $ref: '#/components/schemas/SourceKind' }
+        automationName: { type: string }
+        agentName: { type: string }
         authorizationStateAtRegistration: { type: string, enum: [ACTIVE, REVOKED, EXPIRED] }
         registeredAt: { type: string, format: date-time }
         supervisor:
