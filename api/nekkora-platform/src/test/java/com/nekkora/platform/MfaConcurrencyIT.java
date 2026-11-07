@@ -25,7 +25,7 @@ import com.nekkora.core.testsupport.BrowserClient;
  * aleatorio pequeno em um dos lados, para exercitar as duas ordens de chegada. O que se afirma e o INVARIANTE no
  * estado final, qualquer que seja a ordem; a distribuicao das ordens observadas e impressa (nao e afirmada).
  *
- * <p>Complementa a suite SQL db/tests/mfa-014 (que prova as primitivas atomicas com o MESMO desafio) com os casos de
+ * <p>Complementa as primitivas SQL da 014 (que provam as primitivas atomicas com o MESMO desafio) com os casos de
  * desafios DIFERENTES disputando o mesmo passo TOTP e o mesmo codigo de recuperacao, e com as corridas entre a
  * conclusao do MFA e troca de senha, suspensao e reset administrativo.
  */

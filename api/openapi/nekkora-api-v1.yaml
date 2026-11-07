@@ -472,7 +472,7 @@ paths:
       operationId: identityPasswordConfirm
       summary: '029: reconfirma a senha na sessao sem segundo fator (vale 5 min, so nesta sessao; substitui o step-up por TOTP)'
       description: >
-        Politica aprovada pela titular em 2026-11-02 (relatorio docs/relatorios/2026-11-02-mfa-opcional.md). Sessao de
+        Politica aprovada pela titular em 2026-11-02 (README.md, secao MFA). Sessao de
         identidade sem MFA de identidade que NUNCA confirmou fator, nao restrita, CSRF dela. A aplicacao confere o Argon2
         contra o hash vigente e identity_password_reconfirm (029) exige, sob o lock da identidade, que ele ainda seja a
         credencial vigente; grava password_step_up_at nesta sessao e o evento 19. Vale para tudo que hoje pede step-up

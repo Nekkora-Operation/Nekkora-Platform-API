@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# AWS e certificado do e-mail real em homologacao (docs/relatorios/2026-10-24-email-real-homologacao.md, secao 4).
+# AWS e certificado do e-mail real em homologacao (README.md, secao E-mail).
 # Cada subcomando que altera algo fora da maquina (funcao, publicar, credenciais) e UMA acao autorizada do relatorio;
 # nada roda sozinho. Os identificadores da conta (numero, usuario, MFA) ficam so em <segredos>/m365/aws-local.env, fora
 # do Git (o repositorio e publico); os modelos versionados levam ${CONTA_AWS}, ${USUARIO_IAM} e ${MFA_SERIAL}.

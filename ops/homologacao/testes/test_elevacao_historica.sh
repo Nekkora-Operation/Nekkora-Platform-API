@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Testes SEM Docker da proveniencia historica da lista de elevacao (lib/elevacao_historica.sh) e da expectativa do H02
 # (h02_esperadas e h02_janelas EXTRAIDAS de testes/executar.sh). Ambientes SINTETICOS em diretorio temporario, o LEGADO
-# hml03 pelos registros VERSIONADOS (evidencias/hml03/criacao) e, so como laboratorio OPCIONAL (HOMOLOG_LAB_LEGADO_*), os
+# hml03 pelos registros VERSIONADOS (testes/fixtures/hml03-criacao) e, so como laboratorio OPCIONAL (HOMOLOG_LAB_LEGADO_*), os
 # registros reais de ensaio-016a e ensaio-016c - sem tocar ambiente algum. Nenhum caminho de maquina e exigido.
 # Uso (raiz do repositorio): bash ops/homologacao/testes/test_elevacao_historica.sh
 set -uo pipefail
@@ -67,11 +67,11 @@ cp -r "$T/A" "$T/incompleta"; chmod -R u+w "$T/incompleta/elevacao_criacao"; rm 
 c "8d. fotografia incompleta (sem proveniencia) -> FALHA" '! esp "$T/incompleta"'
 
 # ---- LEGADO (ambiente sem fotografia): obrigatorio e portavel, com os registros VERSIONADOS e um legado sintetico ancorado
-# hml03: registros de criacao versionados em evidencias/hml03/criacao (log sem sha256: runner anterior ao P3). A arvore
+# hml03: registros de criacao versionados em testes/fixtures/hml03-criacao (log sem sha256: runner anterior ao P3). A arvore
 # de migracoes e reconstruida pelos nomes de migracoes_sha256.txt (h02_esperadas so olha os nomes).
 BH03="$T/hml03"; mkdir -p "$BH03/migracoes"
-cp "$AQUI/evidencias/hml03/criacao/implantacao.txt" "$AQUI/evidencias/hml03/criacao/janelas_de_elevacao.txt" "$BH03/"
-tr -d '\r' < "$AQUI/evidencias/hml03/criacao/migracoes_sha256.txt" | sed -E 's/^[0-9a-f]{64} \*?//' | while read -r n; do : > "$BH03/migracoes/$n"; done
+cp "$AQUI/testes/fixtures/hml03-criacao/implantacao.txt" "$AQUI/testes/fixtures/hml03-criacao/janelas_de_elevacao.txt" "$BH03/"
+tr -d '\r' < "$AQUI/testes/fixtures/hml03-criacao/migracoes_sha256.txt" | sed -E 's/^[0-9a-f]{64} \*?//' | while read -r n; do : > "$BH03/migracoes/$n"; done
 # legado ANCORADO sintetico: log de criacao com o sha256 da lista (runner P3+), sem fotografia e sem sha no ambiente.env
 BLA="$T/legado_ancorado"; mkdir -p "$BLA/migracoes"; for n in 001 011 012 013 014 015; do : > "$BLA/migracoes/${n}_x.sql"; done
 echo "== implantacao 2026-09-29T00:00:00.000Z (lista de elevacao: elevacao.txt sha256 $(eh_sha "$T/l_op.txt"))" > "$BLA/implantacao.txt"

@@ -4,9 +4,6 @@ credenciais, chaves, tokens e enderecos sao conferidos e, no maximo, contados.
 Subcomandos:
   credenciais <aws.env>        credenciais TEMPORARIAS da AWS: as tres variaveis e AWS_CREDENTIAL_EXPIRATION no futuro
                                (pelo menos --minimo minutos, padrao 20). Saida: expira_em e minutos restantes.
-  destinatarios <arquivo>      lista fechada (um endereco por linha; '#' comenta): exato ou local+*@dominio, a mesma regra
-                               da Platform (DestinatariosPermitidos). Saida (stdout): a lista separada por virgulas, para a
-                               variavel do compose; contagem no stderr.
   chave-fila <fila.env>        cria a chave PROPRIA da fila (AES-256, id fila-<data>) se o arquivo nao existir; nunca
                                sobrescreve (a chave decifra as mensagens ja enfileiradas).
   montar-segredo --p12 <arquivo> --senha-arquivo <arquivo> --tenant <guid> --client <guid> --saida <segredo.json>
@@ -95,12 +92,6 @@ def permitido(lista, endereco):
         if m and (e == f'{m.group(1)}@{m.group(2)}' or (e.startswith(m.group(1) + '+') and e.endswith('@' + m.group(2)))):
             return True
     return False
-
-
-def destinatarios(a):
-    lista = le_destinatarios(a.arquivo)
-    print(','.join(lista))
-    print(f'destinatarios={len(lista)}', file=sys.stderr)
 
 
 def chave_fila(a):
@@ -201,9 +192,6 @@ def main():
     c.add_argument('arquivo')
     c.add_argument('--minimo', type=int, default=20)
     c.set_defaults(f=credenciais)
-    d = sp.add_parser('destinatarios')
-    d.add_argument('arquivo')
-    d.set_defaults(f=destinatarios)
     k = sp.add_parser('chave-fila')
     k.add_argument('arquivo')
     k.set_defaults(f=chave_fila)

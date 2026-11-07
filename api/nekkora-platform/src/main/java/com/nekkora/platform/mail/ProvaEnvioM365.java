@@ -16,17 +16,14 @@ import com.nekkora.platform.secrets.AwsSecretsManager;
  * Uso, no container da Platform, com as variaveis do ambiente: {@code NEKKORA_M365_TENANT} e, para cliente e certificado,
  * {@code NEKKORA_M365_SEGREDO_AWS} e {@code NEKKORA_M365_AWS_REGIAO} (com as credenciais temporarias da AWS) ou
  * {@code NEKKORA_M365_CLIENT}, {@code NEKKORA_M365_CERT} e {@code NEKKORA_M365_CERT_SENHA}; {@code NEKKORA_M365_PROXY}, se a
- * saida for por proxy. Com {@code NEKKORA_MAIL_DESTINATARIOS_PERMITIDOS} definida (obrigatoria em {@code ensaio-*}), o
- * {@code --para} tem de estar na lista; fora dela, nada e enviado (codigo 64):
+ * saida for por proxy:
  * <pre>
  * java -cp app.jar -Dloader.main=com.nekkora.platform.mail.ProvaEnvioM365 org.springframework.boot.loader.launch.PropertiesLauncher \
  *      --remetente no-reply@nekkora.com --para &lt;caixa controlada&gt;
  * </pre>
  * Imprime so o desfecho, o status HTTP e o identificador da mensagem (que aparece no corpo, para achar a mensagem na
- * caixa). Nunca imprime token de acesso, certificado ou senha. Com {@code NEKKORA_MAIL_TENTATIVAS_DIR} e
- * {@code NEKKORA_MAIL_TENTATIVAS_MAXIMO} (obrigatorios em {@code ensaio-*}), a prova conta no MESMO teto global da fila
- * ({@link TentativasEnvio}). Codigo de saida: 0 aceito, 2 recusado (inclusive sem vaga no teto), 3 retentavel, 4 incerto,
- * 64 uso incorreto, 65 teto ja atingido antes de tentar.
+ * caixa). Nunca imprime token de acesso, certificado ou senha. Codigo de saida: 0 aceito, 2 recusado, 3 retentavel,
+ * 4 incerto, 64 uso incorreto.
  */
 public final class ProvaEnvioM365 {
 
@@ -45,38 +42,13 @@ public final class ProvaEnvioM365 {
             err.println("uso: --remetente <caixa> --para <caixa controlada>");
             return 64;
         }
-        java.util.Set<String> allowed = DestinatariosPermitidos.ler(env.get("NEKKORA_MAIL_DESTINATARIOS_PERMITIDOS"));
-        String environment = env.get("NEKKORA_AMBIENTE");
-        if (allowed.isEmpty() && environment != null && CaixaHomologacaoMailSender.AMBIENTE.matcher(environment).matches()) {
-            err.println("ensaio-* exige NEKKORA_MAIL_DESTINATARIOS_PERMITIDOS");
-            return 64;
-        }
-        if (!allowed.isEmpty() && !DestinatariosPermitidos.permitido(allowed, to)) {
-            err.println("--para fora de NEKKORA_MAIL_DESTINATARIOS_PERMITIDOS: nada enviado");
-            return 64;
-        }
-        // o mesmo teto global da fila (mesmo diretorio no mesmo container): sem vaga, nada e enviado
-        TentativasEnvio teto;
-        try {
-            teto = TentativasEnvio.daConfiguracao(environment, env.get("NEKKORA_MAIL_TENTATIVAS_DIR"), env.get("NEKKORA_MAIL_TENTATIVAS_MAXIMO"), "prova");
-        } catch (IllegalStateException e) {
-            err.println(e.getMessage());
-            return 64;
-        }
-        if (teto.limitado() && teto.usadas() >= teto.maximo()) {
-            out.println("prova_envio teto_atingido usadas=" + teto.usadas() + " maximo=" + teto.maximo() + " (nada enviado)");
-            return 65;
-        }
         GraphMailTransport t = transport(env, sender);
-        if (teto.limitado()) {
-            t.limitarTentativas(teto);
-        }
         UUID id = UUID.randomUUID();
         MailTransport.Delivery d = t.deliverAs(sender, new MailTransport.Message(id, to, "Prova de homologacao do e-mail da Nekkora",
                 "Mensagem de prova do transporte de e-mail da Nekkora (homologacao). Identificador: " + id
                         + "\n\nNao contem link nem codigo. Pode ser descartada depois da conferencia dos cabecalhos."));
         out.println("prova_envio desfecho=" + d.result() + " status=" + d.status() + " identificador=" + id + " certificado_dias="
-                + t.certificateDaysLeft() + (teto.limitado() ? " tentativas_usadas=" + teto.usadas() + " maximo=" + teto.maximo() : ""));
+                + t.certificateDaysLeft());
         return switch (d.result()) {
             case ACEITO -> 0;
             case RECUSADO -> 2;

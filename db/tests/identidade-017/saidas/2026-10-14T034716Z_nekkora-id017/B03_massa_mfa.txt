@@ -1,1 +1,0 @@
-massa_mfa: fatores=60 codigos=180 eventos=82 resets_admin_sem_motivo=10 sessoes_mfa=60

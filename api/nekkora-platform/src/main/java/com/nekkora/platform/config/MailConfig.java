@@ -3,7 +3,6 @@ package com.nekkora.platform.config;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -23,8 +22,6 @@ import com.nekkora.platform.auth.crypto.SecretCipher;
 import com.nekkora.platform.emergency.EmergencyNotices;
 import com.nekkora.platform.identity.SignupMailer;
 import com.nekkora.platform.mail.AfterCommitMailIntents;
-import com.nekkora.platform.mail.CaixaHomologacaoMailSender;
-import com.nekkora.platform.mail.DestinatariosPermitidos;
 import com.nekkora.platform.mail.M365Segredo;
 import com.nekkora.platform.mail.MailQueueCipher;
 import com.nekkora.platform.mail.MailTransport;
@@ -35,7 +32,6 @@ import com.nekkora.platform.mail.MailIntents;
 import com.nekkora.platform.mail.MailSender;
 import com.nekkora.platform.mail.MailTemplates;
 import com.nekkora.platform.mail.OutboxMailIntents;
-import com.nekkora.platform.mail.TentativasEnvio;
 
 /**
  * Transporte real de e-mail (missao 002, PR 5; desenho de 2026-10-11): so com {@code nekkora.mail.transport=m365}. Sem
@@ -67,12 +63,7 @@ public class MailConfig {
                                           @Value("${nekkora.mail.m365.graph-url:https://graph.microsoft.com}") String graph,
                                           @Value("${nekkora.mail.m365.proxy:}") String proxy,
                                           @Value("${nekkora.mail.m365.segredo-aws:}") String awsSecret,
-                                          @Value("${nekkora.mail.m365.aws-regiao:}") String awsRegion,
-                                          @Value("${nekkora.environment:}") String environment,
-                                          @Value("${nekkora.mail.tentativas.diretorio:}") String attemptsDir,
-                                          @Value("${nekkora.mail.tentativas.maximo:}") String attemptsMax) {
-        // teto global de tentativas ANTES do segredo: em ensaio-* sem teto, a partida recusa sem ler nada da AWS
-        TentativasEnvio teto = TentativasEnvio.daConfiguracao(environment, attemptsDir, attemptsMax, "platform");
+                                          @Value("${nekkora.mail.m365.aws-regiao:}") String awsRegion) {
         GraphMailTransport t;
         if (!awsSecret.isBlank()) {
             // cliente e certificado SO do segredo: uma unica origem, sem mistura com arquivo ou variavel
@@ -95,10 +86,6 @@ public class MailConfig {
             }
             t = new GraphMailTransport(new GraphMailTransport.Config(tenant, client, sender, Path.of(certificate),
                     certificatePassword.toCharArray(), timeout, login, graph, proxy));
-        }
-        if (teto.limitado()) {
-            t.limitarTentativas(teto);
-            LOG.info("evento=mail.teto_tentativas_configurado maximo={} usadas={}", teto.maximo(), teto.usadas());
         }
         logCertificate(t);
         return t;
@@ -170,8 +157,6 @@ public class MailConfig {
     @ConditionalOnProperty(name = "nekkora.mail.transport", havingValue = "m365")
     MailDispatcher mailDispatcher(OrgTransactions tx, MailQueueCipher cipher, GraphMailTransport transport, MailTemplates templates,
                                   ObjectProvider<EmergencyNotices> notices,
-                                  @Value("${nekkora.environment:}") String environment,
-                                  @Value("${nekkora.mail.destinatarios-permitidos:}") String allowed,
                                   @Value("${nekkora.mail.despacho.por-minuto:25}") int perMinute,
                                   @Value("${nekkora.mail.despacho.posse:2m}") Duration lease,
                                   @Value("${nekkora.mail.m365.timeout:5s}") Duration timeout) {
@@ -179,7 +164,7 @@ public class MailConfig {
         if (lease.compareTo(timeout.multipliedBy(3)) < 0) {
             throw new IllegalStateException("nekkora.mail.despacho.posse menor que 3x nekkora.mail.m365.timeout");
         }
-        return new MailDispatcher(tx, cipher.cipher(), restrict(transport, environment, allowed), templates, perMinute, lease,
+        return new MailDispatcher(tx, cipher.cipher(), transport, templates, perMinute, lease,
                 (notice, outcome) -> notices.getObject().recordTransportResult(notice, outcome));
     }
 
@@ -211,24 +196,6 @@ public class MailConfig {
         }
         s.scheduleWithFixedDelay(() -> logCertificate(transport), 1, 1, TimeUnit.DAYS);
         return s;
-    }
-
-    /**
-     * Destinatarios do transporte real. Em {@code ensaio-*} (homologacao), a lista fechada e OBRIGATORIA: sem ela a Platform
-     * nao sobe. Fora dele, so se configurada.
-     */
-    static MailTransport restrict(MailTransport transport, String environment, String allowed) {
-        Set<String> list = DestinatariosPermitidos.ler(allowed);
-        boolean homologation = environment != null && CaixaHomologacaoMailSender.AMBIENTE.matcher(environment).matches();
-        if (list.isEmpty()) {
-            if (homologation) {
-                throw new IllegalStateException("transporte m365 em ensaio-* exige nekkora.mail.destinatarios-permitidos");
-            }
-            return transport;
-        }
-        DestinatariosPermitidos d = new DestinatariosPermitidos(transport, list);
-        LOG.info("evento=mail.destinatarios_restritos quantidade={}", d.tamanho());
-        return d;
     }
 
     private static void logCertificate(GraphMailTransport t) {

@@ -1,2 +1,0 @@
-OK    ATV.login outro esperado=200 obtido=200
-OK    ATV.codigo de vinculo emitido esperado=200 obtido=200

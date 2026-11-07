@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # E2E entre processos da API v1: nginx (origem unica, TLS, limit_req) -> Platform (nekkora_platform), Portal
 # (processo e papel nekkora_portal proprios) e canal do Agent (processo nekkora-agent-gateway, papel nekkora_ingestion)
-# -> PostgreSQL 16 (001-025, instalacao limpa) e Redis.
+# -> PostgreSQL 16 (todas as migrations de db/migrations, instalacao limpa) e Redis.
 #
 # Migrations pelo MODELO DO MIGRADOR suportado pela 016 (revisao 5), como RealDatabase: nao vao direto para o
 # initdb.d (seriam aplicadas pelo superusuario); db/bootstrap/aplicar_como_migrador.sh as aplica como
@@ -59,11 +59,13 @@ docker network ls -q | xargs -r docker network inspect -f '{{range .IPAM.Config}
     || falha "sub-rede $E2E_REDE.0/24 sobreposta a uma rede Docker existente (escolha outra E2E_REDE); nada foi criado"
 
 mkdir -p "$SAIDA/migracoes_montadas/migracoes" "$SAIDA/migracoes_montadas/bootstrap" "$SAIDA/tls"
-# Migrations: 001-025 escolhidas explicitamente (instalacao limpa), numa subpasta (o entrypoint so executa o primeiro
-# nivel do initdb.d); o involucro 000_ chama o script do migrador apontando para ela.
-for n in $(seq -w 1 25); do
-    f=("$REPO"/db/migrations/0${n}_*.sql)
-    [ -f "${f[0]}" ] && [ ${#f[@]} -eq 1 ] || falha "migration 0$n ausente ou ambigua"
+# Migrations: todas de db/migrations, 001 ate a ultima, sem lacuna (instalacao limpa), numa subpasta (o entrypoint so
+# executa o primeiro nivel do initdb.d); o involucro 000_ chama o script do migrador apontando para ela.
+ULTIMA_MIG="$(ls "$REPO"/db/migrations/[0-9][0-9][0-9]_*.sql | sed -E 's#.*/([0-9]{3})_.*#\1#' | sort | tail -1)"
+for n in $(seq 1 "$((10#$ULTIMA_MIG))"); do
+    v="$(printf '%03d' "$n")"
+    f=("$REPO"/db/migrations/${v}_*.sql)
+    [ -f "${f[0]}" ] && [ ${#f[@]} -eq 1 ] || falha "migration $v ausente ou ambigua"
     cp "${f[0]}" "$SAIDA/migracoes_montadas/migracoes/"
 done
 cp "$REPO/db/bootstrap/aplicar_como_migrador.sh" "$SAIDA/migracoes_montadas/bootstrap/"

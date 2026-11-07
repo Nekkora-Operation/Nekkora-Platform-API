@@ -75,13 +75,6 @@ with tempfile.TemporaryDirectory() as d:
     caso('mensagens de erro sem valores', SEGREDO not in err and TOKEN_S not in err)
 
     lst = escreve(d, 'dest.txt', '# caixa controlada\ncontrole+*@exemplo.test\nOutra@Exemplo.test\n')
-    rc, out, err = roda('destinatarios', lst)
-    caso('lista valida: exato e local+*@dominio, em minusculas', rc == 0 and out.strip() == 'controle+*@exemplo.test,outra@exemplo.test')
-    for ruim in ('*@exemplo.test', '@exemplo.test', 'exemplo.test', 'controle+*@*.test', 'a,b@exemplo.test'):
-        rc, _, _ = roda('destinatarios', escreve(d, 'ruim.txt', ruim + '\n'))
-        caso(f'item recusado: {ruim}', rc != 0)
-    rc, _, _ = roda('destinatarios', escreve(d, 'vazia.txt', '# nada\n'))
-    caso('lista vazia recusada', rc != 0)
 
     fila = os.path.join(d, 'fila.env')
     rc, out, _ = roda('chave-fila', fila)

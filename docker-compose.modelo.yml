@@ -5,7 +5,7 @@
 # Projeto, container, volume e porta PROPRIOS: nunca usa o volume da stack principal (docker-compose.yml, projeto
 # nekkora-platform, volume nekkora_postgres_data), que continua com a configuracao anterior ate decisao propria.
 # As migrations NAO vao para o initdb.d (seriam aplicadas pelo superusuario): db/bootstrap/aplicar_como_migrador.sh aplica
-# como migrador_nekkora, dono do banco, com SUPERUSER so em 011/012/013/016 e BYPASSRLS so na 014, retirada conferida,
+# como migrador_nekkora, dono do banco, com SUPERUSER so nas versoes do padrao do script (NEKKORA_ELEVAR) e BYPASSRLS so na 014, retirada conferida,
 # sec. 19 da 016 depois da retirada e o marcador "nekkora-inicializacao-completa" so no fim do sucesso.
 # Saude: healthy SO com o marcador. Volume com initdb falho ou interrompido sobe ao reiniciar, mas fica unhealthy e nao e
 # uma instalacao valida: remover o volume deste projeto (docker compose -f docker-compose.modelo.yml down -v) e subir de novo.

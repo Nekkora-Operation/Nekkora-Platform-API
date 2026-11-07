@@ -1,4 +1,4 @@
-"""Normaliza a listagem de catalogo (db/tests/portal-013/sql/c_listagem_catalogo.sql) para comparar instalacoes feitas
+"""Normaliza a listagem de catalogo (db/tests/sql/c_listagem_catalogo.sql) para comparar instalacoes feitas
 por identidades diferentes: o nome do INSTALADOR (dono dos objetos que as migrations nao reatribuem, dono dos
 privilegios padrao e das extensoes) vira "INSTALADOR". So troca o nome como CAMPO inteiro (entre |, =, virgula, chaves
 ou fim de linha): nekkora_platform nunca vira INSTALADOR_platform.

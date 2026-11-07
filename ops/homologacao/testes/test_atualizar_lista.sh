@@ -13,7 +13,7 @@
 #   - controle positivo: com a lista correta, as conferencias de arquivo passam e o atualizar so para na conferencia de
 #     liberacao, que le o banco (aqui inexistente): "ambiente BLOQUEADO: nada alterado".
 # O pre-voo, a janela e a retirada da elevacao com a lista alternativa sao do "implantar" (runner): provados no laboratorio
-# evidencias/ensaio-api-v1-003-j022 (janela-022: P, F e S). O registro da lista usada: atualizacao/registro.txt de la.
+# evidencias de ensaio-api-v1-003-j022 (janela-022: P, F e S; historico do Git anterior a V1). O registro da lista usada: atualizacao/registro.txt de la.
 # Uso: bash testes/test_atualizar_lista.sh   (codigo 0 = todas as provas OK)
 set -uo pipefail
 AQUI="$(cd "$(dirname "$0")/.." && pwd)"

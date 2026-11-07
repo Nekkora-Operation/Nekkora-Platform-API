@@ -4,3 +4,5 @@
 # bytecode do Python
 __pycache__/
 *.pyc
+# saidas de execucao (suites de banco, E2E, homologacao): nunca versionadas
+saidas/

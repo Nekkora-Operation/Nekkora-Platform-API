@@ -3,7 +3,7 @@ info:
   title: Nekkora Agent Gateway v1 (canal da maquina)
   version: 1.0.0
   description: >
-    Lado da MAQUINA do contrato Platform-Agent 1.0 (docs/relatorios/2026-10-28-platform-agent-contrato.md), servido pelo
+    Lado da MAQUINA do contrato Platform-Agent 1.0 (README.md, secao Agent Gateway), servido pelo
     processo nekkora-agent-gateway (papel de banco nekkora_ingestion). O lado das pessoas (codigos, autorizacoes, consultas)
     fica em nekkora-api-v1.yaml, tag "Canal do Agent". Autenticacao: credencial de maquina (Authorization: Bearer nka1...);
     cookie, sessao e CSRF da Platform nao valem aqui. Toda chamada declara a versao do contrato (cabecalho

@@ -1,2 +1,0 @@
-operador=op_hml_atv resultado=RECUSA
-credencial de op_hml_atv nao emitida

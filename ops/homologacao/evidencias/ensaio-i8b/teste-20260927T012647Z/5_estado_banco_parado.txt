@@ -1,3 +1,0 @@
-BLOQUEIO: consulta da trava no banco falhou
-BLOQUEIO: banco sem resposta (estado do migrador desconhecido)
-BLOQUEADO

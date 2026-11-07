@@ -81,7 +81,6 @@ public final class GraphMailTransport implements MailTransport {
     private final String thumbprintS256;
     private volatile String accessToken;
     private volatile Instant accessTokenRenewAt = Instant.EPOCH;
-    private volatile TentativasEnvio tentativas = TentativasEnvio.SEM_TETO;
 
     public GraphMailTransport(Config cfg) {
         this(cfg, readCertificate(cfg), client(cfg.timeout(), cfg.proxy()), Clock.systemUTC());
@@ -180,21 +179,6 @@ public final class GraphMailTransport implements MailTransport {
         return b.toString();
     }
 
-    /**
-     * Teto global de tentativas de envio ({@link TentativasEnvio}), definido UMA vez na partida (Platform ou prova). Toda
-     * chamada {@code sendMail} reserva uma vaga antes; sem vaga, RECUSADO sem rede.
-     */
-    public synchronized void limitarTentativas(TentativasEnvio t) {
-        if (tentativas.limitado()) {
-            throw new IllegalStateException("teto de tentativas ja definido");
-        }
-        tentativas = t;
-    }
-
-    public TentativasEnvio tentativas() {
-        return tentativas;
-    }
-
     /** Reivindicacoes de um token de aplicacao, para a prova do caminho de autenticacao (nunca o token). */
     public record TokenInfo(String tid, String appid, String aud, int roles, long expiraEmSegundos, boolean legivel) {
     }
@@ -202,7 +186,7 @@ public final class GraphMailTransport implements MailTransport {
     /**
      * Prova do caminho de autenticacao real: obtem o token pela assercao de certificado (o mesmo pedido do envio) e devolve
      * so as reivindicacoes de controle: tenant, aplicativo, audiencia, QUANTIDADE de papeis de aplicacao (com o RBAC para
-     * Aplicacoes do Exchange, nenhum papel do Graph e esperado) e validade. Nao envia mensagem e nao conta tentativa.
+     * Aplicacoes do Exchange, nenhum papel do Graph e esperado) e validade. Nao envia mensagem.
      * {@code null} se o Entra recusar ou nao houver conexao; o status fica em {@code falha[0]}.
      */
     public TokenInfo inspecionarToken(Integer[] falha) {
@@ -252,16 +236,6 @@ public final class GraphMailTransport implements MailTransport {
     }
 
     private Delivery send(Message m, String token, String sender) {
-        TentativasEnvio.Reserva vaga = tentativas.reservar(m.correlation());
-        if (!vaga.concedida()) {
-            return new Delivery(Result.RECUSADO, null, null);
-        }
-        Delivery d = sendReserved(m, token, sender);
-        tentativas.registrar(vaga, d.result(), d.status());
-        return d;
-    }
-
-    private Delivery sendReserved(Message m, String token, String sender) {
         Map<String, Object> message = new LinkedHashMap<>();
         message.put("subject", m.subject());
         message.put("body", Map.of("contentType", "Text", "content", m.body()));

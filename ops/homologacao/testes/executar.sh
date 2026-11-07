@@ -264,8 +264,8 @@ h03() {
     fi
     # catalogo x referencia DESCARTAVEL instalada pelo modelo SUPORTADO (aplicar_como_migrador.sh), com o instalador normalizado
     h03_referencia "$HOMOLOG_ID" "$mig" "$modelo" "$REPO/db/bootstrap/aplicar_como_migrador.sh" "$T/cat_ref.txt" \
-        "$REPO/db/tests/portal-013/sql/c_listagem_catalogo.sql" "$EV" || falha3 "referencia do modelo $modelo invalida (ver h03_referencia.txt)"
-    admin_sql nekkora < "$REPO/db/tests/portal-013/sql/c_listagem_catalogo.sql" > "$T/cat_homolog.txt" 2>&1 || falha3 "listagem do catalogo do ambiente"
+        "$REPO/db/tests/sql/c_listagem_catalogo.sql" "$EV" || falha3 "referencia do modelo $modelo invalida (ver h03_referencia.txt)"
+    admin_sql nekkora < "$REPO/db/tests/sql/c_listagem_catalogo.sql" > "$T/cat_homolog.txt" 2>&1 || falha3 "listagem do catalogo do ambiente"
     python "$AQUI/lib/catalogo.py" "$T/cat_ref.txt" "$EV/h03_catalogo_referencia_normalizado.txt" migrador_nekkora nekkora 2> /dev/null || : > "$EV/h03_catalogo_referencia_normalizado.txt"
     python "$AQUI/lib/catalogo.py" "$T/cat_homolog.txt" "$EV/h03_catalogo_homologacao_normalizado.txt" migrador_nekkora admin_cluster
     diff "$EV/h03_catalogo_referencia_normalizado.txt" "$EV/h03_catalogo_homologacao_normalizado.txt" > "$EV/h03_catalogo_diff.txt"
@@ -476,8 +476,8 @@ r015() {
     docker exec "$dst" rm -f /tmp/backup.dump
     # comparacoes: catalogo (sem normalizar: os mesmos nomes existem nos dois clusters) e dados linha a linha
     dsql() { docker exec -i -e PGPASSWORD="$pa" "$dst" psql -X -q -At -v ON_ERROR_STOP=1 -U admin_cluster -d nekkora "$@"; }
-    admin_sql nekkora < "$REPO/db/tests/portal-013/sql/c_listagem_catalogo.sql" > "$T/r015_cat_a.txt" 2>&1
-    dsql < "$REPO/db/tests/portal-013/sql/c_listagem_catalogo.sql" > "$T/r015_cat_b.txt" 2>&1
+    admin_sql nekkora < "$REPO/db/tests/sql/c_listagem_catalogo.sql" > "$T/r015_cat_a.txt" 2>&1
+    dsql < "$REPO/db/tests/sql/c_listagem_catalogo.sql" > "$T/r015_cat_b.txt" 2>&1
     diff "$T/r015_cat_a.txt" "$T/r015_cat_b.txt" > "$EV/r015_catalogo_diff.txt" && echo "catalogo identico ($(wc -l < "$T/r015_cat_a.txt") linhas), inclusive donos migrador_nekkora e os owners protegidos" >> "$f" || { echo "catalogo difere" >> "$f"; ok=1; }
     local tabelas; tabelas="$(admin_sql nekkora -c "SELECT string_agg(tablename, ' ' ORDER BY tablename) FROM pg_tables WHERE schemaname = 'public'")"
     local dif=0 linhas=0
@@ -525,7 +525,7 @@ h08() {
 for t_ in ${HOMOLOG_TESTES:-h01 h02 h03 h04 h05 h06 h07 h09 r015 h08}; do
     case " h01 h02 h03 h04 h05 h06 h07 h09 r015 h08 " in *" $t_ "*) "$t_";; *) echo "teste desconhecido: $t_" >&2; exit 2;; esac
 done
-registra "reutilizada" "-" "evidencia anterior" "suites SQL 012/013/014, restauracao-015 original, atualizacao-populada, 58 testes Maven e E2E 6/6 do commit $HOMOLOG_COMMIT (docs/relatorios/2026-09-26-validacao-api-v1.md); nao repetidas: a homologacao nao muda o schema nem o codigo"
+registra "reutilizada" "-" "evidencia anterior" "suites SQL 012/013/014, restauracao-015 original, atualizacao-populada, 58 testes Maven e E2E 6/6 do commit $HOMOLOG_COMMIT (historico do Git anterior a V1); nao repetidas: a homologacao nao muda o schema nem o codigo"
 echo
 column -t -s '|' "$RESUMO" 2>/dev/null || cat "$RESUMO"
 rm -f "$T/logs_servicos.txt" "$T/h06_pg.log" "$T/cat_ref.txt" "$T/cat_homolog.txt" "$T/r015_cat_a.txt" "$T/r015_cat_b.txt"

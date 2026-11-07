@@ -87,7 +87,7 @@ def gerar(d, origem, interna='10.252.10', ensaio=None):
           f'user portal on #{sha(s["redis_portal"])} resetchannels ~nk:rl:* -@all {cmds}\n')
     grava(os.path.join(d, 'LEIA-ME.txt'),
           'Segredos da homologacao Nekkora - gerados por ops/homologacao/homologacao.sh. NAO versionar, NAO copiar para outro\n'
-          'ambiente. Substituicao: procedimento em ops/homologacao/README.md (secao Segredos).\n'
+          'ambiente. Substituicao: procedimento no README.md da raiz (secao Homologacao).\n'
           'postgres_admin: administrador do cluster (bootstrap/operacao). senhas/: papeis e usuarios Redis por servico.\n'
           'platform.env / portal.env: configuracao sensivel de cada processo. flyway.conf: identidade de implantacao.\n'
           'tls/: CA da homologacao (ca.key e o ativo mais sensivel) e certificados do gateway, PostgreSQL e Redis.\n'

@@ -11,7 +11,7 @@ import com.nekkora.platform.secrets.AwsSecretsManager;
 
 /**
  * Prova do caminho de autenticacao REAL do transporte (homologacao do e-mail real, relatorio de 2026-10-24), com o mesmo
- * codigo da partida da Platform e SEM enviar mensagem (nao conta no teto de tentativas):
+ * codigo da partida da Platform e SEM enviar mensagem:
  * <ul>
  * <li>{@code --segredo [--esperado-sha256 <hex>]}: le o segredo do AWS Secrets Manager (Signature Version 4, credenciais
  * TEMPORARIAS do ambiente), confere o formato {@code nekkora-m365/1} e o tenant e carrega o PKCS#12 no transporte (uma

@@ -87,15 +87,15 @@ PY"
 : > "$S/platform.env"
 # transporte REAL (missao do e-mail real em homologacao): renderiza com valores de exemplo; a Platform continua so na
 # interna, o unico caminho de saida e o proxy-m365 (Entra, Graph e o Secrets Manager da regiao), cliente e certificado SO
-# do segredo da AWS (nenhum arquivo de chave), credenciais temporarias e chave da fila por arquivo de segredos, lista de
-# destinatarios obrigatoria; nunca junto da caixa
+# do segredo da AWS (nenhum arquivo de chave), credenciais temporarias e chave da fila por arquivo de segredos, sem lista
+# de destinatarios nem teto de tentativas; nunca junto da caixa
 mkdir -p "$S/m365"; echo NEKKORA_SENTINELA_AWS=1 > "$S/m365/aws.env"; echo NEKKORA_SENTINELA_FILA=1 > "$S/m365/fila.env"
 echo NEKKORA_SENTINELA_PLATFORM=1 > "$S/platform.env"
-if env HOMOLOG_M365_DESTINATARIOS='controle+*@exemplo.test' docker compose -f "$B" -f "$O16" -f "$O21" -f "$M365" config > "$TMP/m365.yml" 2>"$TMP/compose.err"; then
+if docker compose -f "$B" -f "$O16" -f "$O21" -f "$M365" config > "$TMP/m365.yml" 2>"$TMP/compose.err"; then
     ok "base + 016 + 021 + m365 renderiza"
 else nok "m365 nao renderiza: $(head -3 "$TMP/compose.err")"; fi
-env HOMOLOG_M365_DESTINATARIOS='controle+*@exemplo.test' docker compose -f "$B" -f "$O16" -f "$O21" -f "$M365" config --format json > "$TMP/m365.json" 2>/dev/null
-confere "m365: Platform so na rede interna; proxy na interna e na saida propria; transporte m365 com o proxy, o tenant do Entra, o segredo da AWS (sa-east-1) e a lista de destinatarios" "python - '$TMP/m365.json' <<'PY'
+docker compose -f "$B" -f "$O16" -f "$O21" -f "$M365" config --format json > "$TMP/m365.json" 2>/dev/null
+confere "m365: Platform so na rede interna; proxy na interna e na saida propria; transporte m365 com o proxy, o tenant do Entra, o segredo da AWS (sa-east-1), sem lista de destinatarios nem teto" "python - '$TMP/m365.json' <<'PY'
 import json, sys
 c = json.load(open(sys.argv[1], encoding='utf-8'))
 plat, prox = c['services']['platform'], c['services']['proxy-m365']
@@ -104,7 +104,7 @@ ok = (set(plat['networks']) == {'interna'} and set(prox['networks']) == {'intern
       and env.get('NEKKORA_MAIL_TRANSPORTE') == 'm365' and env.get('NEKKORA_M365_PROXY') == 'proxy-m365:3128'
       and env.get('NEKKORA_M365_TENANT') == 'ae4ed48d-e7d8-4f24-83f2-443e997c5a65' and env.get('NEKKORA_MAIL_REMETENTE') == 'no-reply@nekkora.com'
       and env.get('NEKKORA_M365_SEGREDO_AWS') == 'nekkora/homologacao/platform/m365' and env.get('NEKKORA_M365_AWS_REGIAO') == 'sa-east-1'
-      and env.get('NEKKORA_MAIL_DESTINATARIOS_PERMITIDOS') == 'controle+*@exemplo.test'
+      and not any(k in env for k in ('NEKKORA_MAIL_DESTINATARIOS_PERMITIDOS', 'NEKKORA_MAIL_TENTATIVAS_DIR', 'NEKKORA_MAIL_TENTATIVAS_MAXIMO'))
       and not any(k in env for k in ('NEKKORA_M365_CLIENT', 'NEKKORA_M365_CERT', 'NEKKORA_M365_CERT_SENHA'))
       and not plat.get('secrets')
       and c['networks']['interna'].get('internal') is True and not c['networks']['saida_m365'].get('internal'))
@@ -117,7 +117,6 @@ env = c['services']['platform'].get('environment', {})
 sys.exit(0 if all(env.get(k) == '1' for k in ('NEKKORA_SENTINELA_PLATFORM', 'NEKKORA_SENTINELA_AWS', 'NEKKORA_SENTINELA_FILA')) else 1)
 PY"
 : > "$S/platform.env"
-confere "m365: sem lista de destinatarios a sobreposicao nao renderiza" "! env -u HOMOLOG_M365_DESTINATARIOS docker compose -f '$B' -f '$O16' -f '$O21' -f '$M365' config > /dev/null 2>&1"
 confere "m365: politica do proxy so CONNECT 443 para Entra, Graph e Secrets Manager sa-east-1 (tudo o mais negado)"     "grep -qx 'acl m365 dstdomain login.microsoftonline.com graph.microsoft.com secretsmanager.sa-east-1.amazonaws.com' '$AQUI/proxy/squid.conf' && grep -qx 'http_access allow CONNECT m365' '$AQUI/proxy/squid.conf'      && grep -qx 'http_access deny all' '$AQUI/proxy/squid.conf' && grep -qx 'http_access deny CONNECT !porta_tls' '$AQUI/proxy/squid.conf' && [ \"\$(grep -c '^http_access allow' '$AQUI/proxy/squid.conf')\" = 1 ] && [ \"\$(grep -c '^acl ' '$AQUI/proxy/squid.conf')\" = 3 ]"
 confere "m365: tmpfs do proxy do usuario proxy (uid 13), sem o que o squid nao sobe com a raiz somente leitura" "python - '$TMP/m365.json' <<'PY'
 import json, sys
@@ -125,20 +124,8 @@ c = json.load(open(sys.argv[1], encoding='utf-8'))
 t = c['services']['proxy-m365'].get('tmpfs') or []
 sys.exit(0 if len(t) == 4 and all('uid=13' in x and 'gid=13' in x for x in t) else 1)
 PY"
-confere "m365: teto global de tentativas na Platform (20, diretorio montado de m365/tentativas; fila e prova no mesmo container)" "python - '$TMP/m365.json' <<'PY'
-import json, sys
-c = json.load(open(sys.argv[1]))
-plat = c['services']['platform']
-env = plat.get('environment') or {}
-vols = [v for v in plat.get('volumes') or [] if v.get('target') == '/tentativas']
-ok = (env.get('NEKKORA_MAIL_TENTATIVAS_DIR') == '/tentativas' and env.get('NEKKORA_MAIL_TENTATIVAS_MAXIMO') == '20'
-      and len(vols) == 1 and vols[0]['type'] == 'bind' and vols[0]['source'].replace('\\\\', '/').endswith('/m365/tentativas')
-      and not vols[0].get('read_only') and any(v.get('target') == '/tls/ca.crt' for v in plat.get('volumes') or []))
-sys.exit(0 if ok else 1)
-PY"
-confere "m365: runner confere o teto antes de ligar e de cada prova, exige o evento de teto na partida e tem tentativas/autenticacao" "grep -q 'teto global de tentativas atingido' '$AQUI/homologacao.sh' && grep -q 'prova_envio teto_atingido' '$AQUI/homologacao.sh' && grep -q 'evento=mail.teto_tentativas_configurado maximo=\$TETO_MAX ' '$AQUI/homologacao.sh' && grep -q '^    tentativas)$' '$AQUI/homologacao.sh' && grep -q '^    autenticacao)$' '$AQUI/homologacao.sh' && grep -q 'ProvaAutenticacaoM365' '$AQUI/homologacao.sh'"
+confere "m365: runner sem teto de tentativas nem lista de destinatarios; tem autenticacao" "! grep -qE 'TETO_MAX|HOMOLOG_M365_DESTINATARIOS|tentativas_usadas' '$AQUI/homologacao.sh' && grep -q '^    autenticacao)$' '$AQUI/homologacao.sh' && grep -q 'ProvaAutenticacaoM365' '$AQUI/homologacao.sh'"
 confere "m365: m365-aws.sh so apaga a chave no confirmar (publicar sem trap de remocao)" "! grep -q \"trap 'apagar'\" '$AQUI/aws/m365-aws.sh' && grep -q '^confirmar()' '$AQUI/aws/m365-aws.sh' && grep -q 'chave_privada_no_disco=MANTIDA' '$AQUI/aws/m365-aws.sh'"
-confere "m365: com o transporte real, a lista de destinatarios vale para todo comando compose (prova, autenticacao, desligar)" "grep -q 'compose.m365.yml interpola a lista em TODO comando compose' '$AQUI/homologacao.sh' && grep -q 'HOMOLOG_M365_DESTINATARIOS=\"\$(python \"\$AQUI/lib/email_real.py\" destinatarios' '$AQUI/homologacao.sh'"
 confere "m365: desligar confere pelo Docker que o proxy parou e para pelo rotulo se o compose falhar" "grep -q 'proxy-m365 CONTINUA no ar' '$AQUI/homologacao.sh' && grep -q '^    proxy_no_ar()' '$AQUI/homologacao.sh'"
 confere "m365: prova e autenticacao sem conversao de caminho do Git Bash no docker exec" "[ \"\$(grep -c 'out=\"\$(MSYS_NO_PATHCONV=1 compose exec -T platform java' '$AQUI/homologacao.sh')\" = 2 ]"
 confere "m365: regiao do segredo igual no compose e no proxy" "grep -q 'NEKKORA_M365_AWS_REGIAO: sa-east-1' '$M365' && grep -q 'secretsmanager.sa-east-1.amazonaws.com' '$AQUI/proxy/squid.conf'"
@@ -211,7 +198,7 @@ confere "015 ensaio: sub-redes e IPs pelo prefixo" "grep -q 'subnet: 10.252.20.0
 echo "== 5. elevacao e migrations"
 # F4 (P3-IT): o CONTEUDO da lista (fim de linha normalizado para LF) tem de ser uma versao APROVADA, nao so "sem diff".
 #   7fd92fae... = operacional atual: 011-013, SEM a 016 (a linha da 016 depende da decisao D-ELEV);
-#   47bb9596... = proposta de P3 com "016 <sha256> ensaio-016a" (docs/relatorios/2026-09-29-p3it-anexos/elevacao-016-proposta.patch).
+#   47bb9596... = proposta de P3 com "016 <sha256> ensaio-016a" (patch lido do historico do Git, commit ad2764b, anterior a V1).
 # A proposta so e ACEITA como conteudo aprovado; esta validacao nao a ativa.
 #   d122d22a... = missao PLATFORM-API-V1-003 (PROPOSTA, para revisao): 011-013 legadas + 016-020 tipo=superuser vinculadas
 #   ao ensaio-api-v1-003 (na primeira versao do PR, 374c6620..., ao ensaio-api-v1-002); com a ativacao (022), bf040a47... acrescenta
@@ -234,7 +221,8 @@ BASE_LISTA="$TMP/l_base_011_013.txt"
 git -C "$REPO" show bf977d7:ops/homologacao/implantacao/elevacao.txt > "$BASE_LISTA"
 confere "base fixada (bf977d7) com o conteudo 011-013 aprovado" "[ \"\$(lista_aprovada '$BASE_LISTA')\" = lista-011-013 ]"
 confere "elevacao.txt operacional com conteudo aprovado (011-013 + 016-020 e 022 vinculadas ao ensaio-api-v1-003)" "[ \"\$(lista_aprovada '$AQUI/implantacao/elevacao.txt')\" = operacional ]"
-PROP="$REPO/docs/relatorios/2026-09-29-p3it-anexos/elevacao-016-proposta.patch"
+PROP="$TMP/elevacao-016-proposta.patch"
+git -C "$REPO" show ad2764b:docs/relatorios/2026-09-29-p3it-anexos/elevacao-016-proposta.patch > "$PROP"
 mkdir -p "$TMP/lista/ops/homologacao/implantacao"
 cp "$BASE_LISTA" "$TMP/lista/ops/homologacao/implantacao/elevacao.txt"
 confere "copia proposta com a 016 vinculada (patch aplicado so na copia temporaria) reconhecida como aprovada" \
@@ -452,10 +440,10 @@ if bash "$AQUI/testes/guarda_fontes_imagens.sh" > "$TMP/guarda.txt" 2>&1; then o
 echo "== 11. script do modelo do migrador e configuracao de desenvolvimento (P4-R2a-C2)"
 SM="$REPO/db/bootstrap/aplicar_como_migrador.sh"
 confere "script do modelo em db/bootstrap/ (e nao mais em db/tests/lib/)" "[ -f '$SM' ] && [ ! -e '$REPO/db/tests/lib/aplicar_como_migrador.sh' ]"
-confere "consumidores apontam para db/bootstrap/aplicar_como_migrador.sh (RealDatabase, OpsBanco, suite da 016, compose do modelo)" \
+confere "consumidores apontam para db/bootstrap/aplicar_como_migrador.sh (RealDatabase, OpsBanco, suite de banco, compose do modelo)" \
     "grep -q 'resolveSibling(\"bootstrap/aplicar_como_migrador.sh\")' '$REPO/api/nekkora-core/src/test/java/com/nekkora/core/testsupport/RealDatabase.java' \
      && grep -q 'resolveSibling(\"bootstrap/aplicar_como_migrador.sh\")' '$REPO/api/nekkora-ops/src/test/java/com/nekkora/ops/testsupport/OpsBanco.java' \
-     && grep -q 'MODELO=\"\$REPO/db/bootstrap/aplicar_como_migrador.sh\"' '$REPO/db/tests/mfa-emergencia-016/run.sh' \
+     && grep -q 'MODELO=\"\$REPO/db/bootstrap/aplicar_como_migrador.sh\"' '$REPO/db/tests/run.sh' \
      && grep -q '\./db/bootstrap/aplicar_como_migrador.sh:/docker-entrypoint-initdb.d/000_aplicar_como_migrador.sh:ro' '$REPO/docker-compose.modelo.yml'"
 confere "nenhuma referencia ao caminho antigo db/tests/lib/ em codigo (api, db/tests, ops/homologacao, compose)" \
     "! grep -rlE 'tests/lib/aplicar_como_migrador' '$REPO/api' '$REPO/db/tests' '$AQUI' '$REPO/docker-compose.yml' '$REPO/docker-compose.modelo.yml' \

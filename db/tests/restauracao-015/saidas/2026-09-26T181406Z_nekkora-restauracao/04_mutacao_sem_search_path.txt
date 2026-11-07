@@ -1,4 +1,0 @@
-BEGIN
-ALTER FUNCTION
-ERROR:  is_valid_command_contract sem o search_path esperado
-CONTEXT:  PL/pgSQL function inline_code_block line 7 at RAISE

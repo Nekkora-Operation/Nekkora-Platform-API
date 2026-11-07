@@ -146,7 +146,7 @@ else
     h=""
 fi
 registra "historico antes: ${h:-vazio}"
-case " $h " in *":false "*) libera_trava; registra "FALHA: historico com migration success=false: intervencao manual revisada (IMPLANTACAO.md); o runner nao repara"; exit 3;; esac
+case " $h " in *":false "*) libera_trava; registra "FALHA: historico com migration success=false: intervencao manual revisada (README.md, secao Homologacao); o runner nao repara"; exit 3;; esac
 
 # ---------------------------------------------------------------------------------------------- versoes pendentes
 for f in "$HOMOLOG_MIGRACOES_HOST"/[0-9]*.sql; do

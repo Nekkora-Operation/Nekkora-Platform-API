@@ -1,1 +1,0 @@
-ERROR:  must be able to SET ROLE "nekkora_retention_tables_owner"

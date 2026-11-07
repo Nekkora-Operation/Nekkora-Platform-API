@@ -3,7 +3,7 @@
 # compilacao, teste com falha ou com erro reprova o check. O check NAO detecta sozinho teste pulado ou que deixou de rodar
 # (@Disabled, suposicao nao atendida, classe fora do padrao do surefire): as contagens de "Skipped" e de testes ficam no
 # log e nos relatorios publicados abaixo, para leitura. Bash do runner (Ubuntu) e 5.x, compativel com o FixtureRunnerIT.
-# Fora daqui (manuais, descritos nos READMEs e nos PRs): suites de banco em db/tests e o E2E entre processos (api/e2e).
+# Fora daqui (manuais, descritos no README.md, secao Testes): a suite de banco (db/tests/run.sh) e o E2E entre processos (api/e2e).
 name: api-testes
 
 on:

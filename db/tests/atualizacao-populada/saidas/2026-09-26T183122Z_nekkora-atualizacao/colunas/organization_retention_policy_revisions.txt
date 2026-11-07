@@ -1,1 +1,0 @@
-revision_id,organization_id,category,revision_number,effective_from,retention_mode,retention_days,provisioned_by_user_id,created_at
