@@ -117,11 +117,13 @@ class LinkedAccountsE2E {
         id = browser();
         csrfPre(id);
         BrowserClient.Response l = id.post("/api/v1/auth/login", "{\"email\":\"" + EMAIL + "\",\"password\":\"" + SENHA_IDENTIDADE + "\"}");
-        assertThat(l.field("status")).isEqualTo("mfa_enrollment_required");
+        // 029 (MFA opcional): sem fator, o login ja abre a sessao; o primeiro fator e a ativacao voluntaria
+        assertThat(l.field("status")).isEqualTo("authenticated");
         id.csrf = l.field("csrfToken");
-        String uri = id.post("/api/v1/auth/mfa/enroll/start", null).field("otpauthUri");
+        assertThat(id.post("/api/v1/auth/password-confirm", "{\"password\":\"" + SENHA_IDENTIDADE + "\"}").status()).isEqualTo(204);
+        String uri = id.post("/api/v1/auth/mfa/activate/start", null).field("otpauthUri");
         FATORES.put("identidade", Base32.decode(URI.create(uri).getRawQuery().replaceAll(".*secret=([A-Z2-7]+).*", "$1")));
-        BrowserClient.Response c = id.post("/api/v1/auth/mfa/enroll/confirm", "{\"code\":\"" + code("identidade") + "\"}");
+        BrowserClient.Response c = id.post("/api/v1/auth/mfa/activate/confirm", "{\"code\":\"" + code("identidade") + "\"}");
         assertThat(c.status()).isEqualTo(200);
         id.csrf = c.field("csrfToken");
         SEGREDOS.addAll(c.listField("recoveryCodes"));

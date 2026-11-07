@@ -89,12 +89,13 @@ class IdentityCredentialsE2E {
     @Test
     @Order(1)
     void primeiroFatorPeloDesafioEOrganizacaoCriada() {
-        id = loginNovo("mfa_enrollment_required");
-        String uri = id.post("/api/v1/auth/mfa/enroll/start", null).field("otpauthUri");
+        // 029 (MFA opcional): sem fator, o login ja abre a sessao; o primeiro fator e a ativacao voluntaria
+        id = loginNovo("authenticated");
+        assertThat(id.post("/api/v1/auth/password-confirm", "{\"password\":\"" + SENHA + "\"}").status()).isEqualTo(204);
+        String uri = id.post("/api/v1/auth/mfa/activate/start", null).field("otpauthUri");
         FATORES.put("f1", segredo(uri));
-        BrowserClient.Response c = id.post("/api/v1/auth/mfa/enroll/confirm", "{\"code\":\"" + code("f1") + "\"}");
+        BrowserClient.Response c = id.post("/api/v1/auth/mfa/activate/confirm", "{\"code\":\"" + code("f1") + "\"}");
         assertThat(c.status()).isEqualTo(200);
-        assertThat(c.body()).contains("\"restricted\":false");
         id.csrf = c.field("csrfToken");
         codigos = c.listField("recoveryCodes");
         SEGREDOS.addAll(codigos);

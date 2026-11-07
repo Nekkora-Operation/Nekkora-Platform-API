@@ -337,11 +337,13 @@ class AgentChannelE2E {
         BrowserClient b = browser();
         b.csrf = b.get("/api/v1/csrf").field("csrfToken");
         BrowserClient.Response l = b.post("/api/v1/auth/login", "{\"email\":\"" + email + "\",\"password\":\"" + senha + "\"}");
-        assertThat(l.field("status")).isEqualTo("mfa_enrollment_required");
+        // 029 (MFA opcional): sem fator, o login ja abre a sessao; o primeiro fator e a ativacao voluntaria
+        assertThat(l.field("status")).isEqualTo("authenticated");
         b.csrf = l.field("csrfToken");
-        String uri = b.post("/api/v1/auth/mfa/enroll/start", null).field("otpauthUri");
+        assertThat(b.post("/api/v1/auth/password-confirm", "{\"password\":\"" + senha + "\"}").status()).isEqualTo(204);
+        String uri = b.post("/api/v1/auth/mfa/activate/start", null).field("otpauthUri");
         FATORES.put(fator, Base32.decode(URI.create(uri).getRawQuery().replaceAll(".*secret=([A-Z2-7]+).*", "$1")));
-        BrowserClient.Response c = b.post("/api/v1/auth/mfa/enroll/confirm", "{\"code\":\"" + code(fator) + "\"}");
+        BrowserClient.Response c = b.post("/api/v1/auth/mfa/activate/confirm", "{\"code\":\"" + code(fator) + "\"}");
         assertThat(c.status()).isEqualTo(200);
         b.csrf = c.field("csrfToken");
         SEGREDOS.addAll(c.listField("recoveryCodes"));
