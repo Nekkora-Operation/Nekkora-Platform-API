@@ -48,11 +48,13 @@ public final class AgentRunReads {
                    r.agent_started_at, r.agent_ended_at, r.adopted, r.suspensions, r.locks, r.supervisor_reports, r.supervisor_conflicts, r.last_report_at,
                    r.events_stored, r.stored_through, r.settled_through, r.max_sequence, r.declared_missing, r.collection_completed_sequence,
                    r.lost_at_source, r.lost_local, r.purged_local, r.invalid_refused, r.framework_events, r.last_event_at,
+                   r.source_kind, r.run_request_id, au.name AS automation_name, a.name AS agent_name,
                    a.last_heartbeat_at, a.last_heartbeat_at > clock_timestamp() - make_interval(secs => :connected) AS connected,
                    (SELECT count(*) FROM public.agent_ingestion_refusals x WHERE x.agent_run_id = r.agent_run_id AND x.kind IN (1, 2, 5)) AS delivery_conflicts
               FROM public.agent_runs r
               JOIN public.workspaces w ON w.organization_id = r.organization_id AND w.workspace_id = r.workspace_id
               JOIN public.agents a ON a.organization_id = r.organization_id AND a.agent_id = r.agent_id
+              JOIN public.automations au ON au.organization_id = r.organization_id AND au.automation_id = r.automation_id
             """;
 
     public List<Map<String, Object>> list(JdbcClient j, UUID org, UUID membership, Filter f, OffsetDateTime afterRegistered, UUID afterId, int max) {
@@ -194,7 +196,12 @@ public final class AgentRunReads {
         corr.put("automationVersionId", rs.getObject("automation_version_id", UUID.class));
         corr.put("authorizationId", rs.getObject("authorization_id", UUID.class));
         m.put("correlation", corr);
-        m.put("origin", "LOCAL_AUTHORIZED");
+        corr.put("runRequestId", rs.getObject("run_request_id", UUID.class));
+        // 030: quem pediu (maquina ou pedido da Platform) e de onde vem o codigo (pacote Studio, pacote externo, monitoramento)
+        m.put("origin", rs.getShort("origin") == 2 ? "PLATFORM_REQUEST" : "LOCAL_AUTHORIZED");
+        m.put("sourceKind", switch (rs.getShort("source_kind")) { case 2 -> "EXTERNAL_PACKAGE"; case 3 -> "EXTERNAL_MONITORED"; default -> "STUDIO_PACKAGE"; });
+        m.put("automationName", rs.getString("automation_name"));
+        m.put("agentName", rs.getString("agent_name"));
         m.put("authorizationStateAtRegistration", AUTH_STATES[rs.getShort("authorization_state_at_registration")]);
         m.put("registeredAt", rs.getObject("registered_at", OffsetDateTime.class));
 

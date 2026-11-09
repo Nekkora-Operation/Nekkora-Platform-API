@@ -57,7 +57,11 @@ public class AgentController {
     public record RevokeRequest(String reason) {
     }
 
-    public record LocalRunRequest(String workerId, String automationVersionId, String validUntil) {
+    /**
+     * Sem {@code sourceKind} (ou com pacote): {@code automationVersionId} decide a origem pela regra da versao. Com
+     * {@code sourceKind = EXTERNAL_MONITORED}: {@code automationId} e nada de versao (030).
+     */
+    public record LocalRunRequest(String workerId, String automationVersionId, String validUntil, String sourceKind, String automationId) {
     }
 
     private final AgentAdminService admin;
@@ -136,6 +140,17 @@ public class AgentController {
                                                                                   HttpServletRequest req) {
         if (body == null) {
             throw ApiException.invalid("corpo");
+        }
+        if ("EXTERNAL_MONITORED".equals(body.sourceKind())) {
+            if (body.automationVersionId() != null) {
+                throw ApiException.invalid("versao");
+            }
+            return ResponseEntity.status(HttpStatus.CREATED).body(admin.authorizeMonitored(org, SessionFilter.principal(req), SessionFilter.token(req),
+                    workspace, uuid(body.workerId(), "worker"), uuid(body.automationId(), "automacao"), instant(body.validUntil())));
+        }
+        if (body.sourceKind() != null || body.automationId() != null) {
+            // pacote: a origem vem da regra da versao, nunca do corpo
+            throw ApiException.invalid("origem");
         }
         return ResponseEntity.status(HttpStatus.CREATED).body(admin.authorizeLocalRun(org, SessionFilter.principal(req), SessionFilter.token(req), workspace,
                 uuid(body.workerId(), "worker"), uuid(body.automationVersionId(), "versao"), instant(body.validUntil())));

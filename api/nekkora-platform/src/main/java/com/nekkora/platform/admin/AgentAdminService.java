@@ -27,6 +27,19 @@ public final class AgentAdminService {
     private static final Logger LOG = LoggerFactory.getLogger(AgentAdminService.class);
     /** Regra da impressao do pacote aceita nesta versao (contrato, sec. 6.4). */
     static final String FINGERPRINT_RULE = "nekkora-agent/package-fingerprint/1";
+    /** Regra propria do pacote Python externo (AGENT-PYTHON-001); a /1 dos pacotes Studio nao muda. */
+    static final String EXTERNAL_FINGERPRINT_RULE = "nekkora-agent/external-python-fingerprint/1";
+
+    /** Origem explicita da autorizacao e do registro (030): {@code source_kind} 1, 2 e 3. */
+    public static String sourceKind(short code) {
+        return switch (code) {
+            case 1 -> "STUDIO_PACKAGE";
+            case 2 -> "EXTERNAL_PACKAGE";
+            case 3 -> "EXTERNAL_MONITORED";
+            default -> throw new IllegalStateException("source_kind " + code);
+        };
+    }
+
     static final Pattern NAME = Pattern.compile("[^\\p{Cntrl}]{1,80}");
 
     private final AccessActions actions;
@@ -216,12 +229,20 @@ public final class AgentAdminService {
 
     // ------------------------------------------------------------------ autorizacao de execucao local
 
+    /**
+     * Autorizacao local. {@code sourceKind}: STUDIO_PACKAGE, EXTERNAL_PACKAGE ou EXTERNAL_MONITORED (030). No monitoramento,
+     * {@code automationVersionId}, {@code packageFingerprint} e {@code packageFingerprintRule} sao nulos: a Platform nao conhece codigo.
+     */
     public record LocalAuthorization(UUID authorizationId, UUID workspaceId, UUID workerId, UUID automationId, UUID automationVersionId,
-                                     String packageFingerprint, OffsetDateTime grantedAt, OffsetDateTime validUntil, OffsetDateTime revokedAt) {
+                                     String packageFingerprint, OffsetDateTime grantedAt, OffsetDateTime validUntil, OffsetDateTime revokedAt,
+                                     String sourceKind, String packageFingerprintRule) {
     }
 
-    private record Version(UUID automationId, short status, String packageFingerprint) {
+    private record Version(UUID automationId, short status, String rule, String packageFingerprint) {
     }
+
+    private static final String AUTHORIZATION_COLUMNS = "authorization_id, workspace_id, worker_id, automation_id, automation_version_id, package_fingerprint, "
+            + "granted_at, valid_until, revoked_at, source_kind, package_fingerprint_rule";
 
     public LocalAuthorization authorizeLocalRun(UUID org, ValidSession actor, String token, UUID workspaceId, UUID workerId, UUID versionId,
                                                 OffsetDateTime validUntil) {
@@ -235,14 +256,17 @@ public final class AgentAdminService {
             actions.requireStepUp(j, actor);
             actions.lockOrganizationAndActor(j, org, actor.userId());
             // a impressao do pacote declarada na versao, com a regra (contrato, sec. 6.4); nunca o sha256 dos bytes do artefato
-            Version v = j.sql("SELECT automation_id, status, CASE WHEN command_json -> 'agent_package' ->> 'fingerprint_rule' = ? "
-                            + "THEN command_json -> 'agent_package' ->> 'fingerprint' END FROM public.automation_versions "
-                            + "WHERE organization_id = ? AND workspace_id = ? AND automation_version_id = ?").param(FINGERPRINT_RULE).param(org).param(workspaceId)
-                    .param(versionId).query((rs, n) -> new Version(rs.getObject(1, UUID.class), rs.getShort(2), rs.getString(3))).optional()
+            // a regra declarada na versao decide a origem: /1 = pacote Studio, external-python-fingerprint/1 = pacote externo (030)
+            Version v = j.sql("SELECT automation_id, status, command_json -> 'agent_package' ->> 'fingerprint_rule', "
+                            + "command_json -> 'agent_package' ->> 'fingerprint' FROM public.automation_versions "
+                            + "WHERE organization_id = ? AND workspace_id = ? AND automation_version_id = ?").param(org).param(workspaceId)
+                    .param(versionId).query((rs, n) -> new Version(rs.getObject(1, UUID.class), rs.getShort(2), rs.getString(3), rs.getString(4))).optional()
                     .orElseThrow(() -> AccessActions.refuse(Failure.TARGET_NOT_FOUND, "versao"));
-            if (v.status() != 2 || v.packageFingerprint() == null || !v.packageFingerprint().matches("[0-9a-f]{64}")) {
+            boolean knownRule = FINGERPRINT_RULE.equals(v.rule()) || EXTERNAL_FINGERPRINT_RULE.equals(v.rule());
+            if (v.status() != 2 || !knownRule || v.packageFingerprint() == null || !v.packageFingerprint().matches("[0-9a-f]{64}")) {
                 throw AccessActions.refuse(Failure.CONFLICT, "versao_nao_publicada_ou_sem_impressao_do_pacote");
             }
+            short kind = FINGERPRINT_RULE.equals(v.rule()) ? (short) 1 : (short) 2;
             // automacao e workspace ativos (o gatilho da 025 tambem confere; aqui a recusa vira 409 em vez de 500)
             if (!Boolean.TRUE.equals(j.sql("SELECT a.status = 1 AND w.status = 1 FROM public.automations a JOIN public.workspaces w "
                     + "ON w.organization_id = a.organization_id AND w.workspace_id = a.workspace_id WHERE a.organization_id = ? AND a.automation_id = ?")
@@ -254,11 +278,47 @@ public final class AgentAdminService {
                     .orElseThrow(() -> AccessActions.refuse(Failure.CONFLICT, "worker_nao_autorizado_no_workspace"));
             LocalAuthorization a = j.sql("""
                     INSERT INTO public.local_run_authorizations (organization_id, workspace_id, worker_id, worker_workspace_assignment_id, automation_id,
-                        automation_version_id, package_fingerprint, granted_by_membership_id, valid_until)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    RETURNING authorization_id, workspace_id, worker_id, automation_id, automation_version_id, package_fingerprint, granted_at, valid_until,
-                              revoked_at
-                    """).param(org).param(workspaceId).param(workerId).param(assignment).param(v.automationId()).param(versionId).param(v.packageFingerprint())
+                        automation_version_id, package_fingerprint, package_fingerprint_rule, source_kind, granted_by_membership_id, valid_until)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    RETURNING """ + " " + AUTHORIZATION_COLUMNS).param(org).param(workspaceId).param(workerId).param(assignment).param(v.automationId()).param(versionId)
+                    .param(v.packageFingerprint()).param(v.rule()).param(kind).param(actor.membershipId()).param(validUntil)
+                    .query((rs, n) -> authorization(rs)).single();
+            audit(j, org, 10, actor.membershipId(), null, workerId, workspaceId, null, null, a.authorizationId(), null);
+            return a;
+        });
+    }
+
+    /**
+     * Autorizacao de MONITORAMENTO de Python externo (030, source_kind 3): a automacao cadastrada, o Worker e a validade. Sem
+     * versao e sem impressao: nada de codigo, caminho ou argumento chega a Platform. Mesma autoridade (automation.execute no
+     * workspace + step-up) e mesmas recusas da autorizacao de pacote.
+     */
+    public LocalAuthorization authorizeMonitored(UUID org, ValidSession actor, String token, UUID workspaceId, UUID workerId, UUID automationId,
+                                                 OffsetDateTime validUntil) {
+        if (validUntil == null || !validUntil.isAfter(OffsetDateTime.now()) || validUntil.isAfter(OffsetDateTime.now().plusDays(366))) {
+            throw ApiException.invalid("validade");
+        }
+        return actions.write(org, j -> {
+            actions.requireActor(j, org, actor, token);
+            access.requireWorkspace(j, org, actor.membershipId(), workspaceId, "automation.execute");
+            actions.requireStepUp(j, actor);
+            actions.lockOrganizationAndActor(j, org, actor.userId());
+            Boolean active = j.sql("SELECT a.status = 1 AND w.status = 1 FROM public.automations a JOIN public.workspaces w "
+                            + "ON w.organization_id = a.organization_id AND w.workspace_id = a.workspace_id "
+                            + "WHERE a.organization_id = ? AND a.workspace_id = ? AND a.automation_id = ?")
+                    .param(org).param(workspaceId).param(automationId).query(Boolean.class).optional()
+                    .orElseThrow(() -> AccessActions.refuse(Failure.TARGET_NOT_FOUND, "automacao"));
+            if (!active) {
+                throw AccessActions.refuse(Failure.CONFLICT, "automacao_ou_workspace_inativo");
+            }
+            UUID assignment = j.sql("SELECT assignment_id FROM public.worker_workspace_assignments WHERE organization_id = ? AND worker_id = ? "
+                            + "AND workspace_id = ? AND status = 1").param(org).param(workerId).param(workspaceId).query(UUID.class).optional()
+                    .orElseThrow(() -> AccessActions.refuse(Failure.CONFLICT, "worker_nao_autorizado_no_workspace"));
+            LocalAuthorization a = j.sql("""
+                    INSERT INTO public.local_run_authorizations (organization_id, workspace_id, worker_id, worker_workspace_assignment_id, automation_id,
+                        automation_version_id, package_fingerprint, package_fingerprint_rule, source_kind, granted_by_membership_id, valid_until)
+                    VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, 3, ?, ?)
+                    RETURNING """ + " " + AUTHORIZATION_COLUMNS).param(org).param(workspaceId).param(workerId).param(assignment).param(automationId)
                     .param(actor.membershipId()).param(validUntil).query((rs, n) -> authorization(rs)).single();
             audit(j, org, 10, actor.membershipId(), null, workerId, workspaceId, null, null, a.authorizationId(), null);
             return a;
@@ -285,7 +345,8 @@ public final class AgentAdminService {
             actions.requireActor(j, org, actor, token);
             access.requireWorkspace(j, org, actor.membershipId(), workspaceId, "automation.read");
             return j.sql("""
-                    SELECT authorization_id, workspace_id, worker_id, automation_id, automation_version_id, package_fingerprint, granted_at, valid_until, revoked_at
+                    SELECT """ + " " + AUTHORIZATION_COLUMNS + """
+
                       FROM public.local_run_authorizations WHERE organization_id = ? AND workspace_id = ? ORDER BY granted_at, authorization_id
                     """).param(org).param(workspaceId).query((rs, n) -> authorization(rs)).list();
         });
@@ -294,7 +355,7 @@ public final class AgentAdminService {
     private static LocalAuthorization authorization(java.sql.ResultSet rs) throws java.sql.SQLException {
         return new LocalAuthorization(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getObject(3, UUID.class), rs.getObject(4, UUID.class),
                 rs.getObject(5, UUID.class), rs.getString(6), rs.getObject(7, OffsetDateTime.class), rs.getObject(8, OffsetDateTime.class),
-                rs.getObject(9, OffsetDateTime.class));
+                rs.getObject(9, OffsetDateTime.class), sourceKind(rs.getShort(10)), rs.getString(11));
     }
 
     // ------------------------------------------------------------------ leitura das maquinas

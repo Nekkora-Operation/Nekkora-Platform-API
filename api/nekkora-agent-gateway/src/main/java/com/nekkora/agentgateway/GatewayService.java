@@ -36,7 +36,17 @@ public final class GatewayService {
     static final Pattern AGENT_VERSION = Pattern.compile("[0-9A-Za-z.+-]{1,40}");
     static final Pattern EXECUTION = Pattern.compile("ex-[0-9a-f]{32}");
     static final Pattern SHA = Pattern.compile("[0-9a-f]{64}");
-    static final List<String> CAPABILITIES = List.of("RUN_LOCAL", "OBS_1_0", "SUPERVISOR_REPORT_1_0");
+    static final List<String> CAPABILITIES = List.of("RUN_LOCAL", "OBS_1_0", "SUPERVISOR_REPORT_1_0", "EXTERNAL_PYTHON_1_0", "RUN_REQUEST_1_0");
+
+    /** Origem explicita (030): 1 = STUDIO_PACKAGE, 2 = EXTERNAL_PACKAGE, 3 = EXTERNAL_MONITORED (sem versao nem impressao). */
+    static String sourceKind(short code) {
+        return switch (code) {
+            case 1 -> "STUDIO_PACKAGE";
+            case 2 -> "EXTERNAL_PACKAGE";
+            case 3 -> "EXTERNAL_MONITORED";
+            default -> throw new IllegalStateException("source_kind " + code);
+        };
+    }
     static final JsonMapper JSON = JsonMapper.builder().build();
 
     private final OrgTransactions tx;
@@ -199,8 +209,12 @@ public final class GatewayService {
         });
     }
 
+    /**
+     * Autorizacao ativa do Worker. {@code sourceKind} EXTERNAL_MONITORED: {@code automationVersionId}, {@code packageFingerprint} e
+     * {@code packageFingerprintRule} nulos (um Agent anterior recusa o item por nao ter impressao: falha fechada).
+     */
     public record Authorization(UUID authorizationId, UUID workspaceId, UUID automationId, UUID automationVersionId, String packageFingerprint,
-                                String packageFingerprintRule, OffsetDateTime validUntil) {
+                                String packageFingerprintRule, OffsetDateTime validUntil, String sourceKind) {
     }
 
     /** Autorizacoes ATIVAS do Worker da maquina (nao revogadas, no prazo, com o Worker ainda autorizado no workspace). */
@@ -209,7 +223,7 @@ public final class GatewayService {
             Machine m = auth.authenticate(j, t);
             return j.sql("""
                     SELECT z.authorization_id, z.workspace_id, z.automation_id, z.automation_version_id, z.package_fingerprint,
-                           z.package_fingerprint_rule, z.valid_until
+                           z.package_fingerprint_rule, z.valid_until, z.source_kind
                       FROM public.local_run_authorizations z
                       JOIN public.worker_workspace_assignments x ON x.organization_id = z.organization_id
                                                                  AND x.assignment_id = z.worker_workspace_assignment_id AND x.status = 1
@@ -217,7 +231,8 @@ public final class GatewayService {
                      ORDER BY z.granted_at, z.authorization_id
                     """).param(m.organization()).param(m.workerId())
                     .query((rs, n) -> new Authorization(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getObject(3, UUID.class),
-                            rs.getObject(4, UUID.class), rs.getString(5), rs.getString(6), rs.getObject(7, OffsetDateTime.class)))
+                            rs.getObject(4, UUID.class), rs.getString(5), rs.getString(6), rs.getObject(7, OffsetDateTime.class),
+                            sourceKind(rs.getShort(8))))
                     .list();
         });
     }
@@ -227,32 +242,44 @@ public final class GatewayService {
     public record Registered(UUID runId, boolean created, String state, String reportOutcome) {
     }
 
-    private record RunRow(UUID runId, UUID authorizationId, String fingerprint, SupervisorReport report) {
+    private record RunRow(UUID runId, UUID authorizationId, String fingerprint, UUID runRequestId, SupervisorReport report) {
     }
 
-    private record AuthRow(UUID workspaceId, UUID automationId, UUID versionId, UUID workerId, String fingerprint, boolean revoked, boolean expired) {
+    private record AuthRow(UUID workspaceId, UUID automationId, UUID versionId, UUID workerId, String fingerprint, boolean revoked, boolean expired,
+                           short sourceKind) {
     }
 
-    /** Registro idempotente por (Agent, agent_execution_id). O mesmo id com outra autorizacao ou pacote: 409. */
+    /**
+     * Registro idempotente por (Agent, agent_execution_id). O mesmo id com outra autorizacao, pacote ou pedido: 409.
+     * {@code packageFingerprint} ausente se e somente se a autorizacao for de monitoramento (030); {@code runRequestId}: execucao
+     * de um pedido ACEITO por esta maquina com o mesmo {@code agentExecutionId}.
+     */
     public Registered register(MachineToken t, String agentExecutionId, UUID authorizationId, String packageFingerprint, SupervisorReport report) {
-        if (agentExecutionId == null || !EXECUTION.matcher(agentExecutionId).matches() || authorizationId == null || packageFingerprint == null
-                || !SHA.matcher(packageFingerprint).matches()) {
+        return register(t, agentExecutionId, authorizationId, packageFingerprint, null, report);
+    }
+
+    public Registered register(MachineToken t, String agentExecutionId, UUID authorizationId, String packageFingerprint, UUID runRequestId,
+                               SupervisorReport report) {
+        if (agentExecutionId == null || !EXECUTION.matcher(agentExecutionId).matches() || authorizationId == null
+                || packageFingerprint != null && !SHA.matcher(packageFingerprint).matches()) {
             throw ApiException.invalid("registro");
         }
         try {
-            return registerOnce(t, agentExecutionId, authorizationId, packageFingerprint, report);
+            return registerOnce(t, agentExecutionId, authorizationId, packageFingerprint, runRequestId, report);
         } catch (DuplicateKeyException race) {
             // dois registros concorrentes do mesmo agent_execution_id: o segundo ve o primeiro e segue o caminho idempotente
-            return registerOnce(t, agentExecutionId, authorizationId, packageFingerprint, report);
+            return registerOnce(t, agentExecutionId, authorizationId, packageFingerprint, runRequestId, report);
         }
     }
 
-    private Registered registerOnce(MachineToken t, String agentExecutionId, UUID authorizationId, String packageFingerprint, SupervisorReport report) {
+    private Registered registerOnce(MachineToken t, String agentExecutionId, UUID authorizationId, String packageFingerprint, UUID runRequestId,
+                                    SupervisorReport report) {
         return tx.inOrganization(t.organization(), Mode.READ_WRITE, j -> {
             Machine m = auth.authenticate(j, t);
             RunRow existing = lockRun(j, m, agentExecutionId);
             if (existing != null) {
-                if (!existing.authorizationId().equals(authorizationId) || !existing.fingerprint().equals(packageFingerprint)) {
+                if (!existing.authorizationId().equals(authorizationId) || !java.util.Objects.equals(existing.fingerprint(), packageFingerprint)
+                        || !java.util.Objects.equals(existing.runRequestId(), runRequestId)) {
                     throw new ApiException(ApiError.CONFLICT, "registro_divergente");
                 }
                 Outcome o = applyReport(j, m, existing, report);
@@ -261,31 +288,51 @@ public final class GatewayService {
             }
             AuthRow z = j.sql("""
                     SELECT z.workspace_id, z.automation_id, z.automation_version_id, z.worker_id, z.package_fingerprint,
-                           z.revoked_at IS NOT NULL OR x.status <> 1, z.valid_until <= clock_timestamp()
+                           z.revoked_at IS NOT NULL OR x.status <> 1, z.valid_until <= clock_timestamp(), z.source_kind
                       FROM public.local_run_authorizations z
                       JOIN public.worker_workspace_assignments x ON x.organization_id = z.organization_id AND x.assignment_id = z.worker_workspace_assignment_id
                      WHERE z.organization_id = ? AND z.authorization_id = ?
                     """).param(m.organization()).param(authorizationId)
                     .query((rs, n) -> new AuthRow(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getObject(3, UUID.class),
-                            rs.getObject(4, UUID.class), rs.getString(5), rs.getBoolean(6), rs.getBoolean(7)))
+                            rs.getObject(4, UUID.class), rs.getString(5), rs.getBoolean(6), rs.getBoolean(7), rs.getShort(8)))
                     .optional().orElse(null);
             if (z == null || !z.workerId().equals(m.workerId())) {
                 throw ApiException.forbidden("autorizacao");
             }
-            if (!z.fingerprint().equals(packageFingerprint)) {
+            // monitoramento: sem impressao; pacote: a impressao da autorizacao (nunca adivinhada pelo nome)
+            if (!java.util.Objects.equals(z.fingerprint(), packageFingerprint)) {
                 throw ApiException.forbidden("pacote");
+            }
+            if (runRequestId != null) {
+                Boolean accepted = j.sql("""
+                        SELECT state = 3 AND agent_id = ? AND authorization_id = ? AND agent_execution_id = ?
+                          FROM public.run_requests WHERE organization_id = ? AND run_request_id = ? FOR UPDATE
+                        """).param(m.agentId()).param(authorizationId).param(agentExecutionId).param(m.organization()).param(runRequestId)
+                        .query(Boolean.class).optional().orElse(null);
+                if (accepted == null) {
+                    throw new ApiException(ApiError.NOT_FOUND, "pedido");
+                }
+                if (!accepted) {
+                    throw new ApiException(ApiError.CONFLICT, "pedido_divergente");
+                }
             }
             short authState = z.revoked() ? (short) 2 : z.expired() ? (short) 3 : (short) 1;
             UUID runId = j.sql("""
                     INSERT INTO public.agent_runs (organization_id, workspace_id, automation_id, automation_version_id, authorization_id, agent_id, worker_id,
                         worker_agent_assignment_id, agent_execution_id, package_fingerprint, authorization_state_at_registration, supervisor_state,
-                        supervisor_code, exit_code, supervisor_counts, agent_created_at, agent_started_at, agent_ended_at, adopted, suspensions, locks)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, ?, ?) RETURNING agent_run_id
+                        supervisor_code, exit_code, supervisor_counts, agent_created_at, agent_started_at, agent_ended_at, adopted, suspensions, locks,
+                        source_kind, origin, run_request_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING agent_run_id
                     """).param(m.organization()).param(z.workspaceId()).param(z.automationId()).param(z.versionId()).param(authorizationId)
                     .param(m.agentId()).param(m.workerId()).param(m.assignmentId()).param(agentExecutionId).param(packageFingerprint).param(authState)
                     .param(report.state().code()).param(report.code()).param(report.exitCode()).param(countsJson(report)).param(ts(report.created()))
                     .param(ts(report.started())).param(ts(report.ended())).param(report.adopted()).param(report.suspensions()).param(report.locks())
+                    .param(z.sourceKind()).param(runRequestId == null ? (short) 1 : (short) 2).param(runRequestId)
                     .query(UUID.class).single();
+            if (runRequestId != null) {
+                j.sql("UPDATE public.run_requests SET state = 6, agent_run_id = ? WHERE organization_id = ? AND run_request_id = ?")
+                        .param(runId).param(m.organization()).param(runRequestId).update();
+            }
             insertReport(j, m.organization(), runId, Outcome.APPLIED, report);
             if (authState != 1) {
                 LOG.info("evento=agente.registro_autorizacao_inativa execucao={} estado_autorizacao={} correlacao={}", runId, authState,
@@ -318,10 +365,10 @@ public final class GatewayService {
     private static RunRow lockRun(JdbcClient j, Machine m, String agentExecutionId) {
         return j.sql("""
                 SELECT agent_run_id, authorization_id, package_fingerprint, supervisor_state, supervisor_code, exit_code, supervisor_counts::text,
-                       agent_created_at, agent_started_at, agent_ended_at, adopted, suspensions, locks
+                       agent_created_at, agent_started_at, agent_ended_at, adopted, suspensions, locks, run_request_id
                   FROM public.agent_runs WHERE organization_id = ? AND agent_id = ? AND agent_execution_id = ? FOR UPDATE
                 """).param(m.organization()).param(m.agentId()).param(agentExecutionId)
-                .query((rs, n) -> new RunRow(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getString(3),
+                .query((rs, n) -> new RunRow(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getString(3), rs.getObject(14, UUID.class),
                         new SupervisorReport(State.of(rs.getShort(4)), rs.getString(5), (Integer) rs.getObject(6), counts(rs.getString(7)),
                                 instant(rs.getObject(8, OffsetDateTime.class)), instant(rs.getObject(9, OffsetDateTime.class)),
                                 instant(rs.getObject(10, OffsetDateTime.class)), rs.getBoolean(11), rs.getInt(12),
@@ -363,6 +410,140 @@ public final class GatewayService {
                 VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, ?, ?)
                 """).param(org).param(runId).param(o.code()).param(r.state().code()).param(r.code()).param(r.exitCode()).param(countsJson(r))
                 .param(ts(r.created())).param(ts(r.started())).param(ts(r.ended())).param(r.adopted()).param(r.suspensions()).param(r.locks()).update();
+    }
+
+    // ------------------------------------------------------------------ pedido de execucao (030)
+
+    static final List<String> REFUSAL_REASONS = List.of("PACKAGE_NOT_PRESENT", "PACKAGE_NOT_APPROVED", "AUTHORIZATION_UNUSABLE",
+            "ENVIRONMENT_INCOMPATIBLE", "BUSY", "EXPIRED");
+    static final List<String> REQUEST_STATES = List.of("REQUESTED", "DELIVERED", "ACCEPTED", "REFUSED", "NOT_STARTED", "RUN_LINKED", "EXPIRED",
+            "REVOKED");
+    static final int MAX_PENDING = 50;
+
+    /**
+     * Pedido entregue a maquina: so identificadores, validade e o pacote esperado. Nenhum comando, caminho, argumento ou segredo.
+     * {@code state}: REQUESTED/DELIVERED (aguardando decisao) ou ACCEPTED (decisao ja registrada; a maquina reconcilia com o
+     * seu registro local).
+     */
+    public record PendingRequest(UUID runRequestId, UUID authorizationId, UUID workspaceId, UUID automationId, UUID automationVersionId,
+                                 String sourceKind, String packageFingerprint, String packageFingerprintRule, OffsetDateTime requestedAt,
+                                 OffsetDateTime validUntil, String state, String agentExecutionId) {
+    }
+
+    /**
+     * Pedidos desta maquina ainda sem desfecho de decisao. Os vencidos viram EXPIRED aqui (instante do servidor); os entregues
+     * pela primeira vez viram DELIVERED. Entregar NAO e iniciar.
+     */
+    public List<PendingRequest> runRequests(MachineToken t) {
+        return tx.inOrganization(t.organization(), Mode.READ_WRITE, j -> {
+            Machine m = auth.authenticate(j, t);
+            j.sql("UPDATE public.run_requests SET state = 7 WHERE organization_id = ? AND agent_id = ? AND state IN (1, 2) "
+                    + "AND valid_until <= clock_timestamp()").param(m.organization()).param(m.agentId()).update();
+            List<PendingRequest> items = j.sql("""
+                    SELECT run_request_id, authorization_id, workspace_id, automation_id, automation_version_id, source_kind, package_fingerprint,
+                           package_fingerprint_rule, requested_at, valid_until, state, agent_execution_id
+                      FROM public.run_requests
+                     WHERE organization_id = ? AND agent_id = ? AND state IN (1, 2, 3)
+                     ORDER BY requested_at, run_request_id LIMIT ?
+                    """).param(m.organization()).param(m.agentId()).param(MAX_PENDING)
+                    .query((rs, n) -> new PendingRequest(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getObject(3, UUID.class),
+                            rs.getObject(4, UUID.class), rs.getObject(5, UUID.class), sourceKind(rs.getShort(6)), rs.getString(7), rs.getString(8),
+                            rs.getObject(9, OffsetDateTime.class), rs.getObject(10, OffsetDateTime.class),
+                            REQUEST_STATES.get(rs.getShort(11) - 1), rs.getString(12)))
+                    .list();
+            for (PendingRequest p : items) {
+                if (!"ACCEPTED".equals(p.state())) {
+                    j.sql("UPDATE public.run_requests SET state = 2, deliveries = deliveries + 1 WHERE organization_id = ? AND run_request_id = ?")
+                            .param(m.organization()).param(p.runRequestId()).update();
+                }
+            }
+            return items.stream().map(p -> "REQUESTED".equals(p.state())
+                    ? new PendingRequest(p.runRequestId(), p.authorizationId(), p.workspaceId(), p.automationId(), p.automationVersionId(), p.sourceKind(),
+                            p.packageFingerprint(), p.packageFingerprintRule(), p.requestedAt(), p.validUntil(), "DELIVERED", p.agentExecutionId())
+                    : p).toList();
+        });
+    }
+
+    /**
+     * Resultado de uma decisao. {@code outcome}: APPLIED (gravada agora), UNCHANGED (repeticao identica), EXPIRED, REVOKED ou
+     * CONFLICT (decisao diferente da registrada); os tres ultimos respondem 409 e nada muda alem do vencimento.
+     */
+    public record DecisionResult(UUID runRequestId, String outcome, String state, String agentExecutionId) {
+    }
+
+    private record RequestRow(short state, UUID agentId, String executionId, String reason, boolean expired) {
+    }
+
+    /** Decisao da maquina sobre um pedido seu: ACCEPTED (com o agentExecutionId reservado), REFUSED (motivo) ou NOT_STARTED. */
+    public DecisionResult decide(MachineToken t, UUID runRequestId, String decision, String reason, String agentExecutionId) {
+        boolean accept = "ACCEPTED".equals(decision);
+        boolean refuse = "REFUSED".equals(decision);
+        boolean notStarted = "NOT_STARTED".equals(decision);
+        if (runRequestId == null || !(accept || refuse || notStarted)
+                || accept && (agentExecutionId == null || !EXECUTION.matcher(agentExecutionId).matches() || reason != null)
+                || refuse && (reason == null || !REFUSAL_REASONS.contains(reason) || agentExecutionId != null)
+                || notStarted && (agentExecutionId == null || !EXECUTION.matcher(agentExecutionId).matches()
+                                  || reason != null && !"LAUNCH_NOT_ATTEMPTED".equals(reason))) {
+            throw ApiException.invalid("decisao");
+        }
+        return tx.inOrganization(t.organization(), Mode.READ_WRITE, j -> {
+            Machine m = auth.authenticate(j, t);
+            RequestRow q = j.sql("""
+                    SELECT state, agent_id, agent_execution_id, decision_reason, valid_until <= clock_timestamp()
+                      FROM public.run_requests WHERE organization_id = ? AND run_request_id = ? FOR UPDATE
+                    """).param(m.organization()).param(runRequestId)
+                    .query((rs, n) -> new RequestRow(rs.getShort(1), rs.getObject(2, UUID.class), rs.getString(3), rs.getString(4), rs.getBoolean(5)))
+                    .optional().orElse(null);
+            if (q == null || !q.agentId().equals(m.agentId())) {
+                // pedido de outra maquina (ou inexistente): nunca revelado
+                throw new ApiException(ApiError.NOT_FOUND, "pedido");
+            }
+            String now = REQUEST_STATES.get(q.state() - 1);
+            if (q.state() == 8) {
+                return new DecisionResult(runRequestId, "REVOKED", now, q.executionId());
+            }
+            if (q.state() == 7) {
+                return new DecisionResult(runRequestId, "EXPIRED", now, q.executionId());
+            }
+            if (accept) {
+                if (q.state() == 1 || q.state() == 2) {
+                    if (q.expired()) {
+                        j.sql("UPDATE public.run_requests SET state = 7 WHERE organization_id = ? AND run_request_id = ?").param(m.organization())
+                                .param(runRequestId).update();
+                        return new DecisionResult(runRequestId, "EXPIRED", "EXPIRED", null);
+                    }
+                    j.sql("UPDATE public.run_requests SET state = 3, agent_execution_id = ? WHERE organization_id = ? AND run_request_id = ?")
+                            .param(agentExecutionId).param(m.organization()).param(runRequestId).update();
+                    LOG.info("evento=agente.pedido_aceito pedido={} correlacao={}", runRequestId, RequestContext.correlation());
+                    return new DecisionResult(runRequestId, "APPLIED", "ACCEPTED", agentExecutionId);
+                }
+                boolean same = (q.state() == 3 || q.state() == 5 || q.state() == 6) && agentExecutionId.equals(q.executionId());
+                return new DecisionResult(runRequestId, same ? "UNCHANGED" : "CONFLICT", now, q.executionId());
+            }
+            if (refuse) {
+                if (q.state() == 1 || q.state() == 2) {
+                    if (q.expired()) {
+                        j.sql("UPDATE public.run_requests SET state = 7 WHERE organization_id = ? AND run_request_id = ?").param(m.organization())
+                                .param(runRequestId).update();
+                        return new DecisionResult(runRequestId, "EXPIRED", "EXPIRED", null);
+                    }
+                    j.sql("UPDATE public.run_requests SET state = 4, decision_reason = ? WHERE organization_id = ? AND run_request_id = ?")
+                            .param(reason).param(m.organization()).param(runRequestId).update();
+                    LOG.info("evento=agente.pedido_recusado pedido={} motivo={} correlacao={}", runRequestId, reason, RequestContext.correlation());
+                    return new DecisionResult(runRequestId, "APPLIED", "REFUSED", null);
+                }
+                boolean same = q.state() == 4 && reason.equals(q.reason());
+                return new DecisionResult(runRequestId, same ? "UNCHANGED" : "CONFLICT", now, q.executionId());
+            }
+            // NOT_STARTED: aceito e o processo comprovadamente nao criado
+            if (q.state() == 3 && agentExecutionId.equals(q.executionId())) {
+                j.sql("UPDATE public.run_requests SET state = 5, decision_reason = 'LAUNCH_NOT_ATTEMPTED' WHERE organization_id = ? AND run_request_id = ?")
+                        .param(m.organization()).param(runRequestId).update();
+                return new DecisionResult(runRequestId, "APPLIED", "NOT_STARTED", q.executionId());
+            }
+            boolean same = q.state() == 5 && agentExecutionId.equals(q.executionId());
+            return new DecisionResult(runRequestId, same ? "UNCHANGED" : "CONFLICT", now, q.executionId());
+        });
     }
 
     static String countsJson(SupervisorReport r) {
