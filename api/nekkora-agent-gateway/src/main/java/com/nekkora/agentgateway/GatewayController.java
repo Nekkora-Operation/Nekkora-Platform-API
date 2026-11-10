@@ -63,6 +63,9 @@ public class GatewayController {
 
     // ------------------------------------------------------------------ resgate (pareamento e rotacao)
 
+    /** PLATFORM-AGENT-V2-002, T06: intencao declarada pelo Agent (pair | rotate); ausente = Agent anterior (comportamento antigo). */
+    static final String INTENT_HEADER = "Nekkora-Agent-Intent";
+
     @PostMapping("/agent/api/v1/enrollments/redeem")
     public ResponseEntity<GatewayService.Redeemed> redeem(@RequestBody(required = false) String body, HttpServletRequest req) {
         requireContract(req);
@@ -78,8 +81,9 @@ public class GatewayController {
             throw new ApiException(ApiError.UNSUPPORTED_CONTRACT, "versoes");
         }
         Optional<MachineToken> current = MachineToken.bearer(req.getHeader("Authorization"));
+        GatewayService.Intent intent = GatewayService.Intent.of(req.getHeader(INTENT_HEADER));
         try {
-            GatewayService.Redeemed r = service.redeem(code, text(n, "credentialSecret"), text(n, "agentVersion"), current);
+            GatewayService.Redeemed r = service.redeem(code, text(n, "credentialSecret"), text(n, "agentVersion"), current, intent);
             return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
         } catch (ApiException e) {
             if (e.apiError() == ApiError.UNAUTHENTICATED) {
