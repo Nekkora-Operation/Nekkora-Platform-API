@@ -7,6 +7,11 @@ public enum ApiError {
     INVALID_REQUEST(HttpStatus.BAD_REQUEST, "invalid_request"),
     UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, "unauthenticated"),
     FORBIDDEN(HttpStatus.FORBIDDEN, "forbidden"),
+    /**
+     * Ato sensivel sem confirmacao de identidade valida NESTA sessao (PLATFORM-V2-001, T01): o resto (sessao, organizacao,
+     * permissao) ja foi conferido e nada foi feito. Confirme (TOTP ou, sem MFA, a senha) e repita o ato.
+     */
+    STEP_UP_REQUIRED(HttpStatus.FORBIDDEN, "step_up_required"),
     NOT_FOUND(HttpStatus.NOT_FOUND, "not_found"),
     /** Estado atual impede o ato (convite pendente, papel ou concessao duplicada, destinataria ja cadastrada). */
     CONFLICT(HttpStatus.CONFLICT, "conflict"),

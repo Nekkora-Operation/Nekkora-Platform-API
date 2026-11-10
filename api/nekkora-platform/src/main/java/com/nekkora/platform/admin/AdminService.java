@@ -214,6 +214,7 @@ public final class AdminService {
             LOG.info("evento=admin.negado regra={} correlacao={}", f, RequestContext.correlation());
             throw switch (f) {
                 case SESSION -> ApiException.unauthenticated("sessao");
+                case STEP_UP -> new ApiException(com.nekkora.core.web.ApiError.STEP_UP_REQUIRED, "step_up");
                 case TARGET_NOT_FOUND -> new ApiException(ApiError.NOT_FOUND, "alvo");
                 default -> ApiException.forbidden(f.name());
             };

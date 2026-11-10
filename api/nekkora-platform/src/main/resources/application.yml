@@ -111,7 +111,9 @@ nekkora:
     challenge: 5m
     password-recovery: 30m
     email-verification: 24h
-    step-up: 5m
+    # T01: confirmacao aceita abre janela FIXA para acoes sensiveis comuns da sessao; prova propria: step-up-own-proof
+    step-up: 60m
+    step-up-own-proof: 5m
   limits:
     r1-failures: 5
     r1-window: 15m
