@@ -84,7 +84,7 @@ public final class AccessActions {
                 case SESSION -> ApiException.unauthenticated("sessao");
                 case TARGET_NOT_FOUND -> new ApiException(ApiError.NOT_FOUND, "alvo");
                 // T01: so depois de sessao, organizacao e permissao conferidas; diz a Web que falta a confirmacao
-                case STEP_UP -> new ApiException(ApiError.STEP_UP_REQUIRED, "step_up");
+                case STEP_UP -> new ApiException(ApiError.STEP_UP_REQUIRED, r.failure.name());
                 case CONFLICT -> new ApiException(ApiError.CONFLICT, r.rule);
                 case INVALID -> ApiException.invalid(r.rule);
                 default -> ApiException.forbidden(r.failure.name());
