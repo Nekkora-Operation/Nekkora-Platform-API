@@ -1491,7 +1491,7 @@ paths:
       operationId: createAutomationVersion
       summary: 'Cria uma versao DRAFT (numero atribuido pelo banco)'
       description: >
-        Exige automation.manage no workspace da automacao; automacao e workspace ACTIVE, senao 409. O numero e MAX+1 com a automacao travada (005): criacoes concorrentes nunca repetem numero. command_json nasce com contract_version 1, runtime, entrypoint main.py, arguments, parameters e secret_bindings vazios; o artefato vem pelo PUT do artefato. Auditado (ato 3).
+        Exige automation.manage no workspace da automacao; automacao e workspace ACTIVE, senao 409. T09 (033): no maximo um rascunho por automacao; ja havendo um, 409 conflict + reason draft_exists, nada criado (a Web nova cria o rascunho so com o pacote aceito, em PUT /automations/{automationId}/draft/artifact; esta rota fica para a Web V1). O numero e MAX+1 com a automacao travada (005): criacoes concorrentes nunca repetem numero. command_json nasce com contract_version 1, runtime, entrypoint main.py, arguments, parameters e secret_bindings vazios; o artefato vem pelo PUT do artefato. Auditado (ato 3).
       security: [ { sessionCookie: [], csrfHeader: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' }, { name: automationId, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
       requestBody: { required: false, content: { application/json: { schema: { $ref: '#/components/schemas/VersionDraftRequest' } } } }
@@ -1987,6 +1987,41 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /api/v1/o/{org}/automations/{automationId}/draft/artifact:
+    put:
+      tags: [Ciclo de vida das automacoes]
+      operationId: putAutomationDraftPackage
+      summary: 'Envia o pacote do rascunho da automacao; o rascunho nasce quando o ZIP e aceito (T09)'
+      description: >
+        PLATFORM-AGENT-V2-002, T09. Exige automation.manage; automacao e workspace ACTIVE. O ZIP e inspecionado antes de
+        qualquer escrita: recusado -> 422 package_rejected, nada criado e o pacote anterior preservado. Sem rascunho e sem
+        expectativa: cria a versao DRAFT (numero MAX+1) e o artefato na mesma transacao -> 201. Com rascunho e a expectativa
+        igual a ele (expectedDraftVersionId e, se ele ja tem pacote, expectedSha256 do pacote atual): substitui o pacote da
+        MESMA versao -> 200. Expectativa diferente do rascunho atual (outra aba ou pessoa, ou o rascunho esperado foi
+        publicado): 409 conflict + reason draft_changed, nada sobrescrito; exceto se o rascunho ja tem exatamente estes bytes
+        (repeticao apos resposta perdida) -> 200 com o mesmo rascunho. No maximo um rascunho por automacao, garantido no
+        banco (033). Nao publica nem executa nada. runtime e argument (repetivel, ate 20) valem so para o rascunho criado.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: automationId, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+        - { name: expectedDraftVersionId, in: query, required: false, schema: { type: string, format: uuid }, description: 'ausente = espera que nao exista rascunho' }
+        - { name: expectedSha256, in: query, required: false, schema: { type: string, pattern: '^[0-9a-f]{64}$' }, description: 'sha256 do pacote atual do rascunho esperado; ausente = rascunho sem pacote' }
+        - { name: runtime, in: query, required: false, schema: { type: string, pattern: '^python3\.[0-9]{1,2}$' } }
+        - { name: argument, in: query, required: false, schema: { type: array, maxItems: 20, items: { type: string, maxLength: 512 } }, style: form, explode: true }
+      requestBody: { required: true, content: { application/zip: { schema: { type: string, format: binary } } } }
+      responses:
+        '200': { description: 'Pacote do rascunho existente substituido (ou repeticao com os mesmos bytes)', content: { application/json: { schema: { $ref: '#/components/schemas/LifecycleVersion' } } } }
+        '201': { description: 'Rascunho criado com o pacote aceito', content: { application/json: { schema: { $ref: '#/components/schemas/LifecycleVersion' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { description: 'Pacote recusado: nada criado, pacote anterior preservado', content: { application/json: { schema: { $ref: '#/components/schemas/PackageRejected' } } } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /api/v1/o/{org}/automation-versions/{version}:
     get:
       tags: [Ciclo de vida das automacoes]
@@ -2163,7 +2198,7 @@ components:
     Error:
       type: object
       required: [error]
-      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
+      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, draft_exists, draft_changed], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, draft_exists, draft_changed; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
     WorkspacePermissionCode:
       description: 'Permissoes de workspace (13): podem aparecer em allWorkspaces e em atribuicoes de workspace.'
       type: string

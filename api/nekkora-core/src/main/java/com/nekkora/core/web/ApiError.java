@@ -28,6 +28,16 @@ public enum ApiError {
      * recusa comum de conflito (nada foi feito), nunca um codigo desconhecido.
      */
     WORKSPACE_NAME_TAKEN(HttpStatus.CONFLICT, "conflict", "workspace_name_taken"),
+    /**
+     * Versao: a automacao ja tem um rascunho (PLATFORM-AGENT-V2-002, T09, no maximo um por automacao). Rota antiga de
+     * criacao de versao (Web V1). Codigo CONHECIDO (conflict) com o motivo em "reason". Nada foi criado.
+     */
+    DRAFT_EXISTS(HttpStatus.CONFLICT, "conflict", "draft_exists"),
+    /**
+     * Versao: o rascunho da automacao nao e mais o esperado pelo envio (outra aba ou pessoa enviou outro pacote, ou ele foi
+     * publicado) (T09). Nada foi sobrescrito; o cliente rele e mostra qual pacote permaneceu.
+     */
+    DRAFT_CHANGED(HttpStatus.CONFLICT, "conflict", "draft_changed"),
     /** Canal do Agent (contrato Platform-Agent 1.0, sec. 15): versao maior do contrato nao suportada. */
     UNSUPPORTED_CONTRACT(HttpStatus.BAD_REQUEST, "unsupported_contract"),
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "rate_limited"),
