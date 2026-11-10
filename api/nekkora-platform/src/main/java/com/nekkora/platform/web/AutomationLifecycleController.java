@@ -36,6 +36,9 @@ public class AutomationLifecycleController {
     public record WorkspaceRequest(String name, String description) {
     }
 
+    public record WorkspaceRenameRequest(String name) {
+    }
+
     public record AutomationRequest(String name) {
     }
 
@@ -59,6 +62,15 @@ public class AutomationLifecycleController {
         }
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(service.createWorkspace(org, SessionFilter.principal(req), SessionFilter.token(req), body.name(), body.description()));
+    }
+
+    @PatchMapping("/api/v1/o/{org}/workspaces/{workspaceId}")
+    public AutomationLifecycleService.Workspace renameWorkspace(@PathVariable UUID org, @PathVariable("workspaceId") UUID workspace,
+                                                                @RequestBody(required = false) WorkspaceRenameRequest body, HttpServletRequest req) {
+        if (body == null) {
+            throw ApiException.invalid("corpo");
+        }
+        return service.renameWorkspace(org, SessionFilter.principal(req), SessionFilter.token(req), workspace, body.name());
     }
 
     @PostMapping("/api/v1/o/{org}/workspaces/{workspaceId}/automations")
