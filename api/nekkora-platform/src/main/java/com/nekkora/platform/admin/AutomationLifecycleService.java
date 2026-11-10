@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
+import com.nekkora.core.db.DbErrors;
 import com.nekkora.core.web.ApiError;
 import com.nekkora.core.web.ApiException;
 import com.nekkora.core.web.RequestContext;
@@ -92,7 +93,7 @@ public final class AutomationLifecycleService {
         if (!valid(NAME, name) || description != null && !valid(DESCRIPTION, description)) {
             throw ApiException.invalid("workspace");
         }
-        return actions.write(org, j -> {
+        return uniqueName(() -> actions.write(org, j -> {
             actions.requireActor(j, org, actor, token);
             actions.requirePermission(j, org, actor, "workspace.lifecycle");
             actions.lockOrganizationAndActor(j, org, actor.userId());
@@ -102,8 +103,53 @@ public final class AutomationLifecycleService {
                     .single();
             audit(j, org, 1, actor.membershipId(), w.workspaceId(), null, null, null);
             return w;
-        });
+        }));
     }
+
+    /**
+     * Renomeacao (031): mesma permissao e mesma regra de nome da criacao. O nome igual ao atual, depois de retirar os espacos das
+     * extremidades, nao grava nada; so mudar maiusculas/minusculas do proprio nome e permitido (a chave e a mesma linha). Outro
+     * workspace da organizacao com a mesma chave: 409 workspace_name_taken (indice unico do banco, inclusive em corrida).
+     */
+    public Workspace renameWorkspace(UUID org, ValidSession actor, String token, UUID workspace, String name) {
+        if (!valid(NAME, name)) {
+            throw ApiException.invalid("workspace");
+        }
+        String novo = name.strip();
+        return uniqueName(() -> actions.write(org, j -> {
+            actions.requireActor(j, org, actor, token);
+            actions.requirePermission(j, org, actor, "workspace.lifecycle");
+            actions.lockOrganizationAndActor(j, org, actor.userId());
+            Workspace atual = j.sql("SELECT workspace_id, name, status, created_at FROM public.workspaces WHERE organization_id = ? AND workspace_id = ? FOR UPDATE")
+                    .param(org).param(workspace)
+                    .query((rs, n) -> new Workspace(rs.getObject(1, UUID.class), rs.getString(2), status(rs.getShort(3)), rs.getObject(4, OffsetDateTime.class)))
+                    .optional().orElseThrow(() -> AccessActions.refuse(Failure.TARGET_NOT_FOUND, "workspace"));
+            if (atual.name().equals(novo)) {
+                return atual;
+            }
+            Workspace w = j.sql("UPDATE public.workspaces SET name = ? WHERE organization_id = ? AND workspace_id = ? RETURNING workspace_id, name, status, created_at")
+                    .param(novo).param(org).param(workspace)
+                    .query((rs, n) -> new Workspace(rs.getObject(1, UUID.class), rs.getString(2), status(rs.getShort(3)), rs.getObject(4, OffsetDateTime.class)))
+                    .single();
+            audit(j, org, 7, actor.membershipId(), workspace, null, null, null);
+            return w;
+        }));
+    }
+
+    /** Indice unico do nome (031): a corrida entre duas gravacoes termina em 409 legivel, nunca em 500. */
+    private static Workspace uniqueName(java.util.function.Supplier<Workspace> ato) {
+        try {
+            return ato.get();
+        } catch (RuntimeException e) {
+            if (DbErrors.uniqueViolation(e, WORKSPACE_NAME_KEY)) {
+                LOG.info("evento=workspace.nome_em_uso correlacao={}", RequestContext.correlation());
+                throw new ApiException(ApiError.WORKSPACE_NAME_TAKEN, "nome_workspace");
+            }
+            throw e;
+        }
+    }
+
+    static final String WORKSPACE_NAME_KEY = "ux_workspaces_organization_name_key";
 
     public Automation createAutomation(UUID org, ValidSession actor, String token, UUID workspace, String name) {
         if (!valid(NAME, name)) {

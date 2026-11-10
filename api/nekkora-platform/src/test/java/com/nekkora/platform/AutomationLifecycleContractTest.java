@@ -60,10 +60,11 @@ class AutomationLifecycleContractTest {
                 }
             }
         }
-        assertThat(mapeadas).as("rotas do controller = rotas publicadas").isEqualTo(publicadas).hasSize(8);
+        assertThat(mapeadas).as("rotas do controller = rotas publicadas").isEqualTo(publicadas).hasSize(9);
 
         Map<String, Set<String>> exercitados = Map.of(
-                "post /api/v1/o/{org}/workspaces", Set.of("201", "403"),
+                "post /api/v1/o/{org}/workspaces", Set.of("201", "403", "409"),
+                "patch /api/v1/o/{org}/workspaces/{workspaceId}", Set.of("200", "404", "409"),
                 "post /api/v1/o/{org}/workspaces/{workspaceId}/automations", Set.of("201", "404", "409"),
                 "post /api/v1/o/{org}/automations/{automationId}/versions", Set.of("201", "409"),
                 "get /api/v1/o/{org}/automation-versions/{version}", Set.of("200", "401", "404"),

@@ -16,6 +16,12 @@ public enum ApiError {
     ACCOUNT_EXISTS(HttpStatus.CONFLICT, "account_exists"),
     /** Aceite de convite: a conta ligada a identidade esta suspensa ou com vinculo nao retirado e inativo. */
     ACCOUNT_UNAVAILABLE(HttpStatus.CONFLICT, "account_unavailable"),
+    /**
+     * Workspace: ja existe outro com o mesmo nome (sem distincao de maiusculas nem espacos nas extremidades) na organizacao
+     * (PLATFORM-V2-001, T03). Codigo CONHECIDO (conflict) com o motivo em "reason": o cliente que nao conhece o motivo ve a
+     * recusa comum de conflito (nada foi feito), nunca um codigo desconhecido.
+     */
+    WORKSPACE_NAME_TAKEN(HttpStatus.CONFLICT, "conflict", "workspace_name_taken"),
     /** Canal do Agent (contrato Platform-Agent 1.0, sec. 15): versao maior do contrato nao suportada. */
     UNSUPPORTED_CONTRACT(HttpStatus.BAD_REQUEST, "unsupported_contract"),
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "rate_limited"),
@@ -25,9 +31,16 @@ public enum ApiError {
     private final HttpStatus status;
     private final String code;
 
+    private final String reason;
+
     ApiError(HttpStatus status, String code) {
+        this(status, code, null);
+    }
+
+    ApiError(HttpStatus status, String code, String reason) {
         this.status = status;
         this.code = code;
+        this.reason = reason;
     }
 
     public HttpStatus status() {
@@ -38,8 +51,13 @@ public enum ApiError {
         return code;
     }
 
+    /** Motivo publicado em "reason" (vocabulario fechado do contrato), ou {@code null}. */
+    public String reason() {
+        return reason;
+    }
+
     /** Corpo JSON fixo (sem serializador: nao ha nada variavel). */
     public String body() {
-        return "{\"error\":\"" + code + "\"}";
+        return reason == null ? "{\"error\":\"" + code + "\"}" : "{\"error\":\"" + code + "\",\"reason\":\"" + reason + "\"}";
     }
 }
