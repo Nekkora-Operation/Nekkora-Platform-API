@@ -145,7 +145,10 @@ class ConfirmacaoUmaHoraIT extends IdentityTestBase {
         assertThat(convidar(s.b(), s.org()).status()).isEqualTo(201);
         assertThat(s.b().post("/api/v1/o/" + s.org() + "/auth/logout", null).status()).isIn(200, 204);
         assertThat(convidar(s.b(), s.org()).status()).as("depois do logout").isEqualTo(401);
-        // nova sessao de organizacao da mesma identidade: sem confirmacao propria
+        // nova sessao de organizacao da mesma identidade (a troca usa o CSRF da sessao de identidade): sem confirmacao propria
+        BrowserClient.Response id = s.b().get("/api/v1/me/session");
+        assertThat(id.status()).as("a sessao de identidade continua").isEqualTo(200);
+        s.b().csrf = id.field("csrfToken");
         trocar(s.b(), s.org());
         BrowserClient.Response nova = convidar(s.b(), s.org());
         assertThat(nova.status()).isEqualTo(403);
