@@ -24,6 +24,20 @@ public final class DbErrors {
         return null;
     }
 
+    /** Violacao de unicidade (23505) da restricao ou indice {@code constraint}, pelo nome informado pelo servidor. */
+    public static boolean uniqueViolation(Throwable t, String constraint) {
+        for (Throwable c = t; c != null; c = c.getCause()) {
+            if (c instanceof PSQLException p && p.getSQLState() != null) {
+                ServerErrorMessage m = p.getServerErrorMessage();
+                return "23505".equals(p.getSQLState()) && m != null && constraint.equals(m.getConstraint());
+            }
+            if (c.getCause() == c) {
+                break;
+            }
+        }
+        return false;
+    }
+
     /**
      * Recusa de regra levantada por trigger ou funcao ({@code RAISE ... USING ERRCODE = '23514'}): SQLSTATE 23514 SEM nome
      * de restricao. Uma CHECK violada tambem e 23514, mas o servidor informa a restricao - isso nao e recusa de regra, e

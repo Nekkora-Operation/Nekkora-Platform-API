@@ -263,7 +263,7 @@ class ProductReadRoutesIT extends ReadRoutesSupport {
         List<String> created = new ArrayList<>();
         for (int i = 0; i < wsNames.size(); i++) {
             UUID w = id(firstBytes[i]);
-            DB.asSuperuser("INSERT INTO workspaces (workspace_id, organization_id, name, status) VALUES ('" + w + "', '" + o.id() + "', 'tmp', 1)");
+            DB.asSuperuser("INSERT INTO workspaces (workspace_id, organization_id, name, status) VALUES ('" + w + "', '" + o.id() + "', 'tmp " + i + "', 1)");   // 031: nome unico
             renameWorkspace(w, wsNames.get(i));
             created.add(w.toString());
         }
