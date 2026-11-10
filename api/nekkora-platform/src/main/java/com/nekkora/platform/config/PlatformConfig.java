@@ -241,10 +241,14 @@ public class PlatformConfig {
     @Bean
     AdminService adminService(OrgTransactions tx, AccountRepository accounts, SessionRepository sessions, MfaRepository mfa, com.nekkora.platform.mail.MailIntents mail,
                               PlatformProperties p) {
-        return new AdminService(tx, accounts, sessions, mfa, mail, p.session().stepUp());
+        // redefinir o MFA de outra conta e prova propria (T01): continua exigindo a confirmacao dos ultimos 5 min
+        return new AdminService(tx, accounts, sessions, mfa, mail, p.session().stepUpOwnProof());
     }
 
-    /** Administracao de acesso (023): convites, papeis, vinculo e concessoes, com a mesma janela de step-up do reset de MFA. */
+    /**
+     * Administracao de acesso (023), Agents, Workers, autorizacoes, publicacao e pedidos de execucao: acoes sensiveis comuns,
+     * com a janela fixa da confirmacao (T01, nekkora.session.step-up).
+     */
     @Bean
     com.nekkora.platform.admin.AccessActions accessActions(OrgTransactions tx, AccountRepository accounts, SessionRepository sessions, PlatformProperties p) {
         return new com.nekkora.platform.admin.AccessActions(tx, accounts, sessions, p.session().stepUp());
