@@ -136,7 +136,7 @@ paths:
         comuns DESTA sessao (convites, papeis, concessoes, Agents e Workers, autorizacao de execucao, publicacao, pedidos de
         execucao); usar acoes nao estende o prazo, e cada ato continua conferindo sessao, organizacao e permissao. Prova
         propria mais curta: o reset administrativo de MFA exige a confirmacao dos ultimos 5 minutos. Sem confirmacao valida,
-        o ato responde 403 step_up_required (nada feito). O codigo nunca e guardado nem reaproveitado (anti-replay).
+        o ato responde 403 forbidden com reason step_up_required (nada feito). O codigo nunca e guardado nem reaproveitado (anti-replay).
         Codigo TOTP errado -> 403 forbidden (step_up); so codigo TOTP (recoveryCode nao aceito). Sessao do login por
         organizacao: TOTP do fator local, R1/R4, caminho inalterado. Sessao VINCULADA (nascida da troca, contrato P4): TOTP do
         fator da IDENTIDADE de origem. O CSRF desta sessao de organizacao continua exigido (o CSRF da sessao de identidade
@@ -2125,7 +2125,7 @@ components:
       content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: service_unavailable } } }
     InvalidRequest: { description: 'Parametro invalido: UUID malformado, limit, status, data, periodo ou cursor', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: invalid_request } } } }
     Unauthenticated: { description: 'Sem sessao valida na organizacao da rota', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: unauthenticated } } } }
-    Forbidden: { description: 'Conta externa, sem a permissao exigida, ou Origin/CSRF invalido (forbidden). Nas acoes sensiveis da sessao de organizacao, com tudo o mais conferido e sem confirmacao de identidade valida na janela: step_up_required (T01; confirme e repita o ato)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
+    Forbidden: { description: 'Conta externa, sem a permissao exigida, ou Origin/CSRF invalido (forbidden). Nas acoes sensiveis da sessao de organizacao, com tudo o mais conferido e sem confirmacao de identidade valida na janela: forbidden com reason step_up_required (T01; confirme e repita o ato)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
     NotFound: { description: 'Inexistente, de outra organizacao ou sem acesso ao workspace (resposta identica)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: not_found } } } }
     CatalogInconsistent: { description: 'Codigo de papel, permissao ou rotulo de status desconhecido, ou permissao organizacional em papel de workspace (nunca omitido silenciosamente)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: internal_error } } } }
     Conflict: { description: 'O estado atual impede o ato (convite pendente, destinataria ja cadastrada, concessao duplicada ou fora do estado, papel ja ativo, vinculo inativo)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: conflict } } } }
@@ -2137,7 +2137,7 @@ components:
     Error:
       type: object
       required: [error]
-      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, step_up_required, rate_limited, internal_error, service_unavailable, unsupported_contract] } }
+      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [step_up_required], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
     WorkspacePermissionCode:
       description: 'Permissoes de workspace (13): podem aparecer em allWorkspaces e em atribuicoes de workspace.'
       type: string

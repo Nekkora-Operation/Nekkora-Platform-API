@@ -9,9 +9,10 @@ public enum ApiError {
     FORBIDDEN(HttpStatus.FORBIDDEN, "forbidden"),
     /**
      * Ato sensivel sem confirmacao de identidade valida NESTA sessao (PLATFORM-V2-001, T01): o resto (sessao, organizacao,
-     * permissao) ja foi conferido e nada foi feito. Confirme (TOTP ou, sem MFA, a senha) e repita o ato.
+     * permissao) ja foi conferido e nada foi feito. Confirme (TOTP ou, sem MFA, a senha) e repita o ato. Codigo CONHECIDO
+     * (forbidden) com o motivo em "reason": o cliente que nao conhece o motivo ve a recusa comum, nunca um codigo desconhecido.
      */
-    STEP_UP_REQUIRED(HttpStatus.FORBIDDEN, "step_up_required"),
+    STEP_UP_REQUIRED(HttpStatus.FORBIDDEN, "forbidden", "step_up_required"),
     NOT_FOUND(HttpStatus.NOT_FOUND, "not_found"),
     /** Estado atual impede o ato (convite pendente, papel ou concessao duplicada, destinataria ja cadastrada). */
     CONFLICT(HttpStatus.CONFLICT, "conflict"),
@@ -30,9 +31,16 @@ public enum ApiError {
     private final HttpStatus status;
     private final String code;
 
+    private final String reason;
+
     ApiError(HttpStatus status, String code) {
+        this(status, code, null);
+    }
+
+    ApiError(HttpStatus status, String code, String reason) {
         this.status = status;
         this.code = code;
+        this.reason = reason;
     }
 
     public HttpStatus status() {
@@ -43,8 +51,13 @@ public enum ApiError {
         return code;
     }
 
+    /** Motivo publicado em "reason" (vocabulario fechado do contrato), ou {@code null}. */
+    public String reason() {
+        return reason;
+    }
+
     /** Corpo JSON fixo (sem serializador: nao ha nada variavel). */
     public String body() {
-        return "{\"error\":\"" + code + "\"}";
+        return reason == null ? "{\"error\":\"" + code + "\"}" : "{\"error\":\"" + code + "\",\"reason\":\"" + reason + "\"}";
     }
 }

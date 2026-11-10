@@ -115,6 +115,9 @@ class AccessContractTest {
         String codigos = error.get("properties").toString();
         for (com.nekkora.core.web.ApiError e : com.nekkora.core.web.ApiError.values()) {
             assertThat(codigos).as("codigo de erro publicado: " + e.code()).contains(e.code());
+            if (e.reason() != null) {
+                assertThat(codigos).as("motivo de erro publicado: " + e.reason()).contains(e.reason());
+            }
         }
     }
 }

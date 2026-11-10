@@ -25,7 +25,7 @@ import com.nekkora.core.token.Tokens;
 @DirtiesContext
 class ConfirmacaoUmaHoraIT extends IdentityTestBase {
 
-    private static final String STEP_UP_REQUIRED = "{\"error\":\"step_up_required\"}";
+    private static final String STEP_UP_REQUIRED = "{\"error\":\"forbidden\",\"reason\":\"step_up_required\"}";
     private static final String FORBIDDEN = "{\"error\":\"forbidden\"}";
 
     @DynamicPropertySource
