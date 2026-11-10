@@ -184,7 +184,7 @@ public final class AutomationLifecycleService {
             requireActive(j, org, automation);
             actions.lockOrganizationAndActor(j, org, actor.userId());
             lockAutomation(j, org, automation);
-            // T09: no maximo um rascunho por automacao (033). A rota antiga (Web V1) ainda cria UM rascunho vazio quando nao
+            // T09: no maximo um rascunho por automacao (032). A rota antiga (Web V1) ainda cria UM rascunho vazio quando nao
             // ha nenhum; havendo, 409 conflict + draft_exists, sem criar outro (limitacao transitoria da V1).
             if (currentDraft(j, org, automation).isPresent()) {
                 throw new ApiException(ApiError.DRAFT_EXISTS, "rascunho_existente");
@@ -221,7 +221,7 @@ public final class AutomationLifecycleService {
         return id;
     }
 
-    /** Indice da 033: no maximo um DRAFT por automacao. */
+    /** Indice da 032: no maximo um DRAFT por automacao. */
     static final String ONE_DRAFT_INDEX = "ux_automation_versions_one_draft";
 
     private static void lockAutomation(JdbcClient j, UUID org, UUID automation) {

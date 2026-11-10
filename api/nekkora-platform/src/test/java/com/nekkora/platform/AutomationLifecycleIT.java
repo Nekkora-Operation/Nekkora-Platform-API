@@ -161,7 +161,7 @@ class AutomationLifecycleIT extends PlatformTestBase {
         Draft d = draftWithArtifact(c);
         ExecutorService pool = Executors.newFixedThreadPool(4);
         try {
-            // T09 (033): com o rascunho v1 aberto, nenhuma criacao passa pela rota antiga (409 draft_exists)
+            // T09 (032): com o rascunho v1 aberto, nenhuma criacao passa pela rota antiga (409 draft_exists)
             assertThat(c.admin().post(c.o() + "/automations/" + d.automation() + "/versions", "{}").body())
                     .isEqualTo("{\"error\":\"conflict\",\"reason\":\"draft_exists\"}");
             stepUp(c.admin(), c.org().id(), c.org().adminId());

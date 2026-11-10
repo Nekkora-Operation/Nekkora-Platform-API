@@ -1,14 +1,14 @@
--- Diagnostico SOMENTE LEITURA para antes da 033 (PLATFORM-AGENT-V2-002, T09). Nao altera nada: roda numa transacao READ ONLY.
+-- Diagnostico SOMENTE LEITURA para antes da 032 (PLATFORM-AGENT-V2-002, T09). Nao altera nada: roda numa transacao READ ONLY.
 -- Rodar como administrador do cluster (atravessa a RLS de todas as organizacoes), por exemplo:
---   psql -X -v ON_ERROR_STOP=1 -d nekkora -f db/diagnosticos/033_rascunhos_por_automacao.sql
+--   psql -X -v ON_ERROR_STOP=1 -d nekkora -f db/diagnosticos/032_rascunhos_por_automacao.sql
 --
--- Secao 1 (IMPEDE a 033): automacoes com mais de um rascunho. Decisao humana, caso a caso: nada e apagado, publicado nem
+-- Secao 1 (IMPEDE a 032): automacoes com mais de um rascunho. Decisao humana, caso a caso: nada e apagado, publicado nem
 -- renumerado automaticamente.
 -- Secao 2 (informativa, NAO impede): rascunhos legados sem pacote (criados pela rota antiga). Sendo o unico rascunho da
 -- automacao, viram o rascunho dela e aparecem na Web como "Continuar rascunho".
 BEGIN TRANSACTION READ ONLY;
 
-\echo '== 1. Automacoes com mais de um rascunho (impedem a 033) =='
+\echo '== 1. Automacoes com mais de um rascunho (impedem a 032) =='
 SELECT v.organization_id, v.automation_id, a.name AS automacao, v.automation_version_id, v.version_number,
        CASE WHEN v.command_json ? 'artifact' THEN v.command_json->'artifact'->>'sha256' END AS pacote_sha256, v.created_at
   FROM public.automation_versions v

@@ -2,10 +2,10 @@
 -- (PUT /api/v1/o/{org}/automations/{automationId}/draft/artifact; POST .../versions com 409 draft_exists) e
 -- docs/platform-agent-v2-002/t09-rascunho-unico.md.
 --
--- CANDIDATA ate a aprovacao do PR. Numero 033 conferido em 10/11 contra as branches remotas (a maior era 031). A 032 fica
--- reservada para a T02 da PLATFORM-V2-001 (sessao), que ainda aguarda decisao; esta migration nao depende dela nem a
--- disputa. Se outra migration ocupar 033 antes, esta e renumerada sem mudar o conteudo. Se a 032 entrar DEPOIS desta numa
--- base em que a 033 ja foi aplicada, o migrador a recusaria fora de ordem: renumerar a da T02 para depois desta.
+-- CANDIDATA ate a aprovacao do PR. Numero 032 conferido em 10/11 contra as branches remotas (a maior era 031; nenhuma tinha
+-- 032). A proposta da T02 da PLATFORM-V2-001 (sessao) citava a 032, mas ela ainda nao tem migration escrita nem decisao:
+-- quando for escrita, usa o proximo numero livre. As ferramentas do laboratorio e da homologacao exigem numeracao contigua,
+-- por isso esta nao pula numero. Se outra migration ocupar 032 antes, esta e renumerada sem mudar o conteudo.
 --
 -- O que muda:
 --   1. RESTRICAO NO BANCO (indice unico parcial): automation_versions (organization_id, automation_id) WHERE status = 1 (DRAFT).
@@ -18,7 +18,7 @@
 -- a decisao e humana (manter um e publicar ou abandonar os outros por um procedimento aprovado). Rascunhos LEGADOS sem pacote
 -- (criados pela rota antiga) nao impedem a migration quando sao o unico rascunho da automacao: viram o rascunho dela, que a
 -- Web oferece em "Continuar rascunho". Diagnostico somente leitura, para rodar antes:
--- db/diagnosticos/033_rascunhos_por_automacao.sql.
+-- db/diagnosticos/032_rascunhos_por_automacao.sql.
 --
 -- Papeis: nenhum papel novo, nenhuma funcao SECURITY DEFINER, nenhum dono novo, nenhum privilegio novo: SEM elevacao (como
 -- 025, 028, 030 e 031).
@@ -35,10 +35,10 @@ DECLARE
     v_repetidos TEXT;
 BEGIN
     IF to_regclass('public.automation_artifacts') IS NULL OR to_regclass('public.ux_workspaces_organization_name_key') IS NULL THEN
-        RAISE EXCEPTION '033: exige 028 e 031';
+        RAISE EXCEPTION '032: exige 028 e 031';
     END IF;
     IF to_regclass('public.ux_automation_versions_one_draft') IS NOT NULL THEN
-        RAISE EXCEPTION '033: ja aplicada';
+        RAISE EXCEPTION '032: ja aplicada';
     END IF;
     SELECT string_agg(format('organizacao %s, automacao %s: %s', organization_id, automation_id, rascunhos), E'\n' ORDER BY organization_id, automation_id)
       INTO v_repetidos
@@ -52,9 +52,9 @@ BEGIN
              GROUP BY organization_id, automation_id
             HAVING count(*) > 1) r;
     IF v_repetidos IS NOT NULL THEN
-        RAISE EXCEPTION '033: ha automacoes com mais de um rascunho; nada foi alterado. Decida quais rascunhos ficam e aplique de novo'
+        RAISE EXCEPTION '032: ha automacoes com mais de um rascunho; nada foi alterado. Decida quais rascunhos ficam e aplique de novo'
             USING DETAIL = v_repetidos,
-                  HINT = 'diagnostico: db/diagnosticos/033_rascunhos_por_automacao.sql';
+                  HINT = 'diagnostico: db/diagnosticos/032_rascunhos_por_automacao.sql';
     END IF;
 END;
 $$;
@@ -63,21 +63,21 @@ $$;
 CREATE UNIQUE INDEX ux_automation_versions_one_draft ON public.automation_versions (organization_id, automation_id) WHERE status = 1;
 ALTER TABLE public.automation_versions FORCE ROW LEVEL SECURITY;
 COMMENT ON INDEX public.ux_automation_versions_one_draft IS
-    'no maximo um rascunho (status 1 = DRAFT) por automacao (033); versoes publicadas nao participam';
+    'no maximo um rascunho (status 1 = DRAFT) por automacao (032); versoes publicadas nao participam';
 
 -- === 2. Invariantes ===
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
                     WHERE c.relname = 'ux_automation_versions_one_draft' AND i.indisunique AND i.indisvalid AND i.indpred IS NOT NULL) THEN
-        RAISE EXCEPTION '033: indice unico parcial do rascunho ausente ou invalido';
+        RAISE EXCEPTION '032: indice unico parcial do rascunho ausente ou invalido';
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_class WHERE oid = 'public.automation_versions'::regclass AND relrowsecurity AND relforcerowsecurity) THEN
-        RAISE EXCEPTION '033: RLS forcada de automation_versions nao foi religada';
+        RAISE EXCEPTION '032: RLS forcada de automation_versions nao foi religada';
     END IF;
     IF has_table_privilege('nekkora_platform', 'public.automation_versions', 'DELETE')
        OR has_table_privilege('nekkora_platform', 'public.automation_versions', 'TRUNCATE') THEN
-        RAISE EXCEPTION '033: privilegios de nekkora_platform mudaram';
+        RAISE EXCEPTION '032: privilegios de nekkora_platform mudaram';
     END IF;
 END;
 $$;
