@@ -1351,7 +1351,8 @@ paths:
       description: >
         Exige workspace.lifecycle (permissao da organizacao). Nasce ACTIVE. Auditado (automation_admin_events, ato 1). Nome unico na
         organizacao (031): sem distincao de maiusculas/minusculas nem espacos nas extremidades; o nome visivel e guardado como
-        digitado, sem esses espacos. Outro workspace (de qualquer situacao) com o mesmo nome -> 409 workspace_name_taken.
+        digitado, sem esses espacos. Outro workspace (de qualquer situacao) com o mesmo nome -> 409 conflict com reason
+        workspace_name_taken.
       security: [ { sessionCookie: [], csrfHeader: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/WorkspaceCreateRequest' } } } }
@@ -1392,7 +1393,7 @@ paths:
       description: >
         Exige workspace.lifecycle. Mesma regra de nome da criacao. Nome igual ao atual (depois de retirar os espacos das
         extremidades) nao grava nada e devolve o workspace; mudar so maiusculas/minusculas do proprio nome e permitido. Outro
-        workspace da organizacao com o mesmo nome -> 409 workspace_name_taken. Trocar responsavel nao libera nome. Auditado
+        workspace da organizacao com o mesmo nome -> 409 conflict com reason workspace_name_taken. Trocar responsavel nao libera nome. Auditado
         (automation_admin_events, ato 7) quando o nome muda.
       security: [ { sessionCookie: [], csrfHeader: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' }, { $ref: '#/components/parameters/WorkspaceId' } ]
@@ -2147,7 +2148,7 @@ components:
     Forbidden: { description: 'Conta externa, sem a permissao exigida, ou Origin/CSRF invalido', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
     NotFound: { description: 'Inexistente, de outra organizacao ou sem acesso ao workspace (resposta identica)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: not_found } } } }
     CatalogInconsistent: { description: 'Codigo de papel, permissao ou rotulo de status desconhecido, ou permissao organizacional em papel de workspace (nunca omitido silenciosamente)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: internal_error } } } }
-    WorkspaceNameTaken: { description: 'Ja existe um workspace com esse nome nesta organizacao (031; maiusculas/minusculas e espacos nas extremidades nao distinguem)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: workspace_name_taken } } } }
+    WorkspaceNameTaken: { description: 'Ja existe um workspace com esse nome nesta organizacao (031; maiusculas/minusculas e espacos nas extremidades nao distinguem). Codigo conflict (o cliente que nao conhece o motivo ve a recusa comum) com reason workspace_name_taken', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: conflict, reason: workspace_name_taken } } } }
     Conflict: { description: 'O estado atual impede o ato (convite pendente, destinataria ja cadastrada, concessao duplicada ou fora do estado, papel ja ativo, vinculo inativo)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: conflict } } } }
     RateLimited:
       description: Limite R7
@@ -2157,7 +2158,7 @@ components:
     Error:
       type: object
       required: [error]
-      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, workspace_name_taken, rate_limited, internal_error, service_unavailable, unsupported_contract] } }
+      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken). Cliente que nao o conhece trata o codigo como sempre' } }
     WorkspacePermissionCode:
       description: 'Permissoes de workspace (13): podem aparecer em allWorkspaces e em atribuicoes de workspace.'
       type: string

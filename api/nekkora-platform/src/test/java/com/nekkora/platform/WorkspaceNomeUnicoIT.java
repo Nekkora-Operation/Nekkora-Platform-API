@@ -25,7 +25,7 @@ import com.nekkora.core.testsupport.BrowserClient;
  */
 class WorkspaceNomeUnicoIT extends PlatformTestBase {
 
-    private static final String TAKEN = "{\"error\":\"workspace_name_taken\"}";
+    private static final String TAKEN = "{\"error\":\"conflict\",\"reason\":\"workspace_name_taken\"}";
 
     record Pessoa(BrowserClient b, String o, UUID org, UUID membership) {
     }
