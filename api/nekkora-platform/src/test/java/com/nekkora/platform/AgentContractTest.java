@@ -73,7 +73,7 @@ class AgentContractTest {
             }
         }
         // o controlador usa nomes de variavel curtos ({agent}, {run}); o OpenAPI, os mesmos
-        assertThat(mapeadas).as("rotas do controller = rotas publicadas").isEqualTo(publicadas).hasSize(14);
+        assertThat(mapeadas).as("rotas do controller = rotas publicadas").isEqualTo(publicadas).hasSize(15); // T07: + POST /workers
 
         Map<String, Set<String>> exercitados = Map.ofEntries(
                 Map.entry("post /api/v1/o/{org}/agent-enrollments", Set.of("201", "400", "403", "409")),
@@ -82,6 +82,7 @@ class AgentContractTest {
                 Map.entry("post /api/v1/o/{org}/agents/{agent}/credential-rotations", Set.of("201")),
                 Map.entry("get /api/v1/o/{org}/agents", Set.of("200", "403")),
                 Map.entry("put /api/v1/o/{org}/workers/{worker}/workspaces/{workspace}", Set.of("201")),
+                Map.entry("post /api/v1/o/{org}/workers", Set.of("201", "400", "403", "409")),
                 Map.entry("post /api/v1/o/{org}/workspaces/{workspace}/local-run-authorizations", Set.of("201", "409")),
                 Map.entry("post /api/v1/o/{org}/workspaces/{workspace}/local-run-authorizations/{authorization}/revoke", Set.of("204")),
                 Map.entry("get /api/v1/o/{org}/agent-runs", Set.of("200")),
