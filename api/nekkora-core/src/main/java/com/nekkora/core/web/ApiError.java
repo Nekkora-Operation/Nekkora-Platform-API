@@ -45,6 +45,12 @@ public enum ApiError {
      */
     LOCAL_RUN_AUTHORIZATION_EXISTS(HttpStatus.CONFLICT, "conflict", "local_run_authorization_exists"),
     /**
+     * Organizacao: a identidade ja criou, pelo cadastro, uma organizacao com esse nome (PLATFORM-AGENT-V2-003, T10; 034;
+     * espacos nas pontas, espacos internos repetidos e maiusculas/minusculas nao distinguem). Nada foi criado. Codigo
+     * CONHECIDO (conflict) com o motivo em "reason".
+     */
+    ORGANIZATION_NAME_TAKEN(HttpStatus.CONFLICT, "conflict", "organization_name_taken"),
+    /**
      * Worker: a organizacao atingiu o limite de Workers cadastrados (WORKERS_REGISTERED; zero ate a ativacao)
      * (PLATFORM-AGENT-V2-002, T07). Codigo CONHECIDO (conflict) com o motivo em "reason". Nada foi gravado.
      */

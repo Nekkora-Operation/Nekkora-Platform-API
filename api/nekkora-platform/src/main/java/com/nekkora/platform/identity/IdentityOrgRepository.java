@@ -28,7 +28,8 @@ public final class IdentityOrgRepository {
      * {@code activationState}: ciclo de ativacao da 022 ({@code AGUARDANDO_ATIVACAO} | {@code ATIVADA}), independente da
      * situacao administrativa. So indicacao para a interface; a capacidade continua decidida no banco pelos limites.
      */
-    public record Organization(UUID organizationId, String name, List<String> roles, String activationState) {
+    /** T10 (034): {@code handle} = identificador legivel e estavel da organizacao (nao e credencial; nulo so antes da 034). */
+    public record Organization(UUID organizationId, String name, List<String> roles, String activationState, String handle) {
     }
 
     public static final String AGUARDANDO_ATIVACAO = "AGUARDANDO_ATIVACAO";
@@ -53,7 +54,7 @@ public final class IdentityOrgRepository {
                 .query((rs, n) -> new Linha(rs.getObject(1, UUID.class), rs.getString(2), roles(rs.getArray(3))))
                 .list();
         Map<UUID, String> estados = activationStates(j, linhas.stream().map(Linha::id).toList());
-        return linhas.stream().map(l -> new Organization(l.id(), l.name(), l.roles(), estados.getOrDefault(l.id(), AGUARDANDO_ATIVACAO))).toList();
+        return linhas.stream().map(l -> new Organization(l.id(), l.name(), l.roles(), estados.getOrDefault(l.id(), AGUARDANDO_ATIVACAO), null)).toList();
     }
 
     /**
@@ -71,6 +72,14 @@ public final class IdentityOrgRepository {
                 .query((rs, n) -> m.put(rs.getObject(1, UUID.class), rs.getShort(2) == 2 ? ATIVADA : AGUARDANDO_ATIVACAO))
                 .list();
         return m;
+    }
+
+    /**
+     * T10 (034): identificador legivel da organizacao, lido NO CONTEXTO DELA (RLS de organization_handles: a Platform so ve a
+     * linha da organizacao do contexto). Chamado so para as organizacoes que identity_organizations devolveu.
+     */
+    public static Optional<String> handle(JdbcClient j, UUID organization) {
+        return j.sql("SELECT handle FROM public.organization_handles WHERE organization_id = ?").param(organization).query(String.class).optional();
     }
 
     /** {@code identity_org_session_target}: a candidata, ou vazio (sem vinculo, inelegivel, inexistente, sessao restrita). */
