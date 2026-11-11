@@ -313,8 +313,12 @@ class AgentAdminIT extends PlatformTestBase {
                 .isEqualTo(409);
         // versao publicada sem impressao declarada (so o sha256 dos bytes do artefato, mesmo igual a impressao): recusada
         UUID onlyArtifact = UUID.randomUUID();
+        // T09 (032): um rascunho por automacao; a versao sem impressao fica noutra automacao do mesmo workspace
+        UUID otherAutomation = UUID.randomUUID();
+        DB.asSuperuser("INSERT INTO automations (automation_id, organization_id, workspace_id, name, status, created_by_membership_id) SELECT '" + otherAutomation
+                + "', organization_id, workspace_id, 'Biografias sem impressao', 1, created_by_membership_id FROM automations WHERE automation_id = '" + s.automation() + "'");
         DB.asSuperuser("INSERT INTO automation_versions (automation_version_id, organization_id, workspace_id, automation_id, status, command_json, created_by_membership_id) "
-                        + "SELECT '" + onlyArtifact + "', organization_id, workspace_id, automation_id, 1, (command_json - 'agent_package') || jsonb_build_object('artifact', "
+                        + "SELECT '" + onlyArtifact + "', organization_id, workspace_id, '" + otherAutomation + "', 1, (command_json - 'agent_package') || jsonb_build_object('artifact', "
                         + "jsonb_build_object('reference', 'biografias-python', 'sha256', '" + FINGERPRINT + "')), created_by_membership_id FROM automation_versions WHERE "
                         + "automation_version_id = '" + s.version() + "'",
                 "UPDATE automation_versions SET status = 2, published_at = now(), published_by_membership_id = created_by_membership_id WHERE automation_version_id = '"

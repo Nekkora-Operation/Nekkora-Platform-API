@@ -60,7 +60,7 @@ class AutomationLifecycleContractTest {
                 }
             }
         }
-        assertThat(mapeadas).as("rotas do controller = rotas publicadas").isEqualTo(publicadas).hasSize(9);
+        assertThat(mapeadas).as("rotas do controller = rotas publicadas").isEqualTo(publicadas).hasSize(10); // T09: + PUT /automations/{id}/draft/artifact
 
         Map<String, Set<String>> exercitados = Map.of(
                 "post /api/v1/o/{org}/workspaces", Set.of("201", "403", "409"),
@@ -70,6 +70,7 @@ class AutomationLifecycleContractTest {
                 "get /api/v1/o/{org}/automation-versions/{version}", Set.of("200", "401", "404"),
                 "patch /api/v1/o/{org}/automation-versions/{version}", Set.of("409"),
                 "put /api/v1/o/{org}/automation-versions/{version}/artifact", Set.of("200", "404", "409", "422"),
+                "put /api/v1/o/{org}/automations/{automationId}/draft/artifact", Set.of("200", "201", "400", "403", "404", "409", "422"),
                 "get /api/v1/o/{org}/automation-versions/{version}/artifact/content", Set.of("200"),
                 "post /api/v1/o/{org}/automation-versions/{version}/publish", Set.of("200", "403", "404", "409"));
         for (Map.Entry<String, Set<String>> e : exercitados.entrySet()) {

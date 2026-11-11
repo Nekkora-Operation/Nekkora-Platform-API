@@ -108,7 +108,8 @@ public class PlatformConfig {
     @Bean
     FilterRegistrationBean<BodyLimitFilter> bodyLimitFilter() {
         FilterRegistrationBean<BodyLimitFilter> r = new FilterRegistrationBean<>(new BodyLimitFilter(4096, "PUT",
-                java.util.regex.Pattern.compile("/api/v1/o/[0-9a-f-]{36}/automation-versions/[0-9a-f-]{36}/artifact"),
+                // T09: + o pacote do rascunho da automacao (PUT /automations/{id}/draft/artifact)
+                java.util.regex.Pattern.compile("/api/v1/o/[0-9a-f-]{36}/(automation-versions/[0-9a-f-]{36}/artifact|automations/[0-9a-f-]{36}/draft/artifact)"),
                 com.nekkora.platform.artifact.PackageInspector.MAX_ZIP_BYTES));
         r.setOrder(Ordered.HIGHEST_PRECEDENCE + 1);
         r.addUrlPatterns("/api/*");
