@@ -28,6 +28,13 @@ public enum ApiError {
      * recusa comum de conflito (nada foi feito), nunca um codigo desconhecido.
      */
     WORKSPACE_NAME_TAKEN(HttpStatus.CONFLICT, "conflict", "workspace_name_taken"),
+    /**
+     * Canal do Agent, resgate com intencao declarada (PLATFORM-AGENT-V2-002, T06): codigo de PAREAMENTO enviado como renovacao
+     * de credencial. Nada consumido, nada alterado. Codigo CONHECIDO (conflict) com o motivo em "reason".
+     */
+    PAIRING_CODE_FOR_ROTATION(HttpStatus.CONFLICT, "conflict", "pairing_code_for_rotation"),
+    /** Idem: codigo de RENOVACAO (rotacao) enviado como pareamento. Nada consumido, nada alterado. */
+    ROTATION_CODE_FOR_PAIRING(HttpStatus.CONFLICT, "conflict", "rotation_code_for_pairing"),
     /** Canal do Agent (contrato Platform-Agent 1.0, sec. 15): versao maior do contrato nao suportada. */
     UNSUPPORTED_CONTRACT(HttpStatus.BAD_REQUEST, "unsupported_contract"),
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "rate_limited"),
