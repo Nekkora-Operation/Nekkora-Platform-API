@@ -39,6 +39,12 @@ public enum ApiError {
      */
     DRAFT_CHANGED(HttpStatus.CONFLICT, "conflict", "draft_changed"),
     /**
+     * Autorizacao local: o escopo ja tem uma autorizacao VIGENTE (PLATFORM-AGENT-V2-003, T12; 033): mesma autorizacao do Worker
+     * no workspace e mesma versao (pacote) ou mesma automacao (monitoramento). Nada foi gravado, estendido nem revogado; a
+     * Web rele a lista e mostra a vigente. Codigo CONHECIDO (conflict) com o motivo em "reason".
+     */
+    LOCAL_RUN_AUTHORIZATION_EXISTS(HttpStatus.CONFLICT, "conflict", "local_run_authorization_exists"),
+    /**
      * Worker: a organizacao atingiu o limite de Workers cadastrados (WORKERS_REGISTERED; zero ate a ativacao)
      * (PLATFORM-AGENT-V2-002, T07). Codigo CONHECIDO (conflict) com o motivo em "reason". Nada foi gravado.
      */

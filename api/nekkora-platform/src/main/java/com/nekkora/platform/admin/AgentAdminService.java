@@ -313,13 +313,13 @@ public final class AgentAdminService {
             UUID assignment = j.sql("SELECT assignment_id FROM public.worker_workspace_assignments WHERE organization_id = ? AND worker_id = ? "
                             + "AND workspace_id = ? AND status = 1").param(org).param(workerId).param(workspaceId).query(UUID.class).optional()
                     .orElseThrow(() -> AccessActions.refuse(Failure.CONFLICT, "worker_nao_autorizado_no_workspace"));
-            LocalAuthorization a = j.sql("""
+            LocalAuthorization a = oneValid(() -> j.sql("""
                     INSERT INTO public.local_run_authorizations (organization_id, workspace_id, worker_id, worker_workspace_assignment_id, automation_id,
                         automation_version_id, package_fingerprint, package_fingerprint_rule, source_kind, granted_by_membership_id, valid_until)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     RETURNING """ + " " + AUTHORIZATION_COLUMNS).param(org).param(workspaceId).param(workerId).param(assignment).param(v.automationId()).param(versionId)
                     .param(v.packageFingerprint()).param(v.rule()).param(kind).param(actor.membershipId()).param(validUntil)
-                    .query((rs, n) -> authorization(rs)).single();
+                    .query((rs, n) -> authorization(rs)).single());
             audit(j, org, 10, actor.membershipId(), null, workerId, workspaceId, null, null, a.authorizationId(), null);
             return a;
         });
@@ -351,15 +351,35 @@ public final class AgentAdminService {
             UUID assignment = j.sql("SELECT assignment_id FROM public.worker_workspace_assignments WHERE organization_id = ? AND worker_id = ? "
                             + "AND workspace_id = ? AND status = 1").param(org).param(workerId).param(workspaceId).query(UUID.class).optional()
                     .orElseThrow(() -> AccessActions.refuse(Failure.CONFLICT, "worker_nao_autorizado_no_workspace"));
-            LocalAuthorization a = j.sql("""
+            LocalAuthorization a = oneValid(() -> j.sql("""
                     INSERT INTO public.local_run_authorizations (organization_id, workspace_id, worker_id, worker_workspace_assignment_id, automation_id,
                         automation_version_id, package_fingerprint, package_fingerprint_rule, source_kind, granted_by_membership_id, valid_until)
                     VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, 3, ?, ?)
                     RETURNING """ + " " + AUTHORIZATION_COLUMNS).param(org).param(workspaceId).param(workerId).param(assignment).param(automationId)
-                    .param(actor.membershipId()).param(validUntil).query((rs, n) -> authorization(rs)).single();
+                    .param(actor.membershipId()).param(validUntil).query((rs, n) -> authorization(rs)).single());
             audit(j, org, 10, actor.membershipId(), null, workerId, workspaceId, null, null, a.authorizationId(), null);
             return a;
         });
+    }
+
+    /** Nome da recusa do gatilho da 033 (uma autorizacao local vigente por escopo; SQLSTATE 23505 com este nome). */
+    static final String VALID_AUTHORIZATION_KEY = "ux_local_run_authorizations_vigente";
+
+    /**
+     * T12 (033): a insercao recusada pelo gatilho (ja ha autorizacao VIGENTE no escopo) vira 409 conflict + reason
+     * local_run_authorization_exists. A transacao e desfeita: nada gravado, nada auditado, nada estendido nem revogado. A
+     * recusa fica no log como as demais (evento=acesso.negado), sem identificadores do escopo.
+     */
+    private static LocalAuthorization oneValid(java.util.function.Supplier<LocalAuthorization> insert) {
+        try {
+            return insert.get();
+        } catch (RuntimeException e) {
+            if (DbErrors.uniqueViolation(e, VALID_AUTHORIZATION_KEY)) {
+                LOG.info("evento=acesso.negado regra=CONFLICT motivo=autorizacao_local_vigente correlacao={}", RequestContext.correlation());
+                throw new ApiException(ApiError.LOCAL_RUN_AUTHORIZATION_EXISTS, "autorizacao_local_vigente");
+            }
+            throw e;
+        }
     }
 
     public void revokeLocalRun(UUID org, ValidSession actor, String token, UUID workspaceId, UUID authorizationId) {
