@@ -51,6 +51,10 @@ public class AgentController {
     public record PairingRequest(String workerId, String workerName, String agentName, Integer expiresInMinutes) {
     }
 
+    /** T07: Worker sem Agent. */
+    public record WorkerRequest(String name) {
+    }
+
     public record RotationRequest(Integer expiresInMinutes) {
     }
 
@@ -112,6 +116,16 @@ public class AgentController {
     @GetMapping("/api/v1/o/{org}/agents")
     public Map<String, List<AgentAdminService.AgentView>> agents(@PathVariable UUID org, HttpServletRequest req) {
         return Map.of("items", admin.listAgents(org, SessionFilter.principal(req), SessionFilter.token(req)));
+    }
+
+    /** T07: cria Worker ATIVO sem Agent, sem codigo e sem execucao (201). */
+    @PostMapping("/api/v1/o/{org}/workers")
+    public ResponseEntity<AgentAdminService.WorkerCreated> createWorker(@PathVariable UUID org, @RequestBody(required = false) WorkerRequest body,
+                                                                        HttpServletRequest req) {
+        if (body == null) {
+            throw ApiException.invalid("corpo");
+        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(admin.createWorker(org, SessionFilter.principal(req), SessionFilter.token(req), body.name()));
     }
 
     @GetMapping("/api/v1/o/{org}/workers")

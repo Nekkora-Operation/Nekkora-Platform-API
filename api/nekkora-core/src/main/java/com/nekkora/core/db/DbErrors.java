@@ -39,6 +39,26 @@ public final class DbErrors {
     }
 
     /**
+     * Recusa de capacidade de Worker do gatilho da 010 ({@code enforce_worker_registration_capacity}: RAISE EXCEPTION, SQLSTATE
+     * P0001, sem ERRCODE proprio): reconhecida pelo inicio fixo da mensagem do servidor, que so e comparada aqui e nunca vai
+     * para log nem resposta (C10). Limite atingido ou organizacao sem limite configurado.
+     */
+    public static boolean workerCapacityRefused(Throwable t) {
+        for (Throwable c = t; c != null; c = c.getCause()) {
+            if (c instanceof PSQLException p && p.getSQLState() != null) {
+                ServerErrorMessage m = p.getServerErrorMessage();
+                String msg = m == null ? null : m.getMessage();
+                return "P0001".equals(p.getSQLState()) && msg != null
+                        && (msg.startsWith("limite de workers cadastrados atingido") || msg.startsWith("organizacao sem configuracao de limite para workers"));
+            }
+            if (c.getCause() == c) {
+                break;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Recusa de regra levantada por trigger ou funcao ({@code RAISE ... USING ERRCODE = '23514'}): SQLSTATE 23514 SEM nome
      * de restricao. Uma CHECK violada tambem e 23514, mas o servidor informa a restricao - isso nao e recusa de regra, e
      * falha a propagar (ex.: CHECK de ordem temporal com o relogio do banco recuado), nunca resposta de recusa.
