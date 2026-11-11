@@ -45,6 +45,17 @@ final class MachineClient {
         return post("/enrollments/redeem", b.toString(), credential);
     }
 
+    /** T06: resgate com a intencao declarada no cabecalho Nekkora-Agent-Intent (pair | rotate). */
+    Response redeemWithIntent(String code, String credentialSecret, String intent) {
+        ObjectNode b = JSON.createObjectNode();
+        b.put("code", code);
+        b.put("credentialSecret", credentialSecret);
+        b.put("agentVersion", "0.2.0+lab");
+        b.putArray("contractVersions").add("1.0");
+        return send(HttpRequest.newBuilder(URI.create(base + "/enrollments/redeem")).header("Content-Type", "application/json")
+                .header("Nekkora-Agent-Intent", intent).POST(HttpRequest.BodyPublishers.ofString(b.toString())), credential);
+    }
+
     /** Resgate completo: guarda a credencial montada (nka1.org.cred.segredo). */
     JsonNode pair(String code) {
         secret = Tokens.newToken();

@@ -113,9 +113,12 @@ class AccessContractTest {
         assertThat(faltando).as("referencias sem destino").isEmpty();
         Map<String, Object> error = (Map<String, Object>) ((Map<String, Object>) components.get("schemas")).get("Error");
         String codigos = error.get("properties").toString();
+        // motivos do canal do Agent (T06) sao publicados no contrato da maquina (GatewayContractTest), nao neste
+        Set<com.nekkora.core.web.ApiError> soDaMaquina = Set.of(com.nekkora.core.web.ApiError.PAIRING_CODE_FOR_ROTATION,
+                com.nekkora.core.web.ApiError.ROTATION_CODE_FOR_PAIRING);
         for (com.nekkora.core.web.ApiError e : com.nekkora.core.web.ApiError.values()) {
             assertThat(codigos).as("codigo de erro publicado: " + e.code()).contains(e.code());
-            if (e.reason() != null) {
+            if (e.reason() != null && !soDaMaquina.contains(e)) {
                 assertThat(codigos).as("motivo de erro publicado: " + e.reason()).contains(e.reason());
             }
         }
