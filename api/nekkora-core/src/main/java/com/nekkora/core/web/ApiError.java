@@ -38,6 +38,18 @@ public enum ApiError {
      * publicado) (T09). Nada foi sobrescrito; o cliente rele e mostra qual pacote permaneceu.
      */
     DRAFT_CHANGED(HttpStatus.CONFLICT, "conflict", "draft_changed"),
+    /**
+     * Worker: a organizacao atingiu o limite de Workers cadastrados (WORKERS_REGISTERED; zero ate a ativacao)
+     * (PLATFORM-AGENT-V2-002, T07). Codigo CONHECIDO (conflict) com o motivo em "reason". Nada foi gravado.
+     */
+    WORKER_LIMIT_REACHED(HttpStatus.CONFLICT, "conflict", "worker_limit_reached"),
+    /**
+     * Canal do Agent, resgate com intencao declarada (PLATFORM-AGENT-V2-002, T06): codigo de PAREAMENTO enviado como renovacao
+     * de credencial. Nada consumido, nada alterado. Codigo CONHECIDO (conflict) com o motivo em "reason".
+     */
+    PAIRING_CODE_FOR_ROTATION(HttpStatus.CONFLICT, "conflict", "pairing_code_for_rotation"),
+    /** Idem: codigo de RENOVACAO (rotacao) enviado como pareamento. Nada consumido, nada alterado. */
+    ROTATION_CODE_FOR_PAIRING(HttpStatus.CONFLICT, "conflict", "rotation_code_for_pairing"),
     /** Canal do Agent (contrato Platform-Agent 1.0, sec. 15): versao maior do contrato nao suportada. */
     UNSUPPORTED_CONTRACT(HttpStatus.BAD_REQUEST, "unsupported_contract"),
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "rate_limited"),

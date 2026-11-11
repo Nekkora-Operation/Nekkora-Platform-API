@@ -73,7 +73,31 @@ public final class GatewayService {
      * Resgate do codigo {@code code} com o segredo da credencial gerado pela maquina. Idempotente pelo par (codigo, segredo):
      * a resposta perdida nao tranca a maquina para fora. Rotacao exige a credencial atual ({@code current}).
      */
+    /**
+     * Intencao declarada pelo Agent no resgate (cabecalho Nekkora-Agent-Intent, PLATFORM-AGENT-V2-002 T06). {@code LEGACY}:
+     * Agent anterior, que nao declara; o proposito vem so do codigo, como antes.
+     */
+    public enum Intent {
+        LEGACY, PAIR, ROTATE;
+
+        public static Intent of(String header) {
+            if (header == null) {
+                return LEGACY;
+            }
+            return switch (header) {
+                case "pair" -> PAIR;
+                case "rotate" -> ROTATE;
+                default -> throw ApiException.invalid("intencao");
+            };
+        }
+    }
+
+    /** Compatibilidade: resgate sem intencao declarada (Agent anterior). */
     public Redeemed redeem(MachineToken code, String credentialSecret, String agentVersion, Optional<MachineToken> current) {
+        return redeem(code, credentialSecret, agentVersion, current, Intent.LEGACY);
+    }
+
+    public Redeemed redeem(MachineToken code, String credentialSecret, String agentVersion, Optional<MachineToken> current, Intent intent) {
         if (!Tokens.isValidFormat(credentialSecret) || agentVersion == null || !AGENT_VERSION.matcher(agentVersion).matches()) {
             throw ApiException.invalid("resgate");
         }
@@ -109,7 +133,23 @@ public final class GatewayService {
             if (orgStatus == null || orgStatus != 1) {
                 throw ApiException.unauthenticated("organizacao");
             }
-            return e.purpose() == 1 ? pair(j, code.organization(), e, secretHash, agentVersion) : rotate(j, code.organization(), e, secretHash, current);
+            // T06: o proposito so e revelado a quem tem um codigo valido (hash, prazo e organizacao ja conferidos acima).
+            // Recusa por proposito trocado: nada consumido, nada alterado (o vinculo atual da maquina continua).
+            if (e.purpose() == 1) {
+                if (intent == Intent.ROTATE) {
+                    throw new ApiException(ApiError.PAIRING_CODE_FOR_ROTATION, "codigo_de_pareamento_na_rotacao");
+                }
+                if (intent == Intent.LEGACY && current.isPresent()) {
+                    // Agent anterior em rotacao com codigo de pareamento: antes criava outro Agent (orfao) se o Worker do
+                    // codigo estivesse livre; agora e recusado como Worker indisponivel (mesma mensagem que esse Agent ja mostra)
+                    throw new ApiException(ApiError.CONFLICT, "pareamento_com_credencial");
+                }
+                return pair(j, code.organization(), e, secretHash, agentVersion);
+            }
+            if (intent == Intent.PAIR) {
+                throw new ApiException(ApiError.ROTATION_CODE_FOR_PAIRING, "codigo_de_rotacao_no_pareamento");
+            }
+            return rotate(j, code.organization(), e, secretHash, current);
         });
     }
 

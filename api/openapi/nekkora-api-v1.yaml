@@ -1752,11 +1752,34 @@ paths:
       operationId: listWorkers
       summary: 'Lista os Workers'
       description: >
-        Exige worker.manage. Situacao, Agent associado e workspaces autorizados.
+        Exige worker.manage. Situacao, Agent associado e workspaces autorizados. T07 (campos aditivos): maquina vinculada
+        (agentName, agentStatus, agentVersion, installationId, credentialExpiresAt; null = sem Agent) e comunicacao
+        (lastHeartbeatAt e connectivity, mesma janela de GET /agents). Ausencia de sinal nao altera nada no servidor.
       security: [ { sessionCookie: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' } ]
       responses:
         '200': { description: 'Workers', content: { application/json: { schema: { $ref: '#/components/schemas/WorkerList' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    post:
+      tags: [Canal do Agent]
+      operationId: createWorker
+      summary: 'Cria um Worker sem Agent (T07)'
+      description: >
+        PLATFORM-AGENT-V2-002, T07. Exige worker.manage. Cria o Worker ACTIVE sem Agent, sem codigo e sem execucao; o Agent
+        e vinculado depois por POST /agent-enrollments com workerId. Capacidade decidida no banco (010) com a organizacao
+        travada: limite atingido (zero antes da ativacao) -> 409 conflict + reason worker_limit_reached, nada gravado. Nome
+        de 1 a 80 caracteres (espacos nas extremidades retirados). Auditado (agent_admin_events 7).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/WorkerCreateRequest' } } } }
+      responses:
+        '201': { description: 'Worker criado', content: { application/json: { schema: { $ref: '#/components/schemas/WorkerCreated' } } } }
+        '409': { $ref: '#/components/responses/Conflict' }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -2198,7 +2221,7 @@ components:
     Error:
       type: object
       required: [error]
-      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, draft_exists, draft_changed], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, draft_exists, draft_changed; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
+      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, draft_exists, draft_changed], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
     WorkspacePermissionCode:
       description: 'Permissoes de workspace (13): podem aparecer em allWorkspaces e em atribuicoes de workspace.'
       type: string
@@ -2719,6 +2742,27 @@ components:
               status: { type: string, enum: [ACTIVE, SUSPENDED, RETIRED] }
               agentId: { type: [string, 'null'], format: uuid }
               workspaceIds: { type: array, items: { type: string, format: uuid } }
+              agentName: { type: [string, 'null'], description: 'T07: maquina vinculada (null = sem Agent)' }
+              agentStatus: { type: [string, 'null'], enum: [PENDING, ACTIVE, SUSPENDED, REVOKED, null] }
+              agentVersion: { type: [string, 'null'] }
+              installationId: { type: [string, 'null'], format: uuid }
+              lastHeartbeatAt: { type: [string, 'null'], format: date-time, description: 'T07: ultimo sinal conhecido da maquina vinculada' }
+              connectivity: { type: [string, 'null'], enum: [CONNECTED, DISCONNECTED, null], description: 'T07: null = sem Agent' }
+              credentialExpiresAt: { type: [string, 'null'], format: date-time }
+              createdAt: { type: string, format: date-time }
+    WorkerCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+    WorkerCreated:
+      type: object
+      required: [workerId, name, status]
+      properties:
+        workerId: { type: string, format: uuid }
+        name: { type: string }
+        status: { type: string, enum: [ACTIVE] }
     WorkerWorkspace:
       type: object
       properties:

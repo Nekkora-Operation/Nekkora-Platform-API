@@ -62,5 +62,16 @@ class GatewayContractTest {
             assertThat(o.get("parameters").toString()).as(e.getKey()).contains("#/components/parameters/Contract");
         }
         assertThat(spec.toString()).doesNotContain("sessionCookie").doesNotContain("csrfHeader");
+
+        // T06: intencao declarada no resgate e os motivos do proposito trocado, publicados no esquema Error da maquina
+        Map<String, Object> redeem = (Map<String, Object>) ((Map<String, Object>) paths.get("/agent/api/v1/enrollments/redeem")).get("post");
+        assertThat(redeem.get("parameters").toString()).contains("#/components/parameters/Intent");
+        Map<String, Object> parameters = (Map<String, Object>) ((Map<String, Object>) spec.get("components")).get("parameters");
+        assertThat(parameters.get("Intent").toString()).contains(GatewayController.INTENT_HEADER).contains("pair").contains("rotate");
+        String erros = ((Map<String, Object>) ((Map<String, Object>) ((Map<String, Object>) spec.get("components")).get("schemas")).get("Error")).toString();
+        for (com.nekkora.core.web.ApiError e : Set.of(com.nekkora.core.web.ApiError.PAIRING_CODE_FOR_ROTATION,
+                com.nekkora.core.web.ApiError.ROTATION_CODE_FOR_PAIRING)) {
+            assertThat(erros).as("motivo publicado: " + e.reason()).contains(e.reason()).contains(e.code());
+        }
     }
 }
