@@ -694,8 +694,14 @@ public final class OpsBanco {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(b);
     }
 
+    /**
+     * Sufixo aleatorio de nomes de teste (papeis do PostgreSQL, arquivos de log). Os papeis sao do CLUSTER e se acumulam
+     * no container compartilhado durante toda a suite (~120 criacoes): com 3 bytes (24 bits) a chance de dois nomes
+     * iguais era da ordem de 1 em 1000 execucoes ("role ... already exists", CertificadosIT). Com 6 bytes (48 bits), fica
+     * na ordem de 1e-11. O nome mais longo ("op_semcadastro_" + 12) continua dentro de ^op_[a-z0-9_]{2,40}$.
+     */
     public static String sufixo() {
-        return hex(3);
+        return hex(6);
     }
 
     private static String aleatoria() {
