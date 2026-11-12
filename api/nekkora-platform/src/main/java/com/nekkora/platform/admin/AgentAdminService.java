@@ -423,6 +423,14 @@ public final class AgentAdminService {
                             List<String> capabilities, OffsetDateTime credentialExpiresAt) {
     }
 
+    /**
+     * Comunicacao (PLATFORM-AGENT-V2-003, T11): CONNECTED so com o Agent ATIVO, vinculado (associacao ativa ao Worker) e com
+     * ultimo contato AUTENTICADO (heartbeat aceito pelo gateway, relogio do servidor) nos ultimos 180 s. O Agent bate a cada 60 s
+     * (contrato Platform-Agent, sec. 5): a tolerancia cobre duas batidas perdidas. Revogado, suspenso ou sem associacao nunca
+     * aparece CONNECTED, mesmo com um sinal recente: um sinal antigo nao reativa vinculo. Sem nenhum contato
+     * (lastHeartbeatAt nulo) e DISCONNECTED: nunca "conectado" antes do primeiro contato valido. A expiracao so muda o que a
+     * leitura mostra: nao revoga, nao libera o Worker, nao retira workspaces, nao encerra execucoes.
+     */
     static final int CONNECTED_SECONDS = 180;
 
     public List<AgentView> listAgents(UUID org, ValidSession actor, String token) {
@@ -431,7 +439,7 @@ public final class AgentAdminService {
             actions.requirePermission(j, org, actor, "agent.manage");
             return j.sql("""
                     SELECT a.agent_id, a.name, a.installation_id, a.agent_version, a.status, wa.worker_id, a.registered_at, a.last_heartbeat_at,
-                           a.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?), p.contract_version, p.capabilities, c.expires_at
+                           a.status = 2 AND wa.worker_id IS NOT NULL AND a.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?), p.contract_version, p.capabilities, c.expires_at
                       FROM public.agents a
                       LEFT JOIN public.worker_agent_assignments wa ON wa.organization_id = a.organization_id AND wa.agent_id = a.agent_id AND wa.status = 1
                       LEFT JOIN public.agent_presence p ON p.agent_id = a.agent_id
@@ -442,7 +450,7 @@ public final class AgentAdminService {
                 return new AgentView(rs.getObject(1, UUID.class), rs.getString(2), rs.getObject(3, UUID.class), rs.getString(4),
                         switch (rs.getShort(5)) { case 1 -> "PENDING"; case 2 -> "ACTIVE"; case 3 -> "SUSPENDED"; default -> "REVOKED"; },
                         rs.getObject(6, UUID.class), rs.getObject(7, OffsetDateTime.class), rs.getObject(8, OffsetDateTime.class),
-                        rs.getBoolean(9) ? "CONNECTED" : "DISCONNECTED", rs.getString(10), caps == null ? List.of() : List.of((String[]) caps.getArray()),
+                        Boolean.TRUE.equals(rs.getObject(9, Boolean.class)) ? "CONNECTED" : "DISCONNECTED", rs.getString(10), caps == null ? List.of() : List.of((String[]) caps.getArray()),
                         rs.getObject(12, OffsetDateTime.class));
             }).list();
         });
@@ -467,7 +475,7 @@ public final class AgentAdminService {
                            coalesce((SELECT array_agg(x.workspace_id ORDER BY x.workspace_id) FROM public.worker_workspace_assignments x
                                       WHERE x.organization_id = w.organization_id AND x.worker_id = w.worker_id AND x.status = 1), '{}'),
                            a.name, a.status, a.agent_version, a.installation_id, a.last_heartbeat_at,
-                           a.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?), c.expires_at, w.created_at
+                           a.status = 2 AND a.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?), c.expires_at, w.created_at
                       FROM public.workers w
                       LEFT JOIN public.worker_agent_assignments wa ON wa.organization_id = w.organization_id AND wa.worker_id = w.worker_id AND wa.status = 1
                       LEFT JOIN public.agents a ON a.organization_id = wa.organization_id AND a.agent_id = wa.agent_id
@@ -480,7 +488,7 @@ public final class AgentAdminService {
                         List.of((UUID[]) rs.getArray(5).getArray()), rs.getString(6),
                         agent == null ? null : switch (rs.getShort(7)) { case 1 -> "PENDING"; case 2 -> "ACTIVE"; case 3 -> "SUSPENDED"; default -> "REVOKED"; },
                         rs.getString(8), rs.getObject(9, UUID.class), rs.getObject(10, OffsetDateTime.class),
-                        agent == null ? null : rs.getBoolean(11) ? "CONNECTED" : "DISCONNECTED", rs.getObject(12, OffsetDateTime.class),
+                        agent == null ? null : Boolean.TRUE.equals(rs.getObject(11, Boolean.class)) ? "CONNECTED" : "DISCONNECTED", rs.getObject(12, OffsetDateTime.class),
                         rs.getObject(13, OffsetDateTime.class));
             }).list();
         });

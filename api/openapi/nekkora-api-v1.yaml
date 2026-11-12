@@ -1700,7 +1700,7 @@ paths:
       operationId: listAgents
       summary: 'Lista os Agents da organizacao'
       description: >
-        Exige agent.manage. Identidade, Worker, versao informada, ultimo contato, conectividade (CONNECTED ate 180 s do ultimo heartbeat), capacidades e validade da credencial; nunca o hash.
+        Exige agent.manage. Identidade, Worker, versao informada, ultimo contato, conectividade (ver abaixo), capacidades e validade da credencial; nunca o hash. Comunicacao (PLATFORM-AGENT-V2-003, T11): CONNECTED so com o Agent ACTIVE, vinculado (associacao ativa ao Worker) e ultimo contato autenticado (heartbeat aceito, relogio do servidor) nos ultimos 180 s; o Agent bate a cada 60 s. Revogado, suspenso ou sem associacao: DISCONNECTED mesmo com sinal recente (sinal antigo nao reativa vinculo). Sem nenhum contato: DISCONNECTED com lastHeartbeatAt nulo (ainda sem comunicacao). A ausencia de sinal nao muda estado: nao revoga, nao libera o Worker, nao retira workspaces, nao encerra execucoes. O desvinculo feito so no Agent (T06) nao chega a Platform: o Agent continua ACTIVE ate uma pessoa revogar, e a comunicacao expira para DISCONNECTED.
       security: [ { sessionCookie: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' } ]
       responses:
@@ -2755,7 +2755,7 @@ components:
               agentVersion: { type: [string, 'null'] }
               installationId: { type: [string, 'null'], format: uuid }
               lastHeartbeatAt: { type: [string, 'null'], format: date-time, description: 'T07: ultimo sinal conhecido da maquina vinculada' }
-              connectivity: { type: [string, 'null'], enum: [CONNECTED, DISCONNECTED, null], description: 'T07: null = sem Agent' }
+              connectivity: { type: [string, 'null'], enum: [CONNECTED, DISCONNECTED, null], description: 'T07: null = sem Agent. T11: CONNECTED so com o Agent ACTIVE e contato autenticado nos ultimos 180 s (heartbeat a cada 60 s); ver listAgents' }
               credentialExpiresAt: { type: [string, 'null'], format: date-time }
               createdAt: { type: string, format: date-time }
     WorkerCreateRequest:
