@@ -98,6 +98,139 @@ class AgentAdminIT extends PlatformTestBase {
         assertThat(p.get("/api/v1/o/" + s.org().id() + "/agents").status()).isEqualTo(403);
     }
 
+    // =========================================================================== T07: Worker sem Agent
+
+    /**
+     * PLATFORM-AGENT-V2-002, T07: Worker criado sem Agent, sem codigo e sem execucao; autorizado num workspace antes do
+     * pareamento; o codigo de "Vincular Agent" e emitido para o MESMO Worker (sem cadastrar outro); a lista mostra maquina e
+     * comunicacao separadas. Capacidade, permissao, outro tenant e Worker ocupado recusados sem gravar nada.
+     */
+    @Test
+    void workerSemAgentAutorizadoAntesDoPareamentoECodigoParaOMesmoWorker() throws Exception {
+        Setup s = setup();
+        String org = s.org().id().toString();
+        String workers = "/api/v1/o/" + org + "/workers";
+        long codigosAntes = count("SELECT count(*) FROM agent_enrollments WHERE organization_id = '" + org + "'");
+        assertThat(s.admin().post(workers, "{\"name\":\"  \"}").status()).as("nome vazio").isEqualTo(400);
+        assertThat(s.admin().post(workers, "{\"name\":\"" + "x".repeat(81) + "\"}").status()).as("nome longo").isEqualTo(400);
+        BrowserClient.Response created = s.admin().post(workers, "{\"name\":\"  Estacao fiscal  \"}");
+        assertThat(created.status()).as(created.body()).isEqualTo(201);
+        assertThat(created.field("name")).isEqualTo("Estacao fiscal");
+        assertThat(created.field("status")).isEqualTo("ACTIVE");
+        UUID worker = UUID.fromString(created.field("workerId"));
+        // nada alem do Worker: nenhum Agent, codigo, associacao ou execucao
+        assertThat(count("SELECT count(*) FROM agents WHERE organization_id = '" + org + "'")).isZero();
+        assertThat(count("SELECT count(*) FROM agent_enrollments WHERE organization_id = '" + org + "'")).isEqualTo(codigosAntes);
+        assertThat(count("SELECT count(*) FROM worker_agent_assignments WHERE worker_id = '" + worker + "'")).isZero();
+        assertThat(count("SELECT count(*) FROM agent_runs WHERE organization_id = '" + org + "'")).isZero();
+        assertThat(count("SELECT count(*) FROM agent_admin_events WHERE organization_id = '" + org + "' AND act = 7 AND worker_id = '" + worker + "'")).isEqualTo(1);
+
+        // lista: sem Agent (maquina e comunicacao nulas)
+        tools.jackson.databind.JsonNode item = workerItem(s, worker);
+        assertThat(item.get("agentId").isNull()).isTrue();
+        assertThat(item.get("agentName").isNull()).isTrue();
+        assertThat(item.get("connectivity").isNull()).isTrue();
+        assertThat(item.get("lastHeartbeatAt").isNull()).isTrue();
+
+        // workspace autorizado ANTES do pareamento
+        stepUp(s);
+        assertThat(putWorker(s, "/api/v1/o/" + org + "/workers/" + worker + "/workspaces/" + s.workspace()).status()).isEqualTo(201);
+        // Vincular Agent: codigo para o MESMO Worker, sem criar outro
+        long workersAntes = count("SELECT count(*) FROM workers WHERE organization_id = '" + org + "'");
+        BrowserClient.Response code = s.admin().post("/api/v1/o/" + org + "/agent-enrollments", "{\"workerId\":\"" + worker + "\",\"agentName\":\"Maquina fiscal\"}");
+        assertThat(code.status()).as(code.body()).isEqualTo(201);
+        assertThat(code.field("workerId")).isEqualTo(worker.toString());
+        assertThat(count("SELECT count(*) FROM workers WHERE organization_id = '" + org + "'")).isEqualTo(workersAntes);
+        // codigo emitido e cancelado: nenhuma maquina aparece (o Agent so existe depois do resgate)
+        assertThat(s.admin().post("/api/v1/o/" + org + "/agent-enrollments/" + code.field("enrollmentId") + "/cancel", null).status()).isEqualTo(204);
+        assertThat(count("SELECT count(*) FROM agents WHERE organization_id = '" + org + "'")).isZero();
+        assertThat(workerItem(s, worker).get("agentId").isNull()).isTrue();
+
+        // vinculado (fixture do resgate): maquina e comunicacao separadas; sem sinal recente = DISCONNECTED, sem mudar nada
+        UUID agent = agentOn(s.org(), worker);
+        item = workerItem(s, worker);
+        assertThat(item.get("agentId").asString()).isEqualTo(agent.toString());
+        assertThat(item.get("agentName").asString()).startsWith("Agent ");
+        assertThat(item.get("agentStatus").asString()).isEqualTo("ACTIVE");
+        assertThat(item.get("connectivity").asString()).isEqualTo("DISCONNECTED");
+        assertThat(item.get("lastHeartbeatAt").isNull()).isTrue();
+        assertThat(item.get("credentialExpiresAt").isNull()).isFalse();
+        assertThat(item.get("workspaceIds").toString()).contains(s.workspace().toString());
+        DB.asSuperuser("UPDATE agents SET last_heartbeat_at = now() WHERE agent_id = '" + agent + "'");
+        assertThat(workerItem(s, worker).get("connectivity").asString()).isEqualTo("CONNECTED");
+        DB.asSuperuser("UPDATE agents SET last_heartbeat_at = now() - interval '10 minutes' WHERE agent_id = '" + agent + "'");
+        item = workerItem(s, worker);
+        assertThat(item.get("connectivity").asString()).isEqualTo("DISCONNECTED");
+        assertThat(item.get("lastHeartbeatAt").isNull()).isFalse();
+        // sem sinal nao revoga, nao libera, nao retira workspace
+        assertThat(item.get("agentStatus").asString()).isEqualTo("ACTIVE");
+        assertThat(item.get("workspaceIds").toString()).contains(s.workspace().toString());
+
+        // segundo Agent sobre vinculo ocupado: 409, nada gravado
+        long codigos = count("SELECT count(*) FROM agent_enrollments WHERE organization_id = '" + org + "'");
+        assertThat(s.admin().post("/api/v1/o/" + org + "/agent-enrollments", "{\"workerId\":\"" + worker + "\",\"agentName\":\"Outra\"}").status()).isEqualTo(409);
+        assertThat(count("SELECT count(*) FROM agent_enrollments WHERE organization_id = '" + org + "'")).isEqualTo(codigos);
+
+        // Worker de OUTRA organizacao: codigo recusado (404), nada gravado nas duas
+        Setup other = setup();
+        UUID alheio = workerRow(other.org(), "W-alheio");
+        assertThat(s.admin().post("/api/v1/o/" + org + "/agent-enrollments", "{\"workerId\":\"" + alheio + "\",\"agentName\":\"Intrusa\"}").status()).isEqualTo(404);
+        assertThat(putWorker(s, "/api/v1/o/" + org + "/workers/" + alheio + "/workspaces/" + s.workspace()).status()).isEqualTo(404);
+        assertThat(count("SELECT count(*) FROM agent_enrollments WHERE worker_id = '" + alheio + "'")).isZero();
+
+        // sem permissao (conta interna sem papel): criar e listar recusados
+        TestUser plain = internalUser(s.org(), true, 2);
+        BrowserClient p = browser();
+        firstLogin(p, s.org().id(), plain);
+        assertThat(p.post(workers, "{\"name\":\"Sem permissao\"}").status()).isEqualTo(403);
+        assertThat(p.get(workers).status()).isEqualTo(403);
+        assertThat(count("SELECT count(*) FROM workers WHERE organization_id = '" + org + "' AND name = 'Sem permissao'")).isZero();
+    }
+
+    /** T07: capacidade de Workers decidida no banco; limite atingido (ou organizacao sem limite) = 409 worker_limit_reached. */
+    @Test
+    void criarWorkerRespeitaACapacidadeSemGravarNada() throws Exception {
+        Setup s = setup();
+        String org = s.org().id().toString();
+        DB.asSuperuser("INSERT INTO organization_resource_limit_revisions (organization_id, resource_code, revision_number, effective_from, limit_mode, "
+                + "limit_value, provisioned_by_user_id) VALUES ('" + org + "', 1, 2, now(), 1, 2, '" + s.org().adminId() + "')");
+        String workers = "/api/v1/o/" + org + "/workers";
+        assertThat(s.admin().post(workers, "{\"name\":\"W1\"}").status()).isEqualTo(201);
+        assertThat(s.admin().post(workers, "{\"name\":\"W2\"}").status()).isEqualTo(201);
+        BrowserClient.Response full = s.admin().post(workers, "{\"name\":\"W3\"}");
+        assertThat(full.status()).isEqualTo(409);
+        assertThat(full.body()).isEqualTo("{\"error\":\"conflict\",\"reason\":\"worker_limit_reached\"}");
+        assertThat(count("SELECT count(*) FROM workers WHERE organization_id = '" + org + "'")).isEqualTo(2);
+        assertThat(count("SELECT count(*) FROM agent_admin_events WHERE organization_id = '" + org + "' AND act = 7")).isEqualTo(2);
+        // aposentado libera a vaga (a 010 conta os nao aposentados)
+        DB.asSuperuser("UPDATE workers SET status = 3 WHERE organization_id = '" + org + "' AND name = 'W1'");
+        assertThat(s.admin().post(workers, "{\"name\":\"W3\"}").status()).isEqualTo(201);
+
+        // organizacao sem configuracao de limite (antes da ativacao): tambem 409, nada gravado
+        Org nova = newOrganization();
+        BrowserClient b = browser();
+        firstLogin(b, nova.id(), new TestUser(nova.adminId(), nova.adminEmail(), PASSWORD.toCharArray()));
+        BrowserClient.Response semLimite = b.post("/api/v1/o/" + nova.id() + "/workers", "{\"name\":\"W\"}");
+        assertThat(semLimite.status()).isEqualTo(409);
+        assertThat(semLimite.body()).isEqualTo("{\"error\":\"conflict\",\"reason\":\"worker_limit_reached\"}");
+        assertThat(count("SELECT count(*) FROM workers WHERE organization_id = '" + nova.id() + "'")).isZero();
+    }
+
+    private BrowserClient.Response putWorker(Setup s, String path) {
+        return s.admin().send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(baseUrl() + path)).PUT(java.net.http.HttpRequest.BodyPublishers.noBody()));
+    }
+
+    private static tools.jackson.databind.JsonNode workerItem(Setup s, UUID worker) {
+        BrowserClient.Response r = s.admin().get("/api/v1/o/" + s.org().id() + "/workers");
+        assertThat(r.status()).isEqualTo(200);
+        for (tools.jackson.databind.JsonNode n : tools.jackson.databind.json.JsonMapper.builder().build().readTree(r.body()).get("items")) {
+            if (n.get("workerId").asString().equals(worker.toString())) {
+                return n;
+            }
+        }
+        throw new AssertionError("worker ausente da lista");
+    }
+
     @Test
     void quemCriouOCodigoPerdeuAAutoridadeEOResgateERecusadoNoBanco() throws Exception {
         Setup s = setup();
@@ -180,8 +313,12 @@ class AgentAdminIT extends PlatformTestBase {
                 .isEqualTo(409);
         // versao publicada sem impressao declarada (so o sha256 dos bytes do artefato, mesmo igual a impressao): recusada
         UUID onlyArtifact = UUID.randomUUID();
+        // T09 (032): um rascunho por automacao; a versao sem impressao fica noutra automacao do mesmo workspace
+        UUID otherAutomation = UUID.randomUUID();
+        DB.asSuperuser("INSERT INTO automations (automation_id, organization_id, workspace_id, name, status, created_by_membership_id) SELECT '" + otherAutomation
+                + "', organization_id, workspace_id, 'Biografias sem impressao', 1, created_by_membership_id FROM automations WHERE automation_id = '" + s.automation() + "'");
         DB.asSuperuser("INSERT INTO automation_versions (automation_version_id, organization_id, workspace_id, automation_id, status, command_json, created_by_membership_id) "
-                        + "SELECT '" + onlyArtifact + "', organization_id, workspace_id, automation_id, 1, (command_json - 'agent_package') || jsonb_build_object('artifact', "
+                        + "SELECT '" + onlyArtifact + "', organization_id, workspace_id, '" + otherAutomation + "', 1, (command_json - 'agent_package') || jsonb_build_object('artifact', "
                         + "jsonb_build_object('reference', 'biografias-python', 'sha256', '" + FINGERPRINT + "')), created_by_membership_id FROM automation_versions WHERE "
                         + "automation_version_id = '" + s.version() + "'",
                 "UPDATE automation_versions SET status = 2, published_at = now(), published_by_membership_id = created_by_membership_id WHERE automation_version_id = '"

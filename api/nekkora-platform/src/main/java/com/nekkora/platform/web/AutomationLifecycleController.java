@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.nekkora.core.web.ApiException;
@@ -34,6 +35,9 @@ import com.nekkora.platform.artifact.PackageInspector;
 public class AutomationLifecycleController {
 
     public record WorkspaceRequest(String name, String description) {
+    }
+
+    public record WorkspaceRenameRequest(String name) {
     }
 
     public record AutomationRequest(String name) {
@@ -59,6 +63,15 @@ public class AutomationLifecycleController {
         }
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(service.createWorkspace(org, SessionFilter.principal(req), SessionFilter.token(req), body.name(), body.description()));
+    }
+
+    @PatchMapping("/api/v1/o/{org}/workspaces/{workspaceId}")
+    public AutomationLifecycleService.Workspace renameWorkspace(@PathVariable UUID org, @PathVariable("workspaceId") UUID workspace,
+                                                                @RequestBody(required = false) WorkspaceRenameRequest body, HttpServletRequest req) {
+        if (body == null) {
+            throw ApiException.invalid("corpo");
+        }
+        return service.renameWorkspace(org, SessionFilter.principal(req), SessionFilter.token(req), workspace, body.name());
     }
 
     @PostMapping("/api/v1/o/{org}/workspaces/{workspaceId}/automations")
@@ -98,6 +111,26 @@ public class AutomationLifecycleController {
         byte[] zip = body(req);
         try {
             return ResponseEntity.ok(service.attachArtifact(org, SessionFilter.principal(req), SessionFilter.token(req), version, zip));
+        } catch (PackageInspector.Rejected e) {
+            return ResponseEntity.status(422).body(rejected(e.reason()));
+        }
+    }
+
+    /**
+     * T09: pacote do rascunho da automacao. O rascunho nasce aqui, quando o ZIP e aceito (201); com rascunho, substitui o
+     * pacote da MESMA versao se a expectativa (id e sha256 atuais) confere (200). Repeticao com os mesmos bytes: 200.
+     */
+    @PutMapping(path = "/api/v1/o/{org}/automations/{automationId}/draft/artifact", consumes = "application/zip")
+    public ResponseEntity<?> putDraftPackage(@PathVariable UUID org, @PathVariable("automationId") UUID automation,
+                                             @RequestParam(name = "expectedDraftVersionId", required = false) UUID expectedVersion,
+                                             @RequestParam(name = "expectedSha256", required = false) String expectedSha256,
+                                             @RequestParam(name = "runtime", required = false) String runtime,
+                                             @RequestParam(name = "argument", required = false) List<String> arguments, HttpServletRequest req) {
+        byte[] zip = body(req);
+        try {
+            AutomationLifecycleService.DraftPut r = service.putDraftPackage(org, SessionFilter.principal(req), SessionFilter.token(req), automation,
+                    expectedVersion, expectedSha256, runtime, arguments, zip);
+            return ResponseEntity.status(r.created() ? HttpStatus.CREATED : HttpStatus.OK).body(r.version());
         } catch (PackageInspector.Rejected e) {
             return ResponseEntity.status(422).body(rejected(e.reason()));
         }

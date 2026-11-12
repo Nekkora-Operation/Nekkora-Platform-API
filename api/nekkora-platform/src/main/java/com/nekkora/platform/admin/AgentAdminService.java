@@ -9,7 +9,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
+import com.nekkora.core.db.DbErrors;
 import com.nekkora.core.token.Tokens;
+import com.nekkora.core.web.ApiError;
 import com.nekkora.core.web.ApiException;
 import com.nekkora.core.web.RequestContext;
 import com.nekkora.platform.access.WorkspaceAccess;
@@ -55,6 +57,41 @@ public final class AgentAdminService {
     }
 
     // ------------------------------------------------------------------ pareamento e rotacao
+
+    /** Worker criado sem Agent (PLATFORM-AGENT-V2-002, T07). */
+    public record WorkerCreated(UUID workerId, String name, String status) {
+    }
+
+    /**
+     * T07: cria um Worker ATIVO sem Agent, sem codigo e sem execucao. Exige worker.manage. A capacidade (WORKERS_REGISTERED)
+     * continua decidida pelo gatilho da 010, com a organizacao travada; o limite atingido (inclusive zero, antes da ativacao)
+     * vira 409 conflict + worker_limit_reached, sem gravar nada. Auditado (ato 7, WORKER_CRIADO).
+     */
+    public WorkerCreated createWorker(UUID org, ValidSession actor, String token, String name) {
+        String n = name == null ? null : name.strip();
+        if (!validName(n)) {
+            throw ApiException.invalid("nome");
+        }
+        return actions.write(org, j -> {
+            actions.requireActor(j, org, actor, token);
+            actions.requirePermission(j, org, actor, "worker.manage");
+            actions.lockOrganizationAndActor(j, org, actor.userId());
+            UUID worker;
+            try {
+                worker = j.sql("INSERT INTO public.workers (organization_id, name, status) VALUES (?, ?, 1) RETURNING worker_id")
+                        .param(org).param(n).query(UUID.class).single();
+            } catch (RuntimeException e) {
+                if (DbErrors.workerCapacityRefused(e)) {
+                    LOG.info("evento=worker.limite_atingido correlacao={}", RequestContext.correlation());
+                    throw new ApiException(ApiError.WORKER_LIMIT_REACHED, "limite_workers");
+                }
+                throw e;
+            }
+            audit(j, org, 7, actor.membershipId(), null, worker, null, null, null);
+            LOG.info("evento=worker.criado worker={} correlacao={}", worker, RequestContext.correlation());
+            return new WorkerCreated(worker, n, "ACTIVE");
+        });
+    }
 
     public CodeIssued createPairing(UUID org, ValidSession actor, String token, UUID workerId, String workerName, String agentName, Integer minutes) {
         int ttl = ttl(minutes);
@@ -276,13 +313,13 @@ public final class AgentAdminService {
             UUID assignment = j.sql("SELECT assignment_id FROM public.worker_workspace_assignments WHERE organization_id = ? AND worker_id = ? "
                             + "AND workspace_id = ? AND status = 1").param(org).param(workerId).param(workspaceId).query(UUID.class).optional()
                     .orElseThrow(() -> AccessActions.refuse(Failure.CONFLICT, "worker_nao_autorizado_no_workspace"));
-            LocalAuthorization a = j.sql("""
+            LocalAuthorization a = oneValid(() -> j.sql("""
                     INSERT INTO public.local_run_authorizations (organization_id, workspace_id, worker_id, worker_workspace_assignment_id, automation_id,
                         automation_version_id, package_fingerprint, package_fingerprint_rule, source_kind, granted_by_membership_id, valid_until)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     RETURNING """ + " " + AUTHORIZATION_COLUMNS).param(org).param(workspaceId).param(workerId).param(assignment).param(v.automationId()).param(versionId)
                     .param(v.packageFingerprint()).param(v.rule()).param(kind).param(actor.membershipId()).param(validUntil)
-                    .query((rs, n) -> authorization(rs)).single();
+                    .query((rs, n) -> authorization(rs)).single());
             audit(j, org, 10, actor.membershipId(), null, workerId, workspaceId, null, null, a.authorizationId(), null);
             return a;
         });
@@ -314,15 +351,35 @@ public final class AgentAdminService {
             UUID assignment = j.sql("SELECT assignment_id FROM public.worker_workspace_assignments WHERE organization_id = ? AND worker_id = ? "
                             + "AND workspace_id = ? AND status = 1").param(org).param(workerId).param(workspaceId).query(UUID.class).optional()
                     .orElseThrow(() -> AccessActions.refuse(Failure.CONFLICT, "worker_nao_autorizado_no_workspace"));
-            LocalAuthorization a = j.sql("""
+            LocalAuthorization a = oneValid(() -> j.sql("""
                     INSERT INTO public.local_run_authorizations (organization_id, workspace_id, worker_id, worker_workspace_assignment_id, automation_id,
                         automation_version_id, package_fingerprint, package_fingerprint_rule, source_kind, granted_by_membership_id, valid_until)
                     VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, 3, ?, ?)
                     RETURNING """ + " " + AUTHORIZATION_COLUMNS).param(org).param(workspaceId).param(workerId).param(assignment).param(automationId)
-                    .param(actor.membershipId()).param(validUntil).query((rs, n) -> authorization(rs)).single();
+                    .param(actor.membershipId()).param(validUntil).query((rs, n) -> authorization(rs)).single());
             audit(j, org, 10, actor.membershipId(), null, workerId, workspaceId, null, null, a.authorizationId(), null);
             return a;
         });
+    }
+
+    /** Nome da recusa do gatilho da 033 (uma autorizacao local vigente por escopo; SQLSTATE 23505 com este nome). */
+    static final String VALID_AUTHORIZATION_KEY = "ux_local_run_authorizations_vigente";
+
+    /**
+     * T12 (033): a insercao recusada pelo gatilho (ja ha autorizacao VIGENTE no escopo) vira 409 conflict + reason
+     * local_run_authorization_exists. A transacao e desfeita: nada gravado, nada auditado, nada estendido nem revogado. A
+     * recusa fica no log como as demais (evento=acesso.negado), sem identificadores do escopo.
+     */
+    private static LocalAuthorization oneValid(java.util.function.Supplier<LocalAuthorization> insert) {
+        try {
+            return insert.get();
+        } catch (RuntimeException e) {
+            if (DbErrors.uniqueViolation(e, VALID_AUTHORIZATION_KEY)) {
+                LOG.info("evento=acesso.negado regra=CONFLICT motivo=autorizacao_local_vigente correlacao={}", RequestContext.correlation());
+                throw new ApiException(ApiError.LOCAL_RUN_AUTHORIZATION_EXISTS, "autorizacao_local_vigente");
+            }
+            throw e;
+        }
     }
 
     public void revokeLocalRun(UUID org, ValidSession actor, String token, UUID workspaceId, UUID authorizationId) {
@@ -363,9 +420,17 @@ public final class AgentAdminService {
     /** Agent: identidade, Worker, versao informada, presenca e validade da credencial; nunca o hash. */
     public record AgentView(UUID agentId, String name, UUID installationId, String agentVersion, String status, UUID workerId,
                             OffsetDateTime registeredAt, OffsetDateTime lastHeartbeatAt, String connectivity, String contractVersion,
-                            List<String> capabilities, OffsetDateTime credentialExpiresAt) {
+                            List<String> capabilities, OffsetDateTime credentialExpiresAt, String endedBy) {
     }
 
+    /**
+     * Comunicacao (PLATFORM-AGENT-V2-003, T11): CONNECTED so com o Agent ATIVO, vinculado (associacao ativa ao Worker) e com
+     * ultimo contato AUTENTICADO (heartbeat aceito pelo gateway, relogio do servidor) nos ultimos 180 s. O Agent bate a cada 60 s
+     * (contrato Platform-Agent, sec. 5): a tolerancia cobre duas batidas perdidas. Revogado, suspenso ou sem associacao nunca
+     * aparece CONNECTED, mesmo com um sinal recente: um sinal antigo nao reativa vinculo. Sem nenhum contato
+     * (lastHeartbeatAt nulo) e DISCONNECTED: nunca "conectado" antes do primeiro contato valido. A expiracao so muda o que a
+     * leitura mostra: nao revoga, nao libera o Worker, nao retira workspaces, nao encerra execucoes.
+     */
     static final int CONNECTED_SECONDS = 180;
 
     public List<AgentView> listAgents(UUID org, ValidSession actor, String token) {
@@ -374,7 +439,10 @@ public final class AgentAdminService {
             actions.requirePermission(j, org, actor, "agent.manage");
             return j.sql("""
                     SELECT a.agent_id, a.name, a.installation_id, a.agent_version, a.status, wa.worker_id, a.registered_at, a.last_heartbeat_at,
-                           a.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?), p.contract_version, p.capabilities, c.expires_at
+                           a.status = 2 AND wa.worker_id IS NOT NULL AND a.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?), p.contract_version, p.capabilities, c.expires_at,
+                           CASE WHEN a.status <> 4 THEN NULL
+                                WHEN EXISTS (SELECT 1 FROM public.agent_unlink_operations u WHERE u.organization_id = a.organization_id AND u.agent_id = a.agent_id)
+                                THEN 'MACHINE' ELSE 'ADMINISTRATION' END
                       FROM public.agents a
                       LEFT JOIN public.worker_agent_assignments wa ON wa.organization_id = a.organization_id AND wa.agent_id = a.agent_id AND wa.status = 1
                       LEFT JOIN public.agent_presence p ON p.agent_id = a.agent_id
@@ -385,13 +453,20 @@ public final class AgentAdminService {
                 return new AgentView(rs.getObject(1, UUID.class), rs.getString(2), rs.getObject(3, UUID.class), rs.getString(4),
                         switch (rs.getShort(5)) { case 1 -> "PENDING"; case 2 -> "ACTIVE"; case 3 -> "SUSPENDED"; default -> "REVOKED"; },
                         rs.getObject(6, UUID.class), rs.getObject(7, OffsetDateTime.class), rs.getObject(8, OffsetDateTime.class),
-                        rs.getBoolean(9) ? "CONNECTED" : "DISCONNECTED", rs.getString(10), caps == null ? List.of() : List.of((String[]) caps.getArray()),
-                        rs.getObject(12, OffsetDateTime.class));
+                        Boolean.TRUE.equals(rs.getObject(9, Boolean.class)) ? "CONNECTED" : "DISCONNECTED", rs.getString(10), caps == null ? List.of() : List.of((String[]) caps.getArray()),
+                        rs.getObject(12, OffsetDateTime.class), rs.getString(13));
             }).list();
         });
     }
 
-    public record WorkerView(UUID workerId, String name, String status, UUID agentId, List<UUID> workspaceIds) {
+    /**
+     * Worker com a maquina vinculada (T07, campos aditivos): situacao do Worker, maquina (Agent da associacao ativa; null =
+     * sem Agent) e comunicacao (ultimo sinal; CONNECTED/DISCONNECTED com a mesma janela da lista de Agents). Ausencia de
+     * sinal nao muda nada no servidor: nao revoga, nao libera o Worker, nao retira workspaces, nao encerra execucoes.
+     */
+    public record WorkerView(UUID workerId, String name, String status, UUID agentId, List<UUID> workspaceIds, String agentName,
+                             String agentStatus, String agentVersion, UUID installationId, OffsetDateTime lastHeartbeatAt, String connectivity,
+                             OffsetDateTime credentialExpiresAt, OffsetDateTime createdAt) {
     }
 
     public List<WorkerView> listWorkers(UUID org, ValidSession actor, String token) {
@@ -401,13 +476,24 @@ public final class AgentAdminService {
             return j.sql("""
                     SELECT w.worker_id, w.name, w.status, wa.agent_id,
                            coalesce((SELECT array_agg(x.workspace_id ORDER BY x.workspace_id) FROM public.worker_workspace_assignments x
-                                      WHERE x.organization_id = w.organization_id AND x.worker_id = w.worker_id AND x.status = 1), '{}')
+                                      WHERE x.organization_id = w.organization_id AND x.worker_id = w.worker_id AND x.status = 1), '{}'),
+                           a.name, a.status, a.agent_version, a.installation_id, a.last_heartbeat_at,
+                           a.status = 2 AND a.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?), c.expires_at, w.created_at
                       FROM public.workers w
                       LEFT JOIN public.worker_agent_assignments wa ON wa.organization_id = w.organization_id AND wa.worker_id = w.worker_id AND wa.status = 1
+                      LEFT JOIN public.agents a ON a.organization_id = wa.organization_id AND a.agent_id = wa.agent_id
+                      LEFT JOIN public.agent_credentials c ON c.organization_id = a.organization_id AND c.agent_id = a.agent_id AND c.revoked_at IS NULL
                      WHERE w.organization_id = ? ORDER BY w.created_at, w.worker_id
-                    """).param(org).query((rs, n) -> new WorkerView(rs.getObject(1, UUID.class), rs.getString(2),
-                    switch (rs.getShort(3)) { case 1 -> "ACTIVE"; case 2 -> "SUSPENDED"; default -> "RETIRED"; }, rs.getObject(4, UUID.class),
-                    List.of((UUID[]) rs.getArray(5).getArray()))).list();
+                    """).param(CONNECTED_SECONDS).param(org).query((rs, n) -> {
+                UUID agent = rs.getObject(4, UUID.class);
+                return new WorkerView(rs.getObject(1, UUID.class), rs.getString(2),
+                        switch (rs.getShort(3)) { case 1 -> "ACTIVE"; case 2 -> "SUSPENDED"; default -> "RETIRED"; }, agent,
+                        List.of((UUID[]) rs.getArray(5).getArray()), rs.getString(6),
+                        agent == null ? null : switch (rs.getShort(7)) { case 1 -> "PENDING"; case 2 -> "ACTIVE"; case 3 -> "SUSPENDED"; default -> "REVOKED"; },
+                        rs.getString(8), rs.getObject(9, UUID.class), rs.getObject(10, OffsetDateTime.class),
+                        agent == null ? null : Boolean.TRUE.equals(rs.getObject(11, Boolean.class)) ? "CONNECTED" : "DISCONNECTED", rs.getObject(12, OffsetDateTime.class),
+                        rs.getObject(13, OffsetDateTime.class));
+            }).list();
         });
     }
 

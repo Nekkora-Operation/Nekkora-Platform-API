@@ -11,6 +11,8 @@ import com.nekkora.core.db.IdentityTransactions;
 import com.nekkora.core.db.IdentityTransactions.Mode;
 import com.nekkora.core.db.IdentityTransactions.TokenSessao;
 import com.nekkora.core.token.Tokens;
+import com.nekkora.core.db.DbErrors;
+import com.nekkora.core.web.ApiError;
 import com.nekkora.core.web.ApiException;
 import com.nekkora.core.web.ClientIpResolver;
 import com.nekkora.core.web.RequestContext;
@@ -62,7 +64,14 @@ public final class IdentityOrganizationsService {
         if (found.isEmpty()) {
             throw ApiException.unauthenticated("sessao_identidade");
         }
-        return found.get();
+        // T10 (034): o identificador de cada organizacao da lista, lido no contexto DELA (uma transacao curta por organizacao,
+        // com a mesma sessao de identidade; a lista ja passou pela elegibilidade da 017)
+        List<IdentityOrgRepository.Organization> withHandles = found.get().organizations().stream()
+                .map(o -> new IdentityOrgRepository.Organization(o.organizationId(), o.name(), o.roles(), o.activationState(),
+                        tx.inIdentityAndOrganization(new TokenSessao(sessionToken), o.organizationId(), Mode.READ_ONLY,
+                                (id, j) -> IdentityOrgRepository.handle(j, o.organizationId()).orElse(null)).orElse(null)))
+                .toList();
+        return new Listing(withHandles, found.get().canCreateOrganization());
     }
 
     /**
@@ -81,6 +90,9 @@ public final class IdentityOrganizationsService {
      * perdido. Resultado desconhecido - mantida, com registro da incerteza. Erra para o lado seguro.</li>
      * </ul>
      */
+    /** Indice unico da 034: nome unico entre as organizacoes criadas pela mesma identidade pelo cadastro. */
+    static final String ORGANIZATION_NAME_KEY = "ux_organization_authorship_creator_name";
+
     public UUID create(IdentityPrincipal who, String sessionToken, String name, String legalName, String ip) {
         limits.identityRoutes(ip);
         if (who == null || !Tokens.isValidFormat(sessionToken)) {
@@ -112,6 +124,11 @@ public final class IdentityOrganizationsService {
                         ClientIpResolver.truncated(ip), RequestContext.correlation());
             } else {
                 limits.releaseOrganizationCreation(who.identityId(), reservation);
+            }
+            // T10 (034): esta identidade ja criou, pelo cadastro, uma organizacao com esse nome; nada foi criado
+            if (DbErrors.uniqueViolation(e, ORGANIZATION_NAME_KEY)) {
+                LOG.info("evento=identidade.criacao_organizacao_negada regra=nome_repetido ip={}", ClientIpResolver.truncated(ip));
+                throw new ApiException(ApiError.ORGANIZATION_NAME_TAKEN, "nome_organizacao");
             }
             throw e;
         }

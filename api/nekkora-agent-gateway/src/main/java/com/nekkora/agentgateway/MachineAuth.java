@@ -51,11 +51,51 @@ public final class MachineAuth {
         return new Machine(t.organization(), r.agentId(), r.workerId(), r.credentialId(), r.assignmentId(), r.expiresAt());
     }
 
+    /**
+     * Situacao da credencial para o desvinculo pela maquina (PLATFORM-AGENT-V2-004, T13). So depois de o segredo conferir.
+     * {@code revocationReason} nulo = nao revogada. {@code assignmentId}/{@code workerId}: a associacao ATIVA, se houver.
+     */
+    public record UnlinkView(UUID organization, UUID agentId, UUID credentialId, short agentStatus, Short revocationReason, UUID assignmentId,
+                             UUID workerId) {
+        public boolean revoked() {
+            return revocationReason != null;
+        }
+    }
+
+    /**
+     * Autenticacao do desvinculo: a posse do segredo da credencial, MESMO revogada ou vencida (a classificacao e do chamador:
+     * so a repeticao da propria operacao ou a resposta "ja encerrado" aceitam uma credencial revogada; as demais rotas usam
+     * {@link #authenticate}). Travas na ordem da revogacao administrativa (Agent, depois credencial): sem impasse com ela, e
+     * um ato em curso da maquina (credencial FOR SHARE) termina antes.
+     */
+    public UnlinkView authenticateForUnlink(JdbcClient j, MachineToken t) {
+        Row r = load(j, t, SQL_NO_LOCK); // confere o segredo SEM trava: a primeira trava e a do Agent (ordem da revogacao)
+        short status = j.sql("SELECT status FROM public.agents WHERE organization_id = ? AND agent_id = ? FOR UPDATE")
+                .param(t.organization()).param(r.agentId()).query(Short.class).single();
+        // 0 = nao revogada (o motivo nulo vira 0 aqui: single() nao aceita um valor nulo)
+        short code = j.sql("SELECT coalesce(revocation_reason, 0) FROM public.agent_credentials WHERE organization_id = ? AND credential_id = ? FOR UPDATE")
+                .param(t.organization()).param(r.credentialId()).query(Short.class).single();
+        Short reason = code == 0 ? null : code;
+        record Active(UUID assignment, UUID worker) {
+        }
+        Active a = j.sql("SELECT assignment_id, worker_id FROM public.worker_agent_assignments WHERE organization_id = ? AND agent_id = ? AND status = 1")
+                .param(t.organization()).param(r.agentId())
+                .query((rs, n) -> new Active(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class))).optional().orElse(new Active(null, null));
+        return new UnlinkView(t.organization(), r.agentId(), r.credentialId(), status, reason, a.assignment(), a.worker());
+    }
+
     private static Row load(JdbcClient j, MachineToken t) {
+        return load(j, t, SQL);
+    }
+
+    /** A mesma leitura sem FOR SHARE (desvinculo: trava o Agent antes da credencial). */
+    private static final String SQL_NO_LOCK = SQL.replace("FOR SHARE OF c", "");
+
+    private static Row load(JdbcClient j, MachineToken t, String sql) {
         if (!MachineToken.CREDENTIAL.equals(t.prefix())) {
             throw ApiException.unauthenticated("formato");
         }
-        Row r = j.sql(SQL).param(t.organization()).param(t.id())
+        Row r = j.sql(sql).param(t.organization()).param(t.id())
                 .query((rs, n) -> new Row(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getString(3), rs.getBoolean(4), rs.getBoolean(5),
                         rs.getShort(6), rs.getObject(7, UUID.class), rs.getObject(8, UUID.class), rs.getObject(9, OffsetDateTime.class)))
                 .optional().orElse(null);

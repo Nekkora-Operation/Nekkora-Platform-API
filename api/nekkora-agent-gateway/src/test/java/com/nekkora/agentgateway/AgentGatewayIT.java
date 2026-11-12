@@ -209,6 +209,75 @@ class AgentGatewayIT {
                 + "WHERE credential_id = '" + p.identity().get("credentialId").asString() + "'")).isEqualTo("1:true");
     }
 
+    /**
+     * PLATFORM-AGENT-V2-002, T06: com a intencao declarada, o codigo de outro proposito e recusado com o motivo (409
+     * conflict + reason), sem consumir o codigo nem alterar o vinculo atual; o mesmo codigo depois serve na acao certa.
+     */
+    @Test
+    void codigoDeOutroPropositoComIntencaoDeclaradaERecusadoSemConsumirNemAlterarOVinculo() {
+        Paired p = paired(fx);
+        UUID agent = UUID.fromString(p.identity().get("agentId").asString());
+        String vinculoAntes = vinculo(agent);
+        // codigo de PAREAMENTO para um Worker livre enviado como renovacao: antes criaria outro Agent
+        UUID livre = fx.worker("W-t06-livre");
+        String pairing = fx.pairingCode(livre, "Estacao t06", "15 minutes");
+        String agentsAntes = fx.value("SELECT count(*) FROM agents");
+        MachineClient.Response r1 = p.m().redeemWithIntent(pairing, Tokens.newToken(), "rotate");
+        assertThat(r1.status()).isEqualTo(409);
+        assertThat(r1.raw()).isEqualTo("{\"error\":\"conflict\",\"reason\":\"pairing_code_for_rotation\"}");
+        assertThat(fx.value("SELECT count(*) FROM agents")).isEqualTo(agentsAntes);
+        assertThat(consumido(pairing)).isEqualTo("f");
+        assertThat(vinculo(agent)).isEqualTo(vinculoAntes);
+        assertThat(p.m().heartbeat().status()).isEqualTo(200); // a credencial atual continua valendo
+        // codigo de RENOVACAO enviado como pareamento (maquina sem vinculo)
+        String rotation = fx.rotationCode(agent, p.worker());
+        MachineClient anon = client();
+        MachineClient.Response r2 = anon.redeemWithIntent(rotation, Tokens.newToken(), "pair");
+        assertThat(r2.status()).isEqualTo(409);
+        assertThat(r2.raw()).isEqualTo("{\"error\":\"conflict\",\"reason\":\"rotation_code_for_pairing\"}");
+        assertThat(consumido(rotation)).isEqualTo("f");
+        assertThat(vinculo(agent)).isEqualTo(vinculoAntes);
+        // os mesmos codigos, na acao certa, funcionam
+        assertThat(p.m().redeemWithIntent(rotation, Tokens.newToken(), "rotate").status()).isEqualTo(200);
+        MachineClient nova = client();
+        MachineClient.Response pareada = nova.redeemWithIntent(pairing, Tokens.newToken(), "pair");
+        assertThat(pareada.status()).isEqualTo(200);
+        assertThat(pareada.body().get("workerId").asString()).isEqualTo(livre.toString());
+        // intencao fora do vocabulario: 400, nada consumido
+        String outro = fx.pairingCode(fx.worker("W-t06-400"), "Estacao 400", "15 minutes");
+        assertThat(client().redeemWithIntent(outro, Tokens.newToken(), "unpair").status()).isEqualTo(400);
+        assertThat(consumido(outro)).isEqualTo("f");
+    }
+
+    /** T06, compatibilidade: Agent anterior (sem intencao) em rotacao com codigo de pareamento nao cria Agent orfao. */
+    @Test
+    void agentAnteriorComCredencialECodigoDePareamentoRecebe409SemCriarOutroAgent() {
+        Paired p = paired(fx);
+        UUID livre = fx.worker("W-t06-legado");
+        String pairing = fx.pairingCode(livre, "Estacao legado", "15 minutes");
+        String agentsAntes = fx.value("SELECT count(*) FROM agents");
+        MachineClient.Response r = p.m().redeem(pairing, Tokens.newToken()); // Bearer atual, sem cabecalho de intencao
+        assertThat(r.status()).isEqualTo(409);
+        assertThat(r.raw()).isEqualTo("{\"error\":\"conflict\"}");
+        assertThat(fx.value("SELECT count(*) FROM agents")).isEqualTo(agentsAntes);
+        assertThat(consumido(pairing)).isEqualTo("f");
+        // sem credencial (pareamento do Agent anterior): como antes
+        assertThat(client().redeem(pairing, Tokens.newToken()).status()).isEqualTo(200);
+        // codigo de rotacao sem credencial, Agent anterior: continua 401 (como antes)
+        UUID agent = UUID.fromString(p.identity().get("agentId").asString());
+        assertThat(client().redeem(fx.rotationCode(agent, p.worker()), Tokens.newToken()).status()).isEqualTo(401);
+    }
+
+    private String vinculo(UUID agent) {
+        return fx.value("SELECT a.status || '|' || (SELECT string_agg(c.credential_id::text, ',' ORDER BY c.credential_id) FROM agent_credentials c "
+                + "WHERE c.agent_id = a.agent_id AND c.revoked_at IS NULL) || '|' || (SELECT string_agg(wa.worker_id::text, ',') FROM worker_agent_assignments wa "
+                + "WHERE wa.agent_id = a.agent_id AND wa.status = 1) FROM agents a WHERE a.agent_id = '" + agent + "'");
+    }
+
+    private String consumido(String code) {
+        return fx.value("SELECT consumed_at IS NOT NULL FROM agent_enrollments WHERE enrollment_id = '" + code.split("\\.")[2] + "'");
+    }
+
     @Test
     void repeticaoDoResgateNaoDesfazRotacaoNemReativaCredencialRevogadaNemRestauraAssociacao() {
         UUID worker = fx.worker("W-repr");

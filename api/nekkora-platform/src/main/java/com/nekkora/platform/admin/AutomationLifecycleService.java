@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
+import com.nekkora.core.db.DbErrors;
 import com.nekkora.core.web.ApiError;
 import com.nekkora.core.web.ApiException;
 import com.nekkora.core.web.RequestContext;
@@ -92,7 +93,7 @@ public final class AutomationLifecycleService {
         if (!valid(NAME, name) || description != null && !valid(DESCRIPTION, description)) {
             throw ApiException.invalid("workspace");
         }
-        return actions.write(org, j -> {
+        return uniqueName(() -> actions.write(org, j -> {
             actions.requireActor(j, org, actor, token);
             actions.requirePermission(j, org, actor, "workspace.lifecycle");
             actions.lockOrganizationAndActor(j, org, actor.userId());
@@ -102,8 +103,53 @@ public final class AutomationLifecycleService {
                     .single();
             audit(j, org, 1, actor.membershipId(), w.workspaceId(), null, null, null);
             return w;
-        });
+        }));
     }
+
+    /**
+     * Renomeacao (031): mesma permissao e mesma regra de nome da criacao. O nome igual ao atual, depois de retirar os espacos das
+     * extremidades, nao grava nada; so mudar maiusculas/minusculas do proprio nome e permitido (a chave e a mesma linha). Outro
+     * workspace da organizacao com a mesma chave: 409 workspace_name_taken (indice unico do banco, inclusive em corrida).
+     */
+    public Workspace renameWorkspace(UUID org, ValidSession actor, String token, UUID workspace, String name) {
+        if (!valid(NAME, name)) {
+            throw ApiException.invalid("workspace");
+        }
+        String novo = name.strip();
+        return uniqueName(() -> actions.write(org, j -> {
+            actions.requireActor(j, org, actor, token);
+            actions.requirePermission(j, org, actor, "workspace.lifecycle");
+            actions.lockOrganizationAndActor(j, org, actor.userId());
+            Workspace atual = j.sql("SELECT workspace_id, name, status, created_at FROM public.workspaces WHERE organization_id = ? AND workspace_id = ? FOR UPDATE")
+                    .param(org).param(workspace)
+                    .query((rs, n) -> new Workspace(rs.getObject(1, UUID.class), rs.getString(2), status(rs.getShort(3)), rs.getObject(4, OffsetDateTime.class)))
+                    .optional().orElseThrow(() -> AccessActions.refuse(Failure.TARGET_NOT_FOUND, "workspace"));
+            if (atual.name().equals(novo)) {
+                return atual;
+            }
+            Workspace w = j.sql("UPDATE public.workspaces SET name = ? WHERE organization_id = ? AND workspace_id = ? RETURNING workspace_id, name, status, created_at")
+                    .param(novo).param(org).param(workspace)
+                    .query((rs, n) -> new Workspace(rs.getObject(1, UUID.class), rs.getString(2), status(rs.getShort(3)), rs.getObject(4, OffsetDateTime.class)))
+                    .single();
+            audit(j, org, 7, actor.membershipId(), workspace, null, null, null);
+            return w;
+        }));
+    }
+
+    /** Indice unico do nome (031): a corrida entre duas gravacoes termina em 409 legivel, nunca em 500. */
+    private static Workspace uniqueName(java.util.function.Supplier<Workspace> ato) {
+        try {
+            return ato.get();
+        } catch (RuntimeException e) {
+            if (DbErrors.uniqueViolation(e, WORKSPACE_NAME_KEY)) {
+                LOG.info("evento=workspace.nome_em_uso correlacao={}", RequestContext.correlation());
+                throw new ApiException(ApiError.WORKSPACE_NAME_TAKEN, "nome_workspace");
+            }
+            throw e;
+        }
+    }
+
+    static final String WORKSPACE_NAME_KEY = "ux_workspaces_organization_name_key";
 
     public Automation createAutomation(UUID org, ValidSession actor, String token, UUID workspace, String name) {
         if (!valid(NAME, name)) {
@@ -137,20 +183,124 @@ public final class AutomationLifecycleService {
             UUID workspace = access.requireAutomation(j, org, actor.membershipId(), automation, "automation.manage");
             requireActive(j, org, automation);
             actions.lockOrganizationAndActor(j, org, actor.userId());
-            ObjectNode cmd = JSON.createObjectNode();
-            cmd.put("contract_version", 1);
-            cmd.put("runtime", rt);
-            cmd.put("entrypoint", "main.py");
-            ArrayNode a = cmd.putArray("arguments");
-            args.forEach(a::add);
-            cmd.putObject("parameters");
-            cmd.putObject("secret_bindings");
-            // version_number: o gatilho da 005 atribui MAX+1 com a automacao travada (o valor enviado e substituido)
-            UUID id = j.sql("INSERT INTO public.automation_versions (organization_id, workspace_id, automation_id, version_number, status, command_json, "
+            lockAutomation(j, org, automation);
+            // T09: no maximo um rascunho por automacao (032). A rota antiga (Web V1) ainda cria UM rascunho vazio quando nao
+            // ha nenhum; havendo, 409 conflict + draft_exists, sem criar outro (limitacao transitoria da V1).
+            if (currentDraft(j, org, automation).isPresent()) {
+                throw new ApiException(ApiError.DRAFT_EXISTS, "rascunho_existente");
+            }
+            UUID id = insertDraft(j, org, workspace, automation, rt, args, actor);
+            return version(j, org, id);
+        });
+    }
+
+    /** Insere a versao DRAFT (numero MAX+1 pelo gatilho da 005) e audita (ato 3). Chamado com a automacao travada. */
+    private UUID insertDraft(JdbcClient j, UUID org, UUID workspace, UUID automation, String rt, List<String> args, ValidSession actor) {
+        ObjectNode cmd = JSON.createObjectNode();
+        cmd.put("contract_version", 1);
+        cmd.put("runtime", rt);
+        cmd.put("entrypoint", "main.py");
+        ArrayNode a = cmd.putArray("arguments");
+        args.forEach(a::add);
+        cmd.putObject("parameters");
+        cmd.putObject("secret_bindings");
+        // version_number: o gatilho da 005 atribui MAX+1 com a automacao travada (o valor enviado e substituido)
+        UUID id;
+        try {
+            id = j.sql("INSERT INTO public.automation_versions (organization_id, workspace_id, automation_id, version_number, status, command_json, "
                             + "created_by_membership_id) VALUES (?, ?, ?, 1, 1, ?::jsonb, ?) RETURNING automation_version_id")
                     .param(org).param(workspace).param(automation).param(JSON.writeValueAsString(cmd)).param(actor.membershipId()).query(UUID.class).single();
-            audit(j, org, 3, actor.membershipId(), workspace, automation, id, null);
-            return version(j, org, id);
+        } catch (RuntimeException e) {
+            if (DbErrors.uniqueViolation(e, ONE_DRAFT_INDEX)) {
+                // defesa no banco: outra transacao criou o rascunho (a trava da automacao ja deveria ter serializado)
+                throw new ApiException(ApiError.DRAFT_CHANGED, "rascunho_concorrente");
+            }
+            throw e;
+        }
+        audit(j, org, 3, actor.membershipId(), workspace, automation, id, null);
+        return id;
+    }
+
+    /** Indice da 032: no maximo um DRAFT por automacao. */
+    static final String ONE_DRAFT_INDEX = "ux_automation_versions_one_draft";
+
+    private static void lockAutomation(JdbcClient j, UUID org, UUID automation) {
+        j.sql("SELECT 1 FROM public.automations WHERE organization_id = ? AND automation_id = ? FOR UPDATE").param(org).param(automation)
+                .query(Integer.class).optional();
+    }
+
+    /** O rascunho atual da automacao (id e sha256 do pacote, ou null sem pacote), travado. */
+    private record Draft(UUID versionId, String sha256) {
+    }
+
+    private static Optional<Draft> currentDraft(JdbcClient j, UUID org, UUID automation) {
+        return j.sql("SELECT automation_version_id, command_json->'artifact'->>'sha256' FROM public.automation_versions "
+                        + "WHERE organization_id = ? AND automation_id = ? AND status = 1 FOR UPDATE")
+                .param(org).param(automation).query((rs, n) -> new Draft(rs.getObject(1, UUID.class), rs.getString(2))).optional();
+    }
+
+    /** Resultado do envio do pacote ao rascunho da automacao: a versao e se ela nasceu nesta chamada. */
+    public record DraftPut(Version version, boolean created) {
+    }
+
+
+    /**
+     * PLATFORM-AGENT-V2-002, T09: o rascunho passa a existir quando o servidor ACEITA o ZIP. Sem rascunho (e esperando
+     * nenhum), cria a versao e o artefato na mesma transacao; com rascunho igual ao esperado (id e sha256 do pacote atual),
+     * substitui o pacote na mesma versao. ZIP invalido: nada criado, pacote anterior preservado (422). Expectativa
+     * desatualizada: 409 conflict + draft_changed, sem sobrescrever; exceto a repeticao apos resposta perdida (o rascunho
+     * ja tem exatamente estes bytes), que devolve o mesmo rascunho. Nao publica nem executa nada.
+     */
+    public DraftPut putDraftPackage(UUID org, ValidSession actor, String token, UUID automation, UUID expectedVersionId, String expectedSha256,
+                                    String runtime, List<String> arguments, byte[] zip) throws PackageInspector.Rejected {
+        requireStore();
+        if (expectedSha256 != null && (expectedVersionId == null || !HEX64.matcher(expectedSha256).matches())) {
+            throw ApiException.invalid("expectativa");
+        }
+        String rt = runtime == null ? "python3.12" : runtime;
+        List<String> args = arguments == null ? List.of() : arguments;
+        validCommand(rt, args);
+        actions.read(org, j -> {
+            actions.requireActor(j, org, actor, token);
+            access.requireAutomation(j, org, actor.membershipId(), automation, "automation.manage");
+            requireActive(j, org, automation);
+            return null;
+        });
+        PackageInspector.Inspection in = PackageInspector.inspect(zip);
+        try {
+            store.put(org, in.sha256(), zip);
+        } catch (IOException e) {
+            LOG.warn("evento=artefato.armazenamento_falhou correlacao={}", RequestContext.correlation());
+            throw new ApiException(ApiError.SERVICE_UNAVAILABLE, "armazenamento");
+        }
+        return actions.write(org, j -> {
+            actions.requireActor(j, org, actor, token);
+            UUID workspace = access.requireAutomation(j, org, actor.membershipId(), automation, "automation.manage");
+            actions.lockOrganizationAndActor(j, org, actor.userId());
+            lockAutomation(j, org, automation);
+            requireActive(j, org, automation);
+            Optional<Draft> d = currentDraft(j, org, automation);
+            if (d.isEmpty()) {
+                if (expectedVersionId != null) {
+                    // o rascunho esperado foi publicado (ou nao existe): criar outro em silencio seria trocar o alvo
+                    throw new ApiException(ApiError.DRAFT_CHANGED, "rascunho_esperado_ausente");
+                }
+                UUID id = insertDraft(j, org, workspace, automation, rt, args, actor);
+                attachInTx(j, org, workspace, automation, id, in, actor);
+                LOG.info("evento=versao.rascunho_criado_com_pacote versao={} correlacao={}", id, RequestContext.correlation());
+                return new DraftPut(version(j, org, id), true);
+            }
+            Draft cur = d.get();
+            boolean asExpected = cur.versionId().equals(expectedVersionId) && java.util.Objects.equals(cur.sha256(), expectedSha256);
+            if (!asExpected) {
+                if (in.sha256().equals(cur.sha256())) {
+                    // repeticao (resposta perdida ou outra aba com o mesmo arquivo): o rascunho ja tem exatamente estes bytes
+                    return new DraftPut(version(j, org, cur.versionId()), false);
+                }
+                throw new ApiException(ApiError.DRAFT_CHANGED, "rascunho_divergente");
+            }
+            attachInTx(j, org, workspace, automation, cur.versionId(), in, actor);
+            return new DraftPut(version(j, org, cur.versionId()), false);
         });
     }
 
@@ -225,35 +375,40 @@ public final class AutomationLifecycleService {
                 throw AccessActions.refuse(Failure.CONFLICT, "versao_publicada_imutavel");
             }
             requireActive(j, org, t.automationId());
-            Optional<UUID> existing = j.sql("SELECT artifact_id FROM public.automation_artifacts WHERE organization_id = ? AND automation_version_id = ? AND sha256 = ?")
-                    .param(org).param(versionId).param(in.sha256()).query(UUID.class).optional();
-            UUID artifact = existing.orElseGet(() -> j.sql("""
-                    INSERT INTO public.automation_artifacts (organization_id, workspace_id, automation_id, automation_version_id, sha256, size_bytes,
-                        package_kind, fingerprint_rule, fingerprint, files_count, manifest_version, framework, execution_mode, declared_generator,
-                        storage_key, received_by_membership_id, python_requirement, dependencies, package_name, package_version)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?) RETURNING artifact_id
-                    """).param(org).param(t.workspaceId()).param(t.automationId()).param(versionId).param(in.sha256()).param(in.sizeBytes())
-                    .param((short) in.packageKind()).param(in.rule()).param(in.fingerprint()).param(in.filesCount()).param(in.manifestVersion())
-                    .param(in.framework()).param(in.executionMode()).param(in.declaredGenerator()).param(in.sha256()).param(actor.membershipId())
-                    .param(in.pythonRequirement()).param(in.dependencies() == null ? null : JSON.writeValueAsString(in.dependencies()))
-                    .param(in.packageName()).param(in.packageVersion()).query(UUID.class).single());
-            ObjectNode patch = JSON.createObjectNode();
-            patch.put("contract_version", 1);
-            // Studio: main.py; externo: a entrada relativa declarada e conferida (030)
-            patch.put("entrypoint", in.entry());
-            ObjectNode art = patch.putObject("artifact");
-            art.put("reference", REFERENCE_PREFIX + artifact);
-            art.put("sha256", in.sha256());
-            ObjectNode pkg = patch.putObject("agent_package");
-            pkg.put("fingerprint_rule", in.rule());
-            pkg.put("fingerprint", in.fingerprint());
-            j.sql("UPDATE public.automation_versions SET command_json = command_json || ?::jsonb WHERE organization_id = ? AND automation_version_id = ? AND status = 1")
-                    .param(JSON.writeValueAsString(patch)).param(org).param(versionId).update();
-            if (existing.isEmpty()) {
-                audit(j, org, 5, actor.membershipId(), t.workspaceId(), t.automationId(), versionId, artifact);
-            }
+            attachInTx(j, org, t.workspaceId(), t.automationId(), versionId, in, actor);
             return version(j, org, versionId);
         });
+    }
+
+    /** Artefato (reaproveitado se o mesmo sha256 ja estiver nesta versao) e command_json juntos; versao DRAFT travada. */
+    private void attachInTx(JdbcClient j, UUID org, UUID workspace, UUID automation, UUID versionId, PackageInspector.Inspection in, ValidSession actor) {
+        Optional<UUID> existing = j.sql("SELECT artifact_id FROM public.automation_artifacts WHERE organization_id = ? AND automation_version_id = ? AND sha256 = ?")
+                .param(org).param(versionId).param(in.sha256()).query(UUID.class).optional();
+        UUID artifact = existing.orElseGet(() -> j.sql("""
+                INSERT INTO public.automation_artifacts (organization_id, workspace_id, automation_id, automation_version_id, sha256, size_bytes,
+                    package_kind, fingerprint_rule, fingerprint, files_count, manifest_version, framework, execution_mode, declared_generator,
+                    storage_key, received_by_membership_id, python_requirement, dependencies, package_name, package_version)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?) RETURNING artifact_id
+                """).param(org).param(workspace).param(automation).param(versionId).param(in.sha256()).param(in.sizeBytes())
+                .param((short) in.packageKind()).param(in.rule()).param(in.fingerprint()).param(in.filesCount()).param(in.manifestVersion())
+                .param(in.framework()).param(in.executionMode()).param(in.declaredGenerator()).param(in.sha256()).param(actor.membershipId())
+                .param(in.pythonRequirement()).param(in.dependencies() == null ? null : JSON.writeValueAsString(in.dependencies()))
+                .param(in.packageName()).param(in.packageVersion()).query(UUID.class).single());
+        ObjectNode patch = JSON.createObjectNode();
+        patch.put("contract_version", 1);
+        // Studio: main.py; externo: a entrada relativa declarada e conferida (030)
+        patch.put("entrypoint", in.entry());
+        ObjectNode art = patch.putObject("artifact");
+        art.put("reference", REFERENCE_PREFIX + artifact);
+        art.put("sha256", in.sha256());
+        ObjectNode pkg = patch.putObject("agent_package");
+        pkg.put("fingerprint_rule", in.rule());
+        pkg.put("fingerprint", in.fingerprint());
+        j.sql("UPDATE public.automation_versions SET command_json = command_json || ?::jsonb WHERE organization_id = ? AND automation_version_id = ? AND status = 1")
+                .param(JSON.writeValueAsString(patch)).param(org).param(versionId).update();
+        if (existing.isEmpty()) {
+            audit(j, org, 5, actor.membershipId(), workspace, automation, versionId, artifact);
+        }
     }
 
     public Content artifactContent(UUID org, ValidSession actor, String token, UUID versionId) {

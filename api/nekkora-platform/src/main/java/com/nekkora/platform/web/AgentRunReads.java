@@ -49,7 +49,7 @@ public final class AgentRunReads {
                    r.events_stored, r.stored_through, r.settled_through, r.max_sequence, r.declared_missing, r.collection_completed_sequence,
                    r.lost_at_source, r.lost_local, r.purged_local, r.invalid_refused, r.framework_events, r.last_event_at,
                    r.source_kind, r.run_request_id, au.name AS automation_name, a.name AS agent_name,
-                   a.last_heartbeat_at, a.last_heartbeat_at > clock_timestamp() - make_interval(secs => :connected) AS connected,
+                   a.last_heartbeat_at, coalesce(a.status = 2 AND a.last_heartbeat_at > clock_timestamp() - make_interval(secs => :connected), false) AS connected,
                    (SELECT count(*) FROM public.agent_ingestion_refusals x WHERE x.agent_run_id = r.agent_run_id AND x.kind IN (1, 2, 5)) AS delivery_conflicts
               FROM public.agent_runs r
               JOIN public.workspaces w ON w.organization_id = r.organization_id AND w.workspace_id = r.workspace_id

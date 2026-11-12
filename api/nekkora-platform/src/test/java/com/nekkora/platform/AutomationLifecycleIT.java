@@ -161,24 +161,9 @@ class AutomationLifecycleIT extends PlatformTestBase {
         Draft d = draftWithArtifact(c);
         ExecutorService pool = Executors.newFixedThreadPool(4);
         try {
-            CountDownLatch go = new CountDownLatch(1);
-            List<Callable<Integer>> creates = new ArrayList<>();
-            for (int i = 0; i < 4; i++) {
-                creates.add(() -> {
-                    go.await();
-                    return c.admin().post(c.o() + "/automations/" + d.automation() + "/versions", "{}").status();
-                });
-            }
-            List<Future<Integer>> f = new ArrayList<>();
-            for (Callable<Integer> x : creates) {
-                f.add(pool.submit(x));
-            }
-            go.countDown();
-            for (Future<Integer> x : f) {
-                assertThat(x.get()).isEqualTo(201);
-            }
-            assertThat(value("SELECT string_agg(version_number::text, ',' ORDER BY version_number) FROM automation_versions WHERE automation_id = '"
-                    + d.automation() + "'")).isEqualTo("1,2,3,4,5");
+            // T09 (032): com o rascunho v1 aberto, nenhuma criacao passa pela rota antiga (409 draft_exists)
+            assertThat(c.admin().post(c.o() + "/automations/" + d.automation() + "/versions", "{}").body())
+                    .isEqualTo("{\"error\":\"conflict\",\"reason\":\"draft_exists\"}");
             stepUp(c.admin(), c.org().id(), c.org().adminId());
             CountDownLatch go2 = new CountDownLatch(1);
             List<Future<Integer>> p = new ArrayList<>();
@@ -193,6 +178,28 @@ class AutomationLifecycleIT extends PlatformTestBase {
                 assertThat(x.get()).isEqualTo(200); // a primeira publica; as demais veem a mesma publicacao
             }
             assertThat(count("SELECT count(*) FROM automation_admin_events WHERE act = 6 AND automation_version_id = '" + d.version() + "'")).isEqualTo(1);
+            // publicada a v1: criacoes concorrentes pela rota antiga -> exatamente um rascunho (v2), as demais 409
+            CountDownLatch go = new CountDownLatch(1);
+            List<Callable<Integer>> creates = new ArrayList<>();
+            for (int i = 0; i < 4; i++) {
+                creates.add(() -> {
+                    go.await();
+                    return c.admin().post(c.o() + "/automations/" + d.automation() + "/versions", "{}").status();
+                });
+            }
+            List<Future<Integer>> f = new ArrayList<>();
+            for (Callable<Integer> x : creates) {
+                f.add(pool.submit(x));
+            }
+            go.countDown();
+            List<Integer> statuses = new ArrayList<>();
+            for (Future<Integer> x : f) {
+                statuses.add(x.get());
+            }
+            statuses.sort(Integer::compareTo);
+            assertThat(statuses).containsExactly(201, 409, 409, 409);
+            assertThat(value("SELECT string_agg(version_number::text || ':' || status, ',' ORDER BY version_number) FROM automation_versions WHERE automation_id = '"
+                    + d.automation() + "'")).isEqualTo("1:2,2:1");
         } finally {
             pool.shutdownNow();
         }

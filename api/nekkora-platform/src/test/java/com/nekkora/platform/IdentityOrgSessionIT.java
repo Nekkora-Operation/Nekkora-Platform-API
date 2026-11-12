@@ -62,8 +62,8 @@ class IdentityOrgSessionIT extends IdentityTestBase {
         BrowserClient.Response r = f.browser().get(LISTA);
         assertThat(r.status()).isEqualTo(200);
         assertThat(r.body()).isEqualTo("{\"organizations\":["
-                + "{\"organizationId\":\"" + a + "\",\"name\":\"Alfa\",\"roles\":[\"ORG_ADMIN\"],\"activationState\":\"AGUARDANDO_ATIVACAO\"},"
-                + "{\"organizationId\":\"" + b + "\",\"name\":\"Beta\",\"roles\":[\"ORG_ADMIN\"],\"activationState\":\"AGUARDANDO_ATIVACAO\"}],"
+                + "{\"organizationId\":\"" + a + "\",\"name\":\"Alfa\",\"roles\":[\"ORG_ADMIN\"],\"activationState\":\"AGUARDANDO_ATIVACAO\",\"handle\":\"" + handleOf(a) + "\"},"
+                + "{\"organizationId\":\"" + b + "\",\"name\":\"Beta\",\"roles\":[\"ORG_ADMIN\"],\"activationState\":\"AGUARDANDO_ATIVACAO\",\"handle\":\"" + handleOf(b) + "\"}],"
                 + "\"canCreateOrganization\":false}");
     }
 
@@ -571,5 +571,10 @@ class IdentityOrgSessionIT extends IdentityTestBase {
         try (PreparedStatement ps = c.prepareStatement(s)) {
             ps.execute();
         }
+    }
+
+    /** T10 (034): identificador legivel da organizacao (unico na base de teste inteira, por isso lido do banco). */
+    private static String handleOf(UUID org) throws Exception {
+        return value("SELECT handle FROM organization_handles WHERE organization_id = '" + org + "'");
     }
 }

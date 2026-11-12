@@ -87,7 +87,7 @@ class OrganizationCreationIT extends IdentityTestBase {
 
         BrowserClient.Response lista = f.browser().get(LISTA);
         assertThat(lista.status()).isEqualTo(200);
-        assertThat(lista.body()).isEqualTo("{\"organizations\":[{\"organizationId\":\"" + org + "\",\"name\":\"Clínica Ágata\",\"roles\":[\"ORG_ADMIN\"],\"activationState\":\"AGUARDANDO_ATIVACAO\"}],"
+        assertThat(lista.body()).isEqualTo("{\"organizations\":[{\"organizationId\":\"" + org + "\",\"name\":\"Clínica Ágata\",\"roles\":[\"ORG_ADMIN\"],\"activationState\":\"AGUARDANDO_ATIVACAO\",\"handle\":\"" + value("SELECT handle FROM organization_handles WHERE organization_id = '" + org + "'") + "\"}],"
                 + "\"canCreateOrganization\":true}");
         BrowserClient.Response troca = f.browser().post("/api/v1/sessions/organization", "{\"organizationId\":\"" + org + "\"}");
         assertThat(troca.status()).isEqualTo(200);
@@ -167,7 +167,8 @@ class OrganizationCreationIT extends IdentityTestBase {
     void r11ReservaAtomicaSobConcorrencia() throws Exception {
         ComFator f = comFator();
         stepUpDireto(f.browser());
-        List<BrowserClient.Response> rs = simultaneos(f.browser(), 6, "Rajada");
+        // T10 (034): nomes distintos, porque a mesma identidade nao repete o nome; aqui se prova so a atomicidade do R11
+        List<BrowserClient.Response> rs = simultaneos(f.browser(), 6, "Rajada", true);
         assertThat(rs.stream().map(BrowserClient.Response::status).sorted().toList()).containsExactly(201, 201, 201, 429, 429, 429);
         assertThat(eventos6(f.identity())).isEqualTo(3);
         assertThat(reservasR11(f.identity())).isEqualTo(3);
@@ -369,14 +370,20 @@ class OrganizationCreationIT extends IdentityTestBase {
 
     /** {@code n} POSTs de criacao disparados juntos, com os cabecalhos do navegador (sem tocar no estado dele). */
     private List<BrowserClient.Response> simultaneos(BrowserClient b, int n, String nome) throws Exception {
+        return simultaneos(b, n, nome, false);
+    }
+
+    /** {@code distintos}: cada pedido com o proprio nome ("nome 1", "nome 2"...). */
+    private List<BrowserClient.Response> simultaneos(BrowserClient b, int n, String nome, boolean distintos) throws Exception {
         ExecutorService ex = Executors.newFixedThreadPool(n);
         CountDownLatch largada = new CountDownLatch(1);
         try {
             List<Future<BrowserClient.Response>> fs = new ArrayList<>();
             for (int i = 0; i < n; i++) {
+                String este = distintos ? nome + " " + (i + 1) : nome;
                 fs.add(ex.submit(() -> {
                     largada.await();
-                    return cru(b, CRIAR, corpo(nome, null));
+                    return cru(b, CRIAR, corpo(este, null));
                 }));
             }
             largada.countDown();

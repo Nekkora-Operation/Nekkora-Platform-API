@@ -83,6 +83,8 @@ public final class AccessActions {
             throw switch (r.failure) {
                 case SESSION -> ApiException.unauthenticated("sessao");
                 case TARGET_NOT_FOUND -> new ApiException(ApiError.NOT_FOUND, "alvo");
+                // T01: so depois de sessao, organizacao e permissao conferidas; diz a Web que falta a confirmacao
+                case STEP_UP -> new ApiException(ApiError.STEP_UP_REQUIRED, r.failure.name());
                 case CONFLICT -> new ApiException(ApiError.CONFLICT, r.rule);
                 case INVALID -> ApiException.invalid(r.rule);
                 default -> ApiException.forbidden(r.failure.name());
@@ -127,7 +129,10 @@ public final class AccessActions {
         }
     }
 
-    /** Step-up de TOTP nos ultimos minutos NA MESMA sessao, lido do banco com a hora atual. */
+    /**
+     * Confirmacao de identidade (TOTP, ou a senha na sessao sem MFA) dentro da janela fixa NA MESMA sessao, lida do banco com
+     * a hora atual. A janela conta do instante da confirmacao aceita; usar acoes nao a estende (nada aqui grava).
+     */
     void requireStepUp(JdbcClient j, ValidSession actor) {
         Boolean recent = j.sql(SessionRepository.RECENT_STEP_UP_SQL)
                 .param(SessionRepository.interval(stepUpWindow)).param(SessionRepository.interval(stepUpWindow)).param(actor.sessionId())

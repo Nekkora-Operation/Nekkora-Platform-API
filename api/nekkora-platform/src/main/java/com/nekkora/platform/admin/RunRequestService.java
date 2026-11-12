@@ -179,7 +179,7 @@ public final class RunRequestService {
                    q.authorization_id, q.worker_id, q.agent_id, g.name AS agent_name, q.source_kind, q.package_fingerprint, q.package_fingerprint_rule,
                    q.requested_at, q.valid_until, q.state, q.delivered_at, q.deliveries, q.decided_at, q.decision_reason, q.agent_execution_id,
                    q.not_started_at, q.linked_at, q.agent_run_id, q.expired_at, q.revoked_at, clock_timestamp() >= q.valid_until AS past_due,
-                   g.last_heartbeat_at, g.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?) AS connected,
+                   g.last_heartbeat_at, coalesce(g.status = 2 AND g.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?), false) AS connected,
                    r.supervisor_state, r.supervisor_code, r.exit_code, r.agent_started_at, r.agent_ended_at, r.registered_at AS run_registered_at
               FROM public.run_requests q
               JOIN public.automation_versions v ON v.organization_id = q.organization_id AND v.automation_version_id = q.automation_version_id

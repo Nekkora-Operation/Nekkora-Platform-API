@@ -63,6 +63,9 @@ public class GatewayController {
 
     // ------------------------------------------------------------------ resgate (pareamento e rotacao)
 
+    /** PLATFORM-AGENT-V2-002, T06: intencao declarada pelo Agent (pair | rotate); ausente = Agent anterior (comportamento antigo). */
+    static final String INTENT_HEADER = "Nekkora-Agent-Intent";
+
     @PostMapping("/agent/api/v1/enrollments/redeem")
     public ResponseEntity<GatewayService.Redeemed> redeem(@RequestBody(required = false) String body, HttpServletRequest req) {
         requireContract(req);
@@ -78,8 +81,9 @@ public class GatewayController {
             throw new ApiException(ApiError.UNSUPPORTED_CONTRACT, "versoes");
         }
         Optional<MachineToken> current = MachineToken.bearer(req.getHeader("Authorization"));
+        GatewayService.Intent intent = GatewayService.Intent.of(req.getHeader(INTENT_HEADER));
         try {
-            GatewayService.Redeemed r = service.redeem(code, text(n, "credentialSecret"), text(n, "agentVersion"), current);
+            GatewayService.Redeemed r = service.redeem(code, text(n, "credentialSecret"), text(n, "agentVersion"), current, intent);
             return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
         } catch (ApiException e) {
             if (e.apiError() == ApiError.UNAUTHENTICATED) {
@@ -87,6 +91,30 @@ public class GatewayController {
             }
             throw e;
         }
+    }
+
+    // ------------------------------------------------------------------ desvinculo pela maquina (PLATFORM-AGENT-V2-004, T13)
+
+    /**
+     * A maquina encerra o PROPRIO vinculo. Autoridade so da credencial; o corpo nao escolhe alvo. 200 = encerrado por esta
+     * operacao (inclusive na repeticao); 409 com motivo = ja encerrado de outro modo; 401 = sem prova (nao e conclusao).
+     */
+    @PostMapping("/agent/api/v1/link/unlink")
+    public ResponseEntity<GatewayService.Unlinked> unlink(@RequestBody(required = false) String body, HttpServletRequest req) {
+        MachineToken t = machine(req);
+        JsonNode n = parse(body);
+        UUID operation = uuid(text(n, "operationId"));
+        UUID agent = uuid(text(n, "agentId"));
+        JsonNode l = n.get("launchedRunRequests");
+        if (l == null || !l.isArray() || l.size() > GatewayService.MAX_LAUNCHED) {
+            throw ApiException.invalid("pedidos_iniciados");
+        }
+        List<UUID> launched = new ArrayList<>(l.size());
+        for (JsonNode x : l) {
+            launched.add(uuid(x.isString() ? x.asString() : null));
+        }
+        GatewayService.Unlinked r = authenticated(req, () -> service.unlink(t, operation, agent, launched));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
     }
 
     // ------------------------------------------------------------------ presenca e autorizacoes

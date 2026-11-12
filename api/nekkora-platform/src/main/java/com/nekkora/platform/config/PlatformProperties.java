@@ -31,7 +31,17 @@ public record PlatformProperties(
     }
 
     public record Session(Duration absolute, Duration internalInactivity, Duration externalInactivity, int maxPerAccount,
-                         Duration challenge, Duration passwordRecovery, Duration emailVerification, Duration stepUp) {
+                         Duration challenge, Duration passwordRecovery, Duration emailVerification, Duration stepUp, Duration stepUpOwnProof) {
+        /**
+         * {@code stepUp}: janela FIXA aberta por uma confirmacao aceita, para as acoes sensiveis comuns da mesma sessao (T01:
+         * 60 min; usar acoes nao estende). {@code stepUpOwnProof}: operacoes com prova propria mais curta (redefinir o MFA
+         * de outra conta: 5 min, como antes). Ausente na configuracao: 5 min (o comportamento anterior a T01).
+         */
+        public Session {
+            if (stepUpOwnProof == null) {
+                stepUpOwnProof = Duration.ofMinutes(5);
+            }
+        }
     }
 
     public record Limits(
