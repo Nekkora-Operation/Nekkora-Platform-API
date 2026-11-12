@@ -78,6 +78,7 @@ public class IdentityOrganizationsController {
             m.put("name", o.name());
             m.put("roles", List.copyOf(o.roles()));
             m.put("activationState", o.activationState());
+            m.put("handle", o.handle());
             return m;
         }).toList();
         Map<String, Object> r = new LinkedHashMap<>();
