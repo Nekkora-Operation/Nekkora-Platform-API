@@ -420,7 +420,7 @@ public final class AgentAdminService {
     /** Agent: identidade, Worker, versao informada, presenca e validade da credencial; nunca o hash. */
     public record AgentView(UUID agentId, String name, UUID installationId, String agentVersion, String status, UUID workerId,
                             OffsetDateTime registeredAt, OffsetDateTime lastHeartbeatAt, String connectivity, String contractVersion,
-                            List<String> capabilities, OffsetDateTime credentialExpiresAt) {
+                            List<String> capabilities, OffsetDateTime credentialExpiresAt, String endedBy) {
     }
 
     /**
@@ -439,7 +439,10 @@ public final class AgentAdminService {
             actions.requirePermission(j, org, actor, "agent.manage");
             return j.sql("""
                     SELECT a.agent_id, a.name, a.installation_id, a.agent_version, a.status, wa.worker_id, a.registered_at, a.last_heartbeat_at,
-                           a.status = 2 AND wa.worker_id IS NOT NULL AND a.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?), p.contract_version, p.capabilities, c.expires_at
+                           a.status = 2 AND wa.worker_id IS NOT NULL AND a.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?), p.contract_version, p.capabilities, c.expires_at,
+                           CASE WHEN a.status <> 4 THEN NULL
+                                WHEN EXISTS (SELECT 1 FROM public.agent_unlink_operations u WHERE u.organization_id = a.organization_id AND u.agent_id = a.agent_id)
+                                THEN 'MACHINE' ELSE 'ADMINISTRATION' END
                       FROM public.agents a
                       LEFT JOIN public.worker_agent_assignments wa ON wa.organization_id = a.organization_id AND wa.agent_id = a.agent_id AND wa.status = 1
                       LEFT JOIN public.agent_presence p ON p.agent_id = a.agent_id
@@ -451,7 +454,7 @@ public final class AgentAdminService {
                         switch (rs.getShort(5)) { case 1 -> "PENDING"; case 2 -> "ACTIVE"; case 3 -> "SUSPENDED"; default -> "REVOKED"; },
                         rs.getObject(6, UUID.class), rs.getObject(7, OffsetDateTime.class), rs.getObject(8, OffsetDateTime.class),
                         Boolean.TRUE.equals(rs.getObject(9, Boolean.class)) ? "CONNECTED" : "DISCONNECTED", rs.getString(10), caps == null ? List.of() : List.of((String[]) caps.getArray()),
-                        rs.getObject(12, OffsetDateTime.class));
+                        rs.getObject(12, OffsetDateTime.class), rs.getString(13));
             }).list();
         });
     }

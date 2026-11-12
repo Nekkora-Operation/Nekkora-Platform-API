@@ -95,6 +95,21 @@ final class MachineClient {
         return post("/runs/" + agentExecutionId + "/events", body, credential);
     }
 
+    /** T13: desvinculo pela maquina, com a credencial atual. */
+    Response unlink(String operationId, String agentId, List<String> launched) {
+        return unlinkWith(credential, operationId, agentId, launched);
+    }
+
+    Response unlinkWith(String bearer, String operationId, String agentId, List<String> launched) {
+        ArrayNode l = JSON.createArrayNode();
+        launched.forEach(l::add);
+        ObjectNode b = JSON.createObjectNode();
+        b.put("operationId", operationId);
+        b.put("agentId", agentId);
+        b.set("launchedRunRequests", l);
+        return post("/link/unlink", b.toString(), bearer);
+    }
+
     Response post(String path, String body, String bearer) {
         return send(HttpRequest.newBuilder(URI.create(base + path)).header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(body)),
                 bearer);

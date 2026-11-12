@@ -222,6 +222,97 @@ public final class GatewayService {
                 .single();
     }
 
+    // ------------------------------------------------------------------ desvinculo pela maquina (PLATFORM-AGENT-V2-004, T13)
+
+    /** Resultado do desvinculo (o mesmo corpo na repeticao da operacao). */
+    public record Unlinked(UUID operationId, String outcome, UUID agentId, UUID workerId, OffsetDateTime unlinkedAt, int runRequestsClosed,
+                           int runRequestsKeptAccepted) {
+    }
+
+    static final int MAX_LAUNCHED = 50;
+    static final short MACHINE_UNLINK = 5;
+    static final int ACT_MACHINE_UNLINK = 14;
+
+    /**
+     * Encerra o vinculo DA CREDENCIAL (docs/platform-agent-v2-004/t13-desvinculo-remoto.md, sec. 3). Autoridade: so a posse do
+     * segredo; {@code expectedAgent} so confere que a maquina pede o vinculo que ela pensa ter. Idempotente por
+     * {@code operationId}: a repeticao depois do commit (resposta perdida) recebe o mesmo corpo, mesmo com a credencial ja
+     * revogada por esta operacao. Vinculo encerrado de outro modo: 409 com o motivo; credencial revogada por rotacao: 401.
+     */
+    public Unlinked unlink(MachineToken t, UUID operationId, UUID expectedAgent, List<UUID> launched) {
+        if (operationId == null || expectedAgent == null || launched == null || launched.size() > MAX_LAUNCHED) {
+            throw ApiException.invalid("desvinculo");
+        }
+        return tx.inOrganization(t.organization(), Mode.READ_WRITE, j -> {
+            MachineAuth.UnlinkView v = auth.authenticateForUnlink(j, t);
+            if (!v.agentId().equals(expectedAgent)) {
+                throw ApiException.invalid("agent");
+            }
+            if (v.revoked()) {
+                short reason = v.revocationReason();
+                if (reason == MACHINE_UNLINK) {
+                    Unlinked previous = previousUnlink(j, v);
+                    if (previous != null && previous.operationId().equals(operationId)) {
+                        return previous; // repeticao da mesma operacao: nenhum efeito novo
+                    }
+                    throw new ApiException(ApiError.LINK_ENDED_BY_MACHINE, "desvinculo_outra_operacao");
+                }
+                if (reason == 3 || reason == 4) {
+                    throw new ApiException(ApiError.LINK_ENDED_BY_ADMINISTRATION, "revogado_pela_administracao");
+                }
+                throw ApiException.unauthenticated("credencial_substituida"); // rotacao: o vinculo continua com outra credencial
+            }
+            if (v.agentStatus() != 2 || v.assignmentId() == null) {
+                throw ApiException.unauthenticated("credencial"); // nao ocorre: a revogacao administrativa revoga as credenciais
+            }
+            return end(j, v, operationId, launched);
+        });
+    }
+
+    private static Unlinked previousUnlink(JdbcClient j, MachineAuth.UnlinkView v) {
+        return j.sql("SELECT operation_id, agent_id, worker_id, unlinked_at, run_requests_closed, run_requests_kept_accepted "
+                        + "FROM public.agent_unlink_operations WHERE organization_id = ? AND agent_id = ? AND credential_id = ?")
+                .param(v.organization()).param(v.agentId()).param(v.credentialId())
+                .query((rs, n) -> new Unlinked(rs.getObject(1, UUID.class), "UNLINKED", rs.getObject(2, UUID.class), rs.getObject(3, UUID.class),
+                        rs.getObject(4, OffsetDateTime.class), rs.getInt(5), rs.getInt(6)))
+                .optional().orElse(null);
+    }
+
+    private Unlinked end(JdbcClient j, MachineAuth.UnlinkView v, UUID operationId, List<UUID> launched) {
+        UUID org = v.organization();
+        UUID agent = v.agentId();
+        // pedidos ACEITOS que a maquina diz ter INICIADO: ficam aceitos (so os deste Agent contam; os demais sao ignorados)
+        UUID[] started = launched.stream().distinct().toArray(UUID[]::new);
+        int kept = j.sql("SELECT count(*) FROM public.run_requests WHERE organization_id = ? AND agent_id = ? AND state = 3 AND run_request_id = ANY (?)")
+                .param(org).param(agent).param(started).query(Integer.class).single();
+        // pedidos abertos: no prazo -> REFUSED (AGENT_UNLINKED); vencidos -> EXPIRED; aceitos nao iniciados -> NOT_STARTED.
+        // A folga de 2 s evita recusar um pedido que vence durante a transacao (o gatilho da 030 recusaria); o que vence nela
+        // fica como esta e aparece vencido pela validade (ninguem mais o le).
+        int refused = j.sql("UPDATE public.run_requests SET state = 4, decision_reason = 'AGENT_UNLINKED' WHERE organization_id = ? AND agent_id = ? "
+                + "AND state IN (1, 2) AND valid_until > clock_timestamp() + interval '2 seconds'").param(org).param(agent).update();
+        int expired = j.sql("UPDATE public.run_requests SET state = 7 WHERE organization_id = ? AND agent_id = ? AND state IN (1, 2) "
+                + "AND valid_until <= clock_timestamp()").param(org).param(agent).update();
+        int notStarted = j.sql("UPDATE public.run_requests SET state = 5, decision_reason = 'LAUNCH_NOT_ATTEMPTED' WHERE organization_id = ? AND agent_id = ? "
+                + "AND state = 3 AND NOT (run_request_id = ANY (?))").param(org).param(agent).param(started).update();
+        OffsetDateTime at = j.sql("""
+                INSERT INTO public.agent_unlink_operations (operation_id, organization_id, agent_id, worker_id, assignment_id, credential_id,
+                                                            run_requests_closed, run_requests_kept_accepted)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING unlinked_at
+                """).param(operationId).param(org).param(agent).param(v.workerId()).param(v.assignmentId()).param(v.credentialId())
+                .param(refused + expired + notStarted).param(kept).query(OffsetDateTime.class).single();
+        j.sql("UPDATE public.agent_credentials SET revoked_at = clock_timestamp(), revoked_by_agent_id = agent_id, revocation_reason = 5 "
+                + "WHERE organization_id = ? AND agent_id = ? AND revoked_at IS NULL").param(org).param(agent).update();
+        j.sql("UPDATE public.worker_agent_assignments SET status = 2, ended_at = clock_timestamp(), ended_by_agent_id = agent_id "
+                + "WHERE organization_id = ? AND assignment_id = ? AND status = 1").param(org).param(v.assignmentId()).update();
+        j.sql("UPDATE public.agents SET status = 4 WHERE organization_id = ? AND agent_id = ? AND status = 2").param(org).param(agent).update();
+        j.sql("INSERT INTO public.agent_admin_events (organization_id, act, actor_agent_id, agent_id, worker_id, credential_id, reason_code) "
+                + "VALUES (?, ?, ?, ?, ?, ?, 'MACHINE_UNLINK')").param(org).param((short) ACT_MACHINE_UNLINK).param(agent).param(agent)
+                .param(v.workerId()).param(v.credentialId()).update();
+        LOG.info("evento=agente.desvinculado_pela_maquina agente={} pedidos_encerrados={} pedidos_aceitos_mantidos={} correlacao={}", agent,
+                refused + expired + notStarted, kept, RequestContext.correlation());
+        return new Unlinked(operationId, "UNLINKED", agent, v.workerId(), at, refused + expired + notStarted, kept);
+    }
+
     // ------------------------------------------------------------------ presenca e autorizacoes
 
     public record Presence(OffsetDateTime serverTime, OffsetDateTime credentialExpiresAt, String contractVersion) {

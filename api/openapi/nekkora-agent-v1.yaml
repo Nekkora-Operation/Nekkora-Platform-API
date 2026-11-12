@@ -69,6 +69,33 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /agent/api/v1/link/unlink:
+    post:
+      tags: [Maquina]
+      operationId: unlinkMachine
+      summary: 'A maquina encerra o PROPRIO vinculo (PLATFORM-AGENT-V2-004, T13)'
+      description: >
+        Encerra o vinculo da credencial autenticada: revoga as credenciais do Agent (motivo MACHINE_UNLINK), encerra a
+        associacao ativa com o Worker e marca o Agent como revogado, com a propria maquina como autora (sem pessoa). O Worker
+        fica livre, com workspaces, autorizacoes de execucao local e historico. Pedidos de execucao abertos deste Agent: no prazo,
+        REFUSED com AGENT_UNLINKED; vencidos, EXPIRED; aceitos e nao iniciados, NOT_STARTED; aceitos e INICIADOS (listados em
+        launchedRunRequests), continuam ACCEPTED. A autoridade vem SO da credencial: agentId no corpo apenas confere o vinculo
+        esperado (diferente: 400, sem efeito); nao ha Worker nem organizacao no corpo. Idempotente por operationId: a repeticao
+        da mesma operacao com a mesma credencial recebe o mesmo 200 mesmo depois de a credencial ter sido revogada por ELA
+        (resposta perdida); essa e a unica rota que aceita uma credencial revogada, e so para a operacao que a revogou. Vinculo
+        ja encerrado de outro modo: 409 conflict com reason link_ended_by_machine ou link_ended_by_administration (so para quem
+        prova o segredo daquela credencial). Credencial substituida por rotacao, segredo errado ou formato invalido: 401, que
+        NAO prova o desvinculo. Protocolo: docs/platform-agent-v2-004/t13-desvinculo-remoto.md.
+      parameters: [ { $ref: '#/components/parameters/Contract' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UnlinkRequest' } } } }
+      responses:
+        '200': { description: 'Vinculo encerrado por esta operacao (inclusive na repeticao)', content: { application/json: { schema: { $ref: '#/components/schemas/Unlinked' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { description: 'O vinculo desta credencial ja terminou de outro modo (reason link_ended_by_machine | link_ended_by_administration). Nada mudou agora', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: conflict, reason: link_ended_by_administration } } } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /agent/api/v1/authorizations:
     get:
       tags: [Maquina]
@@ -219,7 +246,25 @@ components:
       required: [error]
       properties:
         error: { type: string, enum: [invalid_request, unsupported_contract, unauthenticated, forbidden, not_found, conflict, rate_limited, internal_error, service_unavailable] }
-        reason: { type: string, enum: [pairing_code_for_rotation, rotation_code_for_pairing], description: 'T06: motivo opcional de um codigo conhecido (conflict). Cliente que nao o conhece trata o codigo como sempre' }
+        reason: { type: string, enum: [pairing_code_for_rotation, rotation_code_for_pairing, link_ended_by_machine, link_ended_by_administration], description: 'Motivo opcional de um codigo conhecido (conflict): T06 (codigos de pareamento/rotacao) e T13 (vinculo ja encerrado). Cliente que nao o conhece trata o codigo como sempre' }
+    UnlinkRequest:
+      type: object
+      required: [operationId, agentId, launchedRunRequests]
+      properties:
+        operationId: { type: string, format: uuid, description: 'Gerado pelo Agent ANTES do primeiro envio e guardado; o mesmo em toda repeticao' }
+        agentId: { type: string, format: uuid, description: 'Conferencia do vinculo esperado; nao da autoridade' }
+        launchedRunRequests: { type: array, maxItems: 50, items: { type: string, format: uuid }, description: 'Pedidos aceitos que a maquina INICIOU e cujo registro ainda nao foi entregue' }
+    Unlinked:
+      type: object
+      required: [operationId, outcome, agentId, workerId, unlinkedAt, runRequestsClosed, runRequestsKeptAccepted]
+      properties:
+        operationId: { type: string, format: uuid }
+        outcome: { type: string, enum: [UNLINKED] }
+        agentId: { type: string, format: uuid }
+        workerId: { type: string, format: uuid }
+        unlinkedAt: { type: string, format: date-time }
+        runRequestsClosed: { type: integer, minimum: 0 }
+        runRequestsKeptAccepted: { type: integer, minimum: 0, maximum: 50 }
     RedeemRequest:
       type: object
       required: [code, credentialSecret, agentVersion, contractVersions]

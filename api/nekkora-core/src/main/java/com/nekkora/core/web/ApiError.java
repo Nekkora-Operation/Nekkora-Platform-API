@@ -62,6 +62,13 @@ public enum ApiError {
     PAIRING_CODE_FOR_ROTATION(HttpStatus.CONFLICT, "conflict", "pairing_code_for_rotation"),
     /** Idem: codigo de RENOVACAO (rotacao) enviado como pareamento. Nada consumido, nada alterado. */
     ROTATION_CODE_FOR_PAIRING(HttpStatus.CONFLICT, "conflict", "rotation_code_for_pairing"),
+    /**
+     * Desvinculo pela maquina (PLATFORM-AGENT-V2-004, T13): o vinculo DESTA credencial ja foi encerrado por outra operacao de
+     * desvinculo da propria maquina. Nada mudou agora. So para quem prova o segredo daquela credencial.
+     */
+    LINK_ENDED_BY_MACHINE(HttpStatus.CONFLICT, "conflict", "link_ended_by_machine"),
+    /** Idem: o vinculo desta credencial ja foi encerrado pela administracao ("Revogar vinculo"). Nada mudou agora. */
+    LINK_ENDED_BY_ADMINISTRATION(HttpStatus.CONFLICT, "conflict", "link_ended_by_administration"),
     /** Canal do Agent (contrato Platform-Agent 1.0, sec. 15): versao maior do contrato nao suportada. */
     UNSUPPORTED_CONTRACT(HttpStatus.BAD_REQUEST, "unsupported_contract"),
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "rate_limited"),
