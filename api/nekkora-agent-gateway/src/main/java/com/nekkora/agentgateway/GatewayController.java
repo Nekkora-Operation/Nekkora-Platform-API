@@ -93,6 +93,30 @@ public class GatewayController {
         }
     }
 
+    // ------------------------------------------------------------------ desvinculo pela maquina (PLATFORM-AGENT-V2-004, T13)
+
+    /**
+     * A maquina encerra o PROPRIO vinculo. Autoridade so da credencial; o corpo nao escolhe alvo. 200 = encerrado por esta
+     * operacao (inclusive na repeticao); 409 com motivo = ja encerrado de outro modo; 401 = sem prova (nao e conclusao).
+     */
+    @PostMapping("/agent/api/v1/link/unlink")
+    public ResponseEntity<GatewayService.Unlinked> unlink(@RequestBody(required = false) String body, HttpServletRequest req) {
+        MachineToken t = machine(req);
+        JsonNode n = parse(body);
+        UUID operation = uuid(text(n, "operationId"));
+        UUID agent = uuid(text(n, "agentId"));
+        JsonNode l = n.get("launchedRunRequests");
+        if (l == null || !l.isArray() || l.size() > GatewayService.MAX_LAUNCHED) {
+            throw ApiException.invalid("pedidos_iniciados");
+        }
+        List<UUID> launched = new ArrayList<>(l.size());
+        for (JsonNode x : l) {
+            launched.add(uuid(x.isString() ? x.asString() : null));
+        }
+        GatewayService.Unlinked r = authenticated(req, () -> service.unlink(t, operation, agent, launched));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
+    }
+
     // ------------------------------------------------------------------ presenca e autorizacoes
 
     @PostMapping("/agent/api/v1/heartbeat")

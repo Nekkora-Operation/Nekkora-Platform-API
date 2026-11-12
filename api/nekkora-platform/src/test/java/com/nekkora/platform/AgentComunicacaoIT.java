@@ -157,7 +157,70 @@ class AgentComunicacaoIT extends PlatformTestBase {
         assertThat(worker(s).get("agentId").isNull()).isTrue();
     }
 
+    /**
+     * PLATFORM-AGENT-V2-004, T13: desvinculo pela propria maquina (as mesmas instrucoes do gateway, com o papel REAL dela, na
+     * mesma transacao da operacao): REVOKED com endedBy MACHINE, sem comunicacao, Worker livre e ativo com o workspace. A
+     * revogacao pela Web depois disso nao acha nada a revogar (409); ativo: endedBy nulo; revogado pela Web: ADMINISTRATION.
+     */
+    @Test
+    void desvinculoPelaMaquinaApareceComoEncerradoPelaMaquinaEOWorkerFicaLivre() throws Exception {
+        Setup s = setup();
+        assertThat(signal(s, "0 seconds")).isEqualTo("OK");
+        assertThat(agent(s).get("endedBy").isNull()).as("ativo: nao encerrado").isTrue();
+        String o = s.org().id().toString();
+        String a = s.agent().toString();
+        assertThat(asIngestionAll(s.org().id(),
+                "INSERT INTO agent_unlink_operations (operation_id, organization_id, agent_id, worker_id, assignment_id, credential_id, run_requests_closed, "
+                        + "run_requests_kept_accepted) SELECT gen_random_uuid(), wa.organization_id, wa.agent_id, wa.worker_id, wa.assignment_id, c.credential_id, 0, 0 "
+                        + "FROM worker_agent_assignments wa JOIN agent_credentials c ON c.agent_id = wa.agent_id AND c.revoked_at IS NULL "
+                        + "WHERE wa.organization_id = '" + o + "' AND wa.agent_id = '" + a + "' AND wa.status = 1",
+                "UPDATE agent_credentials SET revoked_at = clock_timestamp(), revoked_by_agent_id = agent_id, revocation_reason = 5 WHERE agent_id = '" + a
+                        + "' AND revoked_at IS NULL",
+                "UPDATE worker_agent_assignments SET status = 2, ended_at = clock_timestamp(), ended_by_agent_id = agent_id WHERE agent_id = '" + a + "' AND status = 1",
+                "UPDATE agents SET status = 4 WHERE agent_id = '" + a + "'",
+                "INSERT INTO agent_admin_events (organization_id, act, actor_agent_id, agent_id, worker_id, reason_code) VALUES ('" + o + "', 14, '" + a + "', '" + a
+                        + "', '" + s.worker() + "', 'MACHINE_UNLINK')")).isEqualTo("OK");
+        JsonNode ag = agent(s);
+        assertThat(ag.get("status").asString()).isEqualTo("REVOKED");
+        assertThat(ag.get("endedBy").asString()).isEqualTo("MACHINE");
+        assertThat(ag.get("connectivity").asString()).isEqualTo("DISCONNECTED");
+        assertThat(ag.get("workerId").isNull()).isTrue();
+        JsonNode w = worker(s);
+        assertThat(w.get("agentId").isNull()).as("Sem maquina vinculada").isTrue();
+        assertThat(w.get("status").asString()).as("o Worker continua administrativamente ativo").isEqualTo("ACTIVE");
+        assertThat(w.get("workspaceIds").get(0).asString()).isEqualTo(s.workspace().toString());
+        // a revogacao pela Web nao tem mais o que revogar
+        assertThat(s.admin().post("/api/v1/o/" + o + "/auth/mfa/step-up", "{\"code\":\"" + code(s.org().adminId()) + "\"}").status()).isEqualTo(204);
+        assertThat(s.admin().post("/api/v1/o/" + o + "/agents/" + a + "/revoke", "{\"reason\":\"ADMINISTRATIVE\"}").status()).isEqualTo(409);
+        assertThat(agent(s).get("endedBy").asString()).isEqualTo("MACHINE");
+
+        // revogado pela Web: ADMINISTRATION
+        Setup t = setup();
+        assertThat(t.admin().post("/api/v1/o/" + t.org().id() + "/auth/mfa/step-up", "{\"code\":\"" + code(t.org().adminId()) + "\"}").status()).isEqualTo(204);
+        assertThat(t.admin().post("/api/v1/o/" + t.org().id() + "/agents/" + t.agent() + "/revoke", "{\"reason\":\"ADMINISTRATIVE\"}").status()).isIn(200, 204);
+        assertThat(agent(t).get("endedBy").asString()).isEqualTo("ADMINISTRATION");
+    }
+
     // =========================================================================== apoio
+
+    private static String asIngestionAll(UUID org, String... sqls) {
+        try (Connection c = DB.connectAs("nekkora_ingestion")) {
+            c.setAutoCommit(false);
+            try (Statement st = c.createStatement()) {
+                st.execute("SELECT set_config('nekkora.organization_id', '" + org + "', true)");
+                for (String sql : sqls) {
+                    st.execute(sql);
+                }
+                c.commit();
+                return "OK";
+            } catch (SQLException e) {
+                c.rollback();
+                return e.getSQLState() + " " + e.getMessage();
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException(e);
+        }
+    }
 
     private static String asIngestion(UUID org, String sql) {
         try (Connection c = DB.connectAs("nekkora_ingestion")) {
