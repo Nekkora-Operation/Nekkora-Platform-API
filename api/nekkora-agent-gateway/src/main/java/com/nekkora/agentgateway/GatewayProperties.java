@@ -12,8 +12,14 @@ public record GatewayProperties(List<String> trustedProxies, Database database, 
 
     /**
      * Limites do canal (contrato, sec. 4.2 e 8). {@code batchesPerMinute}: lotes de eventos por organizacao;
-     * {@code redeemFailuresPerHour}: resgates recusados por IP de origem; {@code credentialDays}: validade da credencial.
+     * {@code redeemFailuresPerHour}: resgates recusados por IP de origem; {@code credentialDays}: validade da credencial;
+     * {@code catalogReadsPerMinute}: leituras do catalogo por Agent (PLATFORM-AGENT-CATALOGO-001; ausente = 60).
      */
-    public record Limits(int batchesPerMinute, int redeemFailuresPerHour, int credentialDays) {
+    public record Limits(int batchesPerMinute, int redeemFailuresPerHour, int credentialDays, int catalogReadsPerMinute) {
+        public Limits {
+            if (catalogReadsPerMinute <= 0) {
+                catalogReadsPerMinute = 60;
+            }
+        }
     }
 }

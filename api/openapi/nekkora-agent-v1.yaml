@@ -112,6 +112,53 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /agent/api/v1/catalog:
+    get:
+      tags: [Maquina]
+      operationId: machineCatalog
+      summary: 'Catalogo de metadados do subconjunto autorizado ao Worker da maquina (PLATFORM-AGENT-CATALOGO-001; migration 036)'
+      description: >
+        So leitura; nao concede nada (consultar nao autoriza publicar, baixar, aprovar nem executar). Organizacao, Worker e
+        vinculo vem SO da credencial. Uma automacao aparece se, e somente se, o Worker esta ATIVO e tem AGORA ao menos uma
+        autorizacao local vigente para ela (o mesmo criterio de /authorizations), em workspace e automacao ativos; uma versao
+        aparece se, e somente se, esta PUBLICADA e tem uma autorizacao de pacote vigente. coverage = WORKER_AUTHORIZED_SUBSET:
+        nao e a lista da organizacao, e a ausencia de um projeto nao prova que ele nao existe. Ordem: (workspaceId,
+        automationId), estavel diante de renomeacao. Cada pagina autentica e filtra de novo; o cursor e so posicao, preso a
+        organizacao, ao Worker e ao Agent da credencial (outro vinculo: 400). Sem foto consistente entre paginas: uma mudanca
+        concorrente pode tirar ou incluir uma automacao entre duas paginas. Cache-Control no-store. Nada e gravado. Cota por
+        Agent (429 + Retry-After). Worker nao ativo: 403.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 50 }, description: 'Automacoes por pagina' }
+        - { name: cursor, in: query, required: false, schema: { type: string, maxLength: 400, pattern: '^[A-Za-z0-9_-]+$' }, description: 'nextCursor da pagina anterior' }
+      responses:
+        '200': { description: 'Uma pagina', content: { application/json: { schema: { $ref: '#/components/schemas/CatalogPage' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { description: 'Worker da maquina nao ativo', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/catalog/automations/{automationId}:
+    get:
+      tags: [Maquina]
+      operationId: machineCatalogAutomation
+      summary: 'Consulta direta de uma automacao do catalogo da maquina (revalidar a escolha antes de concluir)'
+      description: >
+        Mesma politica do catalogo, para uma automacao. 404 se ela nao e visivel a esta maquina AGORA (o mesmo corpo para
+        inexistente, de outra organizacao, de outro Worker, revogada ou vencida): a resposta nunca confirma a existencia.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: automationId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: 'A automacao visivel', content: { application/json: { schema: { $ref: '#/components/schemas/CatalogSingle' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { description: 'Worker da maquina nao ativo', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
+        '404': { description: 'Nao visivel a esta maquina agora', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: not_found } } } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /agent/api/v1/runs:
     post:
       tags: [Maquina]
@@ -237,7 +284,7 @@ components:
     Forbidden: { description: 'Autorizacao de outro Worker ou organizacao, ou pacote diferente do autorizado', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
     NotFound: { description: 'Execucao nao registrada por esta maquina', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: not_found } } } }
     Conflict: { description: 'Estado atual impede o ato (Worker ocupado, registro divergente, limite por execucao)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: conflict } } } }
-    RateLimited: { description: 'Cota de lotes da organizacao ou de falhas de autenticacao do IP; Retry-After', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: rate_limited } } } }
+    RateLimited: { description: 'Cota de lotes da organizacao, de leituras do catalogo por Agent ou de falhas de autenticacao do IP; Retry-After', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: rate_limited } } } }
     InternalError: { description: 'Falha antes do commit (sem ACK; nada gravado); reenviar os mesmos fatos', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: internal_error } } } }
     ServiceUnavailable: { description: 'Dependencia indisponivel (Redis); sem ACK; reenviar depois', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: service_unavailable } } } }
   schemas:
@@ -318,6 +365,60 @@ components:
                   Origem explicita (030). STUDIO_PACKAGE: regra package-fingerprint/1 (inalterada). EXTERNAL_PACKAGE: pacote Python
                   externo, regra external-python-fingerprint/1. EXTERNAL_MONITORED: Python do cliente disparado pelo agendador dele,
                   sem versao e sem impressao (um Agent anterior recusa o item por nao ter impressao: falha fechada).
+    CatalogOrganization:
+      type: object
+      properties:
+        organizationId: { type: string, format: uuid }
+        displayName: { type: string, description: 'Nome de exibicao da organizacao (nao e a razao social)' }
+    CatalogMachine:
+      type: object
+      description: 'O vinculo da credencial: para o Agent conferir que a resposta e do vinculo atual'
+      properties:
+        agentId: { type: string, format: uuid }
+        workerId: { type: string, format: uuid }
+    CatalogVersion:
+      type: object
+      properties:
+        automationVersionId: { type: string, format: uuid }
+        versionNumber: { type: integer, minimum: 1, description: 'Numero INTERNO da Platform (1, 2, ...); nao e semver nem a versao do pacote' }
+        publishedAt: { type: string, format: date-time }
+        sourceKind: { type: string, enum: [STUDIO_PACKAGE, EXTERNAL_PACKAGE] }
+        packageFingerprintRule: { type: string, enum: ['nekkora-agent/package-fingerprint/1', 'nekkora-agent/external-python-fingerprint/1'] }
+        packageFingerprint: { type: string, pattern: '^[0-9a-f]{64}$', description: 'A impressao da autorizacao, pela regra informada (sem o prefixo sha256:); nao e o sha256 dos bytes do ZIP' }
+        packageName: { type: [string, 'null'], description: 'Nome declarado no manifesto do pacote externo; nulo sem artefato recebido' }
+        packageVersion: { type: [string, 'null'], description: 'Versao DECLARADA no manifesto do pacote externo (MAIOR.MENOR.CORRECAO); nula para pacote do Studio ou sem artefato recebido' }
+    CatalogItem:
+      type: object
+      properties:
+        workspaceId: { type: string, format: uuid }
+        workspaceName: { type: string }
+        automationId: { type: string, format: uuid }
+        automationName: { type: string }
+        versions:
+          type: array
+          maxItems: 20
+          description: 'Versoes elegiveis, maior versionNumber primeiro. Vazio: visivel so por autorizacao de monitoramento (sem versao elegivel)'
+          items: { $ref: '#/components/schemas/CatalogVersion' }
+        versionsTruncated: { type: boolean, description: 'Havia mais de 20 versoes elegiveis; as de maior numero estao na lista' }
+    CatalogPage:
+      type: object
+      properties:
+        catalogVersion: { type: string, enum: ['1.0'] }
+        observedAt: { type: string, format: date-time, description: 'Hora do servidor na consulta' }
+        organization: { $ref: '#/components/schemas/CatalogOrganization' }
+        machine: { $ref: '#/components/schemas/CatalogMachine' }
+        coverage: { type: string, enum: [WORKER_AUTHORIZED_SUBSET] }
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/CatalogItem' } }
+        nextCursor: { type: [string, 'null'], description: 'Nulo: nao havia mais itens no momento desta consulta' }
+    CatalogSingle:
+      type: object
+      properties:
+        catalogVersion: { type: string, enum: ['1.0'] }
+        observedAt: { type: string, format: date-time }
+        organization: { $ref: '#/components/schemas/CatalogOrganization' }
+        machine: { $ref: '#/components/schemas/CatalogMachine' }
+        coverage: { type: string, enum: [WORKER_AUTHORIZED_SUBSET] }
+        item: { $ref: '#/components/schemas/CatalogItem' }
     SupervisorReport:
       type: object
       additionalProperties: false
