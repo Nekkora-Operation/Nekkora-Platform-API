@@ -66,6 +66,26 @@ class IdentityRoutesGateTest {
         }
     }
 
+    /** Login do aplicativo desktop (AGENT-CLIENT-LOGIN-001): chave propria E a entrada geral; encerrar a sessao nao tem chave. */
+    @Test
+    void loginDoAplicativoDesktopExigeAsDuasChaves() throws Exception {
+        for (boolean entrada : new boolean[] {false, true}) {
+            for (boolean desktop : new boolean[] {false, true}) {
+                IdentityRoutesGate g = new IdentityRoutesGate(false, entrada, false, false, false, false, desktop);
+                for (String rota : new String[] {DesktopLoginController.AUTHORIZATIONS, DesktopLoginController.AUTHORIZATION, DesktopLoginController.APPROVE,
+                        DesktopLoginController.DENY, DesktopLoginController.TOKEN, DesktopLoginController.SESSION}) {
+                    for (String metodo : new String[] {"POST", "GET"}) {
+                        assertThat(passa(g, metodo, rota)).as("entrada=" + entrada + " desktop=" + desktop + " " + metodo + " " + rota)
+                                .isEqualTo(entrada && desktop);
+                    }
+                }
+                assertThat(passa(g, "POST", "/api/v1/de%73ktop/token")).as("caminho escapado: mesma decisao").isEqualTo(entrada && desktop);
+                assertThat(passa(g, "POST", DesktopLoginController.REVOKE)).as("encerrar a sessao do aplicativo nunca depende de chave").isTrue();
+                assertThat(passa(g, "POST", IdentityAuthController.LOGIN)).as("o login da Web depende so da entrada geral").isEqualTo(entrada);
+            }
+        }
+    }
+
     private static boolean passa(IdentityRoutesGate g, String metodo, String uri) throws Exception {
         MockHttpServletRequest req = new MockHttpServletRequest(metodo, uri);
         req.setServletPath(uri.replace("%6F", "o").replace("%73", "s"));

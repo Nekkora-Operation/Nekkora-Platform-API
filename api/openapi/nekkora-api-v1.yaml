@@ -22,6 +22,8 @@ tags:
   - name: Identidade e sessao
   - name: Cadastro web (identidade)
   - name: Entrada geral (identidade)
+  - name: Login do aplicativo desktop
+    description: 'Entrada no Nekkora Agent (Client) pelo navegador: Authorization Code com PKCE S256 e redirect de loopback, para um cliente publico fixo, sobre a identidade existente (AGENT-CLIENT-LOGIN-001; 037). Nao e OIDC nem servidor OAuth generico'
   - name: Administracao
   - name: Recuperacao emergencial de MFA
   - name: GAP-02 permissoes
@@ -664,6 +666,130 @@ paths:
         '404': { $ref: '#/components/responses/SignupDisabled' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/desktop/authorizations:
+    post:
+      tags: [Login do aplicativo desktop]
+      operationId: desktopAuthorizationStart
+      summary: 'Navegador: abre o pedido de autorizacao do aplicativo desktop (PKCE S256, redirect de loopback)'
+      description: >
+        AGENT-CLIENT-LOGIN-001, contrato desktop-login/1. Com ou sem sessao de identidade. O pedido inteiro e validado e
+        guardado no servidor por 5 min; o navegador recebe so o cookie opaco __Host-nekkora_desk (HttpOnly, Secure,
+        SameSite=Strict). clientId: exatamente nekkora-agent-client (cliente publico, sem segredo). redirectUri: exatamente
+        http://127.0.0.1:<porta>/callback, porta 1024-65535 (so a porta varia; localhost, outro host, outro caminho, consulta
+        ou fragmento: 400). codeChallengeMethod: so S256 (plain ou ausente: 400). Nada do pedido volta na resposta. Abrir o
+        pedido nao autoriza nada. Chave nekkora.desktop-login.enabled E a entrada geral: desligada, 404.
+      security: [ { preAuthCookie: [], csrfHeader: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/DesktopAuthorizationRequest' } } } }
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '403': { $ref: '#/components/responses/CsrfForbidden' }
+        '404': { $ref: '#/components/responses/SignupDisabled' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/desktop/authorization:
+    get:
+      tags: [Login do aplicativo desktop]
+      operationId: desktopAuthorizationPending
+      summary: 'Navegador: o aplicativo e a conta que vai autorizar a entrada'
+      description: >
+        Para a pagina de confirmacao: mostra SEMPRE a conta da sessao de identidade, mesmo com sessao ja aberta (nenhuma
+        entrada silenciosa). Sem pedido vivo no cookie __Host-nekkora_desk: 404. Sessao restrita a recuperacao: 403.
+      security: [ { identitySessionCookie: [], desktopRequestCookie: [] } ]
+      responses:
+        '200': { description: 'Pedido vivo', content: { application/json: { schema: { $ref: '#/components/schemas/DesktopAuthorizationPending' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/RestrictedIdentitySession' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/desktop/authorization/approve:
+    post:
+      tags: [Login do aplicativo desktop]
+      operationId: desktopAuthorizationApprove
+      summary: 'Navegador: a pessoa autenticada autoriza a entrada; emite o codigo de uso unico'
+      description: >
+        So com a sessao de identidade plena (login e MFA concluidos; nao restrita) e o CSRF dela, reconferida no banco no
+        instante da aprovacao. Consome o pedido (uso unico) e emite o codigo de autorizacao (60 s, uso unico), preso ao
+        pedido, a identidade e a ESTA sessao de identidade. redirectTo e montado pelo servidor a partir do redirect ja
+        validado: http://127.0.0.1:<porta>/callback?code=...&state=...&iss=<origem publica>. Evento 21 (037).
+      security: [ { identitySessionCookie: [], desktopRequestCookie: [], csrfHeader: [] } ]
+      responses:
+        '200': { description: 'Autorizado', content: { application/json: { schema: { $ref: '#/components/schemas/DesktopRedirect' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/desktop/authorization/deny:
+    post:
+      tags: [Login do aplicativo desktop]
+      operationId: desktopAuthorizationDeny
+      summary: 'Navegador: recusa o pedido (com ou sem sessao); devolve o retorno com error=access_denied'
+      description: >
+        Consome o pedido. redirectTo: http://127.0.0.1:<porta>/callback?error=access_denied&state=...&iss=... Nenhum codigo e
+        emitido.
+      security: [ { preAuthCookie: [], desktopRequestCookie: [], csrfHeader: [] } ]
+      responses:
+        '200': { description: 'Recusado', content: { application/json: { schema: { $ref: '#/components/schemas/DesktopRedirect' } } } }
+        '403': { $ref: '#/components/responses/CsrfForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/desktop/token:
+    post:
+      tags: [Login do aplicativo desktop]
+      operationId: desktopToken
+      summary: 'Aplicativo: troca o codigo pela sessao do desktop (RFC 6749 4.1.3 + PKCE RFC 7636)'
+      description: >
+        Chamado pelo aplicativo, por TLS, SEM cookie, SEM Origin e SEM CSRF: vale o codigo com o code_verifier. Corpo
+        application/x-www-form-urlencoded, cada parametro uma unica vez e nenhum na URL. O codigo e consumido antes de
+        qualquer conferencia (PKCE, cliente ou redirect errados tambem o queimam). Reapresentar um codigo ja trocado:
+        invalid_grant E a sessao que ele emitiu e revogada. A sessao de identidade que autorizou precisa continuar ativa.
+        Resposta: token opaco Bearer, 15 min, sem refresh_token, escopo identity. Erros no formato da RFC 6749 5.2. Evento 22.
+      security: []
+      requestBody: { required: true, content: { application/x-www-form-urlencoded: { schema: { $ref: '#/components/schemas/DesktopTokenRequest' } } } }
+      responses:
+        '200': { description: 'Sessao do desktop emitida (Cache-Control: no-store)', content: { application/json: { schema: { $ref: '#/components/schemas/DesktopToken' } } } }
+        '400': { description: 'Troca recusada', content: { application/json: { schema: { $ref: '#/components/schemas/DesktopTokenError' } } } }
+        '404': { $ref: '#/components/responses/SignupDisabled' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/desktop/session:
+    get:
+      tags: [Login do aplicativo desktop]
+      operationId: desktopSession
+      summary: 'Aplicativo: a propria pessoa e o prazo que resta a sessao do desktop'
+      description: >
+        Authorization: Bearer <token>. Cookies sao ignorados. Vale so enquanto a sessao existe (15 min, sem renovacao: usar
+        nao estende) E a sessao de identidade que a autorizou continua ativa no banco - logout no navegador e as revogacoes
+        ja existentes (troca/redefinicao de senha, MFA, codigo de recuperacao) a encerram. Escopo identity: nenhuma
+        organizacao, Worker ou permissao. O token nao autentica nenhuma outra rota da API.
+      security: [ { desktopBearer: [] } ]
+      responses:
+        '200': { description: 'Sessao do desktop valida', content: { application/json: { schema: { $ref: '#/components/schemas/DesktopSession' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/SignupDisabled' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/desktop/session/revoke:
+    post:
+      tags: [Login do aplicativo desktop]
+      operationId: desktopSessionRevoke
+      summary: 'Aplicativo: encerra a propria sessao do desktop (idempotente; sem chave e fora dos limitadores)'
+      description: >
+        Authorization: Bearer <token>, sem cookie e sem CSRF. Token ausente, desconhecido ou ja encerrado: 204, sem efeito. A
+        sessao do navegador nao muda. Evento 23.
+      security: [ {}, { desktopBearer: [] } ]
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
 
   /api/v1/organizations:
     post:
@@ -2176,6 +2302,15 @@ components:
       in: cookie
       name: __Host-nekkora_link
       description: Desafio de vinculacao emitido pela etapa 1 (/api/v1/links/start); SameSite=Strict; 5 min; uso unico, amarrado a identidade e a conta. Expira na resposta da etapa 2.
+    desktopRequestCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-nekkora_desk
+      description: Pedido de autorizacao do aplicativo desktop guardado no servidor (5 min; HttpOnly, Secure, SameSite=Strict). So identifica o pedido; nao autentica ninguem.
+    desktopBearer:
+      type: http
+      scheme: bearer
+      description: Token opaco da sessao do aplicativo desktop (15 min, sem renovacao, escopo identity). So vale em /api/v1/desktop/session e /api/v1/desktop/session/revoke.
     csrfHeader:
       type: apiKey
       in: header
@@ -2440,6 +2575,33 @@ components:
     IdentityFactorReplacement: { type: object, required: [recoveryCodes, restricted], properties: { recoveryCodes: { type: array, items: { type: string }, description: 'Conjunto novo; o anterior foi invalidado. Mostrado uma unica vez' }, restricted: { type: boolean, enum: [false] } } }
     IdentitySessionIssued: { type: object, required: [csrfToken, restricted], properties: { csrfToken: { type: string }, restricted: { type: boolean, description: 'true: sessao nascida de codigo de recuperacao (DC-17.13), restrita ate concluir a troca do fator' } } }
     RecoveryCodes: { type: object, required: [recoveryCodes], properties: { recoveryCodes: { type: array, items: { type: string }, description: 'Conjunto novo; o anterior foi invalidado. Mostrado uma unica vez' } } }
+    DesktopAuthorizationRequest:
+      type: object
+      description: 'Parametros da RFC 6749 4.1.1 e da RFC 7636 4.3, com os nomes em camelCase do contrato da Web'
+      required: [responseType, clientId, redirectUri, state, codeChallenge, codeChallengeMethod, scope]
+      properties:
+        responseType: { type: string, enum: [code] }
+        clientId: { type: string, enum: [nekkora-agent-client] }
+        redirectUri: { type: string, pattern: '^http://127\.0\.0\.1:[1-9][0-9]{3,4}/callback$' }
+        state: { type: string, pattern: '^[A-Za-z0-9_-]{22,128}$' }
+        codeChallenge: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
+        codeChallengeMethod: { type: string, enum: [S256] }
+        scope: { type: string, enum: [identity] }
+    DesktopAuthorizationPending: { type: object, required: [application, account], properties: { application: { type: string }, account: { $ref: '#/components/schemas/DesktopAccount' } } }
+    DesktopAccount: { type: object, required: [email], properties: { email: { type: string } } }
+    DesktopRedirect: { type: object, required: [redirectTo], properties: { redirectTo: { type: string, description: 'Sempre http://127.0.0.1:<porta>/callback?..., montado pelo servidor' } } }
+    DesktopTokenRequest:
+      type: object
+      required: [grant_type, code, redirect_uri, client_id, code_verifier]
+      properties:
+        grant_type: { type: string, enum: [authorization_code] }
+        code: { type: string }
+        redirect_uri: { type: string }
+        client_id: { type: string }
+        code_verifier: { type: string, pattern: '^[A-Za-z0-9._~-]{43,128}$' }
+    DesktopToken: { type: object, required: [access_token, token_type, expires_in, scope], properties: { access_token: { type: string }, token_type: { type: string, enum: [Bearer] }, expires_in: { type: integer }, scope: { type: string, enum: [identity] } } }
+    DesktopTokenError: { type: object, required: [error], properties: { error: { type: string, enum: [invalid_request, invalid_client, invalid_grant, unsupported_grant_type] } } }
+    DesktopSession: { type: object, required: [account, scope, expiresIn], properties: { account: { $ref: '#/components/schemas/DesktopAccount' }, scope: { type: string, enum: [identity] }, expiresIn: { type: integer, description: 'Segundos que restam; nao aumenta com o uso' } } }
     IdentitySessionState: { type: object, required: [restricted, csrfToken, mfaEnabled, stepUpMethod], properties: { restricted: { type: boolean }, csrfToken: { type: string }, mfaEnabled: { type: boolean, description: '029: a identidade tem fator confirmado ativo' }, stepUpMethod: { $ref: '#/components/schemas/StepUpMethod' } } }
     StepUpMethod: { type: string, enum: [totp, password], description: '029: como ESTA sessao prova a pessoa nas acoes sensiveis. password so em sessao sem segundo fator de identidade que nunca confirmou fator (POST .../password-confirm; identidade: vale 5 min; organizacao: abre a janela fixa das acoes comuns, T01); totp em todas as demais (POST .../step-up). A senha nunca substitui o codigo de quem tem fator.' }
     PasswordConfirmRequest: { type: object, required: [password], properties: { password: { type: string, format: password } } }
