@@ -73,6 +73,14 @@ nekkora:
   # nao tem chave (encerrar sessao nunca depende de configuracao)
   entrada-geral:
     enabled: ${NEKKORA_ENTRADA_GERAL:false}
+  # login do aplicativo desktop pelo navegador (AGENT-CLIENT-LOGIN-001, contrato desktop-login/1): DESLIGADO por padrao; so
+  # abre com a entrada geral tambem ligada. Prazos: pedido no navegador, codigo de autorizacao e sessao do aplicativo
+  # (sem renovacao). Nenhum prazo das sessoes existentes muda.
+  desktop-login:
+    enabled: ${NEKKORA_LOGIN_DESKTOP:false}
+    request-ttl: 5m
+    code-ttl: 60s
+    session-ttl: 15m
   # vinculacao de conta antiga (contrato P3): DESLIGADA por padrao; so abre com a entrada geral tambem ligada. Os
   # bloqueios da entrada local de conta vinculada nao dependem dela
   vinculacao:

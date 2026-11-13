@@ -75,6 +75,11 @@ public final class Routes {
             case "/api/v1/signup", "/api/v1/signup/confirm", "/api/v1/signup/confirmation/resend" -> Context.PRE_AUTHENTICATION;
             // entrada geral (Missao 1): senha em pre-autenticacao; MFA no desafio de identidade; logout de identidade
             case "/api/v1/auth/login" -> Context.PRE_AUTHENTICATION;
+            // login do aplicativo desktop (AGENT-CLIENT-LOGIN-001): abrir e recusar o pedido, com ou sem sessao, pelo CSRF
+            // de pre-autenticacao; aprovar, so com o CSRF da sessao de identidade. As rotas do APLICATIVO (token, encerrar)
+            // nao chegam aqui: ver isDesktopClient
+            case DesktopLoginController.AUTHORIZATIONS, DesktopLoginController.DENY -> Context.PRE_AUTHENTICATION;
+            case DesktopLoginController.APPROVE -> Context.IDENTITY_SESSION;
             // recuperacao de senha da identidade (missao 002): pre-autenticacao, como a da organizacao
             case "/api/v1/auth/password-reset/request", "/api/v1/auth/password-reset/confirm" -> Context.PRE_AUTHENTICATION;
             // cadastro de fator: desafio de login (primeiro fator) ou sessao de identidade (substituicao); as duas, ambigua
@@ -105,6 +110,16 @@ public final class Routes {
     public static boolean reducesAccess(HttpServletRequest req) {
         String r = routeSuffix(req);
         return r.equals("/auth/logout") || r.equals("/auth/sessions/revoke-all") || r.equals("/api/v1/auth/logout");
+    }
+
+    /**
+     * Rotas do aplicativo desktop que alteram estado SEM credencial de navegador: a troca do codigo (codigo + verificador
+     * PKCE) e o encerramento (token Bearer). Um cliente nativo nao envia Origin, e nenhum cookie e lido nelas, entao nao
+     * ha o que o CSRF proteger. Comparacao exata da URI.
+     */
+    public static boolean isDesktopClient(HttpServletRequest req) {
+        String r = req.getRequestURI();
+        return DesktopLoginController.TOKEN.equals(r) || DesktopLoginController.REVOKE.equals(r);
     }
 
     public static boolean isWrite(HttpServletRequest req) {

@@ -56,7 +56,7 @@ public final class CsrfFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest req) {
-        return !Routes.isWrite(req) || !req.getRequestURI().startsWith("/api/v1/");
+        return !Routes.isWrite(req) || !req.getRequestURI().startsWith("/api/v1/") || Routes.isDesktopClient(req);
     }
 
     @Override

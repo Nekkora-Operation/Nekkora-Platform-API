@@ -35,7 +35,9 @@ public final class IdentityFilter extends OncePerRequestFilter {
     static final Set<String> SESSION_ROUTES = Set.of(IdentityOrganizationsController.MY_ORGANIZATIONS, IdentityOrganizationsController.ORG_SESSION,
             IdentityAuthController.STEP_UP, IdentityOrganizationsController.ORGANIZATIONS, AccountLinkController.START, AccountLinkController.CONFIRM,
             IdentityAuthController.ME_SESSION, IdentityAuthController.PASSWORD, IdentityAuthController.RECOVERY_CODES, InvitationAcceptController.ACCEPT,
-            IdentityAuthController.PASSWORD_CONFIRM, IdentityAuthController.ACTIVATE_START, IdentityAuthController.ACTIVATE_CONFIRM);
+            IdentityAuthController.PASSWORD_CONFIRM, IdentityAuthController.ACTIVATE_START, IdentityAuthController.ACTIVATE_CONFIRM,
+            // login do aplicativo desktop: ver o pedido e aprova-lo exigem a sessao de identidade
+            DesktopLoginController.AUTHORIZATION, DesktopLoginController.APPROVE);
 
     private final IdentitySessionResolver resolver;
 

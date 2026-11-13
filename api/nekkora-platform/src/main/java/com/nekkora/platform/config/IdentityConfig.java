@@ -1,5 +1,9 @@
 package com.nekkora.platform.config;
 
+import java.time.Duration;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import com.nekkora.platform.desktop.DesktopLoginService;
+import com.nekkora.platform.desktop.DesktopStore;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -233,6 +237,15 @@ public class IdentityConfig {
                 p.session().passwordRecovery(), p.limits().recoveryResponseFloor());
     }
 
+    /** Login do aplicativo desktop (AGENT-CLIENT-LOGIN-001): estado curto no Redis; prazos de nekkora.desktop-login. */
+    @Bean
+    DesktopLoginService desktopLoginService(StringRedisTemplate redis, IdentityTransactions tx, IdentityAuthRepository auth, PlatformProperties p,
+                                            @Value("${nekkora.desktop-login.request-ttl:5m}") Duration request,
+                                            @Value("${nekkora.desktop-login.code-ttl:60s}") Duration code,
+                                            @Value("${nekkora.desktop-login.session-ttl:15m}") Duration session) {
+        return new DesktopLoginService(new DesktopStore(redis), tx, auth, p.publicOrigin(), new DesktopLoginService.Prazos(request, code, session));
+    }
+
     /** Chaves separadas do cadastro, da entrada geral, da criacao de organizacao e da vinculacao: antes da cadeia de seguranca, depois do contexto e do limite de corpo. */
     @Bean
     FilterRegistrationBean<IdentityRoutesGate> identityRoutesGate(@Value("${nekkora.cadastro.enabled:false}") boolean signupEnabled,
@@ -240,9 +253,10 @@ public class IdentityConfig {
                                                                   @Value("${nekkora.criacao-organizacao.enabled:false}") boolean creationEnabled,
                                                                   @Value("${nekkora.vinculacao.enabled:false}") boolean linkEnabled,
                                                                   @Value("${nekkora.recuperacao-senha.enabled:false}") boolean recoveryEnabled,
-                                                                  @Value("${nekkora.convites.enabled:false}") boolean invitationsEnabled) {
+                                                                  @Value("${nekkora.convites.enabled:false}") boolean invitationsEnabled,
+                                                                  @Value("${nekkora.desktop-login.enabled:false}") boolean desktopEnabled) {
         FilterRegistrationBean<IdentityRoutesGate> r = new FilterRegistrationBean<>(new IdentityRoutesGate(signupEnabled, entryEnabled, creationEnabled,
-                linkEnabled, recoveryEnabled, invitationsEnabled));
+                linkEnabled, recoveryEnabled, invitationsEnabled, desktopEnabled));
         r.setOrder(Ordered.HIGHEST_PRECEDENCE + 2);
         r.addUrlPatterns("/api/*");
         return r;
