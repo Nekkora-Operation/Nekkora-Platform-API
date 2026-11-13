@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.nekkora.core.ratelimit.RedisLimiter;
@@ -50,12 +51,14 @@ public class GatewayController {
             .build();
 
     private final GatewayService service;
+    private final MachineCatalog catalog;
     private final EventIngestion ingestion;
     private final RedisLimiter limiter;
     private final GatewayProperties.Limits limits;
 
-    public GatewayController(GatewayService service, EventIngestion ingestion, RedisLimiter limiter, GatewayProperties properties) {
+    public GatewayController(GatewayService service, MachineCatalog catalog, EventIngestion ingestion, RedisLimiter limiter, GatewayProperties properties) {
         this.service = service;
+        this.catalog = catalog;
         this.ingestion = ingestion;
         this.limiter = limiter;
         this.limits = properties.limits();
@@ -136,6 +139,46 @@ public class GatewayController {
     public Map<String, List<GatewayService.Authorization>> authorizations(HttpServletRequest req) {
         MachineToken t = machine(req);
         return Map.of("items", authenticated(req, () -> service.authorizations(t)));
+    }
+
+    // ------------------------------------------------------------------ catalogo da maquina (PLATFORM-AGENT-CATALOGO-001, T01)
+
+    /**
+     * Metadados do subconjunto autorizado ao Worker da maquina (036). So leitura; nao concede nada. {@code limit} 1..100
+     * (padrao 50); {@code cursor} opaco, preso ao vinculo, nunca permissao. Sem cache (no-store).
+     */
+    @GetMapping("/agent/api/v1/catalog")
+    public ResponseEntity<MachineCatalog.Page> catalog(@RequestParam(name = "limit", required = false) String limit,
+                                                       @RequestParam(name = "cursor", required = false) String cursor, HttpServletRequest req) {
+        MachineToken t = machine(req);
+        Integer n = null;
+        if (limit != null) {
+            if (!limit.matches("[0-9]{1,3}")) {
+                throw ApiException.invalid("limite");
+            }
+            n = Integer.valueOf(limit);
+        }
+        Integer size = n;
+        MachineCatalog.Page p = authenticated(req, () -> catalog.page(t, size, cursor, this::catalogQuota));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(p);
+    }
+
+    /** Consulta direta de uma automacao: 404 se nao e visivel a esta maquina agora (mesmo corpo para inexistente ou de outra organizacao). */
+    @GetMapping("/agent/api/v1/catalog/automations/{automationId}")
+    public ResponseEntity<MachineCatalog.Single> catalogAutomation(@PathVariable String automationId, HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(automationId);
+        MachineCatalog.Single s = authenticated(req, () -> catalog.one(t, id, this::catalogQuota));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(s);
+    }
+
+    /** Cota de leituras do catalogo por Agent (balde; Retry-After). Nao muda nenhum limite existente. */
+    private void catalogQuota(MachineAuth.Machine m) {
+        int perMinute = limits.catalogReadsPerMinute();
+        long wait = limiter.consume("agent:catalogo:" + m.agentId(), perMinute, perMinute / 60.0);
+        if (wait > 0) {
+            throw new ApiException(ApiError.RATE_LIMITED, "catalogo_por_maquina", Math.max(1, (wait + 999) / 1000));
+        }
     }
 
     // ------------------------------------------------------------------ registro, supervisor e eventos

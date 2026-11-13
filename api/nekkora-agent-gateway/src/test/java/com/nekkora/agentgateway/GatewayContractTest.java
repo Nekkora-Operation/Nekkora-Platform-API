@@ -46,7 +46,7 @@ class GatewayContractTest {
         Map<String, Object> paths = (Map<String, Object>) spec.get("paths");
         Set<String> publicadas = new TreeSet<>();
         paths.forEach((path, ops) -> ((Map<String, Object>) ops).keySet().forEach(method -> publicadas.add(method + " " + path)));
-        assertThat(mapeadas).isEqualTo(publicadas).hasSize(9); // 030: + run-requests e decision; T13: + link/unlink
+        assertThat(mapeadas).isEqualTo(publicadas).hasSize(11); // 030: + run-requests e decision; T13: + link/unlink; CATALOGO-001: + catalog (2)
 
         Map<String, Set<String>> exercitados = Map.of(
                 "post /agent/api/v1/enrollments/redeem", Set.of("200", "401", "409"),
@@ -55,7 +55,9 @@ class GatewayContractTest {
                 "post /agent/api/v1/runs", Set.of("200", "201", "403", "409"),
                 "post /agent/api/v1/runs/{agentExecutionId}/supervisor", Set.of("200", "409"),
                 "post /agent/api/v1/runs/{agentExecutionId}/events", Set.of("200", "400", "401", "429", "500", "503"),
-                "post /agent/api/v1/link/unlink", Set.of("200", "400", "401", "409"));
+                "post /agent/api/v1/link/unlink", Set.of("200", "400", "401", "409"),
+                "get /agent/api/v1/catalog", Set.of("200", "400", "401", "403", "429"),
+                "get /agent/api/v1/catalog/automations/{automationId}", Set.of("200", "400", "401", "403", "404"));
         for (Map.Entry<String, Set<String>> e : exercitados.entrySet()) {
             String[] mp = e.getKey().split(" ", 2);
             Map<String, Object> o = (Map<String, Object>) ((Map<String, Object>) paths.get(mp[1])).get(mp[0]);
