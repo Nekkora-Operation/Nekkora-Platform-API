@@ -824,11 +824,15 @@ paths:
       operationId: desktopOrganizations
       summary: 'Aplicativo: as organizacoes da pessoa'
       description: >
-        Escopo "identity navigation". As organizacoes resolvidas na aprovacao do login (ate 200) que passam na conferencia
-        de AGORA: sessao de identidade de origem ativa e nao restrita, conta interna ativa ligada a identidade, vinculo
-        ativo e organizacao ativa. A que deixou de passar some da lista, sem erro; a que a pessoa ganhou depois do login so
-        aparece no login seguinte. Ordem: nome e organizationId (a da lista da Web). Sem cursor. Duas organizacoes podem ter
-        o mesmo nome: handle e organizationId as distinguem. Pessoa sem organizacao: 200 com items vazio.
+        Escopo "identity navigation". Contrato desktop-navigation/2 (AGENT-CLIENT-NAVEGACAO-002): as organizacoes da pessoa
+        AGORA (ate 200), resolvidas a cada requisicao para a identidade da sessao: sessao de identidade de origem ativa e
+        nao restrita, conta interna ativa ligada a identidade, vinculo ativo e organizacao ativa. A que a pessoa ganhou
+        depois do login (convite aceito, organizacao criada) aparece na requisicao seguinte, com o mesmo token; a que deixou
+        de passar some da lista, sem erro. A leitura nao renova a sessao do aplicativo. asOf = "request" identifica este
+        comportamento; no contrato desktop-navigation/1 o campo nao existia e a lista era a da aprovacao do login.
+        Organizacao aguardando ativacao aparece como na Web; nada e ativado. Ordem: nome e organizationId (a da lista da
+        Web). Sem cursor. Duas organizacoes podem ter o mesmo nome: handle e organizationId as distinguem. Pessoa sem
+        organizacao: 200 com items vazio.
       security: [ { desktopBearer: [] } ]
       responses:
         '200': { description: 'Organizacoes da pessoa (pode ser vazia)', content: { application/json: { schema: { $ref: '#/components/schemas/DesktopOrganizationList' } } } }
@@ -2474,7 +2478,7 @@ components:
       description: Token CSRF do contexto da rota (pre-autenticacao, desafio ou sessao). Toda escrita exige tambem Origin igual a origem publica.
   parameters:
     Org: { name: org, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 401 (nenhuma sessao e resolvida)' }
-    DesktopOrg: { name: org, in: path, required: true, schema: { type: string, format: uuid }, description: 'Uma das organizacoes de GET /api/v1/desktop/organizations. Malformado -> 400; fora da lista da sessao -> 404' }
+    DesktopOrg: { name: org, in: path, required: true, schema: { type: string, format: uuid }, description: 'Uma das organizacoes de GET /api/v1/desktop/organizations. Malformado -> 400; organizacao em que a pessoa nao tem acesso AGORA (conferido a cada requisicao) -> 404' }
     WorkspaceId: { name: workspaceId, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
     AutomationId: { name: automationId, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
     ExecutionId: { name: executionId, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
@@ -2762,7 +2766,7 @@ components:
     DesktopSession: { type: object, required: [account, scope, expiresIn], properties: { account: { $ref: '#/components/schemas/DesktopAccount' }, scope: { type: string, enum: [identity, identity navigation] }, expiresIn: { type: integer, description: 'Segundos que restam; nao aumenta com o uso' } } }
     DesktopPerson: { type: object, required: [email, displayName], properties: { email: { type: string }, displayName: { type: string } } }
     DesktopOrganization: { type: object, required: [organizationId, name, handle, activationState], properties: { organizationId: { type: string, format: uuid }, name: { type: string, description: 'Nao e unico entre organizacoes' }, handle: { type: [string, 'null'], description: 'Identificador legivel e estavel da organizacao (034)' }, activationState: { type: string, enum: [AGUARDANDO_ATIVACAO, ATIVADA] } } }
-    DesktopOrganizationList: { type: object, required: [items], properties: { items: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/DesktopOrganization' } } } }
+    DesktopOrganizationList: { type: object, required: [items, asOf], properties: { items: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/DesktopOrganization' } }, asOf: { type: string, enum: [request], description: 'request: lista resolvida nesta requisicao (desktop-navigation/2). Ausente em servidor do contrato /1, em que a lista era a da aprovacao do login' } } }
     DesktopWorkspace: { type: object, required: [workspaceId, name], properties: { workspaceId: { type: string, format: uuid }, name: { type: string } } }
     DesktopWorkspacePage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/DesktopWorkspace' } }, nextCursor: { type: [string, 'null'] } } }
     DesktopPackage: { type: object, required: [name, version, fingerprint], properties: { name: { type: [string, 'null'] }, version: { type: [string, 'null'] }, fingerprint: { type: [string, 'null'], description: 'Impressao do pacote calculada pelo servidor (64 hex)' } } }

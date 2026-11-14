@@ -36,8 +36,10 @@ public final class DesktopStore {
     }
 
     /**
-     * Conta candidata da pessoa numa organizacao, como {@code identity_org_session_target} a indicou NA APROVACAO. Nao e
-     * autoridade: cada requisicao reconfere o par no banco ({@code identity_org_session_allowed}) antes de qualquer leitura.
+     * Conta da pessoa numa organizacao. No codigo e na sessao guardados e o retrato da APROVACAO, que desde o contrato
+     * desktop-navigation/2 (AGENT-CLIENT-NAVEGACAO-002) NAO decide mais nada: as rotas resolvem o par a cada requisicao
+     * ({@code identity_session_organizations}, 039). O retrato continua gravado so para que uma instancia da revisao anterior,
+     * durante a implantacao ou num retorno, ainda leia uma sessao emitida por esta.
      */
     public record OrgAccount(UUID organizationId, UUID userId) {
     }
@@ -47,11 +49,6 @@ public final class DesktopStore {
     }
 
     public record Session(UUID identityId, UUID originSessionId, long issuedAtEpochSecond, String scope, List<OrgAccount> organizations) {
-
-        /** A conta desta sessao na organizacao, se ela estava na lista da aprovacao. */
-        public Optional<UUID> userIn(UUID organization) {
-            return organizations.stream().filter(o -> o.organizationId().equals(organization)).map(OrgAccount::userId).findFirst();
-        }
     }
 
     /** Escopo dos valores gravados antes do escopo existir. */
