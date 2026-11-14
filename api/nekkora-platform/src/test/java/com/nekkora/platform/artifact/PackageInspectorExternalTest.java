@@ -92,6 +92,27 @@ class PackageInspectorExternalTest {
         assertRejected(withDescriptor(descriptor("main.py", "[]", FILES).replace(">=3.10,<3.14", "qualquer")), "python_invalido");
     }
 
+    /**
+     * Um arquivo VAZIO comprimido (o {@code __init__.py} de um pacote Python, por exemplo) e um arquivo valido: o fluxo
+     * Deflate dele termina sem produzir nenhum byte. O leitor recusava o ZIP inteiro como "zip_malformado".
+     */
+    @Test
+    void arquivoVazioComprimidoNaoTornaOZipInvalido() throws Exception {
+        String vazio = PackageInspector.fileHash(new byte[0]);
+        Map<String, byte[]> v = withDescriptor(descriptor("main.py", "[]",
+                "{\"main.py\": \"" + MAIN + "\", \"util/x.bin\": \"" + BIN + "\", \"tarefas/__init__.py\": \"" + vazio + "\"}"));
+        v.put("tarefas/__init__.py", new byte[0]);
+        PackageInspector.Inspection in = PackageInspector.inspect(PackageInspectorTest.zip(v));
+        assertThat(in.packageKind()).isEqualTo(2);
+        assertThat(in.filesCount()).isEqualTo(3);
+        // um arquivo vazio que o ZIP diz ter conteudo continua recusado (tamanho declarado diferente do real)
+        byte[] zip = PackageInspectorTest.zip(v);
+        int at = PackageInspectorTest.central(zip, "tarefas/__init__.py");
+        java.nio.ByteBuffer.wrap(zip).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(at + 24, 5);
+        assertThatThrownBy(() -> PackageInspector.inspect(zip)).isInstanceOf(PackageInspector.Rejected.class)
+                .satisfies(e -> assertThat(((PackageInspector.Rejected) e).reason()).isEqualTo("zip_malformado"));
+    }
+
     static Map<String, byte[]> with(String name, byte[] data) {
         Map<String, byte[]> v = vector();
         v.put(name, data);
