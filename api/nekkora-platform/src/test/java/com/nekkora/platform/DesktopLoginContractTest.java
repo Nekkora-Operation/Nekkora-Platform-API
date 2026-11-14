@@ -12,15 +12,18 @@ import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 
 import com.nekkora.platform.web.DesktopLoginController;
+import com.nekkora.platform.web.DesktopNavigationController;
 
 /**
- * Contrato publicado do login do aplicativo desktop (AGENT-CLIENT-LOGIN-001): as rotas de {@link DesktopLoginController}
- * sao EXATAMENTE as da tag "Login do aplicativo desktop", com os codigos que o DesktopLoginIT exercita e a credencial de
- * cada grupo: navegador (cookies e CSRF) ou aplicativo (nenhum cookie; codigo com PKCE, ou Bearer). O contrato nao publica
- * metodo PKCE "plain", outro cliente, outro escopo, refresh_token nem redirect fora do loopback.
+ * Contrato publicado do login do aplicativo desktop (AGENT-CLIENT-LOGIN-001) e da navegacao dele (AGENT-CLIENT-NAVEGACAO-001):
+ * as rotas de {@link DesktopLoginController} e de {@link DesktopNavigationController} sao EXATAMENTE as da tag "Login do
+ * aplicativo desktop", com os codigos que o DesktopLoginIT e o DesktopNavigationIT exercitam e a credencial de cada grupo:
+ * navegador (cookies e CSRF) ou aplicativo (nenhum cookie; codigo com PKCE, ou Bearer). O contrato nao publica metodo PKCE
+ * "plain", outro cliente, escopo alem dos dois, refresh_token nem redirect fora do loopback.
  */
 class DesktopLoginContractTest {
 
@@ -28,15 +31,22 @@ class DesktopLoginContractTest {
     @SuppressWarnings("unchecked")
     void rotasDoLoginDesktopSaoAsPublicadasComCodigosESeguranca() throws IOException {
         Set<String> mapeadas = new TreeSet<>();
-        for (Method m : DesktopLoginController.class.getDeclaredMethods()) {
-            if (m.getAnnotation(PostMapping.class) != null) {
-                for (String p : m.getAnnotation(PostMapping.class).value()) {
-                    mapeadas.add("post " + p);
+        for (Class<?> controller : List.of(DesktopLoginController.class, DesktopNavigationController.class)) {
+            for (Method m : controller.getDeclaredMethods()) {
+                if (m.getAnnotation(PostMapping.class) != null) {
+                    for (String p : m.getAnnotation(PostMapping.class).value()) {
+                        mapeadas.add("post " + p);
+                    }
                 }
-            }
-            if (m.getAnnotation(GetMapping.class) != null) {
-                for (String p : m.getAnnotation(GetMapping.class).value()) {
-                    mapeadas.add("get " + p);
+                if (m.getAnnotation(GetMapping.class) != null) {
+                    for (String p : m.getAnnotation(GetMapping.class).value()) {
+                        mapeadas.add("get " + p);
+                    }
+                }
+                if (m.getAnnotation(PatchMapping.class) != null) {
+                    for (String p : m.getAnnotation(PatchMapping.class).value()) {
+                        mapeadas.add("patch " + p);
+                    }
                 }
             }
         }
@@ -54,7 +64,7 @@ class DesktopLoginContractTest {
                 assertThat(e.getValue().toString()).as(e.getKey() + ": toda rota /desktop/ e desta tag").contains("Login do aplicativo desktop");
             }
         }
-        assertThat(mapeadas).as("rotas do controller = rotas publicadas").isEqualTo(publicadas).hasSize(7);
+        assertThat(mapeadas).as("rotas dos controllers = rotas publicadas").isEqualTo(publicadas).hasSize(13);
 
         Map<String, List<String>> exercitados = Map.of(
                 "post " + DesktopLoginController.AUTHORIZATIONS, List.of("204", "400", "403", "404", "429", "503", "preAuthCookie", "csrfHeader"),
@@ -92,7 +102,7 @@ class DesktopLoginContractTest {
         Map<String, Object> pedido = (Map<String, Object>) ((Map<String, Object>) schemas.get("DesktopAuthorizationRequest")).get("properties");
         assertThat(((Map<String, Object>) pedido.get("codeChallengeMethod")).get("enum")).as("PKCE: so S256").isEqualTo(List.of("S256"));
         assertThat(((Map<String, Object>) pedido.get("clientId")).get("enum")).isEqualTo(List.of("nekkora-agent-client"));
-        assertThat(((Map<String, Object>) pedido.get("scope")).get("enum")).isEqualTo(List.of("identity"));
+        assertThat(((Map<String, Object>) pedido.get("scope")).get("enum")).as("os dois escopos, texto exato").isEqualTo(List.of("identity", "identity navigation"));
         assertThat(((Map<String, Object>) pedido.get("responseType")).get("enum")).isEqualTo(List.of("code"));
         Pattern redirect = Pattern.compile((String) ((Map<String, Object>) pedido.get("redirectUri")).get("pattern"));
         assertThat(redirect.matcher("http://127.0.0.1:49152/callback").matches()).isTrue();
@@ -104,5 +114,53 @@ class DesktopLoginContractTest {
         assertThat(token).as("sem refresh_token nem id_token").containsOnlyKeys("access_token", "token_type", "expires_in", "scope");
         Map<String, Object> sessao = (Map<String, Object>) ((Map<String, Object>) schemas.get("DesktopSession")).get("properties");
         assertThat(sessao).as("so a propria pessoa: nenhuma organizacao, Worker ou permissao").containsOnlyKeys("account", "scope", "expiresIn");
+        for (String schema : List.of("DesktopToken", "DesktopSession", "DesktopAuthorizationPending")) {
+            Map<String, Object> props = (Map<String, Object>) ((Map<String, Object>) schemas.get(schema)).get("properties");
+            assertThat(((Map<String, Object>) props.get("scope")).get("enum")).as(schema + ".scope").isEqualTo(List.of("identity", "identity navigation"));
+        }
+        Map<String, Object> pendente = (Map<String, Object>) schemas.get("DesktopAuthorizationPending");
+        assertThat((List<String>) pendente.get("required")).as("a pagina de confirmacao recebe o escopo pedido").containsExactly("application", "account", "scope");
+
+        // ---- navegacao (desktop-navigation/1): so Bearer; codigos exercitados pelo DesktopNavigationIT
+        Map<String, List<String>> navegacao = Map.of(
+                "get " + DesktopNavigationController.ME, List.of("200", "401", "403", "404", "429", "503"),
+                "get " + DesktopNavigationController.ORGANIZATIONS, List.of("200", "401", "403", "404", "429", "503"),
+                "get " + DesktopNavigationController.WORKSPACES, List.of("200", "400", "401", "403", "404", "429", "500", "503"),
+                "get " + DesktopNavigationController.AUTOMATIONS, List.of("200", "400", "401", "403", "404", "429", "500", "503"),
+                "get " + DesktopNavigationController.VERSIONS, List.of("200", "400", "401", "403", "404", "429", "500", "503"),
+                "patch " + DesktopNavigationController.AUTOMATION, List.of("200", "400", "401", "403", "404", "409", "429", "500", "503"));
+        for (Map.Entry<String, List<String>> e : navegacao.entrySet()) {
+            String[] mp = e.getKey().split(" ", 2);
+            Map<String, Object> o = (Map<String, Object>) ((Map<String, Object>) paths.get(mp[1])).get(mp[0]);
+            assertThat((Map<String, Object>) o.get("responses")).as(e.getKey()).containsOnlyKeys(e.getValue().toArray(String[]::new));
+            assertThat(o.get("security").toString()).as(e.getKey() + ": so o token do aplicativo, sem cookie e sem CSRF").isEqualTo("[{desktopBearer=[]}]");
+            assertThat(o.get("description").toString()).as(e.getKey() + " declara o escopo exigido").contains("identity navigation");
+        }
+        Map<String, Object> schemaOf = Map.of(
+                "DesktopPerson", List.of("email", "displayName"),
+                "DesktopOrganization", List.of("organizationId", "name", "handle", "activationState"),
+                "DesktopOrganizationList", List.of("items"),
+                "DesktopWorkspace", List.of("workspaceId", "name"),
+                "DesktopWorkspacePage", List.of("items", "nextCursor"),
+                "DesktopAutomation", List.of("automationId", "name", "latestPublishedVersion"),
+                "DesktopAutomationPage", List.of("items", "nextCursor", "capabilities"),
+                "DesktopAutomationVersion", List.of("automationVersionId", "versionNumber", "status", "publishedAt", "package"),
+                "DesktopAutomationRenamed", List.of("automationId", "name"));
+        for (Map.Entry<String, Object> e : schemaOf.entrySet()) {
+            Map<String, Object> s = (Map<String, Object>) schemas.get(e.getKey());
+            assertThat(s).as("schema " + e.getKey()).isNotNull();
+            assertThat(((Map<String, Object>) s.get("properties")).keySet()).as(e.getKey() + ": campos publicados = campos da resposta")
+                    .containsExactlyElementsOf((List<String>) e.getValue());
+            assertThat((List<String>) s.get("required")).as(e.getKey() + ": todos presentes (nulo quando nao ha)").containsExactlyElementsOf((List<String>) e.getValue());
+        }
+        assertThat(((Map<String, Object>) ((Map<String, Object>) schemas.get("DesktopPackage")).get("properties")).keySet())
+                .as("pacote: so nome, versao e impressao").containsExactly("name", "version", "fingerprint");
+        assertThat(((Map<String, Object>) ((Map<String, Object>) schemas.get("DesktopCapabilities")).get("properties")).keySet()).containsExactly("rename", "execute");
+        assertThat(((Map<String, Object>) ((Map<String, Object>) schemas.get("DesktopAutomationRename")).get("properties")).keySet())
+                .as("o aplicativo so envia o nome").containsExactly("name");
+        assertThat(((Map<String, Object>) schemas.get("DesktopAutomationRename")).get("additionalProperties")).isEqualTo(Boolean.FALSE);
+        Map<String, Object> bearer = (Map<String, Object>) ((Map<String, Object>) ((Map<String, Object>) spec.get("components")).get("securitySchemes"))
+                .get("desktopBearer");
+        assertThat(bearer.get("description").toString()).contains("identity navigation").contains("/api/v1/desktop/");
     }
 }

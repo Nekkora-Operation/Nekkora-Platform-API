@@ -31,6 +31,8 @@ import jakarta.servlet.http.HttpServletResponse;
  * <li><b>aplicativo</b> ({@link #TOKEN}, {@link #SESSION}, {@link #REVOKE}): sem cookie nenhum. Vale o codigo com o
  * verificador PKCE, ou o token {@code Bearer}. Um cookie de sessao apresentado aqui e ignorado.</li>
  * </ul>
+ * O escopo e o do pedido aprovado ({@code identity} ou {@code identity navigation}); as rotas do segundo ficam em
+ * {@link DesktopNavigationController}.
  * Chave {@code nekkora.desktop-login.enabled} (padrao desligada), que so abre com a entrada geral tambem ligada. O token
  * do aplicativo nao autentica nenhuma outra rota: os filtros de sessao so leem cookies.
  */
@@ -93,6 +95,8 @@ public class DesktopLoginController {
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("application", p.application());
         r.put("account", Map.of("email", p.email()));
+        // o escopo PEDIDO, para a pagina dizer a pessoa o que ela esta concedendo (identity | identity navigation)
+        r.put("scope", p.scope());
         return noStore(r);
     }
 
@@ -131,7 +135,7 @@ public class DesktopLoginController {
             r.put("access_token", i.accessToken());
             r.put("token_type", "Bearer");
             r.put("expires_in", i.expiresIn());
-            r.put("scope", DesktopLoginService.SCOPE);
+            r.put("scope", i.scope());
             return noStore(r);
         } catch (DesktopLoginService.TokenError e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).cacheControl(CacheControl.noStore()).header("Pragma", "no-cache")
@@ -145,7 +149,7 @@ public class DesktopLoginController {
         DesktopLoginService.Current c = service.session(bearer(req));
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("account", Map.of("email", c.email()));
-        r.put("scope", DesktopLoginService.SCOPE);
+        r.put("scope", c.scope());
         r.put("expiresIn", c.expiresIn());
         return noStore(r);
     }
@@ -174,7 +178,7 @@ public class DesktopLoginController {
         return v[0];
     }
 
-    private static String bearer(HttpServletRequest req) {
+    static String bearer(HttpServletRequest req) {
         String t = bearerOrNull(req);
         if (t == null) {
             throw ApiException.unauthenticated("desktop_sessao");

@@ -172,6 +172,57 @@ public final class AutomationLifecycleService {
         });
     }
 
+    /** A regra de nome da criacao ({@link #createAutomation}): 1 a 80 caracteres, sem controle, nao so espacos. */
+    public static boolean validAutomationName(String name) {
+        return valid(NAME, name);
+    }
+
+    /**
+     * Renomeacao de automacao pelo aplicativo desktop (AGENT-CLIENT-NAVEGACAO-001; ato 8 da 038). Roda DENTRO da transacao de
+     * quem chama, que ja tem o contexto da organizacao e ja conferiu a pessoa (sessao do desktop, sessao de identidade de
+     * origem e vinculo ativo): aqui nao ha sessao de organizacao para reler. O vinculo e a conta vem dessa conferencia, nunca
+     * do cliente.
+     * <p>
+     * Mesma regra de nome e mesmas permissoes da criacao: automacao fora do alcance de leitura do vinculo, inexistente ou de
+     * outra organizacao -> 404 (o mesmo do componente de acesso); visivel sem {@code automation.manage} no workspace -> 403;
+     * automacao ou workspace inativo -> 409, como nos demais atos. So {@code automations.name} muda (updated_at pelo gatilho
+     * da 005): versoes, artefatos, manifestos e impressoes nao sao tocados. Nome igual ao atual, depois de retirar os
+     * espacos das extremidades, nao grava nem audita. Nome de automacao nao e unico (005): nao ha 409 por nome repetido.
+     */
+    public Automation renameAutomation(JdbcClient j, UUID org, UUID membership, UUID userId, UUID automation, String name) {
+        if (!valid(NAME, name)) {
+            throw ApiException.invalid("automacao");
+        }
+        String novo = name.strip();
+        UUID workspace = access.requireAutomation(j, org, membership, automation, "automation.read");
+        if (!access.hasWorkspacePermission(j, org, membership, workspace, "automation.manage")) {
+            LOG.info("evento=acesso.negado regra=PERMISSION motivo=automation.manage correlacao={}", RequestContext.correlation());
+            throw ApiException.forbidden("automation.manage");
+        }
+        actions.lockOrganizationAndActor(j, org, userId);
+        record Atual(Automation automation, boolean active) {
+        }
+        Atual atual = j.sql("SELECT a.automation_id, a.workspace_id, a.name, a.status, a.created_at, "
+                        + "(SELECT w.status FROM public.workspaces w WHERE w.organization_id = a.organization_id AND w.workspace_id = a.workspace_id) "
+                        + "FROM public.automations a WHERE a.organization_id = ? AND a.automation_id = ? FOR UPDATE OF a").param(org).param(automation)
+                .query((rs, n) -> new Atual(new Automation(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getString(3),
+                        status(rs.getShort(4)), rs.getObject(5, OffsetDateTime.class)), rs.getShort(4) == 1 && rs.getShort(6) == 1))
+                .optional().orElseThrow(() -> new ApiException(ApiError.NOT_FOUND, "automacao"));
+        if (!atual.active()) {
+            throw new ApiException(ApiError.CONFLICT, "automacao_ou_workspace_inativo");
+        }
+        if (atual.automation().name().equals(novo)) {
+            return atual.automation();
+        }
+        Automation a = j.sql("UPDATE public.automations SET name = ? WHERE organization_id = ? AND automation_id = ? "
+                        + "RETURNING automation_id, workspace_id, name, status, created_at").param(novo).param(org).param(automation)
+                .query((rs, n) -> new Automation(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getString(3), status(rs.getShort(4)),
+                        rs.getObject(5, OffsetDateTime.class))).single();
+        audit(j, org, 8, membership, workspace, automation, null, null);
+        LOG.info("evento=automacao.renomeada automacao={} correlacao={}", automation, RequestContext.correlation());
+        return a;
+    }
+
     // ------------------------------------------------------------------ versao DRAFT
 
     public Version createVersion(UUID org, ValidSession actor, String token, UUID automation, String runtime, List<String> arguments) {

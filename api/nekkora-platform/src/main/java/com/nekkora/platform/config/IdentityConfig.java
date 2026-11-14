@@ -239,11 +239,23 @@ public class IdentityConfig {
 
     /** Login do aplicativo desktop (AGENT-CLIENT-LOGIN-001): estado curto no Redis; prazos de nekkora.desktop-login. */
     @Bean
-    DesktopLoginService desktopLoginService(StringRedisTemplate redis, IdentityTransactions tx, IdentityAuthRepository auth, PlatformProperties p,
+    DesktopLoginService desktopLoginService(StringRedisTemplate redis, IdentityTransactions tx, IdentityAuthRepository auth, IdentityOrgRepository orgs,
+                                            PlatformProperties p,
                                             @Value("${nekkora.desktop-login.request-ttl:5m}") Duration request,
                                             @Value("${nekkora.desktop-login.code-ttl:60s}") Duration code,
                                             @Value("${nekkora.desktop-login.session-ttl:15m}") Duration session) {
-        return new DesktopLoginService(new DesktopStore(redis), tx, auth, p.publicOrigin(), new DesktopLoginService.Prazos(request, code, session));
+        return new DesktopLoginService(new DesktopStore(redis), tx, auth, orgs, p.publicOrigin(), new DesktopLoginService.Prazos(request, code, session));
+    }
+
+    /**
+     * Navegacao do aplicativo desktop (AGENT-CLIENT-NAVEGACAO-001): a conferencia da pessoa e da identidade; a autorizacao por
+     * workspace, as consultas e a renomeacao sao os componentes da organizacao, ligados aqui.
+     */
+    @Bean
+    com.nekkora.platform.desktop.DesktopNavigationService desktopNavigationService(DesktopLoginService login, IdentityTransactions tx,
+            com.nekkora.platform.access.WorkspaceAccess access, com.nekkora.platform.admin.AutomationLifecycleService lifecycle,
+            com.nekkora.platform.paging.CursorCodec cursors) {
+        return new com.nekkora.platform.desktop.DesktopNavigationService(login, tx, access, lifecycle, cursors);
     }
 
     /** Chaves separadas do cadastro, da entrada geral, da criacao de organizacao e da vinculacao: antes da cadeia de seguranca, depois do contexto e do limite de corpo. */

@@ -182,6 +182,7 @@ class DesktopLoginIT extends IdentityTestBase {
         assertThat(pe.status()).isEqualTo(200);
         assertThat(pe.field("application")).isEqualTo("Nekkora Agent");
         assertThat(pe.field("email")).as("a pagina mostra a conta que vai autorizar").isEqualTo(e);
+        assertThat(pe.field("scope")).as("e o escopo pedido").isEqualTo("identity");
         assertThat(pe.body()).doesNotContain(a.state()).doesNotContain(a.challenge()).doesNotContain("127.0.0.1");
 
         BrowserClient.Response ap = b.post(APPROVE, null);

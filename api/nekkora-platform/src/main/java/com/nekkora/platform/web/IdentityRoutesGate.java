@@ -89,13 +89,18 @@ public final class IdentityRoutesGate extends OncePerRequestFilter {
         return !(closed(req.getRequestURI()) || closed(req.getServletPath()));
     }
 
+    /** Rotas de navegacao do aplicativo (AGENT-CLIENT-NAVEGACAO-001): caminhos com ids, fechados pelo prefixo inteiro. */
+    private static boolean desktopNavigation(String path) {
+        return path != null && DesktopNavigationController.ROUTES.matcher(path).matches();
+    }
+
     private boolean closed(String path) {
         return (!signupEnabled && SIGNUP_ROUTES.contains(path)) || (!entryEnabled && ENTRY_ROUTES.contains(path))
                 || (!(entryEnabled && creationEnabled) && CREATION_ROUTES.contains(path))
                 || (!(entryEnabled && linkEnabled) && LINK_ROUTES.contains(path))
                 || (!(entryEnabled && recoveryEnabled) && RECOVERY_ROUTES.contains(path))
                 || (!(entryEnabled && invitationsEnabled) && INVITATION_ROUTES.contains(path))
-                || (!(entryEnabled && desktopEnabled) && DESKTOP_ROUTES.contains(path));
+                || (!(entryEnabled && desktopEnabled) && (DESKTOP_ROUTES.contains(path) || desktopNavigation(path)));
     }
 
     @Override

@@ -86,6 +86,50 @@ class IdentityRoutesGateTest {
         }
     }
 
+    /**
+     * Navegacao do aplicativo desktop (AGENT-CLIENT-NAVEGACAO-001): rotas com ids no caminho, fechadas pela MESMA chave do
+     * login desktop (e a entrada geral), tambem com o caminho escapado; encerrar a sessao continua sem chave.
+     */
+    @Test
+    void navegacaoDoAplicativoDesktopExigeAsDuasChaves() throws Exception {
+        String org = "/api/v1/desktop/organizations/11111111-2222-3333-4444-555555555555";
+        String automacao = org + "/automations/66666666-7777-8888-9999-aaaaaaaaaaaa";
+        for (boolean entrada : new boolean[] {false, true}) {
+            for (boolean desktop : new boolean[] {false, true}) {
+                IdentityRoutesGate g = new IdentityRoutesGate(false, entrada, false, false, false, false, desktop);
+                for (String rota : new String[] {DesktopNavigationController.ME, DesktopNavigationController.ORGANIZATIONS, org + "/workspaces",
+                        org + "/workspaces/66666666-7777-8888-9999-aaaaaaaaaaaa/automations", automacao + "/versions", automacao}) {
+                    for (String metodo : new String[] {"GET", "PATCH", "POST"}) {
+                        assertThat(passa(g, metodo, rota)).as("entrada=" + entrada + " desktop=" + desktop + " " + metodo + " " + rota)
+                                .isEqualTo(entrada && desktop);
+                    }
+                }
+                assertThat(passa(g, "GET", "/api/v1/de%73ktop/organizations")).as("caminho escapado: mesma decisao").isEqualTo(entrada && desktop);
+                assertThat(passa(g, "PATCH", automacao.replace("desktop", "de%73ktop"))).as("renomeacao escapada: mesma decisao").isEqualTo(entrada && desktop);
+                assertThat(passa(g, "POST", DesktopLoginController.REVOKE)).as("encerrar a sessao do aplicativo nunca depende de chave").isTrue();
+                assertThat(passa(g, "GET", "/api/v1/me/organizations")).as("a lista da Web depende so da entrada geral").isEqualTo(entrada);
+            }
+        }
+    }
+
+    /**
+     * Fora do CSRF do navegador so as escritas do APLICATIVO, pela forma exata: troca do codigo, encerramento e PATCH de
+     * renomeacao (dois UUIDs). Qualquer outra escrita sob /api/v1/desktop/ continua no CSRF.
+     */
+    @Test
+    void soAsEscritasDoAplicativoFicamForaDoCsrf() {
+        String automacao = "/api/v1/desktop/organizations/11111111-2222-3333-4444-555555555555/automations/66666666-7777-8888-9999-aaaaaaaaaaaa";
+        assertThat(Routes.isDesktopClient(new MockHttpServletRequest("PATCH", automacao))).isTrue();
+        assertThat(Routes.isDesktopClient(new MockHttpServletRequest("POST", DesktopLoginController.TOKEN))).isTrue();
+        assertThat(Routes.isDesktopClient(new MockHttpServletRequest("POST", DesktopLoginController.REVOKE))).isTrue();
+        for (String[] fora : new String[][] {{"POST", automacao}, {"PUT", automacao}, {"DELETE", automacao}, {"PATCH", automacao + "/versions"},
+                {"PATCH", automacao + "/"}, {"PATCH", automacao.replace("desktop", "de%73ktop")}, {"PATCH", "/api/v1/desktop/organizations/x/automations/y"},
+                {"PATCH", automacao.replace("/api/v1/desktop/organizations", "/api/v1/o")}, {"PATCH", "/api/v1/desktop/organizations"},
+                {"POST", DesktopLoginController.APPROVE}, {"POST", DesktopLoginController.AUTHORIZATIONS}, {"POST", DesktopLoginController.DENY}}) {
+            assertThat(Routes.isDesktopClient(new MockHttpServletRequest(fora[0], fora[1]))).as(fora[0] + " " + fora[1]).isFalse();
+        }
+    }
+
     private static boolean passa(IdentityRoutesGate g, String metodo, String uri) throws Exception {
         MockHttpServletRequest req = new MockHttpServletRequest(metodo, uri);
         req.setServletPath(uri.replace("%6F", "o").replace("%73", "s"));
