@@ -46,6 +46,19 @@ class DesktopNavigationIT extends IdentityTestBase {
     private static final String ORGS = "/api/v1/desktop/organizations";
     private static final String IDENTITY = "identity";
     private static final String NAVIGATION = "identity navigation";
+    private static final String PACKAGES = "identity navigation packages";
+    private static final java.nio.file.Path STORE;
+
+    static {
+        try {
+            STORE = java.nio.file.Files.createTempDirectory("nekkora-desktop-artefatos");
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    @Autowired
+    com.nekkora.platform.artifact.ArtifactStore artifacts;
     private static final String EXTERNAL_RULE = "nekkora-agent/external-python-fingerprint/1";
     private static final String FORBIDDEN = "{\"error\":\"forbidden\"}";
     private static final String NOT_FOUND = "{\"error\":\"not_found\"}";
@@ -63,6 +76,7 @@ class DesktopNavigationIT extends IdentityTestBase {
         r.add("nekkora.desktop-login.enabled", () -> "true");
         r.add("nekkora.criacao-organizacao.enabled", () -> "true");
         r.add("nekkora.convites.enabled", () -> "true");
+        r.add("nekkora.artefatos.dir", STORE::toString);
     }
 
     // ------------------------------------------------------------------ pessoas, organizacoes e convites (rotas reais)
@@ -261,9 +275,13 @@ class DesktopNavigationIT extends IdentityTestBase {
 
     /** Versao com pacote recebido (artefato externo, como a Platform grava): rascunho e, se pedido, publicada. */
     private static Versao versaoComPacote(UUID org, UUID workspace, UUID automation, UUID by, boolean publish, String pacote, String versao) {
+        return versaoComPacote(org, workspace, automation, by, publish, pacote, versao, hex64(), 1234);
+    }
+
+    private static Versao versaoComPacote(UUID org, UUID workspace, UUID automation, UUID by, boolean publish, String pacote, String versao,
+                                          String sha, long tamanho) {
         UUID v = UUID.randomUUID();
         UUID artefato = UUID.randomUUID();
-        String sha = hex64();
         String fp = hex64();
         DB.asSuperuser("INSERT INTO automation_versions (automation_version_id, organization_id, workspace_id, automation_id, status, command_json, "
                         + "created_by_membership_id) VALUES ('" + v + "', '" + org + "', '" + workspace + "', '" + automation + "', 1, "
@@ -273,7 +291,7 @@ class DesktopNavigationIT extends IdentityTestBase {
                 "INSERT INTO automation_artifacts (artifact_id, organization_id, workspace_id, automation_id, automation_version_id, sha256, size_bytes, "
                         + "package_kind, fingerprint_rule, fingerprint, files_count, manifest_version, python_requirement, dependencies, package_name, "
                         + "package_version, storage_key, received_by_membership_id) VALUES ('" + artefato + "', '" + org + "', '" + workspace + "', '" + automation
-                        + "', '" + v + "', '" + sha + "', 1234, 2, '" + EXTERNAL_RULE + "', '" + fp + "', 3, '1.0.0', '>=3.10', '[\"requests==2.31.0\"]'::jsonb, '"
+                        + "', '" + v + "', '" + sha + "', " + tamanho + ", 2, '" + EXTERNAL_RULE + "', '" + fp + "', 3, '1.0.0', '>=3.10', '[\"requests==2.31.0\"]'::jsonb, '"
                         + pacote + "', '" + versao + "', '" + sha + "', '" + by + "')");
         if (publish) {
             DB.asSuperuser("UPDATE automation_versions SET status = 2, published_at = now(), published_by_membership_id = '" + by
@@ -425,7 +443,7 @@ class DesktopNavigationIT extends IdentityTestBase {
         String ana = entrar(c.ana());
         BrowserClient.Response semAuto = get(autos(c.orgA(), c.aVazio()), ana);
         assertThat(semAuto.status()).as(semAuto.body()).isEqualTo(200);
-        assertThat(semAuto.body()).isEqualTo("{\"items\":[],\"nextCursor\":null,\"capabilities\":{\"rename\":true,\"execute\":true}}");
+        assertThat(semAuto.body()).isEqualTo("{\"items\":[],\"nextCursor\":null,\"capabilities\":{\"rename\":true,\"execute\":true,\"download\":false}}");
 
         // automacao sem versao nenhuma: lista de versoes vazia (a automacao existe e e visivel)
         BrowserClient.Response semVersao = get(versoes(c.orgA(), c.semVersao()), ana);
@@ -493,22 +511,24 @@ class DesktopNavigationIT extends IdentityTestBase {
         assertThat(comPacote.get("versionNumber").asInt()).isEqualTo(4);
         assertThat(comPacote.get("publishedAt").asString()).isNotBlank();
         assertThat(comPacote.get("package").toString())
-                .isEqualTo("{\"name\":\"relatorio-modular\",\"version\":\"1.3.0\",\"fingerprint\":\"" + v4.fingerprint() + "\"}");
+                .startsWith("{\"name\":\"relatorio-modular\",\"version\":\"1.3.0\",\"fingerprint\":\"" + v4.fingerprint() + "\",\"sha256\":\"")
+                .endsWith("\",\"sizeBytes\":1234}");
+        assertThat(keys(comPacote.get("package"))).containsExactly("name", "version", "fingerprint", "sha256", "sizeBytes");
         // publicada sem artefato recebido: package nulo; sem versao publicada: latestPublishedVersion nulo
         assertThat(itens.get(4).get("latestPublishedVersion").get("package").isNull()).isTrue();
         assertThat(itens.get(2).get("latestPublishedVersion").isNull()).isTrue();
 
         BrowserClient.Response pagina = get(path + "?limit=2", ana);
         assertThat(keys(json(pagina))).containsExactly("items", "nextCursor", "capabilities");
-        assertThat(json(pagina).get("capabilities").toString()).as("ORG_ADMIN").isEqualTo("{\"rename\":true,\"execute\":true}");
-        assertThat(pagina.body()).as("nada de conteudo, hash de arquivo, comando, criador ou segredo").doesNotContain("sha256").doesNotContain("command")
+        assertThat(json(pagina).get("capabilities").toString()).as("ORG_ADMIN").isEqualTo("{\"rename\":true,\"execute\":true,\"download\":false}");
+        assertThat(pagina.body()).as("nada de conteudo, comando, criador ou segredo").doesNotContain("command")
                 .doesNotContain("storage").doesNotContain("entrypoint").doesNotContain("membership").doesNotContain("dependencies");
 
         // VIEWER na B: ve, nao renomeia nem executa
         BrowserClient.Response naB = get(autos(c.orgB(), c.bCompartilhado()), ana);
         assertThat(naB.status()).as(naB.body()).isEqualTo(200);
         assertThat(field(json(naB).get("items"), "automationId")).containsExactly(c.daBia().toString());
-        assertThat(json(naB).get("capabilities").toString()).as("VIEWER").isEqualTo("{\"rename\":false,\"execute\":false}");
+        assertThat(json(naB).get("capabilities").toString()).as("VIEWER").isEqualTo("{\"rename\":false,\"execute\":false,\"download\":false}");
     }
 
     @Test
@@ -525,7 +545,9 @@ class DesktopNavigationIT extends IdentityTestBase {
         assertThat(itens.get(0).get("publishedAt").isNull()).as("rascunho").isTrue();
         assertThat(itens.get(1).get("publishedAt").asString()).isNotBlank();
         assertThat(itens.get(0).get("package").toString()).as("o rascunho mostra o pacote que tem")
-                .isEqualTo("{\"name\":\"relatorio-modular\",\"version\":\"1.4.0\",\"fingerprint\":\"" + c.versoesComPacote().get(4).fingerprint() + "\"}");
+                .isEqualTo("{\"name\":\"relatorio-modular\",\"version\":\"1.4.0\",\"fingerprint\":\"" + c.versoesComPacote().get(4).fingerprint() + "\",\"sha256\":\""
+                        + value("SELECT sha256 FROM automation_artifacts WHERE automation_version_id = '" + c.versoesComPacote().get(4).id() + "'")
+                        + "\",\"sizeBytes\":1234}");
         assertThat(itens.get(2).get("package").isNull()).as("versao 3: sem artefato recebido").isTrue();
         assertThat(itens.get(4).get("package").get("version").asString()).isEqualTo("1.0.0");
         for (int i = 0; i < 5; i++) {
@@ -533,7 +555,7 @@ class DesktopNavigationIT extends IdentityTestBase {
         }
         BrowserClient.Response primeira = get(path + "?limit=2", ana);
         assertThat(keys(json(primeira))).containsExactly("items", "nextCursor");
-        assertThat(primeira.body()).doesNotContain("sha256").doesNotContain("command").doesNotContain("membership");
+        assertThat(primeira.body()).doesNotContain("command").doesNotContain("storage").doesNotContain("membership");
 
         // mesma visibilidade da rota da Web: automacao ARQUIVADA continua com as versoes legiveis
         assertThat(field(paginas(versoes(c.orgA(), c.velha()), ana, 5), "versionNumber")).containsExactly("1");
@@ -642,12 +664,12 @@ class DesktopNavigationIT extends IdentityTestBase {
         assertErro(rename(c.orgB(), auto, eva1, nome("Sem papel")), 404, NOT_FOUND, "renomear sem papel");
 
         UUID viewer = AccessFixtures.assignWorkspaceRole(c.orgB(), evaEmB, oficina, "VIEWER", c.biaEmB());
-        assertThat(json(get(autos(c.orgB(), oficina), eva1)).get("capabilities").toString()).isEqualTo("{\"rename\":false,\"execute\":false}");
+        assertThat(json(get(autos(c.orgB(), oficina), eva1)).get("capabilities").toString()).isEqualTo("{\"rename\":false,\"execute\":false,\"download\":false}");
         assertErro(rename(c.orgB(), auto, eva1, nome("Pelo viewer")), 403, FORBIDDEN, "VIEWER");
         AccessFixtures.revokeWorkspaceAssignment(viewer, c.biaEmB());
 
         UUID operator = AccessFixtures.assignWorkspaceRole(c.orgB(), evaEmB, oficina, "OPERATOR", c.biaEmB());
-        assertThat(json(get(autos(c.orgB(), oficina), eva1)).get("capabilities").toString()).isEqualTo("{\"rename\":false,\"execute\":true}");
+        assertThat(json(get(autos(c.orgB(), oficina), eva1)).get("capabilities").toString()).isEqualTo("{\"rename\":false,\"execute\":true,\"download\":false}");
         assertErro(rename(c.orgB(), auto, eva1, nome("Pelo operator")), 403, FORBIDDEN, "OPERATOR");
         assertThat(nomeNoBanco(auto)).as("recusas nao renomeiam").isEqualTo("Nome original");
         assertThat(renomeacoes(auto)).isZero();
@@ -656,7 +678,7 @@ class DesktopNavigationIT extends IdentityTestBase {
 
         // WORKSPACE_ADMIN: o MESMO token (sem novo login) passa a poder
         UUID admin = AccessFixtures.assignWorkspaceRole(c.orgB(), evaEmB, oficina, "WORKSPACE_ADMIN", c.biaEmB());
-        assertThat(json(get(autos(c.orgB(), oficina), eva1)).get("capabilities").toString()).isEqualTo("{\"rename\":true,\"execute\":true}");
+        assertThat(json(get(autos(c.orgB(), oficina), eva1)).get("capabilities").toString()).isEqualTo("{\"rename\":true,\"execute\":true,\"download\":false}");
 
         // nome invalido: 400 pela regra da criacao, sem efeito
         String longo = "x".repeat(81);
@@ -769,7 +791,7 @@ class DesktopNavigationIT extends IdentityTestBase {
 
         // papel de volta e depois o VINCULO retirado: a organizacao some da lista e tudo nela e 404
         AccessFixtures.assignWorkspaceRole(c.orgB(), fabioEmB, c.bCompartilhado(), "WORKSPACE_ADMIN", c.biaEmB());
-        assertThat(json(get(autos(c.orgB(), c.bCompartilhado()), token)).get("capabilities").toString()).isEqualTo("{\"rename\":true,\"execute\":true}");
+        assertThat(json(get(autos(c.orgB(), c.bCompartilhado()), token)).get("capabilities").toString()).isEqualTo("{\"rename\":true,\"execute\":true,\"download\":false}");
         DB.asSuperuserIn(c.orgB(), "UPDATE organization_memberships SET status = 4 WHERE membership_id = '" + fabioEmB + "'");
         assertThat(get(ORGS, token).body()).as("vinculo retirado").isEqualTo(VAZIO);
         assertErro(get(ws(c.orgB()), token), 404, NOT_FOUND, "workspaces sem vinculo");
@@ -809,6 +831,139 @@ class DesktopNavigationIT extends IdentityTestBase {
                 + "' AND revoked_at IS NULL");
         assertErro(get(ws(org), token), 401, UNAUTH, "sessao de origem revogada");
         assertErro(get(ORGS, token), 401, UNAUTH, "sessao de origem revogada");
+    }
+
+    // ------------------------------------------------------------------ download do pacote (AGENT-CLIENT-PACOTES-001, contrato /3)
+
+    private String entrarComPacotes(Pessoa p) {
+        BrowserClient.Response t = trocar(p, PACKAGES);
+        assertThat(t.field("scope")).isEqualTo(PACKAGES);
+        return t.field("access_token");
+    }
+
+    private static String pacote(UUID org, UUID automation, UUID version) {
+        return versoes(org, automation) + "/" + version + "/package";
+    }
+
+    private static long downloads(UUID version) throws Exception {
+        return count("SELECT count(*) FROM automation_admin_events WHERE automation_version_id = '" + version + "' AND act = 9");
+    }
+
+    /** Versao publicada com bytes de verdade no armazenamento (texto ASCII: o cliente de teste le o corpo como texto). */
+    private Versao versaoComBytes(UUID org, UUID workspace, UUID automation, UUID by, boolean publish, String versao, String conteudo) throws Exception {
+        byte[] bytes = conteudo.getBytes(StandardCharsets.US_ASCII);
+        String sha = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
+        artifacts.put(org, sha, bytes);
+        return versaoComPacote(org, workspace, automation, by, publish, "pacote-baixavel", versao, sha, bytes.length);
+    }
+
+    /**
+     * Baixar o pacote de uma versao PUBLICADA: so com o escopo de pacotes (o de navegacao nao baixa) e so quem executa ou
+     * gerencia no workspace (quem so le, nao). Ids trocados, rascunho, versao sem pacote e arquivo ausente tem cada um o seu
+     * erro; cada download autorizado e auditado, sem token nem conteudo; nada mais muda.
+     */
+    @Test
+    void baixarPacoteExigeEscopoPermissaoEVersaoPublicada() throws Exception {
+        Cenario c = cenario();
+        UUID ws = AccessFixtures.namedWorkspace(c.orgB(), "Downloads " + UUID.randomUUID().toString().substring(0, 6), 1);
+        UUID auto = ProductFixtures.automation(c.orgB(), ws, null, "Baixavel", c.biaEmB());
+        String conteudo = "PK-pacote-de-teste-" + UUID.randomUUID();
+        // ordem: as publicadas primeiro; so pode haver um rascunho por automacao (032)
+        Versao publicada = versaoComBytes(c.orgB(), ws, auto, c.biaEmB(), true, "1.0.0", conteudo);
+        Versao semArquivo = versaoComPacote(c.orgB(), ws, auto, c.biaEmB(), true, "pacote-baixavel", "0.9.0");
+        UUID semPacote = ProductFixtures.version(c.orgB(), ws, auto, true, c.biaEmB());
+        Versao rascunho = versaoComBytes(c.orgB(), ws, auto, c.biaEmB(), false, "1.1.0", "PK-rascunho-" + UUID.randomUUID());
+        String intacto = versoesEArtefatos(auto);
+
+        // administradora (ORG_ADMIN) com o escopo de pacotes: baixa, com os cabecalhos do contrato
+        String bia = entrarComPacotes(c.bia());
+        BrowserClient.Response r = get(pacote(c.orgB(), auto, publicada.id()), bia);
+        assertThat(r.status()).as(r.body()).isEqualTo(200);
+        assertThat(r.body()).as("os bytes guardados, sem alteracao").isEqualTo(conteudo);
+        assertThat(r.headers().firstValue("Content-Type").orElse("")).isEqualTo("application/zip");
+        assertThat(r.headers().firstValue("Cache-Control").orElse("")).contains("no-store");
+        String sha = value("SELECT sha256 FROM automation_artifacts WHERE automation_version_id = '" + publicada.id() + "'");
+        assertThat(r.headers().firstValue("X-Artifact-Sha256").orElse("")).isEqualTo(sha);
+        assertThat(r.headers().firstValue("X-Package-Fingerprint").orElse("")).isEqualTo(publicada.fingerprint());
+        assertThat(r.headers().firstValue("Content-Disposition").orElse("")).isEqualTo("attachment; filename=\"" + sha + ".zip\"");
+        assertThat(r.headers().firstValue("Content-Length").orElse("")).isEqualTo(String.valueOf(conteudo.length()));
+        assertThat(r.setCookies()).isEmpty();
+        assertThat(r.headers().firstValue("Location")).as("download autenticado direto: sem redirecionamento").isEmpty();
+        // auditado: quem, onde, o que; sem token nem conteudo
+        assertThat(downloads(publicada.id())).isEqualTo(1);
+        assertThat(value("SELECT actor_membership_id || '|' || workspace_id || '|' || automation_id || '|' || (artifact_id IS NOT NULL) FROM automation_admin_events"
+                + " WHERE automation_version_id = '" + publicada.id() + "' AND act = 9"))
+                .isEqualTo(c.biaEmB() + "|" + ws + "|" + auto + "|true");
+        // a lista diz o tamanho e o sha256 do que sera baixado, e a capacidade de baixar
+        JsonNode lista = json(get(versoes(c.orgB(), auto), bia));
+        JsonNode item = null;
+        for (JsonNode v : lista.get("items")) {
+            if (v.get("automationVersionId").asString().equals(publicada.id().toString())) {
+                item = v;
+            }
+        }
+        assertThat(item.get("package").get("sha256").asString()).isEqualTo(sha);
+        assertThat(item.get("package").get("sizeBytes").asLong()).isEqualTo(conteudo.length());
+        assertThat(json(get(autos(c.orgB(), ws), bia)).get("capabilities").toString())
+                .isEqualTo("{\"rename\":true,\"execute\":true,\"download\":true}");
+
+        // o MESMO acesso com o escopo de navegacao (token anterior): 403, nada auditado; a capacidade vem falsa
+        String biaNavegacao = entrar(c.bia());
+        assertErro(get(pacote(c.orgB(), auto, publicada.id()), biaNavegacao), 403, FORBIDDEN, "escopo de navegacao nao baixa");
+        assertThat(json(get(autos(c.orgB(), ws), biaNavegacao)).get("capabilities").get("download").asBoolean()).isFalse();
+        assertErro(get(pacote(c.orgB(), auto, publicada.id()), trocar(c.bia(), IDENTITY).field("access_token")), 403, FORBIDDEN, "escopo identity");
+        assertErro(call(app(), "GET", pacote(c.orgB(), auto, publicada.id()), null, null), 401, UNAUTH, "sem token");
+
+        // quem so LE (VIEWER no workspace): ve a versao e os metadados, e NAO baixa - mesmo com o escopo de pacotes
+        Pessoa leitora = pessoa();
+        convidarEAceitar(c.bia(), c.bCsrf(), c.orgB(), leitora, "VIEWER", ws);
+        String ana = entrarComPacotes(leitora);
+        assertThat(get(versoes(c.orgB(), auto), ana).status()).as("ver metadados continua permitido").isEqualTo(200);
+        assertThat(json(get(autos(c.orgB(), ws), ana)).get("capabilities").toString())
+                .isEqualTo("{\"rename\":false,\"execute\":false,\"download\":false}");
+        assertErro(get(pacote(c.orgB(), auto, publicada.id()), ana), 403, FORBIDDEN, "leitora nao baixa");
+
+        // quem EXECUTA (OPERATOR) baixa; quem perde o papel deixa de baixar na requisicao seguinte
+        Pessoa op = pessoa();
+        convidarEAceitar(c.bia(), c.bCsrf(), c.orgB(), op, "OPERATOR", ws);
+        String operador = entrarComPacotes(op);
+        assertThat(json(get(autos(c.orgB(), ws), operador)).get("capabilities").toString())
+                .isEqualTo("{\"rename\":false,\"execute\":true,\"download\":true}");
+        assertThat(get(pacote(c.orgB(), auto, publicada.id()), operador).body()).isEqualTo(conteudo);
+        assertThat(downloads(publicada.id())).isEqualTo(2);
+        UUID opEmB = vinculoDe(op, c.orgB());
+        String papel = value("SELECT assignment_id FROM workspace_role_assignments WHERE membership_id = '" + opEmB + "' AND status = 1");
+        AccessFixtures.revokeWorkspaceAssignment(UUID.fromString(papel), c.biaEmB());
+        assertErro(get(pacote(c.orgB(), auto, publicada.id()), operador), 404, NOT_FOUND, "papel revogado antes do pedido");
+
+        // ids trocados: organizacao, automacao e versao que nao se pertencem
+        assertErro(get(pacote(c.orgA(), auto, publicada.id()), bia), 404, NOT_FOUND, "organizacao de que nao participa");
+        assertErro(get(pacote(c.orgB(), c.daBia(), publicada.id()), bia), 404, NOT_FOUND, "versao de OUTRA automacao da mesma organizacao");
+        assertErro(get(pacote(c.orgB(), auto, c.versoesComPacote().get(0).id()), bia), 404, NOT_FOUND, "versao de outra organizacao");
+        assertErro(get(pacote(c.orgB(), auto, UUID.randomUUID()), bia), 404, NOT_FOUND, "versao inexistente");
+        assertErro(get(pacote(c.orgB(), UUID.randomUUID(), publicada.id()), bia), 404, NOT_FOUND, "automacao inexistente");
+        assertErro(get(versoes(c.orgB(), auto) + "/nao-e-uuid/package", bia), 400, INVALID, "id malformado");
+        // Ana (ORG_ADMIN da A) nao alcanca a automacao da B pelo caminho da A
+        assertErro(get(pacote(c.orgA(), auto, publicada.id()), entrarComPacotes(c.ana())), 404, NOT_FOUND, "automacao da B pelo caminho da A");
+
+        // rascunho, versao sem pacote e arquivo ausente: 409, sem bytes
+        assertErro(get(pacote(c.orgB(), auto, rascunho.id()), bia), 409, CONFLICT, "rascunho nao e baixado");
+        assertErro(get(pacote(c.orgB(), auto, semPacote), bia), 409, CONFLICT, "versao publicada sem pacote");
+        assertErro(get(pacote(c.orgB(), auto, semArquivo.id()), bia), 409, CONFLICT, "arquivo ausente no armazenamento");
+        // corrompido: os bytes guardados deixam de bater com a chave
+        try (var files = java.nio.file.Files.walk(STORE)) {
+            for (java.nio.file.Path f : files.filter(java.nio.file.Files::isRegularFile).filter(x -> x.getFileName().toString().startsWith(sha)).toList()) {
+                java.nio.file.Files.writeString(f, "adulterado");
+            }
+        }
+        assertErro(get(pacote(c.orgB(), auto, publicada.id()), bia), 409, CONFLICT, "arquivo corrompido no armazenamento");
+        artifacts.put(c.orgB(), sha, conteudo.getBytes(StandardCharsets.US_ASCII));
+
+        // automacao arquivada: 409; so download: nenhuma versao, artefato ou nome mudou
+        assertThat(downloads(rascunho.id()) + downloads(semPacote)).as("recusa por rascunho ou sem pacote nao audita").isZero();
+        assertThat(versoesEArtefatos(auto)).isEqualTo(intacto);
+        exec("UPDATE automations SET status = 3 WHERE automation_id = '" + auto + "'");
+        assertThat(get(pacote(c.orgB(), auto, publicada.id()), bia).status()).as("arquivada").isIn(404, 409);
     }
 
     // ------------------------------------------------------------------ escopo

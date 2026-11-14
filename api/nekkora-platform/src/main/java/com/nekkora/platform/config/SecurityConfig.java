@@ -57,7 +57,9 @@ public class SecurityConfig {
      */
     private static final String[] DESKTOP_NAVIGATION_GET_ROUTES = {
             "/api/v1/desktop/me", "/api/v1/desktop/organizations", "/api/v1/desktop/organizations/*/workspaces",
-            "/api/v1/desktop/organizations/*/workspaces/*/automations", "/api/v1/desktop/organizations/*/automations/*/versions"};
+            "/api/v1/desktop/organizations/*/workspaces/*/automations", "/api/v1/desktop/organizations/*/automations/*/versions",
+            // AGENT-CLIENT-PACOTES-001: pacote de uma versao publicada (escopo e permissao conferidos no servico)
+            "/api/v1/desktop/organizations/*/automations/*/versions/*/package"};
     private static final String DESKTOP_RENAME_ROUTE = "/api/v1/desktop/organizations/*/automations/*";
 
     @Bean

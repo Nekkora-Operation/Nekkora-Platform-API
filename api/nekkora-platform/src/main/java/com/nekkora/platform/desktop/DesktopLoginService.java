@@ -62,6 +62,12 @@ public final class DesktopLoginService {
     public static final String SCOPE = "identity";
     /** Identidade + navegacao (organizacoes, workspaces, automacoes, versoes e renomear automacao). Texto exato. */
     public static final String SCOPE_NAVIGATION = "identity navigation";
+    /**
+     * AGENT-CLIENT-PACOTES-001 (contrato desktop-navigation/3): alem da navegacao, baixar o pacote de uma versao publicada
+     * onde a pessoa ja pode executar ou gerenciar a automacao. Escopo PROPRIO, pedido e aprovado como tal: sessao emitida com
+     * {@code identity navigation} nao baixa nada.
+     */
+    public static final String SCOPE_PACKAGES = "identity navigation packages";
     /** Teto de organizacoes levadas com a sessao (as primeiras, na ordem de {@code identity_organizations}: nome, id). */
     public static final int MAX_ORGANIZATIONS = 200;
     /** So o IP literal de loopback e o caminho fixo; a porta e a unica parte livre (RFC 8252 7.3). */
@@ -95,7 +101,12 @@ public final class DesktopLoginService {
     public record Authenticated(DesktopStore.Session session, String email, String displayName, long expiresIn) {
 
         public boolean navigation() {
-            return SCOPE_NAVIGATION.equals(session.scope());
+            return SCOPE_NAVIGATION.equals(session.scope()) || SCOPE_PACKAGES.equals(session.scope());
+        }
+
+        /** O escopo de download de pacotes, e so ele: o de navegacao nao o inclui. */
+        public boolean packages() {
+            return SCOPE_PACKAGES.equals(session.scope());
         }
     }
 
@@ -140,7 +151,7 @@ public final class DesktopLoginService {
     /** Valida o pedido inteiro e o guarda. Qualquer campo fora da regra: 400, sem redirecionar a lugar nenhum. */
     public Started start(String responseType, String clientId, String redirectUri, String state, String challenge, String method, String scope) {
         // escopo: exatamente um dos dois textos (nenhuma normalizacao de espacos, ordem ou caixa)
-        if (!"code".equals(responseType) || !CLIENT_ID.equals(clientId) || !(SCOPE.equals(scope) || SCOPE_NAVIGATION.equals(scope))) {
+        if (!"code".equals(responseType) || !CLIENT_ID.equals(clientId) || !(SCOPE.equals(scope) || SCOPE_NAVIGATION.equals(scope) || SCOPE_PACKAGES.equals(scope))) {
             throw ApiException.invalid("desktop_pedido");
         }
         // PKCE obrigatorio e so S256: "plain" ou ausencia nunca abrem um pedido (sem downgrade)
@@ -189,7 +200,7 @@ public final class DesktopLoginService {
         requireFull(p);
         Request r = store.takeRequest(requestToken).orElseThrow(() -> new ApiException(ApiError.NOT_FOUND, "desktop_sem_pedido", null));
         // sessao reconferida no banco AGORA, com a identidade travada (ordem da 017), no mesmo commit do evento
-        boolean navigation = SCOPE_NAVIGATION.equals(r.scope());
+        boolean navigation = SCOPE_NAVIGATION.equals(r.scope()) || SCOPE_PACKAGES.equals(r.scope());
         Optional<List<OrgAccount>> ok = tx.inIdentity(new TokenSessao(sessionToken), Mode.READ_WRITE, (id, j) -> {
             if (id.referencia().isEmpty() || !p.sessionId().equals(id.referencia().get()) || !auth.lockIdentity(j, id.identityId())) {
                 return null;

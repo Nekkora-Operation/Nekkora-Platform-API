@@ -6,6 +6,8 @@ import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -38,6 +40,7 @@ public class DesktopNavigationController {
     public static final String AUTOMATIONS = "/api/v1/desktop/organizations/{org}/workspaces/{workspace}/automations";
     public static final String VERSIONS = "/api/v1/desktop/organizations/{org}/automations/{automation}/versions";
     public static final String AUTOMATION = "/api/v1/desktop/organizations/{org}/automations/{automation}";
+    public static final String PACKAGE = "/api/v1/desktop/organizations/{org}/automations/{automation}/versions/{version}/package";
 
     /** Tudo o que e (ou vier a ser) rota de navegacao: a chave do login desktop fecha o prefixo inteiro. */
     static final Pattern ROUTES = Pattern.compile("^/api/v1/desktop/(me|organizations(/.*)?)$");
@@ -102,6 +105,20 @@ public class DesktopNavigationController {
     public ResponseEntity<Map<String, Object>> rename(@PathVariable UUID org, @PathVariable UUID automation,
                                                       @RequestBody(required = false) RenameRequest b, HttpServletRequest req) {
         return noStore(service.renameAutomation(open(req), org, automation, b == null ? null : b.name()));
+    }
+
+    /**
+     * O ZIP da versao publicada, como anexo. O nome do arquivo e o sha256 (nada do cliente nem da automacao vai no cabecalho);
+     * o aplicativo confere tamanho, sha256 e impressao contra o que a lista de versoes informou.
+     */
+    @GetMapping(PACKAGE)
+    public ResponseEntity<byte[]> packageContent(@PathVariable UUID org, @PathVariable UUID automation, @PathVariable UUID version,
+                                                 HttpServletRequest req) {
+        DesktopNavigationService.PackageContent c = service.packageContent(open(req), org, automation, version);
+        return ResponseEntity.ok().contentType(MediaType.parseMediaType("application/zip"))
+                .cacheControl(CacheControl.noStore()).header("Pragma", "no-cache")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + c.sha256() + ".zip\"")
+                .header("X-Artifact-Sha256", c.sha256()).header("X-Package-Fingerprint", c.fingerprint()).body(c.bytes());
     }
 
     private static <T> ResponseEntity<T> noStore(T body) {

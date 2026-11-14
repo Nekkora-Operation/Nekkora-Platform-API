@@ -73,6 +73,10 @@ public final class DesktopNavigationService {
     private static final String MANAGE = "automation.manage";
     private static final String EXECUTE = "automation.execute";
 
+    /** Pacote de uma versao publicada, pronto para a resposta. */
+    public record PackageContent(String sha256, String fingerprint, byte[] bytes) {
+    }
+
     /** Vinculo ativo da pessoa na organizacao, resolvido NESTA transacao. */
     private record Member(UUID organizationId, UUID userId, UUID membershipId) {
     }
@@ -238,7 +242,10 @@ public final class DesktopNavigationService {
                     });
             Map<String, Object> capabilities = new LinkedHashMap<>();
             capabilities.put("rename", access.hasWorkspacePermission(j, org, m.membershipId(), workspace, MANAGE));
-            capabilities.put("execute", access.hasWorkspacePermission(j, org, m.membershipId(), workspace, EXECUTE));
+            boolean execute = access.hasWorkspacePermission(j, org, m.membershipId(), workspace, EXECUTE);
+            capabilities.put("execute", execute);
+            // baixar o pacote: quem executa ou gerencia no workspace E tem o escopo de pacotes nesta sessao (contrato /3)
+            capabilities.put("download", a.packages() && (execute || Boolean.TRUE.equals(capabilities.get("rename"))));
             r.put("capabilities", capabilities);
             return r;
         });
@@ -264,6 +271,25 @@ public final class DesktopNavigationService {
                 return item;
             });
         });
+    }
+
+    // ------------------------------------------------------------------ baixar o pacote de uma versao publicada
+
+    /**
+     * O pacote (ZIP) de uma versao PUBLICADA (contrato desktop-navigation/3). Exige o escopo de pacotes (403 sem ele: o
+     * escopo de navegacao nao baixa nada) e, no workspace da automacao, {@code automation.execute} ou {@code automation.manage}
+     * (403). A conferencia e a auditoria ficam em {@link AutomationLifecycleService#authorizeDownload}, na mesma transacao da
+     * conferencia da pessoa; os bytes sao lidos e conferidos pelo sha256 depois dela.
+     */
+    public PackageContent packageContent(String accessToken, UUID org, UUID automation, UUID version) {
+        Authenticated a = navigation(accessToken);
+        if (!a.packages()) {
+            LOG.info("evento=desktop.escopo_insuficiente motivo=pacotes correlacao={}", RequestContext.correlation());
+            throw ApiException.forbidden("desktop_escopo_pacotes");
+        }
+        AutomationLifecycleService.Artifact artifact = inOrganization(accessToken, a, org, Mode.READ_WRITE,
+                (j, m) -> lifecycle.authorizeDownload(j, org, m.membershipId(), automation, version));
+        return new PackageContent(artifact.sha256(), artifact.fingerprint(), lifecycle.packageBytes(org, artifact));
     }
 
     // ------------------------------------------------------------------ renomear automacao
@@ -354,8 +380,9 @@ public final class DesktopNavigationService {
     // ------------------------------------------------------------------ apoio
 
     /**
-     * Pacote (artefato recebido, 028/030) de cada versao que tem um: o artefato que o comando da versao referencia. So nome,
-     * versao e impressao do pacote; nenhum conteudo, hash de arquivo ou dado de quem enviou.
+     * Pacote (artefato recebido, 028/030) de cada versao que tem um: o artefato que o comando da versao referencia. Nome,
+     * versao e impressao do pacote e, desde o contrato /3, o sha256 e o tamanho do ZIP guardado (o que o aplicativo confere
+     * depois de baixar); nenhum conteudo, hash de arquivo interno ou dado de quem enviou.
      */
     private static Map<UUID, Map<String, Object>> packages(JdbcClient j, UUID org, List<UUID> versions) {
         Map<UUID, Map<String, Object>> out = new HashMap<>();
@@ -363,7 +390,7 @@ public final class DesktopNavigationService {
             return out;
         }
         j.sql("""
-                SELECT v.automation_version_id, x.package_name, x.package_version, x.fingerprint
+                SELECT v.automation_version_id, x.package_name, x.package_version, x.fingerprint, x.sha256, x.size_bytes
                   FROM public.automation_versions v
                   JOIN public.automation_artifacts x ON x.organization_id = v.organization_id AND x.automation_version_id = v.automation_version_id
                                                     AND v.command_json -> 'artifact' ->> 'reference' = 'nekkora-artifact:' || x.artifact_id::text
@@ -373,6 +400,8 @@ public final class DesktopNavigationService {
                     p.put("name", rs.getString(2));
                     p.put("version", rs.getString(3));
                     p.put("fingerprint", rs.getString(4));
+                    p.put("sha256", rs.getString(5));
+                    p.put("sizeBytes", rs.getLong(6));
                     return out.put(rs.getObject(1, UUID.class), p);
                 }).list();
         return out;
