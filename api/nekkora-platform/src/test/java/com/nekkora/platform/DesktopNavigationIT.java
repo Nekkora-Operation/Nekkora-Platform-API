@@ -28,7 +28,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Contexto da pessoa para o aplicativo desktop (AGENT-CLIENT-NAVEGACAO-001, contrato desktop-navigation/1), na Platform real:
- * papel nekkora_platform, PostgreSQL com a 038 e Redis reais. As PESSOAS, as organizacoes e os vinculos nascem pelas rotas
+ * papel nekkora_platform, PostgreSQL com a 039 e Redis reais. As PESSOAS, as organizacoes e os vinculos nascem pelas rotas
  * reais (cadastro, criacao de organizacao, convite aceito); o "aplicativo" e um cliente SEM Origin e SEM cookies, so com o
  * token Bearer do login desktop. Workspaces, automacoes, versoes, pacotes e papeis de workspace sao preparados no banco como
  * superusuario (DECLARADO: preparacao, nao evidencia), assim como as mudancas de estado dos ensaios de revogacao (papel
@@ -211,6 +211,9 @@ class DesktopNavigationIT extends IdentityTestBase {
         return out;
     }
 
+    /** Lista de organizacoes vazia no contrato desktop-navigation/2. */
+    private static final String VAZIO = "{\"items\":[],\"asOf\":\"request\"}";
+
     private static void assertErro(BrowserClient.Response r, int status, String body, String oQue) {
         assertThat(r.status()).as(oQue + ": " + r.body()).isEqualTo(status);
         assertThat(r.body()).as(oQue).isEqualTo(body);
@@ -383,7 +386,8 @@ class DesktopNavigationIT extends IdentityTestBase {
         assertThat(r.status()).as(r.body()).isEqualTo(200);
         assertThat(r.headers().firstValue("Cache-Control").orElse("")).contains("no-store");
         JsonNode b = json(r);
-        assertThat(keys(b)).containsExactly("items");
+        assertThat(keys(b)).containsExactly("items", "asOf");
+        assertThat(b.get("asOf").asString()).isEqualTo("request");
         List<String> esperado = c.orgA().toString().compareTo(c.orgB().toString()) < 0 ? List.of(c.orgA().toString(), c.orgB().toString())
                 : List.of(c.orgB().toString(), c.orgA().toString());
         assertThat(field(b.get("items"), "organizationId")).as("mesmo nome: desempate pelo id").isEqualTo(esperado);
@@ -412,7 +416,7 @@ class DesktopNavigationIT extends IdentityTestBase {
         Cenario c = cenario();
         BrowserClient.Response semOrg = get(ORGS, entrar(c.caio()));
         assertThat(semOrg.status()).isEqualTo(200);
-        assertThat(semOrg.body()).isEqualTo("{\"items\":[]}");
+        assertThat(semOrg.body()).isEqualTo(VAZIO);
 
         BrowserClient.Response semWs = get(ws(c.orgD()), entrar(c.dora()));
         assertThat(semWs.status()).as(semWs.body()).isEqualTo(200);
@@ -706,26 +710,49 @@ class DesktopNavigationIT extends IdentityTestBase {
         assertThat(nomeNoBanco(auto)).isEqualTo("Nome da Bia");
     }
 
-    // ------------------------------------------------------------------ fotografia da aprovacao e revogacao com a tela aberta
+    // ------------------------------------------------------------------ organizacoes atuais e revogacao com a tela aberta
 
     /**
-     * A lista de organizacoes da sessao e a da APROVACAO: organizacao em que a pessoa entrou depois so aparece no login
-     * seguinte. Dentro dela tudo e conferido a cada requisicao: papel revogado, vinculo retirado e sessao do navegador
-     * encerrada valem na requisicao seguinte, com o mesmo token.
+     * Contrato desktop-navigation/2 (AGENT-CLIENT-NAVEGACAO-002): a lista de organizacoes e a de AGORA. Organizacao em que a
+     * pessoa entrou depois do login (convite aceito ou criada por ela) aparece com o MESMO token, sem novo login, e sem
+     * renovar a sessao. Dentro dela tudo e conferido a cada requisicao: papel revogado, vinculo retirado e sessao do
+     * navegador encerrada valem na requisicao seguinte.
      */
     @Test
-    void organizacaoNovaSoNoProximoLoginERevogacaoValeNaRequisicaoSeguinte() throws Exception {
+    void organizacaoNovaApareceSemNovoLoginERevogacaoValeNaRequisicaoSeguinte() throws Exception {
         Cenario c = cenario();
         Pessoa fabio = pessoa();
-        String antes = entrar(fabio);
-        assertThat(get(ORGS, antes).body()).isEqualTo("{\"items\":[]}");
-
-        convidarEAceitar(c.bia(), c.bCsrf(), c.orgB(), fabio, "VIEWER", c.bCompartilhado());
-        assertThat(fabio.browser().get("/api/v1/me/organizations").body()).as("a Web ja mostra").contains(c.orgB().toString());
-        assertThat(get(ORGS, antes).body()).as("a sessao do aplicativo aberta antes nao ganha a organizacao").isEqualTo("{\"items\":[]}");
-        assertErro(get(ws(c.orgB()), antes), 404, NOT_FOUND, "organizacao posterior ao login");
-
         String token = entrar(fabio);
+        assertThat(get(ORGS, token).body()).isEqualTo(VAZIO);
+        assertErro(get(ws(c.orgB()), token), 404, NOT_FOUND, "organizacao de que ainda nao participa");
+        long prazoAntes = json(get("/api/v1/desktop/session", token)).get("expiresIn").asLong();
+
+        // convite aceito DEPOIS do login do aplicativo: aparece na requisicao seguinte, com o mesmo token
+        convidarEAceitar(c.bia(), c.bCsrf(), c.orgB(), fabio, "VIEWER", c.bCompartilhado());
+        assertThat(field(json(get(ORGS, token)).get("items"), "organizationId")).as("convite aceito depois do login").containsExactly(c.orgB().toString());
+
+        // organizacao criada pela propria pessoa depois do login: aparece, aguardando ativacao (nada e ativado)
+        UUID propria = criarOrganizacao(fabio, "Mesma Organizacao");
+        JsonNode lista = json(get(ORGS, token));
+        assertThat(field(lista.get("items"), "organizationId")).containsExactlyInAnyOrder(c.orgB().toString(), propria.toString());
+        lista.get("items").forEach(i -> assertThat(i.get("activationState").asString()).isEqualTo("AGUARDANDO_ATIVACAO"));
+        assertThat(get(ws(propria), token).status()).as("a organizacao nova e navegavel").isEqualTo(200);
+        // a mesma lista e a mesma ordem da Web, agora
+        List<String> web = new ArrayList<>();
+        JSON.readTree(fabio.browser().get("/api/v1/me/organizations").body()).get("organizations").forEach(o -> web.add(o.get("organizationId").asString()));
+        assertThat(field(lista.get("items"), "organizationId")).isEqualTo(web);
+        // homonimas de outras pessoas (A e a da Dora tem outro dono) nao vazam: nem na lista, nem pelo id
+        assertThat(get(ORGS, token).body()).doesNotContain(c.orgA().toString()).doesNotContain(c.orgD().toString());
+        assertErro(get(ws(c.orgA()), token), 404, NOT_FOUND, "organizacao homonima de outra pessoa");
+        assertErro(get(ws(c.orgD()), token), 404, NOT_FOUND, "organizacao de outra pessoa");
+        // quem nao entrou em nada continua sem nada: a leitura atual e por identidade
+        assertThat(get(ORGS, entrar(pessoa())).body()).isEqualTo(VAZIO);
+        // atualizar nao renova a sessao do aplicativo
+        assertThat(json(get("/api/v1/desktop/session", token)).get("expiresIn").asLong()).as("prazo nao cresce").isLessThanOrEqualTo(prazoAntes);
+        // a propria nao interessa ao resto do teste
+        DB.asSuperuser("UPDATE organizations SET status = 2 WHERE organization_id = '" + propria + "'");
+        assertThat(field(json(get(ORGS, token)).get("items"), "organizationId")).containsExactly(c.orgB().toString());
+
         assertThat(field(json(get(ORGS, token)).get("items"), "organizationId")).containsExactly(c.orgB().toString());
         assertThat(field(json(get(ws(c.orgB()), token)).get("items"), "workspaceId")).containsExactly(c.bCompartilhado().toString());
         assertThat(get(autos(c.orgB(), c.bCompartilhado()), token).status()).isEqualTo(200);
@@ -744,7 +771,7 @@ class DesktopNavigationIT extends IdentityTestBase {
         AccessFixtures.assignWorkspaceRole(c.orgB(), fabioEmB, c.bCompartilhado(), "WORKSPACE_ADMIN", c.biaEmB());
         assertThat(json(get(autos(c.orgB(), c.bCompartilhado()), token)).get("capabilities").toString()).isEqualTo("{\"rename\":true,\"execute\":true}");
         DB.asSuperuserIn(c.orgB(), "UPDATE organization_memberships SET status = 4 WHERE membership_id = '" + fabioEmB + "'");
-        assertThat(get(ORGS, token).body()).as("vinculo retirado").isEqualTo("{\"items\":[]}");
+        assertThat(get(ORGS, token).body()).as("vinculo retirado").isEqualTo(VAZIO);
         assertErro(get(ws(c.orgB()), token), 404, NOT_FOUND, "workspaces sem vinculo");
         assertErro(get(autos(c.orgB(), c.bCompartilhado()), token), 404, NOT_FOUND, "automacoes sem vinculo");
         assertErro(rename(c.orgB(), c.daBia(), token, nome("Sem vinculo")), 404, NOT_FOUND, "renomear sem vinculo");
@@ -772,7 +799,7 @@ class DesktopNavigationIT extends IdentityTestBase {
         assertThat(json(get(ws(org), token)).get("items").size()).isEqualTo(1);
 
         DB.asSuperuser("UPDATE organizations SET status = 2 WHERE organization_id = '" + org + "'");
-        assertThat(get(ORGS, token).body()).isEqualTo("{\"items\":[]}");
+        assertThat(get(ORGS, token).body()).isEqualTo(VAZIO);
         assertErro(get(ws(org), token), 404, NOT_FOUND, "organizacao suspensa");
         DB.asSuperuser("UPDATE organizations SET status = 1 WHERE organization_id = '" + org + "'");
         assertThat(json(get(ws(org), token)).get("items").size()).as("reativada: volta, com o mesmo token").isEqualTo(1);
@@ -840,6 +867,23 @@ class DesktopNavigationIT extends IdentityTestBase {
         // encerrada, e 401 (nao 403)
         assertThat(call(app(), "POST", "/api/v1/desktop/session/revoke", "Bearer " + so, null).status()).isEqualTo(204);
         assertErro(get(ORGS, so), 401, UNAUTH, "sessao encerrada");
+    }
+
+    /** O retrato gravado com a sessao nao e autoridade: adulterado para a conta de outra pessoa, nada muda (contrato /2). */
+    @Test
+    void retratoDaSessaoNaoDecideOAcesso() throws Exception {
+        Cenario c = cenario();
+        String token = entrar(c.bia());
+        String chave = "nk:desk:sess:" + Tokens.sha256Hex(token);
+        String[] campos = redis.opsForValue().get(chave).split("\n", -1);
+        campos[4] = c.orgD() + ":" + contaDe(c.dora(), c.orgD());
+        redis.opsForValue().set(chave, String.join("\n", campos), java.time.Duration.ofSeconds(redis.getExpire(chave)));
+        assertThat(field(json(get(ORGS, token)).get("items"), "organizationId")).containsExactly(c.orgB().toString());
+        assertErro(get(ws(c.orgD()), token), 404, NOT_FOUND, "retrato adulterado");
+        // e vazio: a organizacao da propria pessoa continua acessivel
+        campos[4] = "";
+        redis.opsForValue().set(chave, String.join("\n", campos), java.time.Duration.ofSeconds(redis.getExpire(chave)));
+        assertThat(get(ws(c.orgB()), token).status()).isEqualTo(200);
     }
 
     /**

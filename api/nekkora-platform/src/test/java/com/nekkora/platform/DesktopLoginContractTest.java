@@ -139,7 +139,7 @@ class DesktopLoginContractTest {
         Map<String, Object> schemaOf = Map.of(
                 "DesktopPerson", List.of("email", "displayName"),
                 "DesktopOrganization", List.of("organizationId", "name", "handle", "activationState"),
-                "DesktopOrganizationList", List.of("items"),
+                "DesktopOrganizationList", List.of("items", "asOf"),
                 "DesktopWorkspace", List.of("workspaceId", "name"),
                 "DesktopWorkspacePage", List.of("items", "nextCursor"),
                 "DesktopAutomation", List.of("automationId", "name", "latestPublishedVersion"),

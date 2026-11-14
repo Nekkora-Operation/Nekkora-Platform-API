@@ -214,7 +214,8 @@ public final class DesktopLoginService {
     /**
      * Organizacoes elegiveis da pessoa e a conta candidata em cada uma, pelas funcoes da 017 (as mesmas da lista da Web e da
      * troca por sessao de organizacao), na ordem da lista (nome, id) e ate {@link #MAX_ORGANIZATIONS}. Organizacao que a
-     * segunda funcao nao confirma fica fora. E so a candidata: cada requisicao do aplicativo a reconfere no banco.
+     * segunda funcao nao confirma fica fora. Desde o contrato desktop-navigation/2 este retrato nao decide o acesso (ver
+     * {@link DesktopNavigationService}); segue gravado para as instancias da revisao anterior.
      */
     private List<OrgAccount> organizations(JdbcClient j, String sessionToken) {
         List<OrgAccount> out = new ArrayList<>();

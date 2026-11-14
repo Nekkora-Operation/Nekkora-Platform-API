@@ -31,7 +31,7 @@ import com.nekkora.platform.paging.Paging;
 import com.nekkora.platform.web.ProductReads;
 
 /**
- * Contexto da pessoa para o aplicativo desktop (AGENT-CLIENT-NAVEGACAO-001, contrato desktop-navigation/1): quem ela e, em
+ * Contexto da pessoa para o aplicativo desktop (AGENT-CLIENT-NAVEGACAO-001, contratos desktop-navigation/1 e /2): quem ela e, em
  * quais organizacoes esta, e os workspaces, automacoes e versoes que pode ver; mais a renomeacao de automacao. So para
  * sessao do desktop com o escopo {@code identity navigation}.
  *
@@ -39,9 +39,10 @@ import com.nekkora.platform.web.ProductReads;
  * <ol>
  * <li>a sessao do desktop e a sessao de identidade de origem, exatamente como em {@code GET /desktop/session} (401);</li>
  * <li>o escopo da sessao (403 sem navegacao);</li>
- * <li>nas rotas de organizacao: a organizacao do caminho tem de ser uma das que a APROVACAO resolveu para esta sessao (404).
- * O par (organizacao, conta) guardado e so a candidata;</li>
- * <li>numa UNICA transacao com os contextos da identidade e da organizacao ({@link IdentityTransactions#inIdentityAndOrganization}):
+ * <li>nas rotas de organizacao: a conta da pessoa na organizacao do caminho e resolvida AGORA pela funcao
+ * {@code identity_session_organizations} (039), para a identidade e a sessao de origem desta sessao; sem conta elegivel: 404.
+ * (AGENT-CLIENT-NAVEGACAO-002: ate o contrato /1 valia o retrato da aprovacao, e organizacao nova so aparecia no login seguinte);</li>
+ * <li>na MESMA transacao, com os contextos da identidade e da organizacao ({@link IdentityTransactions#inIdentityAndOrganization}):
  * sessao de origem ainda ativa (401); {@code identity_org_session_allowed} (017/029: a conta e desta identidade, a sessao de
  * origem esta ativa e nao restrita, conta interna ativa e verificada, organizacao ativa, vinculo ativo), falso -> 404; vinculo
  * ativo da conta lido das tabelas da organizacao; e entao a MESMA autorizacao e as MESMAS consultas da Web
@@ -122,16 +123,35 @@ public final class DesktopNavigationService {
     }
 
     /**
-     * As organizacoes resolvidas na aprovacao que passam na conferencia de AGORA, cada uma lida no proprio contexto (uma
-     * transacao curta por organizacao, como a lista da Web faz para o identificador). Ordem da lista da Web: nome e id, na
-     * ordenacao do banco. Sem cursor: no maximo {@link DesktopLoginService#MAX_ORGANIZATIONS}.
+     * As organizacoes da pessoa AGORA (contrato desktop-navigation/2): a funcao {@code identity_session_organizations} (039)
+     * resolve, a cada requisicao, os pares (organizacao, conta) elegiveis da identidade desta sessao; cada organizacao e
+     * entao conferida e lida no proprio contexto (uma transacao curta por organizacao, como a lista da Web faz para o
+     * identificador). Ordem: nome e id, na ordenacao do banco. Sem cursor: no maximo
+     * {@link DesktopLoginService#MAX_ORGANIZATIONS}. {@code asOf = "request"} diz ao aplicativo que a lista nao e o retrato
+     * da aprovacao (o contrato /1 nao tinha o campo).
      */
     public Map<String, Object> organizations(String accessToken) {
         Authenticated a = navigation(accessToken);
+        UUID origin = a.session().originSessionId();
+        List<OrgAccount> current;
+        try {
+            current = tx.inIdentity(new SessaoDeOrigem(a.session().identityId(), origin), Mode.READ_ONLY, (id, j) -> {
+                if (!DesktopLoginService.originActive(j, origin)) {
+                    throw new OriginEnded();
+                }
+                return current(j, origin, null, DesktopLoginService.MAX_ORGANIZATIONS + 1);
+            }).orElseThrow(() -> new IllegalStateException("rota do aplicativo sem resultado"));
+        } catch (OriginEnded e) {
+            throw login.ended(accessToken);
+        }
+        if (current.size() > DesktopLoginService.MAX_ORGANIZATIONS) {
+            LOG.warn("evento=desktop.organizacoes_truncadas teto={} correlacao={}", DesktopLoginService.MAX_ORGANIZATIONS, RequestContext.correlation());
+            current = current.subList(0, DesktopLoginService.MAX_ORGANIZATIONS);
+        }
         List<Map<String, Object>> found = new ArrayList<>();
-        for (OrgAccount o : a.session().organizations()) {
+        for (OrgAccount o : current) {
             try {
-                found.add(inOrganization(accessToken, a, o, Mode.READ_ONLY, (j, m) -> {
+                found.add(inOrganization(accessToken, a, o.organizationId(), Mode.READ_ONLY, (j, m) -> {
                     Map<String, Object> item = new LinkedHashMap<>();
                     item.put("organizationId", o.organizationId().toString());
                     item.put("name", j.sql("SELECT name FROM public.organizations WHERE organization_id = ?").param(o.organizationId())
@@ -142,25 +162,23 @@ public final class DesktopNavigationService {
                     return item;
                 }, NoAccess::new));
             } catch (NoAccess e) {
-                // vinculo retirado, conta ou organizacao suspensa depois da aprovacao: some da lista, sem erro
+                // vinculo retirado, conta ou organizacao suspensa entre a lista e a leitura: fica fora, sem erro
             }
         }
         Map<String, Object> r = new LinkedHashMap<>();
-        r.put("items", found.size() < 2 ? found : sorted(a, found));
+        r.put("items", found);
+        r.put("asOf", "request");
         return r;
     }
 
-    /** Ordena por nome e id NO BANCO (mesma ordenacao de {@code identity_organizations}); so parametros, nenhuma tabela. */
-    private List<Map<String, Object>> sorted(Authenticated a, List<Map<String, Object>> items) {
-        String[] names = items.stream().map(i -> (String) i.get("name")).toArray(String[]::new);
-        String[] ids = items.stream().map(i -> (String) i.get("organizationId")).toArray(String[]::new);
-        List<Integer> order = tx.inIdentity(new SessaoDeOrigem(a.session().identityId(), a.session().originSessionId()), Mode.READ_ONLY,
-                (id, j) -> j.sql("SELECT t.i FROM unnest(?::text[], ?::uuid[]) WITH ORDINALITY AS t(name, id, i) ORDER BY t.name, t.id")
-                        .param(names).param(ids).query(Integer.class).list()).orElseThrow();
-        if (order.size() != items.size()) {
-            throw new IllegalStateException("ordenacao das organizacoes devolveu outra quantidade");
-        }
-        return order.stream().map(i -> items.get(i - 1)).toList();
+    /**
+     * Pares (organizacao, conta) elegiveis AGORA para a identidade do contexto desta transacao, pela funcao da 039 (dono da
+     * identidade; a Platform nao le {@code identity_users}). {@code organization} nulo = todas, em ordem de nome e id.
+     */
+    private static List<OrgAccount> current(JdbcClient j, UUID originSession, UUID organization, int limit) {
+        return j.sql("SELECT organization_id, user_id FROM public.identity_session_organizations(?, ?, ?)")
+                .param(originSession).param(organization).param(limit)
+                .query((rs, n) -> new OrgAccount(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class))).list();
     }
 
     // ------------------------------------------------------------------ workspaces, automacoes e versoes
@@ -280,21 +298,24 @@ public final class DesktopNavigationService {
         return a;
     }
 
-    /** Passo 3 pelo id do caminho: organizacao fora da lista desta sessao -> 404, igual a inexistente. */
+    /** Rotas de organizacao pelo id do caminho: sem acesso (ou inexistente) -> 404. */
     private <T> T inOrganization(String accessToken, Authenticated a, UUID org, Mode mode, BiFunction<JdbcClient, Member, T> work) {
-        UUID user = a.session().userIn(org).orElseThrow(DesktopNavigationService::notFound);
-        return inOrganization(accessToken, a, new OrgAccount(org, user), mode, work, DesktopNavigationService::notFound);
+        return inOrganization(accessToken, a, org, mode, work, DesktopNavigationService::notFound);
     }
 
-    /** Passo 4. {@code refused}: o que lancar quando a pessoa nao tem (mais) acesso a organizacao. */
-    private <T> T inOrganization(String accessToken, Authenticated a, OrgAccount o, Mode mode, BiFunction<JdbcClient, Member, T> work,
+    /**
+     * Passos 3 e 4, numa transacao. {@code refused}: o que lancar quando a pessoa nao tem (mais) acesso a organizacao. A
+     * conta da pessoa na organizacao e resolvida AGORA pela funcao da 039 (nada vem do cliente nem do retrato da aprovacao).
+     */
+    private <T> T inOrganization(String accessToken, Authenticated a, UUID org, Mode mode, BiFunction<JdbcClient, Member, T> work,
                                  java.util.function.Supplier<? extends RuntimeException> refused) {
         UUID origin = a.session().originSessionId();
         try {
-            return tx.inIdentityAndOrganization(new SessaoDeOrigem(a.session().identityId(), origin), o.organizationId(), mode, (id, j) -> {
+            return tx.inIdentityAndOrganization(new SessaoDeOrigem(a.session().identityId(), origin), org, mode, (id, j) -> {
                 if (!DesktopLoginService.originActive(j, origin)) {
                     throw new OriginEnded();
                 }
+                OrgAccount o = current(j, origin, org, 1).stream().findFirst().orElseThrow(refused);
                 UUID membership = membership(j, o, origin).orElseThrow(refused);
                 return work.apply(j, new Member(o.organizationId(), o.userId(), membership));
             }).orElseThrow(() -> new IllegalStateException("rota do aplicativo sem resultado"));
