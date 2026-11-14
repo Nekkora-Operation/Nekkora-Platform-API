@@ -1,6 +1,7 @@
 package com.nekkora.platform;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.net.URI;
 import java.net.http.HttpRequest;
@@ -338,6 +339,63 @@ class AutomationLifecycleIT extends PlatformTestBase {
         // outro ZIP do mesmo pacote (outra compactacao): outro artefato, mesma impressao; a versao passa a apontar o novo
         assertThat(putZip(c.admin(), base + "/artifact", PackageInspectorTest.realZip()).status()).isEqualTo(200);
         assertThat(count("SELECT count(DISTINCT fingerprint) FROM automation_artifacts WHERE automation_version_id = '" + d.version() + "'")).isEqualTo(1);
+    }
+
+    /**
+     * AGENT-CLIENT-PREPARACAO-002 (migration 041): pacote Python externo com descritor 1.1. Sem requisito de Python, o artefato e
+     * gravado com python_requirement NULL (nenhuma faixa no lugar) e a resposta diz null; com a versao exata, ela e guardada
+     * como veio. O descritor 1.0 continua exigindo o requisito, e um descritor de versao desconhecida e recusado.
+     */
+    @Test
+    void pacote_externo_sem_requisito_de_python_e_aceito_no_descritor_1_1_e_recusado_no_1_0() throws Exception {
+        Ctx c = login();
+        Draft d = draftWithArtifact(c);
+        String base = c.o() + "/automation-versions/" + d.version();
+        java.util.function.Function<String, byte[]> externo = descriptor -> {
+            try {
+                return PackageInspectorTest.zip(com.nekkora.platform.artifact.PackageInspectorExternalTest.withDescriptor(descriptor));
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        };
+        // 1.0 sem requisito e versao desconhecida: recusados com motivo, e nada muda
+        BrowserClient.Response dez = putZip(c.admin(), base + "/artifact", externo.apply(com.nekkora.platform.artifact.PackageInspectorExternalTest.descriptor11("1.0.0", "")));
+        assertThat(dez.status()).isEqualTo(422);
+        assertThat(dez.body()).isEqualTo("{\"error\":\"package_rejected\",\"reason\":\"python_invalido\"}");
+        assertThat(putZip(c.admin(), base + "/artifact", externo.apply(com.nekkora.platform.artifact.PackageInspectorExternalTest.descriptor11("1.2.0", ""))).body())
+                .contains("manifesto_fora_do_contrato");
+        assertThat(count("SELECT count(*) FROM automation_artifacts WHERE automation_version_id = '" + d.version() + "' AND package_kind = 2")).isZero();
+
+        // 1.1 sem requisito: aceito; NULL no banco e null na resposta
+        BrowserClient.Response sem = putZip(c.admin(), base + "/artifact", externo.apply(com.nekkora.platform.artifact.PackageInspectorExternalTest.descriptor11("1.1.0", "")));
+        assertThat(sem.status()).as(sem.body()).isEqualTo(200);
+        assertThat(sem.body()).contains("\"packageKind\":\"EXTERNAL_PYTHON\"").contains("\"manifestVersion\":\"1.1.0\"").contains("\"pythonRequirement\":null");
+        assertThat(count("SELECT count(*) FROM automation_artifacts WHERE automation_version_id = '" + d.version()
+                + "' AND package_kind = 2 AND manifest_version = '1.1.0' AND python_requirement IS NULL")).isEqualTo(1);
+
+        // 1.1 com versao exata: guardada como veio
+        BrowserClient.Response exata = putZip(c.admin(), base + "/artifact",
+                externo.apply(com.nekkora.platform.artifact.PackageInspectorExternalTest.descriptor11("1.1.0", "\"python\": \"==3.12.0\", ")));
+        assertThat(exata.status()).as(exata.body()).isEqualTo(200);
+        assertThat(exata.body()).contains("\"pythonRequirement\":\"==3.12.0\"");
+
+        // o BANCO recusa por conta propria o que o validador nao deixaria passar. O artefato e imutavel, entao a regra e
+        // conferida numa copia temporaria da linha, com os mesmos CHECKs da tabela (LIKE ... INCLUDING CONSTRAINTS)
+        try (Connection db = DB.connectAsSuperuser(); Statement st = db.createStatement()) {
+            st.execute("CREATE TEMP TABLE regra_041 (LIKE public.automation_artifacts INCLUDING CONSTRAINTS)");
+            st.execute("INSERT INTO regra_041 SELECT * FROM public.automation_artifacts WHERE automation_version_id = '" + d.version()
+                    + "' AND package_kind = 2 AND python_requirement IS NULL");
+            for (String errado : List.of("manifest_version = '1.0.0', python_requirement = NULL", "manifest_version = '1.0.0', python_requirement = '==3.12.0'",
+                    "manifest_version = '1.1.0', python_requirement = '>=0'", "manifest_version = '1.2.0', python_requirement = NULL",
+                    "manifest_version = '1.1.0', python_requirement = ''")) {
+                assertThatThrownBy(() -> st.executeUpdate("UPDATE regra_041 SET " + errado)).as(errado).isInstanceOf(SQLException.class)
+                        .satisfies(e -> assertThat(((SQLException) e).getSQLState()).isEqualTo("23514"));
+            }
+            for (String certo : List.of("manifest_version = '1.1.0', python_requirement = '==3.12.0'", "manifest_version = '1.0.0', python_requirement = '>=3.10,<3.14'",
+                    "manifest_version = '1.1.3', python_requirement = NULL")) {
+                assertThat(st.executeUpdate("UPDATE regra_041 SET " + certo)).as(certo).isEqualTo(1);
+            }
+        }
     }
 
     // =========================================================================== apoio
