@@ -51,6 +51,15 @@ public class SecurityConfig {
             "/api/v1/desktop/authorizations", "/api/v1/desktop/authorization/deny", "/api/v1/desktop/token",
             "/api/v1/desktop/session/revoke"};
 
+    /**
+     * Navegacao do aplicativo desktop (AGENT-CLIENT-NAVEGACAO-001): so estas formas e metodos. O token Bearer, o escopo e o
+     * acesso a organizacao sao conferidos no servico, a cada requisicao; nenhum cookie e lido nelas.
+     */
+    private static final String[] DESKTOP_NAVIGATION_GET_ROUTES = {
+            "/api/v1/desktop/me", "/api/v1/desktop/organizations", "/api/v1/desktop/organizations/*/workspaces",
+            "/api/v1/desktop/organizations/*/workspaces/*/automations", "/api/v1/desktop/organizations/*/automations/*/versions"};
+    private static final String DESKTOP_RENAME_ROUTE = "/api/v1/desktop/organizations/*/automations/*";
+
     @Bean
     SecurityFilterChain apiSecurityFilterChain(HttpSecurity http, OrgTransactions tx, SessionRepository sessions, Limits limits, PreAuthCsrf pre,
                                MfaRepository mfa, PlatformProperties p, IdentitySessionResolver identities) throws Exception {
@@ -65,6 +74,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/csrf").permitAll()
                         // sessao do aplicativo desktop: token Bearer conferido no servico (Redis + sessao de origem no banco)
                         .requestMatchers(HttpMethod.GET, "/api/v1/desktop/session").permitAll()
+                        .requestMatchers(HttpMethod.GET, DESKTOP_NAVIGATION_GET_ROUTES).permitAll()
+                        .requestMatchers(HttpMethod.PATCH, DESKTOP_RENAME_ROUTE).permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLIC_POST_ROUTES).permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())

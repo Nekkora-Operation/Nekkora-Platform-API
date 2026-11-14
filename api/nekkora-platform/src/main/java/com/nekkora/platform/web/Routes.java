@@ -114,12 +114,15 @@ public final class Routes {
 
     /**
      * Rotas do aplicativo desktop que alteram estado SEM credencial de navegador: a troca do codigo (codigo + verificador
-     * PKCE) e o encerramento (token Bearer). Um cliente nativo nao envia Origin, e nenhum cookie e lido nelas, entao nao
-     * ha o que o CSRF proteger. Comparacao exata da URI.
+     * PKCE), o encerramento (token Bearer) e a renomeacao de automacao (PATCH com o token Bearer; AGENT-CLIENT-NAVEGACAO-001).
+     * Um cliente nativo nao envia Origin, e nenhum cookie e lido nelas, entao nao ha o que o CSRF proteger. Comparacao exata
+     * da URI crua; a renomeacao, pela forma exata do caminho (dois UUIDs) E pelo metodo: qualquer outra escrita sob
+     * /api/v1/desktop/ continua no CSRF.
      */
     public static boolean isDesktopClient(HttpServletRequest req) {
         String r = req.getRequestURI();
-        return DesktopLoginController.TOKEN.equals(r) || DesktopLoginController.REVOKE.equals(r);
+        return DesktopLoginController.TOKEN.equals(r) || DesktopLoginController.REVOKE.equals(r)
+                || ("PATCH".equals(req.getMethod()) && DesktopNavigationController.RENAME.matcher(r).matches());
     }
 
     public static boolean isWrite(HttpServletRequest req) {
