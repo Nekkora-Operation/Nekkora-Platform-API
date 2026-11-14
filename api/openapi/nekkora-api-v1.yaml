@@ -922,6 +922,43 @@ paths:
         '500': { $ref: '#/components/responses/CatalogInconsistent' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /api/v1/desktop/organizations/{org}/automations/{automation}/versions/{version}/package:
+    get:
+      tags: [Login do aplicativo desktop]
+      operationId: desktopVersionPackage
+      summary: 'Aplicativo: baixar o pacote (ZIP) de uma versao publicada'
+      description: >
+        AGENT-CLIENT-PACOTES-001, contrato desktop-navigation/3. Exige sessao do aplicativo com o escopo
+        "identity navigation packages" (a sessao de escopo "identity navigation" recebe 403: token anterior nao ganha o
+        download) e, no workspace da automacao, automation.execute ou automation.manage (quem so tem automation.read ve os
+        metadados e recebe 403 aqui). Identidade, organizacao, vinculo, automacao, versao e permissao sao conferidos a cada
+        requisicao; nada alem dos ids do caminho vem do aplicativo. Organizacao, automacao ou versao fora do alcance, ou
+        versao de outra automacao: 404. Automacao ou workspace inativo, versao nao publicada, versao sem pacote, ou arquivo
+        ausente ou corrompido no armazenamento: 409, sem bytes. Resposta: os bytes guardados, relidos e conferidos pelo
+        sha256, direto desta rota (sem redirecionamento e sem URL temporaria); Content-Length, Cache-Control no-store,
+        X-Artifact-Sha256 e X-Package-Fingerprint, iguais ao sha256 e ao fingerprint que a lista de versoes informa. Cada
+        download autorizado e auditado (ato 9 da 040), sem token, URL ou conteudo. A rota nao executa, nao publica e nao
+        altera a versao.
+      security: [ { desktopBearer: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/DesktopOrg' }
+        - { name: automation, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+        - { name: version, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+      responses:
+        '200':
+          description: 'ZIP da versao publicada'
+          headers:
+            X-Artifact-Sha256: { schema: { type: string, pattern: '^[0-9a-f]{64}$' }, description: 'sha256 dos bytes' }
+            X-Package-Fingerprint: { schema: { type: string, pattern: '^[0-9a-f]{64}$' }, description: 'impressao do pacote' }
+          content: { application/zip: { schema: { type: string, format: binary } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/DesktopScopeForbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/CatalogInconsistent' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /api/v1/desktop/organizations/{org}/automations/{automation}:
     patch:
       tags: [Login do aplicativo desktop]
@@ -2470,7 +2507,7 @@ components:
     desktopBearer:
       type: http
       scheme: bearer
-      description: 'Token opaco da sessao do aplicativo desktop (15 min, sem renovacao), com o escopo que a pessoa aprovou: "identity" (so /api/v1/desktop/session e /api/v1/desktop/session/revoke) ou "identity navigation" (tambem /api/v1/desktop/me e /api/v1/desktop/organizations...). Sessao emitida com "identity" nao ganha o outro escopo. So vale em /api/v1/desktop/; nao autentica nenhuma outra rota, nem o canal das maquinas.'
+      description: 'Token opaco da sessao do aplicativo desktop (15 min, sem renovacao), com o escopo que a pessoa aprovou: "identity" (so /api/v1/desktop/session e /api/v1/desktop/session/revoke) "identity navigation" (tambem /api/v1/desktop/me e /api/v1/desktop/organizations...) ou "identity navigation packages" (tambem o download do pacote de versao publicada). Sessao emitida com um escopo nao ganha outro. So vale em /api/v1/desktop/; nao autentica nenhuma outra rota, nem o canal das maquinas.'
     csrfHeader:
       type: apiKey
       in: header
@@ -2515,7 +2552,7 @@ components:
     CatalogInconsistent: { description: 'Codigo de papel, permissao ou rotulo de status desconhecido, ou permissao organizacional em papel de workspace (nunca omitido silenciosamente)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: internal_error } } } }
     WorkspaceNameTaken: { description: 'Ja existe um workspace com esse nome nesta organizacao (031; maiusculas/minusculas e espacos nas extremidades nao distinguem). Codigo conflict (o cliente que nao conhece o motivo ve a recusa comum) com reason workspace_name_taken', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: conflict, reason: workspace_name_taken } } } }
     LocalRunAuthorizationConflict: { description: 'O ato nao cabe no estado atual. Com reason local_run_authorization_exists (T12, 033): o escopo ja tem uma autorizacao vigente, nada foi gravado. Sem reason: as recusas da 025/030 (versao nao publicada ou sem impressao, Worker sem autorizacao no workspace, automacao ou workspace inativo). O cliente que nao conhece o motivo ve a recusa comum', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: conflict, reason: local_run_authorization_exists } } } }
-    DesktopScopeForbidden: { description: 'Rotas de navegacao do aplicativo: a sessao do desktop nao tem o escopo "identity navigation" (login feito com "identity"); entre de novo pedindo o escopo. Na renomeacao tambem: automacao visivel sem automation.manage no workspace', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
+    DesktopScopeForbidden: { description: 'Rotas de navegacao do aplicativo: a sessao do desktop nao tem o escopo exigido ("identity navigation"; no download do pacote, "identity navigation packages"); entre de novo pedindo o escopo. Na renomeacao tambem: automacao visivel sem automation.manage no workspace. No download tambem: automacao visivel sem automation.execute nem automation.manage', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
     Conflict: { description: 'O estado atual impede o ato (convite pendente, destinataria ja cadastrada, concessao duplicada ou fora do estado, papel ja ativo, vinculo inativo)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: conflict } } } }
     RateLimited:
       description: Limite R7
@@ -2748,8 +2785,8 @@ components:
         state: { type: string, pattern: '^[A-Za-z0-9_-]{22,128}$' }
         codeChallenge: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
         codeChallengeMethod: { type: string, enum: [S256] }
-        scope: { type: string, enum: [identity, identity navigation], description: 'Texto exato. identity: a propria conta. identity navigation: tambem as rotas de navegacao (desktop-navigation/1)' }
-    DesktopAuthorizationPending: { type: object, required: [application, account, scope], properties: { application: { type: string }, account: { $ref: '#/components/schemas/DesktopAccount' }, scope: { type: string, enum: [identity, identity navigation], description: 'O escopo pedido, para a pagina de confirmacao' } } }
+        scope: { type: string, enum: [identity, identity navigation, identity navigation packages], description: 'Texto exato. identity: a propria conta. identity navigation: tambem as rotas de navegacao (desktop-navigation/1)' }
+    DesktopAuthorizationPending: { type: object, required: [application, account, scope], properties: { application: { type: string }, account: { $ref: '#/components/schemas/DesktopAccount' }, scope: { type: string, enum: [identity, identity navigation, identity navigation packages], description: 'O escopo pedido, para a pagina de confirmacao' } } }
     DesktopAccount: { type: object, required: [email], properties: { email: { type: string } } }
     DesktopRedirect: { type: object, required: [redirectTo], properties: { redirectTo: { type: string, description: 'Sempre http://127.0.0.1:<porta>/callback?..., montado pelo servidor' } } }
     DesktopTokenRequest:
@@ -2761,18 +2798,18 @@ components:
         redirect_uri: { type: string }
         client_id: { type: string }
         code_verifier: { type: string, pattern: '^[A-Za-z0-9._~-]{43,128}$' }
-    DesktopToken: { type: object, required: [access_token, token_type, expires_in, scope], properties: { access_token: { type: string }, token_type: { type: string, enum: [Bearer] }, expires_in: { type: integer }, scope: { type: string, enum: [identity, identity navigation] } } }
+    DesktopToken: { type: object, required: [access_token, token_type, expires_in, scope], properties: { access_token: { type: string }, token_type: { type: string, enum: [Bearer] }, expires_in: { type: integer }, scope: { type: string, enum: [identity, identity navigation, identity navigation packages] } } }
     DesktopTokenError: { type: object, required: [error], properties: { error: { type: string, enum: [invalid_request, invalid_client, invalid_grant, unsupported_grant_type] } } }
-    DesktopSession: { type: object, required: [account, scope, expiresIn], properties: { account: { $ref: '#/components/schemas/DesktopAccount' }, scope: { type: string, enum: [identity, identity navigation] }, expiresIn: { type: integer, description: 'Segundos que restam; nao aumenta com o uso' } } }
+    DesktopSession: { type: object, required: [account, scope, expiresIn], properties: { account: { $ref: '#/components/schemas/DesktopAccount' }, scope: { type: string, enum: [identity, identity navigation, identity navigation packages] }, expiresIn: { type: integer, description: 'Segundos que restam; nao aumenta com o uso' } } }
     DesktopPerson: { type: object, required: [email, displayName], properties: { email: { type: string }, displayName: { type: string } } }
     DesktopOrganization: { type: object, required: [organizationId, name, handle, activationState], properties: { organizationId: { type: string, format: uuid }, name: { type: string, description: 'Nao e unico entre organizacoes' }, handle: { type: [string, 'null'], description: 'Identificador legivel e estavel da organizacao (034)' }, activationState: { type: string, enum: [AGUARDANDO_ATIVACAO, ATIVADA] } } }
     DesktopOrganizationList: { type: object, required: [items, asOf], properties: { items: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/DesktopOrganization' } }, asOf: { type: string, enum: [request], description: 'request: lista resolvida nesta requisicao (desktop-navigation/2). Ausente em servidor do contrato /1, em que a lista era a da aprovacao do login' } } }
     DesktopWorkspace: { type: object, required: [workspaceId, name], properties: { workspaceId: { type: string, format: uuid }, name: { type: string } } }
     DesktopWorkspacePage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/DesktopWorkspace' } }, nextCursor: { type: [string, 'null'] } } }
-    DesktopPackage: { type: object, required: [name, version, fingerprint], properties: { name: { type: [string, 'null'] }, version: { type: [string, 'null'] }, fingerprint: { type: [string, 'null'], description: 'Impressao do pacote calculada pelo servidor (64 hex)' } } }
+    DesktopPackage: { type: object, required: [name, version, fingerprint, sha256, sizeBytes], properties: { name: { type: [string, 'null'] }, version: { type: [string, 'null'] }, fingerprint: { type: [string, 'null'], description: 'Impressao do pacote calculada pelo servidor (64 hex)' }, sha256: { type: string, pattern: '^[0-9a-f]{64}$', description: 'Contrato /3: sha256 do ZIP guardado; o aplicativo confere depois de baixar' }, sizeBytes: { type: integer, format: int64, description: 'Contrato /3: tamanho do ZIP guardado, em bytes' } } }
     DesktopPublishedVersion: { type: object, required: [automationVersionId, versionNumber, publishedAt, package], properties: { automationVersionId: { type: string, format: uuid }, versionNumber: { type: integer }, publishedAt: { type: string, format: date-time }, package: { oneOf: [ { $ref: '#/components/schemas/DesktopPackage' }, { type: 'null' } ] } } }
     DesktopAutomation: { type: object, required: [automationId, name, latestPublishedVersion], properties: { automationId: { type: string, format: uuid }, name: { type: string }, latestPublishedVersion: { oneOf: [ { $ref: '#/components/schemas/DesktopPublishedVersion' }, { type: 'null' } ] } } }
-    DesktopCapabilities: { type: object, required: [rename, execute], properties: { rename: { type: boolean, description: 'automation.manage no workspace' }, execute: { type: boolean, description: 'automation.execute no workspace' } } }
+    DesktopCapabilities: { type: object, required: [rename, execute, download], properties: { rename: { type: boolean, description: 'automation.manage no workspace' }, execute: { type: boolean, description: 'automation.execute no workspace' }, download: { type: boolean, description: 'Contrato /3: a sessao tem o escopo de pacotes E a pessoa tem automation.execute ou automation.manage no workspace. Ausente em servidor anterior' } } }
     DesktopAutomationPage: { type: object, required: [items, nextCursor, capabilities], properties: { items: { type: array, items: { $ref: '#/components/schemas/DesktopAutomation' } }, nextCursor: { type: [string, 'null'] }, capabilities: { $ref: '#/components/schemas/DesktopCapabilities' } } }
     DesktopAutomationVersion: { type: object, required: [automationVersionId, versionNumber, status, publishedAt, package], properties: { automationVersionId: { type: string, format: uuid }, versionNumber: { type: integer }, status: { type: string, enum: [draft, published] }, publishedAt: { type: [string, 'null'], format: date-time }, package: { oneOf: [ { $ref: '#/components/schemas/DesktopPackage' }, { type: 'null' } ] } } }
     DesktopAutomationVersionPage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/DesktopAutomationVersion' } }, nextCursor: { type: [string, 'null'] } } }

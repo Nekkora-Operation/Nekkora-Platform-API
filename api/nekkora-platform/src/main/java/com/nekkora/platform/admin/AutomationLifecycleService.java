@@ -476,6 +476,55 @@ public final class AutomationLifecycleService {
         return new Content(v.artifact().sha256(), verifiedBytes(org, v.artifact()));
     }
 
+    /**
+     * Download do pacote de uma versao PUBLICADA pelo aplicativo desktop (AGENT-CLIENT-PACOTES-001; ato 9 da 040). Roda DENTRO
+     * da transacao de quem chama, que ja tem o contexto da organizacao e ja conferiu a pessoa (sessao do desktop, sessao de
+     * identidade de origem e vinculo ativo). Nada vem do cliente alem dos ids do caminho.
+     * <p>
+     * Ver metadados, baixar o codigo e executar sao coisas diferentes: quem so tem {@code automation.read} ve a versao e NAO
+     * baixa. Baixa quem, no workspace da automacao, tem {@code automation.execute} (vai executar) ou {@code automation.manage}
+     * (a mesma permissao do download pela Web). Fora do alcance de leitura, inexistente, de outra organizacao ou versao de
+     * outra automacao -> 404; visivel sem permissao de download -> 403; automacao ou workspace inativo, versao nao publicada
+     * ou sem pacote -> 409. O ato e auditado aqui (sem token, URL nem conteudo); os bytes sao lidos depois, por
+     * {@link #packageBytes}.
+     */
+    public Artifact authorizeDownload(JdbcClient j, UUID org, UUID membership, UUID automation, UUID versionId) {
+        requireStore();
+        UUID workspace = access.requireAutomation(j, org, membership, automation, "automation.read");
+        if (!access.hasWorkspacePermission(j, org, membership, workspace, "automation.execute")
+                && !access.hasWorkspacePermission(j, org, membership, workspace, "automation.manage")) {
+            LOG.info("evento=acesso.negado regra=PERMISSION motivo=automation.download correlacao={}", RequestContext.correlation());
+            throw ApiException.forbidden("automation.download");
+        }
+        boolean active = Boolean.TRUE.equals(j.sql("SELECT a.status = 1 AND (SELECT w.status FROM public.workspaces w WHERE w.organization_id = a.organization_id "
+                        + "AND w.workspace_id = a.workspace_id) = 1 FROM public.automations a WHERE a.organization_id = ? AND a.automation_id = ?")
+                .param(org).param(automation).query(Boolean.class).optional().orElse(false));
+        if (!active) {
+            throw new ApiException(ApiError.CONFLICT, "automacao_ou_workspace_inativo");
+        }
+        // a versao tem de ser DESTA automacao, nesta organizacao: de outra, ou inexistente, e a mesma resposta
+        UUID dona = j.sql("SELECT automation_id FROM public.automation_versions WHERE organization_id = ? AND automation_version_id = ?")
+                .param(org).param(versionId).query(UUID.class).optional().orElse(null);
+        if (!automation.equals(dona)) {
+            throw new ApiException(ApiError.NOT_FOUND, "versao");
+        }
+        Version v = version(j, org, versionId);
+        if (!"PUBLISHED".equals(v.status())) {
+            throw new ApiException(ApiError.CONFLICT, "versao_nao_publicada");
+        }
+        if (v.artifact() == null) {
+            throw new ApiException(ApiError.CONFLICT, "versao_sem_pacote");
+        }
+        audit(j, org, 9, membership, workspace, automation, versionId, v.artifact().artifactId());
+        LOG.info("evento=automacao.pacote_baixado versao={} correlacao={}", versionId, RequestContext.correlation());
+        return v.artifact();
+    }
+
+    /** Os bytes preservados do artefato, relidos e conferidos pelo sha256: ausente ou corrompido, 409; armazenamento fora, 503. */
+    public byte[] packageBytes(UUID org, Artifact artifact) {
+        return verifiedBytes(org, artifact);
+    }
+
     // ------------------------------------------------------------------ publicacao
 
     /**
