@@ -2,17 +2,23 @@
 # Volume nomeado proprio da stack (descartavel com ela); sem esta sobreposicao, as rotas de artefato respondem 503.
 volumes:
   artefatos: {}
+  # PLATFORM-CLIENT-EXECUCAO-REMOTA-001 (T03b): resultados das execucoes remotas. O gateway GRAVA; a Platform LE.
+  resultados: {}
 
 services:
   platform:
     environment:
       NEKKORA_ARTEFATOS_DIR: /var/lib/nekkora/artefatos
+      NEKKORA_RESULTADOS_DIR: /var/lib/nekkora/resultados
     volumes:
       - artefatos:/var/lib/nekkora/artefatos
+      - resultados:/var/lib/nekkora/resultados:ro
   # PLATFORM-CLIENT-EXECUCAO-REMOTA-001 (T03): o gateway LE os pacotes publicados para entrega-los a maquina da tentativa.
   # A mesma pasta da Platform, montada so para leitura.
   agent-gateway:
     environment:
       NEKKORA_ARTEFATOS_DIR: /var/lib/nekkora/artefatos
+      NEKKORA_RESULTADOS_DIR: /var/lib/nekkora/resultados
     volumes:
       - artefatos:/var/lib/nekkora/artefatos:ro
+      - resultados:/var/lib/nekkora/resultados

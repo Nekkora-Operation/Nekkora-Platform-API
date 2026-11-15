@@ -212,6 +212,51 @@ public class GatewayController {
     static final String ATTEMPT_TOKEN_HEADER = "Nekkora-Attempt-Token";
     static final String ATTEMPT_EPOCH_HEADER = "Nekkora-Attempt-Epoch";
 
+    static final String RESULT_NAME_HEADER = "Nekkora-Result-Name";
+    static final String RESULT_SHA_HEADER = "Nekkora-Result-Sha256";
+
+    private static Integer epochHeader(HttpServletRequest req) {
+        try {
+            return req.getHeader(ATTEMPT_EPOCH_HEADER) == null ? null : Integer.valueOf(req.getHeader(ATTEMPT_EPOCH_HEADER));
+        } catch (NumberFormatException e) {
+            throw ApiException.invalid("epoca");
+        }
+    }
+
+    /** T03b: um arquivo de resultado da tentativa. O nome vai no cabecalho, em UTF-8 com escape de URL; os bytes, no corpo. */
+    @org.springframework.web.bind.annotation.PutMapping("/agent/api/v1/remote/attempts/{attempt}/results/{number}")
+    public ResponseEntity<RemoteDelivery.StoredResult> remoteResult(@PathVariable String attempt, @PathVariable String number,
+                                                                    @RequestBody(required = false) byte[] body, HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(attempt);
+        int n;
+        String name;
+        try {
+            n = Integer.parseInt(number);
+            name = req.getHeader(RESULT_NAME_HEADER) == null ? null
+                    : java.net.URLDecoder.decode(req.getHeader(RESULT_NAME_HEADER).replace("+", "%2B"), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            throw ApiException.invalid("resultado");
+        }
+        Integer epoch = epochHeader(req);
+        byte[] data = body == null ? new byte[0] : body;
+        RemoteDelivery.StoredResult r = authenticated(req, () -> delivery.storeResult(t, id, req.getHeader(ATTEMPT_TOKEN_HEADER), epoch, n, name,
+                req.getHeader(RESULT_SHA_HEADER), data));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
+    }
+
+    /** T03b: fecha o envio de resultados. Corpo: {@code {"token", "epoch", "sent", "skippedByLimit"}}. */
+    @PostMapping("/agent/api/v1/remote/attempts/{attempt}/results/complete")
+    public ResponseEntity<RemoteDelivery.ResultsClosure> remoteResultsComplete(@PathVariable String attempt, @RequestBody(required = false) String body,
+                                                                               HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(attempt);
+        JsonNode n = parse(body);
+        RemoteDelivery.ResultsClosure c = authenticated(req, () -> delivery.closeResults(t, id, text(n, "token"), integer(n, "epoch"), integer(n, "sent"),
+                integer(n, "skippedByLimit")));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(c);
+    }
+
     /** T03: o pacote da versao fixada na tentativa, so para a maquina que a recebeu e so antes do inicio. */
     @GetMapping("/agent/api/v1/remote/attempts/{attempt}/package")
     public ResponseEntity<byte[]> remotePackage(@PathVariable String attempt, HttpServletRequest req) {

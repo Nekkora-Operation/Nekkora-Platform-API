@@ -5,6 +5,8 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.http.CacheControl;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.MediaType;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -87,6 +89,26 @@ public class RemoteExecutionController {
     public ResponseEntity<RemoteExecutionService.Execution> get(@PathVariable UUID org, @PathVariable UUID execution, HttpServletRequest req) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(service.get(org, SessionFilter.principal(req), SessionFilter.token(req), execution));
+    }
+
+    /** T03b: os arquivos de resultado de uma tentativa e o fechamento do envio (logs.read). */
+    @GetMapping("/api/v1/o/{org}/remote-executions/{execution}/attempts/{attempt}/results")
+    public ResponseEntity<RemoteExecutionService.Results> results(@PathVariable UUID org, @PathVariable UUID execution, @PathVariable UUID attempt,
+                                                                  HttpServletRequest req) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(service.results(org, SessionFilter.principal(req), SessionFilter.token(req), execution, attempt));
+    }
+
+    /** T03b: os bytes de um arquivo de resultado, como anexo; nunca interpretado pelo navegador. */
+    @GetMapping("/api/v1/o/{org}/remote-executions/{execution}/attempts/{attempt}/results/{number}/content")
+    public ResponseEntity<byte[]> resultContent(@PathVariable UUID org, @PathVariable UUID execution, @PathVariable UUID attempt, @PathVariable int number,
+                                                HttpServletRequest req) {
+        RemoteExecutionService.ResultContent c = service.resultContent(org, SessionFilter.principal(req), SessionFilter.token(req), execution, attempt, number);
+        String base = c.fileName().substring(c.fileName().lastIndexOf('/') + 1);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .header("Content-Disposition", ContentDisposition.attachment().filename(base, java.nio.charset.StandardCharsets.UTF_8)
+                        .build().toString())
+                .header("X-Content-Type-Options", "nosniff").header("Nekkora-Result-Sha256", c.sha256()).body(c.bytes());
     }
 
     @PostMapping("/api/v1/o/{org}/remote-executions/{execution}/cancel")

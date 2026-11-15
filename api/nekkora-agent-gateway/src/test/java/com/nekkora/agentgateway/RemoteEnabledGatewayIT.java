@@ -21,6 +21,17 @@ abstract class RemoteEnabledGatewayIT {
     /** A pasta dos pacotes publicados (a mesma que a Platform usaria), so deste contexto de teste. */
     static final java.nio.file.Path PACKAGES = packages();
 
+    /** A pasta dos resultados das execucoes remotas, so deste contexto de teste. */
+    static final java.nio.file.Path RESULTS = results();
+
+    private static java.nio.file.Path results() {
+        try {
+            return java.nio.file.Files.createTempDirectory("gateway-resultados");
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     private static java.nio.file.Path packages() {
         try {
             return java.nio.file.Files.createTempDirectory("gateway-pacotes");
@@ -45,5 +56,6 @@ abstract class RemoteEnabledGatewayIT {
         r.add("nekkora.limits.redeem-failures-per-hour", () -> "1000");
         r.add("nekkora.remote-execution.enabled", () -> "true");
         r.add("nekkora.artefatos.dir", PACKAGES::toString);
+        r.add("nekkora.resultados.dir", RESULTS::toString);
     }
 }

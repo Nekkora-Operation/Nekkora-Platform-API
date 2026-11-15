@@ -79,10 +79,20 @@ public final class RemoteDelivery {
     private final MachineAuth auth;
     private final int leaseSeconds;
     private final com.nekkora.core.artifact.ArtifactStore packages;
+    private final com.nekkora.core.artifact.ResultStore results;
+    /** Limites dos resultados de uma tentativa (pontos de partida de laboratorio; os mesmos da 050). */
+    static final int MAX_RESULTS = 50;
+    static final long MAX_RESULT_BYTES = 20L * 1024 * 1024;
+    static final long MAX_RESULTS_TOTAL_BYTES = 50L * 1024 * 1024;
+    private static final java.util.regex.Pattern RESULT_NAME_BAD = java.util.regex.Pattern.compile(
+            "[\\x01-\\x1f\\x7f\\\\]|(^|/)\\.\\.?(/|$)|^/|/$|//|^[A-Za-z]:");
+    private static final java.util.regex.Pattern SHA256 = java.util.regex.Pattern.compile("^[0-9a-f]{64}$");
 
     /** {@code leaseSeconds}: prazo da comunicacao, renovado a cada escrita aceita (ponto de partida de laboratorio: 90 s). */
-    public RemoteDelivery(OrgTransactions tx, MachineAuth auth, int leaseSeconds, com.nekkora.core.artifact.ArtifactStore packages) {
+    public RemoteDelivery(OrgTransactions tx, MachineAuth auth, int leaseSeconds, com.nekkora.core.artifact.ArtifactStore packages,
+                          com.nekkora.core.artifact.ResultStore results) {
         this.packages = packages;
+        this.results = results;
         this.tx = tx;
         this.auth = auth;
         this.leaseSeconds = Math.max(30, Math.min(leaseSeconds, 3600));
@@ -240,6 +250,124 @@ public final class RemoteDelivery {
         } catch (java.io.IOException e) {
             throw new ApiException(ApiError.SERVICE_UNAVAILABLE, "armazenamento_de_pacotes");
         }
+    }
+
+    // ------------------------------------------------------------------ resultados (T03b)
+
+    /** {@code created}: {@code false} quando o mesmo arquivo ja tinha chegado com este numero (repeticao de um envio). */
+    public record StoredResult(int number, String fileName, long sizeBytes, String sha256, boolean created) {
+    }
+
+    public record ResultsClosure(int sent, int skippedByLimit) {
+    }
+
+    /**
+     * A maquina envia UM arquivo de resultado da tentativa que ela executou. So de tentativa que INICIOU; com o token e a epoca
+     * vigentes (continuam valendo depois do termino); numero de 1 a 50; nome relativo a pasta de saida; ate 20 MiB por arquivo
+     * e 50 MiB no total. O servidor confere o SHA-256 declarado contra os bytes que chegaram e so entao grava: primeiro os
+     * bytes (duraveis, enderecados pelo hash), depois o metadado. Repetir o MESMO arquivo no mesmo numero nao muda nada
+     * (resposta perdida); outro arquivo no mesmo numero, ou qualquer envio depois do fechamento: 409 remote_result_conflict.
+     * Passar do total: 409 remote_result_limit, e nada e gravado. Enviar resultado nao muda o estado da tentativa.
+     */
+    public StoredResult storeResult(MachineToken t, UUID attemptId, String token, Integer epoch, int number, String fileName, String sha256, byte[] data) {
+        if (number < 1 || number > MAX_RESULTS || fileName == null || fileName.isEmpty() || fileName.length() > 200
+                || RESULT_NAME_BAD.matcher(fileName).find() || sha256 == null || !SHA256.matcher(sha256).matches() || data == null
+                || data.length > MAX_RESULT_BYTES || !sha256.equals(sha256Hex(data))) {
+            throw ApiException.invalid("resultado");
+        }
+        if (!results.available()) {
+            throw new ApiException(ApiError.SERVICE_UNAVAILABLE, "armazenamento_de_resultados");
+        }
+        return tx.inOrganization(t.organization(), Mode.READ_WRITE, j -> {
+            Machine m = auth.authenticate(j, t);
+            Row a = owned(j, m, attemptId, token, epoch);
+            requireStarted(j, m, a);
+            record Existing(String name, String sha) {
+            }
+            Existing e = j.sql("SELECT file_name, sha256 FROM public.remote_attempt_results WHERE organization_id = ? AND attempt_id = ? AND result_number = ?")
+                    .param(m.organization()).param(attemptId).param((short) number).query((rs, n) -> new Existing(rs.getString(1), rs.getString(2)))
+                    .optional().orElse(null);
+            if (e != null) {
+                if (e.name().equals(fileName) && e.sha().equals(sha256)) {
+                    return new StoredResult(number, fileName, data.length, sha256, false);
+                }
+                throw new ApiException(ApiError.REMOTE_RESULT_CONFLICT, "numero_com_outro_arquivo");
+            }
+            if (closure(j, m, attemptId) != null
+                    || j.sql("SELECT count(*) FROM public.remote_attempt_results WHERE organization_id = ? AND attempt_id = ? AND file_name = ?")
+                            .param(m.organization()).param(attemptId).param(fileName).query(Long.class).single() > 0) {
+                throw new ApiException(ApiError.REMOTE_RESULT_CONFLICT, "envio_fechado_ou_nome_repetido");
+            }
+            long total = j.sql("SELECT coalesce(sum(size_bytes), 0) FROM public.remote_attempt_results WHERE organization_id = ? AND attempt_id = ?")
+                    .param(m.organization()).param(attemptId).query(Long.class).single();
+            if (total + data.length > MAX_RESULTS_TOTAL_BYTES) {
+                throw new ApiException(ApiError.REMOTE_RESULT_LIMIT, "total_de_resultados");
+            }
+            try {
+                results.put(m.organization(), sha256, data);
+            } catch (java.io.IOException x) {
+                throw new ApiException(ApiError.SERVICE_UNAVAILABLE, "armazenamento_de_resultados");
+            }
+            j.sql("INSERT INTO public.remote_attempt_results (attempt_id, result_number, organization_id, file_name, size_bytes, sha256) VALUES (?, ?, ?, ?, ?, ?)")
+                    .param(attemptId).param((short) number).param(m.organization()).param(fileName).param((long) data.length).param(sha256).update();
+            LOG.info("evento=execucao_remota.resultado_recebido tentativa={} numero={} bytes={} correlacao={}", attemptId, number, data.length,
+                    RequestContext.correlation());
+            return new StoredResult(number, fileName, data.length, sha256, true);
+        });
+    }
+
+    /**
+     * A maquina fecha o envio: {@code sent} arquivos enviados (tem de ser o que o servidor recebeu - um envio perdido aparece
+     * aqui) e {@code skippedByLimit} que ela deixou de enviar por limite. So depois que a tentativa que iniciou TERMINOU. Repetir
+     * o mesmo fechamento nao muda nada; outro, 409. Fechar nao muda o estado da tentativa.
+     */
+    public ResultsClosure closeResults(MachineToken t, UUID attemptId, String token, Integer epoch, Integer sent, Integer skippedByLimit) {
+        if (sent == null || skippedByLimit == null || sent < 0 || sent > MAX_RESULTS || skippedByLimit < 0 || skippedByLimit > 1_000_000) {
+            throw ApiException.invalid("fechamento");
+        }
+        return tx.inOrganization(t.organization(), Mode.READ_WRITE, j -> {
+            Machine m = auth.authenticate(j, t);
+            Row a = owned(j, m, attemptId, token, epoch);
+            requireStarted(j, m, a);
+            ResultsClosure existing = closure(j, m, attemptId);
+            if (existing != null) {
+                if (existing.sent() == sent && existing.skippedByLimit() == skippedByLimit) {
+                    return existing;
+                }
+                throw new ApiException(ApiError.REMOTE_RESULT_CONFLICT, "fechamento_diferente");
+            }
+            long received = j.sql("SELECT count(*) FROM public.remote_attempt_results WHERE organization_id = ? AND attempt_id = ?")
+                    .param(m.organization()).param(attemptId).query(Long.class).single();
+            if (a.state() < 7 || received != sent) {
+                throw new ApiException(a.state() < 7 ? ApiError.REMOTE_ATTEMPT_TRANSITION : ApiError.REMOTE_RESULT_CONFLICT, "fechamento_fora_de_hora_ou_contagem");
+            }
+            j.sql("INSERT INTO public.remote_attempt_result_closures (attempt_id, organization_id, sent, skipped_by_limit) VALUES (?, ?, ?, ?)")
+                    .param(attemptId).param(m.organization()).param(sent.shortValue()).param(skippedByLimit).update();
+            LOG.info("evento=execucao_remota.resultados_fechados tentativa={} enviados={} fora_do_limite={} correlacao={}", attemptId, sent, skippedByLimit,
+                    RequestContext.correlation());
+            return new ResultsClosure(sent, skippedByLimit);
+        });
+    }
+
+    private static String sha256Hex(byte[] data) {
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(data));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static void requireStarted(JdbcClient j, Machine m, Row a) {
+        boolean started = j.sql("SELECT started_at IS NOT NULL FROM public.remote_attempts WHERE organization_id = ? AND attempt_id = ?")
+                .param(m.organization()).param(a.attemptId()).query(Boolean.class).single();
+        if (!started) {
+            throw new ApiException(ApiError.REMOTE_ATTEMPT_TRANSITION, "tentativa_que_nao_iniciou");
+        }
+    }
+
+    private static ResultsClosure closure(JdbcClient j, Machine m, UUID attemptId) {
+        return j.sql("SELECT sent, skipped_by_limit FROM public.remote_attempt_result_closures WHERE organization_id = ? AND attempt_id = ?")
+                .param(m.organization()).param(attemptId).query((rs, n) -> new ResultsClosure(rs.getInt(1), rs.getInt(2))).optional().orElse(null);
     }
 
     // ------------------------------------------------------------------ apoio
