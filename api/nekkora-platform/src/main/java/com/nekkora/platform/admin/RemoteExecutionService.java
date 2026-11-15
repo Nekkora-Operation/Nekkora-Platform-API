@@ -251,6 +251,8 @@ public class RemoteExecutionService {
                 return new Created(same, false);
             }
             Version v = version(j, org, workspaceId, versionId);
+            // antes de qualquer outra exigencia, e antes de gravar: so pacote Python externo e executado remotamente
+            requireSupported(v.rule());
             RuntimeRequirementsService.View requirements = RuntimeRequirementsService.view(j, org, v.automationId());
             if (requirements.declared() == null) {
                 throw new ApiException(ApiError.REMOTE_REQUIREMENTS_NOT_DECLARED, "dependencias_nao_declaradas");
@@ -302,6 +304,9 @@ public class RemoteExecutionService {
             if (STATES.indexOf(last.state()) < 6) {
                 throw new ApiException(ApiError.REMOTE_ATTEMPT_NOT_FINISHED, "tentativa_anterior_nao_terminou");
             }
+            // a mesma recusa da solicitacao: uma solicitacao antiga de pacote que nao e externo nao ganha nova tentativa
+            requireSupported(j.sql("SELECT package_fingerprint_rule FROM public.remote_executions WHERE organization_id = ? AND remote_execution_id = ?")
+                    .param(org).param(executionId).query(String.class).single());
             Target target = target(j, org, x.workspaceId(), x.automationVersionId(), agentId);
             attempt(j, org, executionId, last.attemptNumber() + 1, target, actor.membershipId());
             LOG.info("evento=execucao_remota.nova_tentativa solicitacao={} tentativa={} correlacao={}", executionId, last.attemptNumber() + 1,
@@ -462,10 +467,31 @@ public class RemoteExecutionService {
                 .optional().orElseThrow(() -> AccessActions.refuse(Failure.TARGET_NOT_FOUND, "versao_publicada"));
     }
 
-    /** O que falta e nao depende da maquina: a declaracao das dependencias. */
+    /**
+     * A unica regra de pacote que a execucao remota aceita nesta versao do produto: o pacote Python externo. O pacote no formato
+     * Studio fica de fora. O aplicativo da maquina faz a mesma conferencia por conta propria.
+     */
+    static final String SUPPORTED_RULE = AgentAdminService.EXTERNAL_FINGERPRINT_RULE;
+
+    private static void requireSupported(String rule) {
+        if (!SUPPORTED_RULE.equals(rule)) {
+            throw new ApiException(ApiError.REMOTE_PACKAGE_NOT_SUPPORTED, "pacote_nao_e_python_externo");
+        }
+    }
+
+    /** O que falta e nao depende da maquina: o tipo do pacote da versao e a declaracao das dependencias. */
     private static List<String> commonMissing(JdbcClient j, UUID org, Version v) {
+        List<String> out = new ArrayList<>();
+        if (!SUPPORTED_RULE.equals(v.rule())) {
+            out.add("PACKAGE_NOT_SUPPORTED");
+        }
         RuntimeRequirementsService.View r = RuntimeRequirementsService.view(j, org, v.automationId());
-        return r.declared() == null ? List.of("REQUIREMENTS_NOT_DECLARED") : r.effective().resolved() ? List.of() : List.of("REQUIREMENTS_CONFLICT");
+        if (r.declared() == null) {
+            out.add("REQUIREMENTS_NOT_DECLARED");
+        } else if (!r.effective().resolved()) {
+            out.add("REQUIREMENTS_CONFLICT");
+        }
+        return List.copyOf(out);
     }
 
     /**
