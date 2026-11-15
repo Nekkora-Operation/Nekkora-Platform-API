@@ -3311,7 +3311,7 @@ components:
         framework: { type: [string, 'null'], description: 'So STUDIO_PYTHON' }
         executionMode: { type: [string, 'null'], enum: [single, list, tabular, null], description: 'So STUDIO_PYTHON' }
         packageKind: { type: string, enum: [STUDIO_PYTHON, EXTERNAL_PYTHON] }
-        pythonRequirement: { type: [string, 'null'], description: 'So EXTERNAL_PYTHON (ex.: >=3.10,<3.14)' }
+        pythonRequirement: { type: [string, 'null'], description: 'So EXTERNAL_PYTHON (ex.: >=3.10,<3.14; ==3.12.0 no descritor 1.1). null num EXTERNAL_PYTHON de descritor 1.1: o autor nao declarou restricao de Python (nao e promessa de compatibilidade)' }
         dependencies: { type: [array, 'null'], items: { type: string }, description: 'So EXTERNAL_PYTHON: nome==versao exata' }
         packageName: { type: [string, 'null'] }
         packageVersion: { type: [string, 'null'] }
