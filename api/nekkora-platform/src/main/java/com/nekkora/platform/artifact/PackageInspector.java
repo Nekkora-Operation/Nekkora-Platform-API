@@ -514,7 +514,9 @@ public final class PackageInspector {
                 long produced = 0;
                 while (!inf.finished()) {
                     int n = inf.inflate(buf);
-                    if (n == 0 && (inf.needsInput() || inf.needsDictionary())) {
+                    // um arquivo VAZIO comprimido (um __init__.py, por exemplo) termina sem produzir nenhum byte: o fluxo
+                    // acabou, e isso nao e um ZIP malformado. So e malformado quando faltam dados e o fluxo NAO terminou
+                    if (n == 0 && !inf.finished() && (inf.needsInput() || inf.needsDictionary())) {
                         throw new Rejected("zip_malformado");
                     }
                     produced += n;
