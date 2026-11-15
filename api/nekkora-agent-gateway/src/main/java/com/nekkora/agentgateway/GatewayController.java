@@ -160,6 +160,19 @@ public class GatewayController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
     }
 
+    /**
+     * T01b: a maquina habilitada troca a propria credencial. Corpo: {@code {"credentialSecret": "<segredo novo>"}}. A
+     * credencial do cabecalho e a ATUAL (ou, so na repeticao da mesma troca, a que esta troca revogou).
+     */
+    @PostMapping("/agent/api/v1/remote/credential/renew")
+    public ResponseEntity<GatewayService.Renewed> renewCredential(@RequestBody(required = false) String body, HttpServletRequest req) {
+        MachineToken t = machine(req);
+        guardFailures(RequestContextFilter.ip(req));
+        JsonNode n = parse(body);
+        GatewayService.Renewed r = authenticated(req, () -> service.renewCredential(t, text(n, "credentialSecret")));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
+    }
+
     @GetMapping("/agent/api/v1/authorizations")
     public Map<String, List<GatewayService.Authorization>> authorizations(HttpServletRequest req) {
         MachineToken t = machine(req);

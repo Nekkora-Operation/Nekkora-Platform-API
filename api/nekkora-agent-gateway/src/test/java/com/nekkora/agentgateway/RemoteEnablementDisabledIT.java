@@ -68,5 +68,10 @@ class RemoteEnablementDisabledIT {
         MachineClient.Response hb = legacy.heartbeat();
         assertThat(hb.status()).isEqualTo(200);
         assertThat(hb.body().has("remote")).isFalse();
+        // T01b: com o recurso desligado, nenhuma credencial e renovada pela maquina
+        MachineClient.Response renew = legacy.post("/remote/credential/renew", "{\"credentialSecret\":\"" + Tokens.newToken() + "\"}", legacy.credential);
+        assertThat(renew.status()).isEqualTo(409);
+        assertThat(renew.body().get("reason").asString()).isEqualTo("remote_execution_unavailable");
+        assertThat(legacy.heartbeat().status()).isEqualTo(200);
     }
 }

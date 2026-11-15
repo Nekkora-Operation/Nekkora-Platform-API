@@ -101,6 +101,32 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /agent/api/v1/remote/credential/renew:
+    post:
+      tags: [Maquina]
+      operationId: renewMachineCredential
+      summary: 'A maquina habilitada renova a propria credencial (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01b)'
+      description: >
+        Sem pessoa e sem codigo: a maquina prova a posse da credencial ATUAL (Authorization) e envia o segredo novo, gerado
+        nela (credentialSecret, mesmo formato do resgate). Numa transacao: a anterior e revogada (motivo MACHINE_RENEWAL,
+        autoria da maquina) e a nova e emitida com o mesmo prazo e o mesmo emissor da anterior; o vinculo, o Worker e a
+        habilitacao nao mudam. A credencial nova e nka1.<organizationId>.<credentialId>.<segredo novo>. So dentro da janela
+        (por padrao, 30 dias antes do vencimento): antes disso, 409 conflict + reason credential_renewal_not_due. Credencial
+        VENCIDA ou revogada: 401 - nunca volta a valer; a saida e habilitar a maquina de novo. Resposta perdida: repetir com a
+        credencial ANTERIOR e o MESMO segredo novo devolve a mesma credencial nova (unica situacao em que uma credencial
+        revogada e aceita, e so para repetir a troca que a revogou); com outro segredo: 401. Maquina vinculada mas nao
+        habilitada para execucao remota: 409 + remote_execution_not_enabled (o Agent anterior continua usando o codigo de
+        rotacao). Recurso desligado: 409 + remote_execution_unavailable. O token de uma pessoa nunca e aceito aqui.
+      parameters: [ { $ref: '#/components/parameters/Contract' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RenewCredentialRequest' } } } }
+      responses:
+        '200': { description: 'Credencial nova (inclusive na repeticao); Cache-Control no-store', content: { application/json: { schema: { $ref: '#/components/schemas/RenewedCredential' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /agent/api/v1/link/unlink:
     post:
       tags: [Maquina]
@@ -325,7 +351,7 @@ components:
       required: [error]
       properties:
         error: { type: string, enum: [invalid_request, unsupported_contract, unauthenticated, forbidden, not_found, conflict, rate_limited, internal_error, service_unavailable] }
-        reason: { type: string, enum: [pairing_code_for_rotation, rotation_code_for_pairing, link_ended_by_machine, link_ended_by_administration, remote_execution_unavailable, remote_code_without_enablement, code_not_for_remote_execution, remote_execution_not_enabled], description: 'Motivo opcional de um codigo conhecido (conflict): T06 (codigos de pareamento/rotacao), T13 (vinculo ja encerrado) e EXECUCAO-REMOTA-001 T01a (habilitacao). Cliente que nao o conhece trata o codigo como sempre' }
+        reason: { type: string, enum: [pairing_code_for_rotation, rotation_code_for_pairing, link_ended_by_machine, link_ended_by_administration, remote_execution_unavailable, remote_code_without_enablement, code_not_for_remote_execution, remote_execution_not_enabled, credential_renewal_not_due], description: 'Motivo opcional de um codigo conhecido (conflict): T06 (codigos de pareamento/rotacao), T13 (vinculo ja encerrado) e EXECUCAO-REMOTA-001 T01a (habilitacao). Cliente que nao o conhece trata o codigo como sempre' }
     UnlinkRequest:
       type: object
       required: [operationId, agentId, launchedRunRequests]
@@ -363,6 +389,18 @@ components:
         credentialExpiresAt: { type: string, format: date-time }
         contractVersion: { type: string }
         remoteExecution: { type: boolean, enum: [true], description: 'Presente (true) so quando o resgate habilitou a maquina para execucao remota; ausente nos demais' }
+    RenewCredentialRequest:
+      type: object
+      additionalProperties: false
+      required: [credentialSecret]
+      properties:
+        credentialSecret: { type: string, pattern: '^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$', description: 'Segredo NOVO, gerado pela maquina; viaja uma vez' }
+    RenewedCredential:
+      type: object
+      required: [credentialId, credentialExpiresAt]
+      properties:
+        credentialId: { type: string, format: uuid }
+        credentialExpiresAt: { type: string, format: date-time }
     RemoteReceiving:
       type: object
       additionalProperties: false
