@@ -44,6 +44,15 @@ paths:
         pairing_code_for_rotation (codigo de pareamento enviado como renovacao) ou rotation_code_for_pairing (codigo de renovacao
         enviado como pareamento). Sem o cabecalho (Agent anterior), o comportamento e o de antes, exceto codigo de pareamento com
         Authorization: 409 conflict (Worker indisponivel), em vez de criar outro Agent.
+      x-execucao-remota: >
+        PLATFORM-CLIENT-EXECUCAO-REMOTA-001 (T01a): pair-remote e a confirmacao, feita NA MAQUINA, de que ela passa a receber
+        execucoes solicitadas pela Platform. So vale com um codigo de pareamento MARCADO para isso por quem administra o vinculo
+        e o Worker; o resgate cria o vinculo e a habilitacao na mesma transacao e a resposta traz remoteExecution true. Codigo e
+        intencao precisam casar, e a recusa vem DEPOIS de conferidos o codigo, o prazo e a organizacao, sem consumir o codigo:
+        codigo marcado sem pair-remote (pair, ou sem cabecalho) -> 409 conflict + reason remote_code_without_enablement; codigo
+        comum com pair-remote -> 409 + code_not_for_remote_execution; codigo de rotacao com pair-remote -> 409 +
+        rotation_code_for_pairing; recurso desligado no servidor -> 409 + remote_execution_unavailable. Entrar no aplicativo
+        com a conta de uma pessoa nao habilita a maquina; nenhuma rota habilita uma maquina ja pareada.
       responses:
         '200': { description: 'Maquina pareada (ou credencial rotacionada); Cache-Control no-store', content: { application/json: { schema: { $ref: '#/components/schemas/Redeemed' } } } }
         '400': { $ref: '#/components/responses/InvalidRequest' }
@@ -60,12 +69,35 @@ paths:
       description: >
         Atualiza o ultimo contato e a versao informada e grava as capacidades (lista fechada). Recomendado a cada 60 s. A
         AUSENCIA de heartbeat nunca encerra execucao, nunca muda estado e nunca libera Worker.
+        PLATFORM-CLIENT-EXECUCAO-REMOTA-001 (T01a, aditivo): a maquina habilitada pode enviar "remote" (ocupada, pouco espaco
+        em disco), que vale ate o proximo batimento (sem "remote": falso), e recebe "remote.receiving", a referencia do
+        recebimento de novos trabalhos. Maquina nao habilitada e Agent anterior: pedido e resposta de sempre.
       parameters: [ { $ref: '#/components/parameters/Contract' } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/HeartbeatRequest' } } } }
       responses:
         '200': { description: 'Presenca registrada', content: { application/json: { schema: { $ref: '#/components/schemas/Presence' } } } }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/receiving:
+    post:
+      tags: [Maquina]
+      operationId: setRemoteReceiving
+      summary: 'A maquina pausa ou retoma o recebimento de novos trabalhos (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01a)'
+      description: >
+        So a propria maquina, pela credencial, pausa (PAUSED) ou retoma (ENABLED) o recebimento de execucoes solicitadas pela
+        Platform. Pausar nao cancela o que estiver em andamento e nao encerra o vinculo. Idempotente: repetir o mesmo valor
+        devolve 200 sem novo registro de auditoria. Maquina pareada mas nao habilitada: 409 conflict + reason
+        remote_execution_not_enabled. Nao ha Worker, Agent nem organizacao no corpo: a autoridade vem so da credencial.
+      parameters: [ { $ref: '#/components/parameters/Contract' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RemoteReceiving' } } } }
+      responses:
+        '200': { description: 'Recebimento atual', content: { application/json: { schema: { $ref: '#/components/schemas/RemoteReceiving' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
@@ -275,7 +307,7 @@ components:
       scheme: bearer
       bearerFormat: 'nka1.<organization_id>.<credential_id>.<segredo base64url de 32 bytes>'
   parameters:
-    Intent: { name: Nekkora-Agent-Intent, in: header, required: false, schema: { type: string, enum: [pair, rotate] }, description: 'T06: intencao do resgate (pair = Parear com a Platform; rotate = Renovar credencial). Ausente: Agent anterior. Outro valor: 400' }
+    Intent: { name: Nekkora-Agent-Intent, in: header, required: false, schema: { type: string, enum: [pair, rotate, pair-remote] }, description: 'T06: intencao do resgate (pair = Parear com a Platform; rotate = Renovar credencial). EXECUCAO-REMOTA-001 T01a: pair-remote = parear E habilitar esta maquina para execucao remota (so com codigo marcado). Ausente: Agent anterior. Outro valor: 400' }
     Contract: { name: Nekkora-Agent-Contract, in: header, required: true, schema: { type: string, pattern: '^1\.[0-9]{1,3}$' }, description: 'versao do contrato (maior 1)' }
     AgentExecutionId: { name: agentExecutionId, in: path, required: true, schema: { type: string, pattern: '^ex-[0-9a-f]{32}$' } }
   responses:
@@ -293,7 +325,7 @@ components:
       required: [error]
       properties:
         error: { type: string, enum: [invalid_request, unsupported_contract, unauthenticated, forbidden, not_found, conflict, rate_limited, internal_error, service_unavailable] }
-        reason: { type: string, enum: [pairing_code_for_rotation, rotation_code_for_pairing, link_ended_by_machine, link_ended_by_administration], description: 'Motivo opcional de um codigo conhecido (conflict): T06 (codigos de pareamento/rotacao) e T13 (vinculo ja encerrado). Cliente que nao o conhece trata o codigo como sempre' }
+        reason: { type: string, enum: [pairing_code_for_rotation, rotation_code_for_pairing, link_ended_by_machine, link_ended_by_administration, remote_execution_unavailable, remote_code_without_enablement, code_not_for_remote_execution, remote_execution_not_enabled], description: 'Motivo opcional de um codigo conhecido (conflict): T06 (codigos de pareamento/rotacao), T13 (vinculo ja encerrado) e EXECUCAO-REMOTA-001 T01a (habilitacao). Cliente que nao o conhece trata o codigo como sempre' }
     UnlinkRequest:
       type: object
       required: [operationId, agentId, launchedRunRequests]
@@ -330,19 +362,39 @@ components:
         credentialId: { type: string, format: uuid }
         credentialExpiresAt: { type: string, format: date-time }
         contractVersion: { type: string }
+        remoteExecution: { type: boolean, enum: [true], description: 'Presente (true) so quando o resgate habilitou a maquina para execucao remota; ausente nos demais' }
+    RemoteReceiving:
+      type: object
+      additionalProperties: false
+      required: [receiving]
+      properties:
+        receiving: { type: string, enum: [ENABLED, PAUSED] }
     HeartbeatRequest:
       type: object
       required: [agentVersion, contractVersion, capabilities]
       properties:
         agentVersion: { type: string, pattern: '^[0-9A-Za-z.+-]{1,40}$' }
         contractVersion: { type: string, pattern: '^1\.[0-9]{1,3}$' }
-        capabilities: { type: array, maxItems: 8, items: { type: string, enum: [RUN_LOCAL, OBS_1_0, SUPERVISOR_REPORT_1_0, EXTERNAL_PYTHON_1_0, RUN_REQUEST_1_0] } }
+        capabilities: { type: array, maxItems: 12, items: { type: string, enum: [RUN_LOCAL, OBS_1_0, SUPERVISOR_REPORT_1_0, EXTERNAL_PYTHON_1_0, RUN_REQUEST_1_0, REMOTE_RUN_1_0, REMOTE_LOGS_1_0, REMOTE_RESULTS_1_0, PY_INVENTORY_1_0] } }
+        remote:
+          type: object
+          additionalProperties: false
+          required: [busy, diskPressure]
+          description: 'Opcional (T01a da execucao remota): sinais da maquina habilitada, validos ate o proximo batimento'
+          properties:
+            busy: { type: boolean, description: 'Ha uma execucao em andamento nesta maquina' }
+            diskPressure: { type: boolean, description: 'Espaco em disco abaixo do minimo para preparar uma execucao' }
     Presence:
       type: object
       properties:
         serverTime: { type: string, format: date-time }
         credentialExpiresAt: { type: string, format: date-time }
         contractVersion: { type: string }
+        remote:
+          type: object
+          description: 'So para a maquina habilitada para execucao remota'
+          properties:
+            receiving: { type: string, enum: [ENABLED, PAUSED] }
     AuthorizationList:
       type: object
       properties:

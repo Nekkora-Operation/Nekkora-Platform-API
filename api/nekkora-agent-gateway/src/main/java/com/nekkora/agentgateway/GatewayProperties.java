@@ -5,7 +5,18 @@ import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "nekkora")
-public record GatewayProperties(List<String> trustedProxies, Database database, Limits limits) {
+public record GatewayProperties(List<String> trustedProxies, Database database, Limits limits, RemoteExecution remoteExecution) {
+
+    /**
+     * PLATFORM-CLIENT-EXECUCAO-REMOTA-001: chave do recurso (NEKKORA_EXECUCAO_REMOTA; ausente = desligado). Desligado, nenhuma
+     * maquina e habilitada para execucao remota; o resto do canal nao muda.
+     */
+    public record RemoteExecution(boolean enabled) {
+    }
+
+    public boolean remoteExecutionEnabled() {
+        return remoteExecution != null && remoteExecution.enabled();
+    }
 
     public record Database(String url, String user, String password, int maxPoolSize) {
     }

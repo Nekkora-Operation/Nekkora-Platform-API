@@ -46,14 +46,29 @@ public final class AgentAdminService {
 
     private final AccessActions actions;
     private final WorkspaceAccess access;
+    /** NEKKORA_EXECUCAO_REMOTA: desligado, nenhum codigo de pareamento e criado marcado para execucao remota. */
+    private final boolean remoteExecution;
 
     public AgentAdminService(AccessActions actions, WorkspaceAccess access) {
-        this.actions = actions;
-        this.access = access;
+        this(actions, access, false);
     }
 
-    /** Codigo emitido: o valor {@code code} so aparece nesta resposta. */
-    public record CodeIssued(UUID enrollmentId, String code, OffsetDateTime expiresAt, UUID workerId, UUID agentId) {
+    public AgentAdminService(AccessActions actions, WorkspaceAccess access, boolean remoteExecution) {
+        this.actions = actions;
+        this.access = access;
+        this.remoteExecution = remoteExecution;
+    }
+
+    /**
+     * Codigo emitido: o valor {@code code} so aparece nesta resposta. {@code remoteExecution}: {@code true} no codigo de
+     * pareamento marcado para execucao remota; ausente nos demais (a resposta de sempre, campo por campo).
+     */
+    public record CodeIssued(UUID enrollmentId, String code, OffsetDateTime expiresAt, UUID workerId, UUID agentId,
+                             @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                             Boolean remoteExecution) {
+        public CodeIssued(UUID enrollmentId, String code, OffsetDateTime expiresAt, UUID workerId, UUID agentId) {
+            this(enrollmentId, code, expiresAt, workerId, agentId, null);
+        }
     }
 
     // ------------------------------------------------------------------ pareamento e rotacao
@@ -94,9 +109,24 @@ public final class AgentAdminService {
     }
 
     public CodeIssued createPairing(UUID org, ValidSession actor, String token, UUID workerId, String workerName, String agentName, Integer minutes) {
+        return createPairing(org, actor, token, workerId, workerName, agentName, minutes, false);
+    }
+
+    /**
+     * {@code remote} (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01a): o codigo nasce MARCADO para execucao remota. E o ato de
+     * autoridade da habilitacao: as mesmas permissoes de administrar o vinculo e o Worker e a mesma confirmacao reforcada do
+     * pareamento comum, conferidas aqui e de novo pelo gatilho do banco; quem cria o codigo fica gravado como quem habilitou
+     * a maquina. O codigo sozinho nao habilita nada: a maquina so fica habilitada quando a pessoa confirma NELA e o resgata.
+     * Com o recurso desligado: 409 remote_execution_unavailable, sem criar nada (nem o Worker).
+     */
+    public CodeIssued createPairing(UUID org, ValidSession actor, String token, UUID workerId, String workerName, String agentName, Integer minutes,
+                                    boolean remote) {
         int ttl = ttl(minutes);
         if ((workerId == null) == (workerName == null) || !validName(agentName) || workerName != null && !validName(workerName)) {
             throw ApiException.invalid("pareamento");
+        }
+        if (remote && !remoteExecution) {
+            throw new ApiException(ApiError.REMOTE_EXECUTION_UNAVAILABLE, "execucao_remota_desligada");
         }
         return actions.write(org, j -> {
             actions.requireActor(j, org, actor, token);
@@ -125,9 +155,9 @@ public final class AgentAdminService {
                     .param(org).param(worker).query(Boolean.class).single()) {
                 throw AccessActions.refuse(Failure.CONFLICT, "worker_com_agent_ativo");
             }
-            CodeIssued c = issue(j, org, actor, (short) 1, worker, null, agentName, ttl);
+            CodeIssued c = issue(j, org, actor, (short) 1, worker, null, agentName, ttl, remote);
             audit(j, org, 1, actor.membershipId(), null, worker, null, c.enrollmentId(), null);
-            LOG.info("evento=agente.codigo_pareamento worker={} correlacao={}", worker, RequestContext.correlation());
+            LOG.info("evento=agente.codigo_pareamento worker={} execucao_remota={} correlacao={}", worker, remote, RequestContext.correlation());
             return c;
         });
     }
@@ -152,15 +182,65 @@ public final class AgentAdminService {
     }
 
     private static CodeIssued issue(JdbcClient j, UUID org, ValidSession actor, short purpose, UUID worker, UUID agent, String agentName, int ttl) {
+        return issue(j, org, actor, purpose, worker, agent, agentName, ttl, false);
+    }
+
+    private static CodeIssued issue(JdbcClient j, UUID org, ValidSession actor, short purpose, UUID worker, UUID agent, String agentName, int ttl,
+                                    boolean remote) {
         UUID enrollment = UUID.randomUUID();
         String code = "nkp1." + org + "." + enrollment + "." + Tokens.newToken();
         OffsetDateTime expires = j.sql("""
                 INSERT INTO public.agent_enrollments (enrollment_id, organization_id, purpose, worker_id, agent_id, agent_name, code_hash,
-                    created_by_membership_id, expires_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, clock_timestamp() + make_interval(mins => ?)) RETURNING expires_at
+                    created_by_membership_id, expires_at, remote_execution)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, clock_timestamp() + make_interval(mins => ?), ?) RETURNING expires_at
                 """).param(enrollment).param(org).param(purpose).param(worker).param(agent).param(agentName).param(Tokens.sha256Hex(code))
-                .param(actor.membershipId()).param(ttl).query(OffsetDateTime.class).single();
-        return new CodeIssued(enrollment, code, expires, worker, agent);
+                .param(actor.membershipId()).param(ttl).param(remote).query(OffsetDateTime.class).single();
+        return new CodeIssued(enrollment, code, expires, worker, agent, remote ? Boolean.TRUE : null);
+    }
+
+    // ------------------------------------------------------------------ maquinas para execucao remota (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01a)
+
+    /**
+     * Uma maquina habilitada para execucao remota, vista por quem pode executar no ambiente. {@code state}: OFFLINE (sem
+     * contato autenticado nos ultimos 180 s), INCOMPATIBLE (o aplicativo nao declara REMOTE_RUN_1_0), PAUSED (a maquina
+     * pausou o recebimento), NO_DISK_SPACE e BUSY (o que a maquina disse no ultimo batimento) ou AVAILABLE. Nesta ordem: o
+     * primeiro que valer. E INDICATIVO: a reserva de uma execucao e decidida, de forma atomica, quando ela e solicitada.
+     * Nao traz credencial, instalacao nem nada da maquina alem do nome e da versao do aplicativo.
+     */
+    public record RemoteMachine(UUID workerId, String workerName, UUID agentId, String agentName, String agentVersion, String state,
+                                String receiving, OffsetDateTime lastHeartbeatAt, OffsetDateTime enabledAt) {
+    }
+
+    /**
+     * As maquinas habilitadas para execucao remota cujo Worker esta autorizado NESTE ambiente. Exige automation.execute no
+     * ambiente (ambiente de outro escopo: o mesmo 404 das demais leituras). So entram Agents ativos e associados; um Agent
+     * revogado ou desvinculado deixa de aparecer, sem que a habilitacao precise ser apagada.
+     */
+    public List<RemoteMachine> listRemoteMachines(UUID org, ValidSession actor, String token, UUID workspaceId) {
+        return actions.read(org, j -> {
+            actions.requireActor(j, org, actor, token);
+            access.requireWorkspace(j, org, actor.membershipId(), workspaceId, "automation.execute");
+            return j.sql("""
+                    SELECT w.worker_id, w.name, a.agent_id, a.name, a.agent_version, r.receiving, a.last_heartbeat_at, r.enabled_at,
+                           a.last_heartbeat_at IS NOT NULL AND a.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?),
+                           coalesce(p.capabilities @> ARRAY['REMOTE_RUN_1_0']::text[], false), coalesce(p.remote_busy, false),
+                           coalesce(p.disk_pressure, false)
+                      FROM public.agent_remote_enablements r
+                      JOIN public.agents a ON a.organization_id = r.organization_id AND a.agent_id = r.agent_id AND a.status = 2
+                      JOIN public.worker_agent_assignments wa ON wa.organization_id = a.organization_id AND wa.agent_id = a.agent_id AND wa.status = 1
+                      JOIN public.workers w ON w.organization_id = wa.organization_id AND w.worker_id = wa.worker_id AND w.status = 1
+                      JOIN public.worker_workspace_assignments x ON x.organization_id = w.organization_id AND x.worker_id = w.worker_id
+                                                                 AND x.workspace_id = ? AND x.status = 1
+                      LEFT JOIN public.agent_presence p ON p.agent_id = a.agent_id
+                     WHERE r.organization_id = ? ORDER BY w.name, w.worker_id
+                    """).param(CONNECTED_SECONDS).param(workspaceId).param(org).query((rs, n) -> {
+                boolean paused = rs.getShort(6) == 2;
+                String state = !rs.getBoolean(9) ? "OFFLINE" : !rs.getBoolean(10) ? "INCOMPATIBLE" : paused ? "PAUSED"
+                        : rs.getBoolean(12) ? "NO_DISK_SPACE" : rs.getBoolean(11) ? "BUSY" : "AVAILABLE";
+                return new RemoteMachine(rs.getObject(1, UUID.class), rs.getString(2), rs.getObject(3, UUID.class), rs.getString(4), rs.getString(5),
+                        state, paused ? "PAUSED" : "ENABLED", rs.getObject(7, OffsetDateTime.class), rs.getObject(8, OffsetDateTime.class));
+            }).list();
+        });
     }
 
     public void cancelCode(UUID org, ValidSession actor, String token, UUID enrollmentId) {

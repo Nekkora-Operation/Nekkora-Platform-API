@@ -216,6 +216,29 @@ class AgentAdminIT extends PlatformTestBase {
         assertThat(count("SELECT count(*) FROM workers WHERE organization_id = '" + nova.id() + "'")).isZero();
     }
 
+    /** PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01a: com o recurso DESLIGADO (o padrao), nenhum codigo nasce marcado. */
+    @Test
+    void comAExecucaoRemotaDesligadaNenhumCodigoNasceMarcado() throws Exception {
+        Setup s = setup();
+        stepUp(s);
+        String org = s.org().id().toString();
+        BrowserClient.Response r = s.admin().post("/api/v1/o/" + org + "/agent-enrollments",
+                "{\"workerName\":\"Estacao remota\",\"agentName\":\"Maquina 1\",\"expiresInMinutes\":15,\"remoteExecution\":true}");
+        assertThat(r.status()).isEqualTo(409);
+        assertThat(r.body()).isEqualTo("{\"error\":\"conflict\",\"reason\":\"remote_execution_unavailable\"}");
+        assertThat(count("SELECT count(*) FROM workers WHERE organization_id = '" + org + "'")).as("nem o Worker e criado").isZero();
+        assertThat(count("SELECT count(*) FROM agent_enrollments WHERE organization_id = '" + org + "'")).isZero();
+        // o pareamento comum continua como sempre, sem o campo novo na resposta
+        BrowserClient.Response plain = s.admin().post("/api/v1/o/" + org + "/agent-enrollments",
+                "{\"workerName\":\"Estacao comum\",\"agentName\":\"Maquina 1\",\"expiresInMinutes\":15,\"remoteExecution\":false}");
+        assertThat(plain.status()).isEqualTo(201);
+        assertThat(plain.body()).doesNotContain("remoteExecution");
+        // a lista de maquinas existe e fica vazia
+        BrowserClient.Response list = s.admin().get("/api/v1/o/" + org + "/workspaces/" + s.workspace() + "/remote-machines");
+        assertThat(list.status()).isEqualTo(200);
+        assertThat(list.body()).isEqualTo("{\"items\":[]}");
+    }
+
     private BrowserClient.Response putWorker(Setup s, String path) {
         return s.admin().send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(baseUrl() + path)).PUT(java.net.http.HttpRequest.BodyPublishers.noBody()));
     }

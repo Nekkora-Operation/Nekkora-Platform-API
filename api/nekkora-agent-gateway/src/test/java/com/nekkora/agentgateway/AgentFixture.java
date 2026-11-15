@@ -80,6 +80,16 @@ final class AgentFixture {
         return code;
     }
 
+    /** PLATFORM-CLIENT-EXECUCAO-REMOTA-001: codigo de pareamento MARCADO para execucao remota (fixture, como superusuario). */
+    String remotePairingCode(UUID worker, String agentName) {
+        UUID enrollment = UUID.randomUUID();
+        String code = MachineToken.enrollment(org, enrollment, Tokens.newToken());
+        db.asSuperuser("INSERT INTO agent_enrollments (enrollment_id, organization_id, purpose, worker_id, agent_name, code_hash, created_by_membership_id, expires_at, "
+                + "remote_execution) VALUES ('" + enrollment + "', '" + org + "', 1, '" + worker + "', '" + agentName + "', '" + Tokens.sha256Hex(code) + "', '"
+                + adminMembership + "', clock_timestamp() + interval '15 minutes', true)");
+        return code;
+    }
+
     String rotationCode(UUID agent, UUID worker) {
         UUID enrollment = UUID.randomUUID();
         String code = MachineToken.enrollment(org, enrollment, Tokens.newToken());

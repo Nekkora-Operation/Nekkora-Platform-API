@@ -69,6 +69,20 @@ public enum ApiError {
     LINK_ENDED_BY_MACHINE(HttpStatus.CONFLICT, "conflict", "link_ended_by_machine"),
     /** Idem: o vinculo desta credencial ja foi encerrado pela administracao ("Revogar vinculo"). Nada mudou agora. */
     LINK_ENDED_BY_ADMINISTRATION(HttpStatus.CONFLICT, "conflict", "link_ended_by_administration"),
+    /**
+     * Execucao remota (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01a): o recurso esta DESLIGADO neste servidor
+     * (NEKKORA_EXECUCAO_REMOTA). Nada criado, nada consumido; o uso local do aplicativo nao depende disto.
+     */
+    REMOTE_EXECUTION_UNAVAILABLE(HttpStatus.CONFLICT, "conflict", "remote_execution_unavailable"),
+    /**
+     * Idem: codigo de pareamento MARCADO para execucao remota resgatado por um aplicativo que nao declarou a habilitacao
+     * (um Agent anterior, por exemplo). Nada consumido: a maquina nao fica habilitada sem a confirmacao feita nela.
+     */
+    REMOTE_CODE_WITHOUT_ENABLEMENT(HttpStatus.CONFLICT, "conflict", "remote_code_without_enablement"),
+    /** Idem: a maquina pediu a habilitacao com um codigo de pareamento comum (nao marcado). Nada consumido. */
+    CODE_NOT_FOR_REMOTE_EXECUTION(HttpStatus.CONFLICT, "conflict", "code_not_for_remote_execution"),
+    /** Idem: a maquina desta credencial nao esta habilitada para execucao remota. */
+    REMOTE_EXECUTION_NOT_ENABLED(HttpStatus.CONFLICT, "conflict", "remote_execution_not_enabled"),
     /** Canal do Agent (contrato Platform-Agent 1.0, sec. 15): versao maior do contrato nao suportada. */
     UNSUPPORTED_CONTRACT(HttpStatus.BAD_REQUEST, "unsupported_contract"),
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "rate_limited"),
