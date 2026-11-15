@@ -306,6 +306,13 @@ public class PlatformConfig {
                 : new com.nekkora.platform.artifact.LocalArtifactStore(java.nio.file.Path.of(dir));
     }
 
+    /** Dependencias de execucao declaradas para uma automacao (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01c). */
+    @Bean
+    com.nekkora.platform.admin.RuntimeRequirementsService runtimeRequirementsService(com.nekkora.platform.admin.AccessActions actions,
+                                                                                    com.nekkora.platform.access.WorkspaceAccess access) {
+        return new com.nekkora.platform.admin.RuntimeRequirementsService(actions, access);
+    }
+
     /** Ciclo de vida das automacoes (workspace, automacao, versao, artefato, publicacao). */
     @Bean
     com.nekkora.platform.admin.AutomationLifecycleService automationLifecycleService(com.nekkora.platform.admin.AccessActions actions,
