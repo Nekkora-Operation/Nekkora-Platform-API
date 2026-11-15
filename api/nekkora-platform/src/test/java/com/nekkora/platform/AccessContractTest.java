@@ -113,10 +113,13 @@ class AccessContractTest {
         assertThat(faltando).as("referencias sem destino").isEmpty();
         Map<String, Object> error = (Map<String, Object>) ((Map<String, Object>) components.get("schemas")).get("Error");
         String codigos = error.get("properties").toString();
-        // motivos do canal do Agent (T06 e T13) sao publicados no contrato da maquina (GatewayContractTest), nao neste
+        // motivos do canal do Agent (T06, T13 e execucao remota T01a) sao publicados no contrato da maquina (GatewayContractTest), nao neste
         Set<com.nekkora.core.web.ApiError> soDaMaquina = Set.of(com.nekkora.core.web.ApiError.PAIRING_CODE_FOR_ROTATION,
                 com.nekkora.core.web.ApiError.ROTATION_CODE_FOR_PAIRING, com.nekkora.core.web.ApiError.LINK_ENDED_BY_MACHINE,
-                com.nekkora.core.web.ApiError.LINK_ENDED_BY_ADMINISTRATION);
+                com.nekkora.core.web.ApiError.LINK_ENDED_BY_ADMINISTRATION,
+                // PLATFORM-CLIENT-EXECUCAO-REMOTA-001 T01a: recusas do resgate e do recebimento, so no canal da maquina
+                com.nekkora.core.web.ApiError.REMOTE_CODE_WITHOUT_ENABLEMENT, com.nekkora.core.web.ApiError.CODE_NOT_FOR_REMOTE_EXECUTION,
+                com.nekkora.core.web.ApiError.REMOTE_EXECUTION_NOT_ENABLED);
         for (com.nekkora.core.web.ApiError e : com.nekkora.core.web.ApiError.values()) {
             assertThat(codigos).as("codigo de erro publicado: " + e.code()).contains(e.code());
             if (e.reason() != null && !soDaMaquina.contains(e)) {
