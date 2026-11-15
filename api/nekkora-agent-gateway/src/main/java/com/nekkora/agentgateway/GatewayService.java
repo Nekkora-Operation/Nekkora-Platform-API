@@ -447,6 +447,59 @@ public final class GatewayService {
         });
     }
 
+    // ------------------------------------------------------------------ inventario de Python (T01c, parte 1)
+
+    static final int MAX_ENVIRONMENTS = 32;
+    private static final Pattern ENVIRONMENT_ID = Pattern.compile("^[A-Za-z0-9_-]{43}$");
+    private static final Pattern PYTHON_VERSION = Pattern.compile("^3\\.[0-9]{1,2}\\.[0-9]{1,3}([abc]|rc)?[0-9]{0,2}$");
+
+    /** Um ambiente do inventario: identificador OPACO, versao, tipo e quando a maquina o observou. Nunca um caminho. */
+    public record PythonEnvironment(String environmentId, String pythonVersion, String kind, OffsetDateTime observedAt) {
+    }
+
+    public record InventoryPublished(int count, OffsetDateTime reportedAt) {
+    }
+
+    /**
+     * A maquina habilitada publica o RETRATO do Python que tem: substitui o anterior inteiro, na mesma transacao. So entram
+     * o identificador opaco, a versao, o tipo e o instante da observacao; qualquer outro campo, ou um valor fora do formato
+     * (um caminho, por exemplo), recusa o pedido inteiro e nada muda. Lista vazia e valida: a maquina nao achou Python.
+     */
+    public InventoryPublished publishPythonInventory(MachineToken t, List<PythonEnvironment> environments, java.util.function.Consumer<Machine> quota) {
+        if (environments == null || environments.size() > MAX_ENVIRONMENTS) {
+            throw ApiException.invalid("ambientes");
+        }
+        java.util.Set<String> ids = new java.util.HashSet<>();
+        for (PythonEnvironment e : environments) {
+            if (e.environmentId() == null || !ENVIRONMENT_ID.matcher(e.environmentId()).matches() || !ids.add(e.environmentId())
+                    || e.pythonVersion() == null || !PYTHON_VERSION.matcher(e.pythonVersion()).matches()
+                    || !("INSTALLATION".equals(e.kind()) || "VIRTUAL_ENVIRONMENT".equals(e.kind())) || e.observedAt() == null) {
+                throw ApiException.invalid("ambiente");
+            }
+        }
+        return tx.inOrganization(t.organization(), Mode.READ_WRITE, j -> {
+            Machine m = auth.authenticate(j, t);
+            quota.accept(m);
+            if (receiving(j, m).isEmpty()) {
+                throw new ApiException(ApiError.REMOTE_EXECUTION_NOT_ENABLED, "maquina_nao_habilitada");
+            }
+            OffsetDateTime now = j.sql("SELECT clock_timestamp()").query(OffsetDateTime.class).single();
+            for (PythonEnvironment e : environments) {
+                if (e.observedAt().isAfter(now.plusMinutes(5))) {
+                    throw ApiException.invalid("observacao_no_futuro");
+                }
+            }
+            j.sql("DELETE FROM public.agent_python_environments WHERE organization_id = ? AND agent_id = ?").param(m.organization()).param(m.agentId()).update();
+            for (PythonEnvironment e : environments) {
+                j.sql("INSERT INTO public.agent_python_environments (agent_id, environment_id, organization_id, python_version, kind, observed_at) "
+                        + "VALUES (?, ?, ?, ?, ?, ?)").param(m.agentId()).param(e.environmentId()).param(m.organization()).param(e.pythonVersion())
+                        .param((short) ("INSTALLATION".equals(e.kind()) ? 1 : 2)).param(e.observedAt()).update();
+            }
+            LOG.info("evento=agente.inventario_python agente={} ambientes={} correlacao={}", m.agentId(), environments.size(), RequestContext.correlation());
+            return new InventoryPublished(environments.size(), now);
+        });
+    }
+
     // ------------------------------------------------------------------ continuidade da credencial (T01b)
 
     /** A credencial NOVA. O segredo e o que a maquina gerou e enviou; o servidor nunca o devolve. */

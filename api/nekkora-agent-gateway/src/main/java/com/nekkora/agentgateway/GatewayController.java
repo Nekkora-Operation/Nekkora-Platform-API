@@ -17,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -171,6 +172,43 @@ public class GatewayController {
         JsonNode n = parse(body);
         GatewayService.Renewed r = authenticated(req, () -> service.renewCredential(t, text(n, "credentialSecret")));
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
+    }
+
+    /**
+     * T01c: a maquina habilitada publica o retrato do Python que tem. Corpo: {@code {"environments": [{environmentId,
+     * pythonVersion, kind, observedAt}]}}, no maximo 32; campos alem desses recusam o pedido (nenhum caminho entra).
+     */
+    @PutMapping("/agent/api/v1/remote/python-environments")
+    public ResponseEntity<GatewayService.InventoryPublished> publishPythonInventory(@RequestBody(required = false) String body, HttpServletRequest req) {
+        MachineToken t = machine(req);
+        JsonNode n = parse(body);
+        JsonNode list = n.get("environments");
+        if (list == null || !list.isArray() || list.size() > GatewayService.MAX_ENVIRONMENTS || n.size() != 1) {
+            throw ApiException.invalid("ambientes");
+        }
+        List<GatewayService.PythonEnvironment> environments = new ArrayList<>(list.size());
+        for (JsonNode e : list) {
+            if (!e.isObject() || e.size() != 4) {
+                throw ApiException.invalid("ambiente");
+            }
+            java.time.OffsetDateTime observed;
+            try {
+                observed = java.time.OffsetDateTime.parse(String.valueOf(text(e, "observedAt")));
+            } catch (java.time.DateTimeException x) {
+                throw ApiException.invalid("observacao");
+            }
+            environments.add(new GatewayService.PythonEnvironment(text(e, "environmentId"), text(e, "pythonVersion"), text(e, "kind"), observed));
+        }
+        GatewayService.InventoryPublished r = authenticated(req, () -> service.publishPythonInventory(t, environments, this::inventoryQuota));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
+    }
+
+    /** Publicacoes do inventario por maquina: 6 por minuto (balde; Retry-After). */
+    private void inventoryQuota(MachineAuth.Machine m) {
+        long wait = limiter.consume("agent:inventario:" + m.agentId(), 6, 6 / 60.0);
+        if (wait > 0) {
+            throw new ApiException(ApiError.RATE_LIMITED, "inventario_por_maquina", Math.max(1, (wait + 999) / 1000));
+        }
     }
 
     @GetMapping("/agent/api/v1/authorizations")
