@@ -89,6 +89,30 @@ public enum ApiError {
     RUNTIME_REQUIREMENTS_UNRESOLVED(HttpStatus.CONFLICT, "conflict", "runtime_requirements_unresolved"),
     /** Idem: outra pessoa declarou depois da revisao que esta pessoa viu; nada foi gravado. */
     RUNTIME_REQUIREMENTS_CHANGED(HttpStatus.CONFLICT, "conflict", "runtime_requirements_changed"),
+    // Solicitacao de execucao remota (T02): cada exigencia que falta tem o seu motivo, para a tela dizer o que falta.
+    /** Nao ha autorizacao de execucao desta versao para o Worker da maquina. */
+    REMOTE_AUTHORIZATION_MISSING(HttpStatus.CONFLICT, "conflict", "remote_authorization_missing"),
+    REMOTE_AUTHORIZATION_REVOKED(HttpStatus.CONFLICT, "conflict", "remote_authorization_revoked"),
+    REMOTE_AUTHORIZATION_EXPIRED(HttpStatus.CONFLICT, "conflict", "remote_authorization_expired"),
+    /** A maquina esta vinculada, mas nao foi habilitada para execucao remota. */
+    REMOTE_MACHINE_NOT_ENABLED(HttpStatus.CONFLICT, "conflict", "remote_machine_not_enabled"),
+    REMOTE_MACHINE_PAUSED(HttpStatus.CONFLICT, "conflict", "remote_machine_paused"),
+    /** O aplicativo da maquina nao executa solicitacoes da Platform. */
+    REMOTE_MACHINE_INCOMPATIBLE(HttpStatus.CONFLICT, "conflict", "remote_machine_incompatible"),
+    /** A maquina ja tem uma tentativa nao terminada (a reserva e atomica). */
+    REMOTE_MACHINE_BUSY(HttpStatus.CONFLICT, "conflict", "remote_machine_busy"),
+    REMOTE_REQUIREMENTS_NOT_DECLARED(HttpStatus.CONFLICT, "conflict", "remote_requirements_not_declared"),
+    REMOTE_REQUIREMENTS_CONFLICT(HttpStatus.CONFLICT, "conflict", "remote_requirements_conflict"),
+    /** Repetir em outra maquina: a tentativa anterior ainda nao terminou. */
+    REMOTE_ATTEMPT_NOT_FINISHED(HttpStatus.CONFLICT, "conflict", "remote_attempt_not_finished"),
+    /** Cancelar: a tentativa ja terminou. */
+    REMOTE_ATTEMPT_ALREADY_FINISHED(HttpStatus.CONFLICT, "conflict", "remote_attempt_already_finished"),
+    /** Repetir: o cancelamento desta solicitacao ja foi pedido. */
+    REMOTE_EXECUTION_CANCEL_REQUESTED(HttpStatus.CONFLICT, "conflict", "remote_execution_cancel_requested"),
+    /** Canal da maquina: o token ou a epoca da atribuicao nao sao os vigentes; nada foi alterado. */
+    REMOTE_ATTEMPT_STALE(HttpStatus.CONFLICT, "conflict", "remote_attempt_stale"),
+    /** Canal da maquina: a mudanca de estado pedida nao e permitida a partir do estado atual. */
+    REMOTE_ATTEMPT_TRANSITION(HttpStatus.CONFLICT, "conflict", "remote_attempt_transition"),
     /** Canal do Agent (contrato Platform-Agent 1.0, sec. 15): versao maior do contrato nao suportada. */
     UNSUPPORTED_CONTRACT(HttpStatus.BAD_REQUEST, "unsupported_contract"),
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "rate_limited"),

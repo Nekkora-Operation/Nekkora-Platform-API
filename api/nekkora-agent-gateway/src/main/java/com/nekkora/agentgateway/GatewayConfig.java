@@ -124,6 +124,11 @@ public class GatewayConfig {
     }
 
     @Bean
+    RemoteDelivery remoteDelivery(OrgTransactions tx, MachineAuth auth, GatewayProperties p) {
+        return new RemoteDelivery(tx, auth, p.leaseSeconds());
+    }
+
+    @Bean
     MachineCatalog machineCatalog(OrgTransactions tx, MachineAuth auth) {
         return new MachineCatalog(tx, auth);
     }

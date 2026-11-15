@@ -306,6 +306,15 @@ public class PlatformConfig {
                 : new com.nekkora.platform.artifact.LocalArtifactStore(java.nio.file.Path.of(dir));
     }
 
+    /** Solicitacao de execucao remota (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T02). Desligada, nenhuma solicitacao e aceita. */
+    @Bean
+    com.nekkora.platform.admin.RemoteExecutionService remoteExecutionService(
+            com.nekkora.platform.admin.AccessActions actions, com.nekkora.platform.access.WorkspaceAccess access,
+            @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.enabled:false}") boolean remoteExecution,
+            @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.offer-minutes:15}") int offerMinutes) {
+        return new com.nekkora.platform.admin.RemoteExecutionService(actions, access, remoteExecution, offerMinutes);
+    }
+
     /** Dependencias de execucao declaradas para uma automacao (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01c). */
     @Bean
     com.nekkora.platform.admin.RuntimeRequirementsService runtimeRequirementsService(com.nekkora.platform.admin.AccessActions actions,

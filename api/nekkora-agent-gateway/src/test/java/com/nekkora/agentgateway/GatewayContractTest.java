@@ -51,7 +51,7 @@ class GatewayContractTest {
         Map<String, Object> paths = (Map<String, Object>) spec.get("paths");
         Set<String> publicadas = new TreeSet<>();
         paths.forEach((path, ops) -> ((Map<String, Object>) ops).keySet().forEach(method -> publicadas.add(method + " " + path)));
-        assertThat(mapeadas).isEqualTo(publicadas).hasSize(14); // T01c: + remote/python-environments; 030: + run-requests e decision; T13: + link/unlink; CATALOGO-001: + catalog (2); EXECUCAO-REMOTA-001 T01a: + remote/receiving; T01b: + remote/credential/renew
+        assertThat(mapeadas).isEqualTo(publicadas).hasSize(17); // T02: + remote/next, attempts ack e state; T01c: + remote/python-environments; 030: + run-requests e decision; T13: + link/unlink; CATALOGO-001: + catalog (2); EXECUCAO-REMOTA-001 T01a: + remote/receiving; T01b: + remote/credential/renew
 
         Map<String, Set<String>> exercitados = Map.of(
                 "post /agent/api/v1/enrollments/redeem", Set.of("200", "401", "409"),
@@ -81,7 +81,18 @@ class GatewayContractTest {
         assertThat(((Map<String, Object>) receiving.get("responses")).keySet()).contains("200", "400", "401", "409");
         assertThat(receiving.get("parameters").toString()).contains("#/components/parameters/Contract");
         assertThat(spec.toString()).contains("remote_execution_unavailable").contains("remote_code_without_enablement")
-                .contains("code_not_for_remote_execution").contains("remote_execution_not_enabled").contains("credential_renewal_not_due");
+                .contains("code_not_for_remote_execution").contains("remote_execution_not_enabled").contains("credential_renewal_not_due")
+                .contains("remote_attempt_stale").contains("remote_attempt_transition");
+        for (String route : new String[] {"/agent/api/v1/remote/attempts/{attempt}/ack", "/agent/api/v1/remote/attempts/{attempt}/state"}) {
+            Map<String, Object> op = (Map<String, Object>) ((Map<String, Object>) paths.get(route)).get("post");
+            assertThat(((Map<String, Object>) op.get("responses")).keySet()).as(route).contains("200", "400", "401", "404", "409");
+            assertThat(op.get("parameters").toString()).as(route).contains("#/components/parameters/Contract");
+        }
+        Map<String, Object> next = (Map<String, Object>) ((Map<String, Object>) paths.get("/agent/api/v1/remote/next")).get("get");
+        assertThat(((Map<String, Object>) next.get("responses")).keySet()).contains("200", "401", "409");
+        for (String state : RemoteDelivery.STATES) {
+            assertThat(spec.toString()).as("estado publicado").contains(state);
+        }
         Map<String, Object> inventory = (Map<String, Object>) ((Map<String, Object>) paths.get("/agent/api/v1/remote/python-environments")).get("put");
         assertThat(((Map<String, Object>) inventory.get("responses")).keySet()).contains("200", "400", "401", "409", "429");
         assertThat(inventory.get("parameters").toString()).contains("#/components/parameters/Contract");

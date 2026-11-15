@@ -101,6 +101,78 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /agent/api/v1/remote/next:
+    get:
+      tags: [Maquina]
+      operationId: nextRemoteWork
+      summary: 'A maquina pergunta o que ha para ela (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T02)'
+      description: >
+        Entrega no maximo UMA coisa. attempt: a tentativa que e desta maquina e ela ainda nao recebeu, com o token e a epoca da
+        atribuicao (o token aparece SO aqui) e o prazo da comunicacao. cancel: a tentativa que ela ja recebeu e cuja
+        solicitacao teve o cancelamento pedido (a maquina para e informa CANCELLED). Nada a fazer: objeto vazio. Antes de
+        entregar, o servidor REVALIDA as condicoes da solicitacao (Worker autorizado no ambiente, maquina habilitada e
+        compativel, autorizacao vigente da versao para este Worker): se algo deixou de valer, a tentativa fica REFUSED com o
+        motivo e nada e entregue. Maquina pausada: nada e entregue (a tentativa espera ate o prazo da oferta e entao expira).
+        Perguntar de novo antes de confirmar o recebimento entrega a MESMA tentativa com token e epoca novos: os anteriores
+        deixam de valer. Maquina nao habilitada: 409 + remote_execution_not_enabled. Entregar nao prova recebimento.
+      parameters: [ { $ref: '#/components/parameters/Contract' } ]
+      responses:
+        '200': { description: 'O que ha para a maquina', content: { application/json: { schema: { $ref: '#/components/schemas/RemoteNext' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/attempts/{attempt}/ack:
+    post:
+      tags: [Maquina]
+      operationId: ackRemoteAttempt
+      summary: 'A maquina confirma que recebeu a tentativa (T02)'
+      description: >
+        Depois de gravar a tentativa no proprio diario. OFFERED vira RECEIVED. Idempotente com o mesmo token e epoca. Token ou
+        epoca que nao sao os vigentes: 409 conflict + reason remote_attempt_stale, e nada e alterado. Tentativa de outra maquina
+        ou inexistente: 404. Tentativa ja encerrada pelo servidor (cancelada, recusada, expirada): 200 com proceed false.
+        Receber nao prova inicio.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RemoteAttemptWrite' } } } }
+      responses:
+        '200': { description: 'Situacao da tentativa', content: { application/json: { schema: { $ref: '#/components/schemas/RemoteAttemptStatus' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/attempts/{attempt}/state:
+    post:
+      tags: [Maquina]
+      operationId: reportRemoteAttemptState
+      summary: 'A maquina informa o estado da tentativa e renova o prazo (T02)'
+      description: >
+        Estados que a maquina informa: PREPARING, STARTING, RUNNING, SUCCEEDED, FAILED, CANCELLED, TIMED_OUT, REFUSED (com
+        refusalReason da lista da maquina) e ENDED_UNKNOWN (a maquina voltou, o processo nao esta mais rodando e nao ha prova do
+        resultado). exitCode so em SUCCEEDED, FAILED e TIMED_OUT. Repetir o estado atual so renova o prazo. Transicao nao
+        permitida: 409 + remote_attempt_transition. Token ou epoca que nao sao os vigentes: 409 + remote_attempt_stale; nada e
+        alterado. ANTES DE INICIAR (STARTING) o servidor revalida: cancelamento pedido -> a tentativa fica CANCELLED;
+        autorizacao revogada ou vencida, Worker fora do ambiente ou maquina desabilitada -> fica REFUSED com o motivo. Nos dois
+        casos a resposta traz proceed false e a maquina NAO inicia. cancelRequested true: a pessoa pediu o cancelamento; a
+        maquina para e informa CANCELLED. O prazo vencido so quer dizer comunicacao perdida: nao muda o estado.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RemoteAttemptStateWrite' } } } }
+      responses:
+        '200': { description: 'Situacao da tentativa', content: { application/json: { schema: { $ref: '#/components/schemas/RemoteAttemptStatus' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /agent/api/v1/remote/python-environments:
     put:
       tags: [Maquina]
@@ -373,7 +445,7 @@ components:
       required: [error]
       properties:
         error: { type: string, enum: [invalid_request, unsupported_contract, unauthenticated, forbidden, not_found, conflict, rate_limited, internal_error, service_unavailable] }
-        reason: { type: string, enum: [pairing_code_for_rotation, rotation_code_for_pairing, link_ended_by_machine, link_ended_by_administration, remote_execution_unavailable, remote_code_without_enablement, code_not_for_remote_execution, remote_execution_not_enabled, credential_renewal_not_due], description: 'Motivo opcional de um codigo conhecido (conflict): T06 (codigos de pareamento/rotacao), T13 (vinculo ja encerrado) e EXECUCAO-REMOTA-001 T01a (habilitacao). Cliente que nao o conhece trata o codigo como sempre' }
+        reason: { type: string, enum: [pairing_code_for_rotation, rotation_code_for_pairing, link_ended_by_machine, link_ended_by_administration, remote_execution_unavailable, remote_code_without_enablement, code_not_for_remote_execution, remote_execution_not_enabled, credential_renewal_not_due, remote_attempt_stale, remote_attempt_transition], description: 'Motivo opcional de um codigo conhecido (conflict): T06 (codigos de pareamento/rotacao), T13 (vinculo ja encerrado) e EXECUCAO-REMOTA-001 T01a (habilitacao). Cliente que nao o conhece trata o codigo como sempre' }
     UnlinkRequest:
       type: object
       required: [operationId, agentId, launchedRunRequests]
@@ -411,6 +483,57 @@ components:
         credentialExpiresAt: { type: string, format: date-time }
         contractVersion: { type: string }
         remoteExecution: { type: boolean, enum: [true], description: 'Presente (true) so quando o resgate habilitou a maquina para execucao remota; ausente nos demais' }
+    RemoteNext:
+      type: object
+      description: 'No maximo um dos campos. Nenhum: nada a fazer'
+      properties:
+        attempt:
+          type: object
+          required: [attemptId, remoteExecutionId, attemptNumber, automationId, automationVersionId, packageFingerprint, packageFingerprintRule, dependencies, token, epoch, leaseSeconds]
+          properties:
+            attemptId: { type: string, format: uuid }
+            remoteExecutionId: { type: string, format: uuid }
+            attemptNumber: { type: integer, minimum: 1 }
+            automationId: { type: string, format: uuid }
+            automationVersionId: { type: string, format: uuid }
+            packageFingerprint: { type: string, pattern: '^[0-9a-f]{64}$' }
+            packageFingerprintRule: { type: string }
+            dependencies: { type: array, items: { type: string }, description: 'O efetivo congelado na solicitacao (nome==versao)' }
+            token: { type: string, description: 'Token da atribuicao; aparece so aqui' }
+            epoch: { type: integer, minimum: 1 }
+            leaseSeconds: { type: integer }
+        cancel:
+          type: object
+          required: [attemptId]
+          properties:
+            attemptId: { type: string, format: uuid }
+    RemoteAttemptWrite:
+      type: object
+      additionalProperties: false
+      required: [token, epoch]
+      properties:
+        token: { type: string }
+        epoch: { type: integer, minimum: 1 }
+    RemoteAttemptStateWrite:
+      type: object
+      additionalProperties: false
+      required: [token, epoch, state]
+      properties:
+        token: { type: string }
+        epoch: { type: integer, minimum: 1 }
+        state: { type: string, enum: [PREPARING, STARTING, RUNNING, SUCCEEDED, FAILED, CANCELLED, TIMED_OUT, REFUSED, ENDED_UNKNOWN] }
+        refusalReason: { type: string, enum: [BUSY, PAUSED, PACKAGE_INVALID, ENVIRONMENT_GONE, ENVIRONMENT_INCOMPATIBLE, DEPENDENCIES_MISSING, DISK_PRESSURE, CLIENT_INCOMPATIBLE], description: 'So com REFUSED' }
+        exitCode: { type: integer, description: 'So com SUCCEEDED, FAILED ou TIMED_OUT' }
+    RemoteAttemptStatus:
+      type: object
+      required: [attemptId, state, proceed, cancelRequested, leaseSeconds]
+      properties:
+        attemptId: { type: string, format: uuid }
+        state: { type: string, enum: [QUEUED, OFFERED, RECEIVED, PREPARING, STARTING, RUNNING, SUCCEEDED, FAILED, CANCELLED, TIMED_OUT, REFUSED, EXPIRED, ENDED_UNKNOWN] }
+        proceed: { type: boolean, description: 'false: a maquina NAO deve seguir (inicio recusado pelo servidor, ou tentativa ja terminada)' }
+        refusalReason: { type: string, description: 'So em REFUSED; inclui os motivos do servidor (AUTHORIZATION_REVOKED, AUTHORIZATION_EXPIRED, AUTHORIZATION_MISSING, WORKER_NOT_AUTHORIZED, MACHINE_NOT_LINKED, MACHINE_NOT_ENABLED, MACHINE_INCOMPATIBLE)' }
+        cancelRequested: { type: boolean }
+        leaseSeconds: { type: integer }
     PythonInventory:
       type: object
       additionalProperties: false

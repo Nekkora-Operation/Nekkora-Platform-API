@@ -53,11 +53,14 @@ public class GatewayController {
 
     private final GatewayService service;
     private final MachineCatalog catalog;
+    private final RemoteDelivery delivery;
     private final EventIngestion ingestion;
     private final RedisLimiter limiter;
     private final GatewayProperties.Limits limits;
 
-    public GatewayController(GatewayService service, MachineCatalog catalog, EventIngestion ingestion, RedisLimiter limiter, GatewayProperties properties) {
+    public GatewayController(GatewayService service, MachineCatalog catalog, RemoteDelivery delivery, EventIngestion ingestion, RedisLimiter limiter,
+                             GatewayProperties properties) {
+        this.delivery = delivery;
         this.service = service;
         this.catalog = catalog;
         this.ingestion = ingestion;
@@ -172,6 +175,48 @@ public class GatewayController {
         JsonNode n = parse(body);
         GatewayService.Renewed r = authenticated(req, () -> service.renewCredential(t, text(n, "credentialSecret")));
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
+    }
+
+    // ------------------------------------------------------------------ entrega da tentativa (T02)
+
+    /** O que ha para esta maquina: no maximo uma tentativa a receber, ou o aviso de cancelamento da que ela ja recebeu. */
+    @GetMapping("/agent/api/v1/remote/next")
+    public ResponseEntity<RemoteDelivery.Next> remoteNext(HttpServletRequest req) {
+        MachineToken t = machine(req);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(authenticated(req, () -> delivery.next(t)));
+    }
+
+    /** A maquina confirma o recebimento. Corpo: {@code {"token", "epoch"}}. */
+    @PostMapping("/agent/api/v1/remote/attempts/{attempt}/ack")
+    public ResponseEntity<RemoteDelivery.Status> remoteAck(@PathVariable String attempt, @RequestBody(required = false) String body, HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(attempt);
+        JsonNode n = parse(body);
+        RemoteDelivery.Status s = authenticated(req, () -> delivery.ack(t, id, text(n, "token"), integer(n, "epoch")));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(s);
+    }
+
+    /** A maquina informa o estado e renova o prazo. Corpo: {@code {"token", "epoch", "state", "refusalReason"?, "exitCode"?}}. */
+    @PostMapping("/agent/api/v1/remote/attempts/{attempt}/state")
+    public ResponseEntity<RemoteDelivery.Status> remoteState(@PathVariable String attempt, @RequestBody(required = false) String body,
+                                                             HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(attempt);
+        JsonNode n = parse(body);
+        RemoteDelivery.Status s = authenticated(req, () -> delivery.state(t, id, text(n, "token"), integer(n, "epoch"), text(n, "state"),
+                text(n, "refusalReason"), integer(n, "exitCode")));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(s);
+    }
+
+    private static Integer integer(JsonNode n, String field) {
+        JsonNode v = n.get(field);
+        if (v == null || v.isNull()) {
+            return null;
+        }
+        if (!v.isIntegralNumber() || !v.canConvertToInt()) {
+            throw ApiException.invalid(field);
+        }
+        return v.intValue();
     }
 
     /**

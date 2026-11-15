@@ -11,7 +11,12 @@ public record GatewayProperties(List<String> trustedProxies, Database database, 
      * PLATFORM-CLIENT-EXECUCAO-REMOTA-001: chave do recurso (NEKKORA_EXECUCAO_REMOTA; ausente = desligado). Desligado, nenhuma
      * maquina e habilitada para execucao remota; o resto do canal nao muda.
      */
-    public record RemoteExecution(boolean enabled, Integer renewalWindowDays) {
+    public record RemoteExecution(boolean enabled, Integer renewalWindowDays, Integer leaseSeconds) {
+    }
+
+    /** T02: prazo da comunicacao de uma tentativa, renovado a cada escrita aceita (NEKKORA_EXECUCAO_REMOTA_LEASE_SEGUNDOS; padrao 90). */
+    public int leaseSeconds() {
+        return remoteExecution == null || remoteExecution.leaseSeconds() == null ? 90 : remoteExecution.leaseSeconds();
     }
 
     /**
