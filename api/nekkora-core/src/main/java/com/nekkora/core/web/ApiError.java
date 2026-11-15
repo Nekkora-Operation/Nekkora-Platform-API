@@ -103,6 +103,10 @@ public enum ApiError {
     REMOTE_MACHINE_BUSY(HttpStatus.CONFLICT, "conflict", "remote_machine_busy"),
     REMOTE_REQUIREMENTS_NOT_DECLARED(HttpStatus.CONFLICT, "conflict", "remote_requirements_not_declared"),
     REMOTE_REQUIREMENTS_CONFLICT(HttpStatus.CONFLICT, "conflict", "remote_requirements_conflict"),
+    /** Ninguem escolheu ainda o ambiente Python desta automacao nesta maquina. */
+    REMOTE_PYTHON_NOT_SELECTED(HttpStatus.CONFLICT, "conflict", "remote_python_not_selected"),
+    /** O ambiente Python indicado (ou o escolhido antes) nao esta no inventario atual da maquina. */
+    REMOTE_PYTHON_NOT_IN_INVENTORY(HttpStatus.CONFLICT, "conflict", "remote_python_not_in_inventory"),
     /** Repetir em outra maquina: a tentativa anterior ainda nao terminou. */
     REMOTE_ATTEMPT_NOT_FINISHED(HttpStatus.CONFLICT, "conflict", "remote_attempt_not_finished"),
     /** Cancelar: a tentativa ja terminou. */

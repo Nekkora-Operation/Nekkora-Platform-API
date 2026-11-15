@@ -41,6 +41,8 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
                 + "a".repeat(64) + "', '" + fx.adminMembership + "')");
     }
 
+    /** O identificador opaco de um ambiente Python (43 caracteres base64url), como a maquina o publicaria. */
+    static final String ENVIRONMENT = "E".repeat(43);
     static final String CAPABLE = "{\"agentVersion\":\"0.2.0+client\",\"contractVersion\":\"1.0\",\"capabilities\":[\"REMOTE_RUN_1_0\",\"PY_INVENTORY_1_0\"]}";
 
     /** Uma maquina habilitada, compativel e com a autorizacao da versao para o Worker dela. */
@@ -59,7 +61,14 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
         if (capable) {
             assertThat(m.post("/heartbeat", CAPABLE, credential).status()).isEqualTo(200);
         }
-        return new Machine(m, r.body().get("agentId").asString(), worker, ww, authorization, credential);
+        // 047: a tentativa so nasce com o Python da automacao escolhido NESTA maquina, do inventario dela
+        String agent = r.body().get("agentId").asString();
+        DB.asSuperuser("INSERT INTO agent_python_environments (agent_id, environment_id, organization_id, python_version, kind, observed_at) VALUES ('" + agent
+                + "', '" + ENVIRONMENT + "', '" + fx.org + "', '3.12.10', 1, clock_timestamp())");
+        DB.asSuperuser("INSERT INTO automation_python_selections (automation_id, agent_id, organization_id, workspace_id, environment_id, python_version, "
+                + "selected_by_membership_id) VALUES ('" + fx.automation + "', '" + agent + "', '" + fx.org + "', '" + fx.workspace + "', '" + ENVIRONMENT
+                + "', '3.0.0', '" + fx.adminMembership + "')");
+        return new Machine(m, agent, worker, ww, authorization, credential);
     }
 
     /** Solicitacao e primeira tentativa, na fila (fixture; os gatilhos da 046 conferem as exigencias). Devolve o id da tentativa. */
@@ -154,6 +163,8 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
         assertThat(offer.get("automationVersionId").asString()).isEqualTo(fx.version.toString());
         assertThat(offer.get("packageFingerprint").asString()).matches("[0-9a-f]{64}");
         assertThat(offer.get("dependencies").toString()).isEqualTo("[\"idna==3.7\"]");
+        // 047: o ambiente Python escolhido para a automacao NESTA maquina - o identificador que ela publicou, nunca um caminho
+        assertThat(offer.get("pythonEnvironmentId").asString()).isEqualTo(ENVIRONMENT);
         assertThat(offer.get("epoch").asInt()).isEqualTo(1);
         assertThat(offer.get("leaseSeconds").asInt()).isEqualTo(90);
         String token = offer.get("token").asString();
