@@ -58,7 +58,7 @@ class DesktopNavigationIT extends IdentityTestBase {
     }
 
     @Autowired
-    com.nekkora.platform.artifact.ArtifactStore artifacts;
+    com.nekkora.core.artifact.ArtifactStore artifacts;
     private static final String EXTERNAL_RULE = "nekkora-agent/external-python-fingerprint/1";
     private static final String FORBIDDEN = "{\"error\":\"forbidden\"}";
     private static final String NOT_FOUND = "{\"error\":\"not_found\"}";

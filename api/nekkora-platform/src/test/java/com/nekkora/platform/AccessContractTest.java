@@ -121,7 +121,9 @@ class AccessContractTest {
                 com.nekkora.core.web.ApiError.REMOTE_CODE_WITHOUT_ENABLEMENT, com.nekkora.core.web.ApiError.CODE_NOT_FOR_REMOTE_EXECUTION,
                 com.nekkora.core.web.ApiError.REMOTE_EXECUTION_NOT_ENABLED, com.nekkora.core.web.ApiError.CREDENTIAL_RENEWAL_NOT_DUE,
                 // T02: o token ou a epoca da atribuicao e a transicao de estado sao do canal da maquina
-                com.nekkora.core.web.ApiError.REMOTE_ATTEMPT_STALE, com.nekkora.core.web.ApiError.REMOTE_ATTEMPT_TRANSITION);
+                com.nekkora.core.web.ApiError.REMOTE_ATTEMPT_STALE, com.nekkora.core.web.ApiError.REMOTE_ATTEMPT_TRANSITION,
+                // T03: o pacote da tentativa, baixado so pela maquina
+                com.nekkora.core.web.ApiError.REMOTE_PACKAGE_UNAVAILABLE);
         for (com.nekkora.core.web.ApiError e : com.nekkora.core.web.ApiError.values()) {
             assertThat(codigos).as("codigo de erro publicado: " + e.code()).contains(e.code());
             if (e.reason() != null && !soDaMaquina.contains(e)) {
