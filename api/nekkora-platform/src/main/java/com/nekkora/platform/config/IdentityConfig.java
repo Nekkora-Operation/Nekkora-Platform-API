@@ -1,5 +1,9 @@
 package com.nekkora.platform.config;
 
+import java.time.Duration;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import com.nekkora.platform.desktop.DesktopLoginService;
+import com.nekkora.platform.desktop.DesktopStore;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -233,6 +237,27 @@ public class IdentityConfig {
                 p.session().passwordRecovery(), p.limits().recoveryResponseFloor());
     }
 
+    /** Login do aplicativo desktop (AGENT-CLIENT-LOGIN-001): estado curto no Redis; prazos de nekkora.desktop-login. */
+    @Bean
+    DesktopLoginService desktopLoginService(StringRedisTemplate redis, IdentityTransactions tx, IdentityAuthRepository auth, IdentityOrgRepository orgs,
+                                            PlatformProperties p,
+                                            @Value("${nekkora.desktop-login.request-ttl:5m}") Duration request,
+                                            @Value("${nekkora.desktop-login.code-ttl:60s}") Duration code,
+                                            @Value("${nekkora.desktop-login.session-ttl:15m}") Duration session) {
+        return new DesktopLoginService(new DesktopStore(redis), tx, auth, orgs, p.publicOrigin(), new DesktopLoginService.Prazos(request, code, session));
+    }
+
+    /**
+     * Navegacao do aplicativo desktop (AGENT-CLIENT-NAVEGACAO-001): a conferencia da pessoa e da identidade; a autorizacao por
+     * workspace, as consultas e a renomeacao sao os componentes da organizacao, ligados aqui.
+     */
+    @Bean
+    com.nekkora.platform.desktop.DesktopNavigationService desktopNavigationService(DesktopLoginService login, IdentityTransactions tx,
+            com.nekkora.platform.access.WorkspaceAccess access, com.nekkora.platform.admin.AutomationLifecycleService lifecycle,
+            com.nekkora.platform.paging.CursorCodec cursors) {
+        return new com.nekkora.platform.desktop.DesktopNavigationService(login, tx, access, lifecycle, cursors);
+    }
+
     /** Chaves separadas do cadastro, da entrada geral, da criacao de organizacao e da vinculacao: antes da cadeia de seguranca, depois do contexto e do limite de corpo. */
     @Bean
     FilterRegistrationBean<IdentityRoutesGate> identityRoutesGate(@Value("${nekkora.cadastro.enabled:false}") boolean signupEnabled,
@@ -240,9 +265,10 @@ public class IdentityConfig {
                                                                   @Value("${nekkora.criacao-organizacao.enabled:false}") boolean creationEnabled,
                                                                   @Value("${nekkora.vinculacao.enabled:false}") boolean linkEnabled,
                                                                   @Value("${nekkora.recuperacao-senha.enabled:false}") boolean recoveryEnabled,
-                                                                  @Value("${nekkora.convites.enabled:false}") boolean invitationsEnabled) {
+                                                                  @Value("${nekkora.convites.enabled:false}") boolean invitationsEnabled,
+                                                                  @Value("${nekkora.desktop-login.enabled:false}") boolean desktopEnabled) {
         FilterRegistrationBean<IdentityRoutesGate> r = new FilterRegistrationBean<>(new IdentityRoutesGate(signupEnabled, entryEnabled, creationEnabled,
-                linkEnabled, recoveryEnabled, invitationsEnabled));
+                linkEnabled, recoveryEnabled, invitationsEnabled, desktopEnabled));
         r.setOrder(Ordered.HIGHEST_PRECEDENCE + 2);
         r.addUrlPatterns("/api/*");
         return r;

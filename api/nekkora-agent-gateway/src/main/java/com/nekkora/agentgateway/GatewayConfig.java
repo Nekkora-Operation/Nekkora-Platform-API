@@ -123,6 +123,11 @@ public class GatewayConfig {
         return new GatewayService(tx, auth, p.limits().credentialDays());
     }
 
+    @Bean
+    MachineCatalog machineCatalog(OrgTransactions tx, MachineAuth auth) {
+        return new MachineCatalog(tx, auth);
+    }
+
     /** Mesmo DataSource: dentro da transacao da organizacao, usa a conexao vinculada a thread (contexto e RLS valem). */
     @Bean
     JdbcTemplate jdbcTemplate(ConnectionResetDataSource ds) {

@@ -57,6 +57,8 @@ services:
       # contas vinculadas (LinkedAccountsE2E): entrada geral, criacao de organizacao e vinculacao ligadas SO nesta stack
       # descartavel; o cadastro continua desligado (a identidade da jornada nasce na fixture: o e-mail real esta fora)
       NEKKORA_ENTRADA_GERAL: "true"
+      # login do aplicativo desktop (AGENT-CLIENT-LOGIN-001): ligado so nesta pilha descartavel
+      NEKKORA_LOGIN_DESKTOP: "true"
       NEKKORA_CRIACAO_ORGANIZACAO_ENABLED: "true"
       NEKKORA_VINCULACAO: "true"
       # recuperacao de senha da identidade (IdentityCredentialsE2E, missao 002): so nesta stack descartavel

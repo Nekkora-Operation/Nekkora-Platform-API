@@ -23,6 +23,9 @@ public final class Cookies {
     /** Vinculacao (contrato P3): desafio entre a prova da conta antiga e a confirmacao, 5 min. */
     public static final String LINK = "__Host-nekkora_link";
 
+    /** Login do aplicativo desktop (AGENT-CLIENT-LOGIN-001): pedido de autorizacao guardado no servidor, 5 min. */
+    public static final String DESKTOP_REQUEST = "__Host-nekkora_desk";
+
     private Cookies() {
     }
 
@@ -66,6 +69,11 @@ public final class Cookies {
     /** Desafio de vinculacao: SameSite=Strict, Max-Age do prazo do desafio (5 min). */
     public static void link(HttpServletResponse res, String token, Duration validity) {
         writeCookie(res, LINK, token, "Strict", validity.toSeconds());
+    }
+
+    /** Pedido do login do desktop: SameSite=Strict (toda a jornada e na mesma origem), Max-Age do prazo do pedido. */
+    public static void desktopRequest(HttpServletResponse res, String token, Duration validity) {
+        writeCookie(res, DESKTOP_REQUEST, token, "Strict", validity.toSeconds());
     }
 
     public static void pre(HttpServletResponse res, String id, Duration validity) {

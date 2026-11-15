@@ -43,7 +43,7 @@ public final class IdentityTransactions {
     public enum Mode { READ_ONLY, READ_WRITE }
 
     /** Chave exata de resolucao da identidade. Cada uma corresponde a uma funcao de consulta da 017. */
-    public sealed interface Chave permits TokenSessao, TokenDesafio, TokenEmail, EmailCadastro, NovaIdentidade {
+    public sealed interface Chave permits TokenSessao, TokenDesafio, TokenEmail, EmailCadastro, NovaIdentidade, SessaoDeOrigem {
     }
 
     /** Token bruto do cookie {@code __Host-nekkora_id}: {@code identity_session_lookup} (so sessao ativa e no prazo). */
@@ -67,6 +67,19 @@ public final class IdentityTransactions {
     }
 
     /** Cadastro de e-mail livre: a aplicacao gera o identity_id e o define como contexto ANTES do INSERT. */
+    /**
+     * Login do aplicativo desktop (AGENT-CLIENT-LOGIN-001): a identidade e a sessao de identidade que AUTORIZOU a entrada,
+     * como o servidor as gravou ao emitir o codigo (estado proprio, achado pelo hash de um token opaco). Nunca vem de
+     * parametro da requisicao. Nao ha funcao de consulta: a resolucao so poe o contexto, e o trabalho TEM de conferir, sob
+     * a RLS, que a sessao existe, e desta identidade e continua ativa - sem isso nao ha o que ler (falha fechada).
+     */
+    public record SessaoDeOrigem(UUID identityId, UUID sessionId) implements Chave {
+        public SessaoDeOrigem {
+            Objects.requireNonNull(identityId, "identityId");
+            Objects.requireNonNull(sessionId, "sessionId");
+        }
+    }
+
     public record NovaIdentidade() implements Chave {
     }
 
@@ -264,6 +277,7 @@ public final class IdentityTransactions {
             case EmailCadastro(String email) -> jdbc.sql("SELECT identity_id, status FROM public.identity_signup_state(?)").param(email)
                     .query((rs, n) -> new Linha(rs.getObject(1, UUID.class), null, rs.getShort(2))).optional();
             case NovaIdentidade n -> Optional.of(new Linha(UUID.randomUUID(), null, null));
+            case SessaoDeOrigem(UUID identity, UUID session) -> Optional.of(new Linha(identity, session, null));
         };
         return l.map(x -> new IdentidadeResolvida(x.identityId(), x.referencia(), x.status(), fonte));
     }

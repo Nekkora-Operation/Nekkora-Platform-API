@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
  * implementacao Python independente do gerador (tools/external-package/nekkora_empacotar.py, Nekkora-Agent) e e conferida
  * tambem pelo Agent. Nada e executado na inspecao.
  */
-class PackageInspectorExternalTest {
+public class PackageInspectorExternalTest {
 
     static final String MAIN = "sha256:dbccf933401a15cfe345e90891e20b5a05a495f552e4577b80c052276604e24f";
     static final String BIN = "sha256:d2ad9277baaee14856d20ec2b21f87a0cb8a7f86c6ef090fd5a082b1e85135ac";
@@ -69,6 +69,27 @@ class PackageInspectorExternalTest {
         assertThat(PackageInspector.inspect(PackageInspectorTest.zip(v)).dependencies()).containsExactly("requests==2.32.3", "openpyxl[lxml]==3.1.5");
     }
 
+    /**
+     * Um arquivo VAZIO comprimido (o {@code __init__.py} de um pacote Python, por exemplo) e um arquivo valido: o fluxo
+     * Deflate dele termina sem produzir nenhum byte. O leitor recusava o ZIP inteiro como "zip_malformado".
+     */
+    @Test
+    void arquivoVazioComprimidoNaoTornaOZipInvalido() throws Exception {
+        String vazio = PackageInspector.fileHash(new byte[0]);
+        Map<String, byte[]> v = withDescriptor(descriptor("main.py", "[]",
+                "{\"main.py\": \"" + MAIN + "\", \"util/x.bin\": \"" + BIN + "\", \"tarefas/__init__.py\": \"" + vazio + "\"}"));
+        v.put("tarefas/__init__.py", new byte[0]);
+        PackageInspector.Inspection in = PackageInspector.inspect(PackageInspectorTest.zip(v));
+        assertThat(in.packageKind()).isEqualTo(2);
+        assertThat(in.filesCount()).isEqualTo(3);
+        // um arquivo vazio que o ZIP diz ter conteudo continua recusado (tamanho declarado diferente do real)
+        byte[] zip = PackageInspectorTest.zip(v);
+        int at = PackageInspectorTest.central(zip, "tarefas/__init__.py");
+        java.nio.ByteBuffer.wrap(zip).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(at + 24, 5);
+        assertThatThrownBy(() -> PackageInspector.inspect(zip)).isInstanceOf(PackageInspector.Rejected.class)
+                .satisfies(e -> assertThat(((PackageInspector.Rejected) e).reason()).isEqualTo("zip_malformado"));
+    }
+
     @Test
     void recusasSemExecutarNada() throws Exception {
         assertRejected(with("main.py", "print('alterado')\r\n".getBytes(StandardCharsets.UTF_8)), "hash_divergente");
@@ -92,13 +113,51 @@ class PackageInspectorExternalTest {
         assertRejected(withDescriptor(descriptor("main.py", "[]", FILES).replace(">=3.10,<3.14", "qualquer")), "python_invalido");
     }
 
+    // ------------------------------------------------------------------ descritor 1.1 (AGENT-CLIENT-PREPARACAO-002)
+
+    /** O descritor do vetor com outra versao e outra linha de {@code python} ({@code ""} = sem a chave). */
+    public static String descriptor11(String version, String pythonLine) {
+        return descriptor("main.py", "[]", FILES).replace("\"version\": \"1.0.0\"", "\"version\": \"" + version + "\"")
+                .replace("\"python\": \">=3.10,<3.14\", ", pythonLine);
+    }
+
+    @Test
+    void descritorUmPontoUmAceitaAusenciaDoRequisitoEVersaoExata() throws Exception {
+        PackageInspector.Inspection sem = PackageInspector.inspect(PackageInspectorTest.zip(withDescriptor(descriptor11("1.1.0", ""))));
+        assertThat(sem.packageKind()).isEqualTo(2);
+        assertThat(sem.manifestVersion()).isEqualTo("1.1.0");
+        assertThat(sem.pythonRequirement()).as("sem restricao declarada: nulo, nunca uma faixa arbitraria").isNull();
+        assertThat(sem.rule()).isEqualTo("nekkora-agent/external-python-fingerprint/1");
+        assertThat(sem.fingerprint()).as("o descritor entra na impressao: outro descritor, outra impressao").isNotEqualTo(FINGERPRINT);
+        assertThat(PackageInspector.inspect(PackageInspectorTest.zip(withDescriptor(descriptor11("1.1.0", "\"python\": \"==3.12.0\", ")))).pythonRequirement())
+                .isEqualTo("==3.12.0");
+        assertThat(PackageInspector.inspect(PackageInspectorTest.zip(withDescriptor(descriptor11("1.1.7", "\"python\": \"==3.12.*\", ")))).pythonRequirement())
+                .isEqualTo("==3.12.*");
+    }
+
+    @Test
+    void descritorUmPontoZeroContinuaExigindoORequisitoEChavePresenteNuncaEAusencia() {
+        // 1.0: como sempre
+        assertRejected(withDescriptor(descriptor11("1.0.0", "")), "python_invalido");
+        assertRejected(withDescriptor(descriptor11("1.0.0", "\"python\": \"==3.12.0\", ")), "python_invalido");
+        // 1.1: chave presente tem de ser um requisito
+        assertRejected(withDescriptor(descriptor11("1.1.0", "\"python\": null, ")), "python_invalido");
+        assertRejected(withDescriptor(descriptor11("1.1.0", "\"python\": \"\", ")), "python_invalido");
+        assertRejected(withDescriptor(descriptor11("1.1.0", "\"python\": 3.12, ")), "python_invalido");
+        assertRejected(withDescriptor(descriptor11("1.1.0", "\"python\": \">=0\", ")), "python_invalido");
+        assertRejected(withDescriptor(descriptor11("1.1.0", "\"python\": \"==3.12.0.1\", ")), "python_invalido");
+        // versoes de descritor desconhecidas: recusadas, nunca aceitas ignorando campos
+        assertRejected(withDescriptor(descriptor11("1.2.0", "")), "manifesto_fora_do_contrato");
+        assertRejected(withDescriptor(descriptor11("2.0.0", "")), "manifesto_fora_do_contrato");
+    }
+
     static Map<String, byte[]> with(String name, byte[] data) {
         Map<String, byte[]> v = vector();
         v.put(name, data);
         return v;
     }
 
-    static Map<String, byte[]> withDescriptor(String text) {
+    public static Map<String, byte[]> withDescriptor(String text) {
         return with("nekkora-external.json", text.getBytes(StandardCharsets.UTF_8));
     }
 

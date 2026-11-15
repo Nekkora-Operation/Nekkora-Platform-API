@@ -60,7 +60,11 @@ public final class PackageInspector {
     private static final Pattern OPTION = Pattern.compile("--[a-z][a-z-]{0,30}");
     private static final Pattern FRAMEWORK = Pattern.compile("nekkora-rpa(\\[excel])?==([0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3})");
     private static final Pattern MANIFEST_VERSION = Pattern.compile("1\\.[4-9]\\.[0-9]{1,3}");
+    /** Descritor externo 1.0.x: requisito de Python obrigatorio. 1.1.x (AGENT-CLIENT-PREPARACAO-002): opcional, e aceita a versao exata. */
     private static final Pattern EXTERNAL_VERSION = Pattern.compile("1\\.0\\.[0-9]{1,3}");
+    private static final Pattern EXTERNAL_VERSION_11 = Pattern.compile("1\\.1\\.[0-9]{1,3}");
+    /** Versao EXATA de Python ({@code ==X.Y.Z}): so existe no descritor 1.1. */
+    private static final Pattern PYTHON_EXACT = Pattern.compile("==[0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{1,3}");
     private static final Pattern PACKAGE_NAME = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,79}");
     private static final Pattern SEMVER = Pattern.compile("[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,6}");
     private static final Pattern PYTHON = Pattern.compile("(>=|==|~=)[0-9]{1,2}\\.[0-9]{1,2}(\\.\\*)?(,<[0-9]{1,2}\\.[0-9]{1,2})?");
@@ -221,8 +225,9 @@ public final class PackageInspector {
     }
 
     /**
-     * Pacote externo: descritor {@code nekkora-external.json} 1.0.x com nome, versao, entrada relativa {@code .py} listada,
-     * versao de Python, dependencias com versao exata e a lista de arquivos com hash. Nada e executado; nenhum texto do
+     * Pacote externo: descritor {@code nekkora-external.json} 1.0.x ou 1.1.x com nome, versao, entrada relativa {@code .py}
+     * listada, requisito de Python (obrigatorio na 1.0; opcional na 1.1, que tambem aceita a versao exata {@code ==X.Y.Z}),
+     * dependencias com versao exata e a lista de arquivos com hash. Nada e executado; nenhum texto do
      * pacote vai para a resposta.
      */
     private static Inspection external(byte[] zip, Map<String, byte[]> files) throws Rejected {
@@ -240,7 +245,10 @@ public final class PackageInspector {
             throw new Rejected("manifesto_malformado");
         }
         String version = text(m, "version");
-        if (!EXTERNAL_SCHEMA.equals(text(m, "schema")) || version == null || !EXTERNAL_VERSION.matcher(version).matches()) {
+        boolean v10 = version != null && EXTERNAL_VERSION.matcher(version).matches();
+        boolean v11 = version != null && EXTERNAL_VERSION_11.matcher(version).matches();
+        // versao de descritor que este servidor nao conhece e recusada: nunca aceita ignorando um campo que ele nao entende
+        if (!EXTERNAL_SCHEMA.equals(text(m, "schema")) || !(v10 || v11)) {
             throw new Rejected("manifesto_fora_do_contrato");
         }
         String name = text(m, "name");
@@ -248,9 +256,16 @@ public final class PackageInspector {
         if (name == null || !PACKAGE_NAME.matcher(name).matches() || pkgVersion == null || !SEMVER.matcher(pkgVersion).matches()) {
             throw new Rejected("manifesto_fora_do_contrato");
         }
-        String python = text(m, "python");
-        if (python == null || !PYTHON.matcher(python).matches()) {
-            throw new Rejected("python_invalido");
+        // 1.0: requisito obrigatorio, nas formas da 1.0. 1.1: a CHAVE pode faltar - o autor nao declarou restricao de Python
+        // (guardado como NULL; nunca uma faixa arbitraria no lugar). Presente, precisa ser um texto valido: nulo, vazio ou de
+        // outro tipo nao e lido como "sem restricao".
+        String python = null;
+        if (v10 || m.has("python")) {
+            python = text(m, "python");
+            boolean exact = python != null && PYTHON_EXACT.matcher(python).matches();
+            if (python == null || !(PYTHON.matcher(python).matches() || (v11 && exact))) {
+                throw new Rejected("python_invalido");
+            }
         }
         JsonNode deps = m.get("dependencies");
         if (deps == null || !deps.isArray() || deps.size() > MAX_DEPENDENCIES) {
@@ -499,7 +514,9 @@ public final class PackageInspector {
                 long produced = 0;
                 while (!inf.finished()) {
                     int n = inf.inflate(buf);
-                    if (n == 0 && (inf.needsInput() || inf.needsDictionary())) {
+                    // um arquivo VAZIO comprimido (um __init__.py, por exemplo) termina sem produzir nenhum byte: o fluxo
+                    // acabou, e isso nao e um ZIP malformado. So e malformado quando faltam dados e o fluxo NAO terminou
+                    if (n == 0 && !inf.finished() && (inf.needsInput() || inf.needsDictionary())) {
                         throw new Rejected("zip_malformado");
                     }
                     produced += n;

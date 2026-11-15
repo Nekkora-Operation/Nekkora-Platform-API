@@ -47,6 +47,9 @@ public final class IdentityRoutesGate extends OncePerRequestFilter {
     static final Set<String> LINK_ROUTES = Set.of(AccountLinkController.START, AccountLinkController.CONFIRM);
     static final Set<String> RECOVERY_ROUTES = Set.of(IdentityAuthController.PASSWORD_RESET_REQUEST, IdentityAuthController.PASSWORD_RESET_CONFIRM);
     static final Set<String> INVITATION_ROUTES = Set.of(InvitationAcceptController.ACCEPT);
+    /** Login do aplicativo desktop: so abre com a entrada geral tambem ligada. O encerramento (REVOKE) nao tem chave. */
+    static final Set<String> DESKTOP_ROUTES = Set.of(DesktopLoginController.AUTHORIZATIONS, DesktopLoginController.AUTHORIZATION,
+            DesktopLoginController.APPROVE, DesktopLoginController.DENY, DesktopLoginController.TOKEN, DesktopLoginController.SESSION);
 
     private final boolean signupEnabled;
     private final boolean entryEnabled;
@@ -54,6 +57,7 @@ public final class IdentityRoutesGate extends OncePerRequestFilter {
     private final boolean linkEnabled;
     private final boolean recoveryEnabled;
     private final boolean invitationsEnabled;
+    private final boolean desktopEnabled;
 
     public IdentityRoutesGate(boolean signupEnabled, boolean entryEnabled, boolean creationEnabled, boolean linkEnabled) {
         this(signupEnabled, entryEnabled, creationEnabled, linkEnabled, false);
@@ -65,6 +69,12 @@ public final class IdentityRoutesGate extends OncePerRequestFilter {
 
     public IdentityRoutesGate(boolean signupEnabled, boolean entryEnabled, boolean creationEnabled, boolean linkEnabled, boolean recoveryEnabled,
                               boolean invitationsEnabled) {
+        this(signupEnabled, entryEnabled, creationEnabled, linkEnabled, recoveryEnabled, invitationsEnabled, false);
+    }
+
+    public IdentityRoutesGate(boolean signupEnabled, boolean entryEnabled, boolean creationEnabled, boolean linkEnabled, boolean recoveryEnabled,
+                              boolean invitationsEnabled, boolean desktopEnabled) {
+        this.desktopEnabled = desktopEnabled;
         this.signupEnabled = signupEnabled;
         this.entryEnabled = entryEnabled;
         this.creationEnabled = creationEnabled;
@@ -79,12 +89,18 @@ public final class IdentityRoutesGate extends OncePerRequestFilter {
         return !(closed(req.getRequestURI()) || closed(req.getServletPath()));
     }
 
+    /** Rotas de navegacao do aplicativo (AGENT-CLIENT-NAVEGACAO-001): caminhos com ids, fechados pelo prefixo inteiro. */
+    private static boolean desktopNavigation(String path) {
+        return path != null && DesktopNavigationController.ROUTES.matcher(path).matches();
+    }
+
     private boolean closed(String path) {
         return (!signupEnabled && SIGNUP_ROUTES.contains(path)) || (!entryEnabled && ENTRY_ROUTES.contains(path))
                 || (!(entryEnabled && creationEnabled) && CREATION_ROUTES.contains(path))
                 || (!(entryEnabled && linkEnabled) && LINK_ROUTES.contains(path))
                 || (!(entryEnabled && recoveryEnabled) && RECOVERY_ROUTES.contains(path))
-                || (!(entryEnabled && invitationsEnabled) && INVITATION_ROUTES.contains(path));
+                || (!(entryEnabled && invitationsEnabled) && INVITATION_ROUTES.contains(path))
+                || (!(entryEnabled && desktopEnabled) && (DESKTOP_ROUTES.contains(path) || desktopNavigation(path)));
     }
 
     @Override

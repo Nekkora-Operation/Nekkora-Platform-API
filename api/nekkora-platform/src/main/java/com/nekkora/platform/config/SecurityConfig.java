@@ -45,7 +45,22 @@ public class SecurityConfig {
             "/api/v1/auth/login", "/api/v1/auth/mfa/enroll/start", "/api/v1/auth/mfa/enroll/confirm", "/api/v1/auth/mfa/verify",
             "/api/v1/auth/logout",
             // recuperacao de senha da identidade (missao 002): sem sessao; CSRF de pre-autenticacao. Desligada: 404 antes daqui
-            "/api/v1/auth/password-reset/request", "/api/v1/auth/password-reset/confirm"};
+            "/api/v1/auth/password-reset/request", "/api/v1/auth/password-reset/confirm",
+            // login do aplicativo desktop (AGENT-CLIENT-LOGIN-001): abrir e recusar o pedido (CSRF de pre-autenticacao); troca
+            // do codigo e encerramento pelo aplicativo (sem cookie: codigo + PKCE, ou token Bearer conferido no servico)
+            "/api/v1/desktop/authorizations", "/api/v1/desktop/authorization/deny", "/api/v1/desktop/token",
+            "/api/v1/desktop/session/revoke"};
+
+    /**
+     * Navegacao do aplicativo desktop (AGENT-CLIENT-NAVEGACAO-001): so estas formas e metodos. O token Bearer, o escopo e o
+     * acesso a organizacao sao conferidos no servico, a cada requisicao; nenhum cookie e lido nelas.
+     */
+    private static final String[] DESKTOP_NAVIGATION_GET_ROUTES = {
+            "/api/v1/desktop/me", "/api/v1/desktop/organizations", "/api/v1/desktop/organizations/*/workspaces",
+            "/api/v1/desktop/organizations/*/workspaces/*/automations", "/api/v1/desktop/organizations/*/automations/*/versions",
+            // AGENT-CLIENT-PACOTES-001: pacote de uma versao publicada (escopo e permissao conferidos no servico)
+            "/api/v1/desktop/organizations/*/automations/*/versions/*/package"};
+    private static final String DESKTOP_RENAME_ROUTE = "/api/v1/desktop/organizations/*/automations/*";
 
     @Bean
     SecurityFilterChain apiSecurityFilterChain(HttpSecurity http, OrgTransactions tx, SessionRepository sessions, Limits limits, PreAuthCsrf pre,
@@ -59,6 +74,10 @@ public class SecurityConfig {
                 .headers(h -> h.frameOptions(f -> f.deny()))
                 .authorizeHttpRequests(a -> a
                         .requestMatchers(HttpMethod.GET, "/api/v1/csrf").permitAll()
+                        // sessao do aplicativo desktop: token Bearer conferido no servico (Redis + sessao de origem no banco)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/desktop/session").permitAll()
+                        .requestMatchers(HttpMethod.GET, DESKTOP_NAVIGATION_GET_ROUTES).permitAll()
+                        .requestMatchers(HttpMethod.PATCH, DESKTOP_RENAME_ROUTE).permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLIC_POST_ROUTES).permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())
