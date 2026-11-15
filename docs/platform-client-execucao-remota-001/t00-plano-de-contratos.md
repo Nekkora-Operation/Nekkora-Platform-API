@@ -69,7 +69,7 @@ diálogo antigo fica como está.
 |---|---|---|
 | D1 | Contrato **novo e separado** (`/agent/api/v1/remote/*`, tabelas `remote_*`), sem tocar em `run_requests`/`agent_runs` | o fluxo antigo tem outra semântica e um consumidor em uso; misturar exigiria mudar a máquina de estados dele |
 | D2 | A habilitação reaproveita o **código de pareamento**: a pessoa com autoridade cria na Web um código marcado "execuções pela Platform"; no Client, a pessoa lê a consequência e digita o código | a autoridade é conferida no servidor (permissão + confirmação reforçada + gatilho do banco); o Client sozinho não concede nada |
-| D3 | Depois de habilitada, vale a regra: Worker autorizado no ambiente + máquina habilitada + pessoa com `automation.execute` ⇒ qualquer versão **publicada** daquele ambiente pode ser pedida, sem confirmação na máquina | é a decisão de produto da missão; a tela de habilitação diz isso antes |
+| D3 | Depois de habilitada, a máquina executa versões **publicadas** dos ambientes em que o Worker está autorizado, sem confirmação presencial a cada pedido — **e sem contornar as autorizações que já existem**: continua valendo a autorização vigente daquele Worker para aquela versão (a mesma que o fluxo antigo exige), e uma autorização só de monitoramento não serve para executar | decisão da titular (15/11); a habilitação remota é uma condição a mais, nunca um atalho |
 | D4 | Solicitação lógica e **tentativas** em tabelas separadas; toda tentativa tem máquina, época, token e histórico | repetição em outra máquina sem perder histórico |
 | D5 | Consulta de saída iniciada pelo Client (sem porta de entrada na máquina), com lease e token de atribuição | exigência da missão; lease vencido vira "comunicação perdida", nunca redistribuição |
 | D6 | Logs em tabela própria de linhas de texto, com ACK por sequência | o envelope estruturado do canal antigo não comporta texto livre |
@@ -254,16 +254,21 @@ da máquina continua, e a tela de entrada diz isso.
 | Limite | Valor | Ao atingir |
 |---|---|---|
 | Linha de log | 8 KiB | truncada, com marca visível |
-| Logs por tentativa | 50.000 linhas ou 20 MiB | evento "limite atingido"; o processo continua; a lacuna aparece na Web |
+| Logs por tentativa | 50.000 linhas ou 20 MiB | a captura **não para em silêncio**: grava um evento "limite de logs atingido", continua lendo a saída do processo (para ele não travar) e descarta o excedente contando as linhas; o processo segue e **o resultado do robô não muda**; a Web mostra o truncamento e o estado final verdadeiro |
 | Lote de logs | 200 linhas ou 256 KiB | — |
 | Fila local (todas as tentativas) | 200 MiB | novos trabalhos recusados com `DISK_PRESSURE` |
 | Espaço livre mínimo no disco de dados | 1 GiB | idem |
 | Resultados por tentativa | 50 arquivos, 20 MiB cada, 50 MiB no total | o excedente não é enviado e é listado como "não enviado: limite" |
 | Retenção na fila local sem conseguir enviar | 7 dias | descarte com registro; a Web mostra a lacuna |
-| Retenção de logs no servidor | 30 dias | redação, como na 026 |
-| Retenção de resultados no servidor | 30 dias | remoção com registro |
+| Retenção de **logs** no servidor | 30 dias | o texto das linhas é redigido (como na 026); fica o registro de que existiram e quantas eram |
+| Retenção de **resultados** no servidor | 30 dias | os arquivos são removidos; ficam nome, tamanho, SHA-256 e a data da remoção |
+| Retenção do **histórico de execução** (solicitação, tentativas, estados, quem pediu, máquina, auditoria) | não expira por esta regra | segue a política de auditoria da Platform; nenhuma regra desta missão o apaga |
 | Limpeza do código temporário | imediata; novas tentativas com espera crescente por 24 h | "limpeza pendente", com o motivo |
 | Tempo máximo da tentativa | 60 min (o do executor local) | `TIMED_OUT` |
+
+Os valores são **provisórios de laboratório**: todos configuráveis, cada um com o comportamento ao ser atingido escrito
+acima. A titular aceitou quatro como ponto de partida (logs por tentativa, fila local, resultados por tentativa e retenção de
+30 dias); a tabela inteira ainda precisa ser conferida antes de valer fora do laboratório.
 
 A limpeza depende de o Client voltar a rodar: com a máquina desligada, nada é apagado. Só são apagadas pastas de posse
 comprovada dentro da raiz gerenciada, conferindo caminho real e links. Não há apagamento forense.
@@ -273,7 +278,10 @@ comprovada dentro da raiz gerenciada, conferindo caminho real e links. Não há 
 - Pacote novo `com.nekkora.client.remote`: credencial (DPAPI), heartbeat, consulta, download, fila e relatórios.
 - `run` continua sem rede. O executor ganha a origem da execução como dado do registro (`LOCAL` ou `PLATFORM`), e o
   diário recusa misturar: uma execução `LOCAL` nunca entra na fila nem em rota de máquina.
-- Captura de stdout e stderr passa a existir (hoje é descartada), com leitura incremental que nunca bloqueia o processo.
+- **Captura de stdout e stderr é funcionalidade nova.** Hoje o Client drena a saída do processo e a descarta (só conta
+  os bytes): não existe log nem da execução local. A missão cria a captura, com leitura incremental que nunca bloqueia o
+  processo. Os logs de uma execução **local** ficam só no Client; os de uma execução **remota** são consultados só na
+  Platform.
 - Os testes de arquitetura são reescritos, não removidos: rede de máquina só em `remote`; `pack`, `run` e `nav` sem
   rede; rotas de pessoa continuam só em `/api/v1/desktop/`; e um teste novo prova que uma execução local não gera
   nenhuma chamada de máquina.
@@ -334,18 +342,43 @@ antiga é reentregue ao religar. Resultados e logs não são apagados na revers�
 
 - **Desligamento abrupto real:** precisa de uma VM descartável ou máquina de ensaio autorizada. Sem ela, só será provado
   o encerramento abrupto do processo do Client, e o relatório dirá isso. O computador pessoal não será desligado.
-- **Dois Workers:** serão dois perfis e processos isolados **no mesmo computador**, e o relatório dirá isso.
+- **Dois Workers:** serão dois perfis e processos isolados **no mesmo computador**. Isso comprova o isolamento e o
+  encaminhamento entre Workers; **não comprova** portabilidade entre computadores com instalações diferentes (outro
+  Python, outras bibliotecas, outros caminhos).
 - **Desktop desbloqueado:** só é validável o que o Windows informa sobre a sessão; automação que exige tela desbloqueada
   fica como limite declarado.
 - **Isolamento:** a pasta por tentativa não isola o processo.
 
-## 10. Decisões da titular antes do T01
+## 10. Decisões da titular (15/11/2026)
 
-1. **D2 — quem habilita:** código de pareamento criado na Web por quem tem as permissões de agente (hoje, administração da
-   organização), digitado no Client. Alternativa: uma permissão nova, só de habilitação remota.
-2. **D1 — contrato separado** do fluxo do Agent antigo, que continua existindo sem mudança.
-3. **D3 — alcance:** máquina habilitada executa qualquer versão publicada dos ambientes em que o Worker está autorizado,
-   a pedido de quem tem `automation.execute`. Alternativa mais restrita: lista de automações permitidas por máquina.
-4. **Limites** da seção 5.11.
-5. **Web #46:** mesclar ou fechar antes dos PRs da Web desta missão.
-6. **VM de ensaio** para o teste de desligamento real: há uma disponível?
+| # | Decisão |
+|---|---|
+| 1. Habilitação | Reutilizar o pareamento por código, **explicitamente marcado para execução remota**, com confirmação no Client. O servidor verifica a permissão para administrar o vínculo e o Worker envolvido. |
+| 2. Contrato separado | Sim: fluxo novo ao lado do antigo, que mantém o comportamento. Componentes comuns são reaproveitados quando adequado. |
+| 3. Alcance | Versões publicadas dos ambientes autorizados, **respeitando as autorizações vigentes de automação e de monitoramento que já existirem**. Habilitar a execução remota não contorna essas regras. Uma lista adicional por máquina fica para depois. |
+| 4. Limites | Os quatro valores apresentados servem como ponto de partida **no laboratório**. Todos configuráveis, com comportamento explícito ao atingir cada um. A tabela completa ainda precisa ser conferida antes de aprovar todos os valores. |
+| 5. Web #46 | Não mesclar nem fechar automaticamente. A missão pode desenvolver e abrir PRs da Web, mas as mudanças ficam **fora da `dev` da Web** até a promoção anterior ser resolvida. Não impede a API. |
+| 6. VM | Não presumir que exista. Seguir com testes isolados de encerramento do processo; o desligamento real fica identificado como **pendente**. O computador pessoal nunca é desligado. |
+
+Condições acrescentadas pela titular, já incorporadas acima:
+
+- **Logs:** atingir o limite não interrompe a captura em silêncio nem transforma o resultado do robô em falha; a Platform
+  indica o truncamento e preserva o estado final (seção 5.11).
+- **Retenção:** logs, resultados e histórico de execução têm regras distintas (seção 5.11).
+- **Troca de máquina:** dois perfis no mesmo computador não comprovam portabilidade entre computadores (seção 9).
+- **Captura de stdout/stderr** é funcionalidade nova e fica explícita na entrega (seção 5.12).
+
+### Como a decisão 3 foi lida
+
+Para solicitar uma execução remota, o servidor exige **todas** as condições:
+
+1. o Worker está autorizado no ambiente (regra existente);
+2. a máquina foi habilitada para execução remota e a habilitação não foi revogada nem está pausada;
+3. existe uma **autorização vigente daquele Worker para aquela versão**, com a mesma impressão digital — a autorização
+   de execução que o fluxo antigo já exige, criada por quem tem `automation.execute`, com confirmação reforçada e prazo;
+4. essa autorização não é só de monitoramento (essas não servem para executar, como hoje);
+5. a pessoa que solicita tem `automation.execute` no ambiente.
+
+A habilitação remota dispensa a confirmação **na máquina** a cada pedido; não dispensa a autorização da versão na
+Platform. Se a intenção era outra (por exemplo, dispensar a autorização por versão), isto precisa ser dito antes do T02,
+que é onde a solicitação é implementada.
