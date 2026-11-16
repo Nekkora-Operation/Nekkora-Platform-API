@@ -3609,7 +3609,7 @@ components:
           type: array
           items:
             type: object
-            required: [attemptId, attemptNumber, agentId, agentName, workerId, workerName, state, refusalReason, communication, exitCode, createdAt, offerValidUntil, offeredAt, receivedAt, startedAt, endedAt]
+            required: [attemptId, attemptNumber, agentId, agentName, workerId, workerName, state, refusalReason, communication, exitCode, createdAt, offerValidUntil, offeredAt, receivedAt, startedAt, endedAt, closureCause, lateReport]
             properties:
               attemptId: { type: string, format: uuid }
               attemptNumber: { type: integer }
@@ -3618,8 +3618,8 @@ components:
               workerId: { type: string, format: uuid }
               workerName: { type: string }
               state: { $ref: '#/components/schemas/RemoteAttemptState' }
-              refusalReason: { type: [string, 'null'], enum: [BUSY, PAUSED, PACKAGE_INVALID, ENVIRONMENT_GONE, ENVIRONMENT_INCOMPATIBLE, DEPENDENCIES_MISSING, DISK_PRESSURE, CLIENT_INCOMPATIBLE, SESSION_UNAVAILABLE, AUTHORIZATION_MISSING, AUTHORIZATION_REVOKED, AUTHORIZATION_EXPIRED, WORKER_NOT_AUTHORIZED, MACHINE_NOT_LINKED, MACHINE_NOT_ENABLED, MACHINE_INCOMPATIBLE, null] }
-              communication: { type: string, enum: [OK, LOST, NONE], description: 'LOST: o prazo da maquina venceu; nao muda o estado' }
+              refusalReason: { type: [string, 'null'], enum: [BUSY, PAUSED, PACKAGE_INVALID, ENVIRONMENT_GONE, ENVIRONMENT_INCOMPATIBLE, DEPENDENCIES_MISSING, DISK_PRESSURE, CLIENT_INCOMPATIBLE, SESSION_UNAVAILABLE, AUTHORIZATION_MISSING, AUTHORIZATION_REVOKED, AUTHORIZATION_EXPIRED, WORKER_NOT_AUTHORIZED, MACHINE_NOT_LINKED, MACHINE_NOT_ENABLED, MACHINE_INCOMPATIBLE, COMMUNICATION_LOST, null] }
+              communication: { type: string, enum: [OK, LOST, NONE], description: 'LOST: o prazo da maquina venceu. Vencido ha mais que a espera configurada (padrao 120 min), a tentativa recebida e encerrada pelo servidor (closureCause COMMUNICATION_LOST)' }
               exitCode: { type: [integer, 'null'] }
               createdAt: { type: string, format: date-time }
               offerValidUntil: { type: string, format: date-time }
@@ -3627,6 +3627,24 @@ components:
               receivedAt: { type: [string, 'null'], format: date-time }
               startedAt: { type: [string, 'null'], format: date-time }
               endedAt: { type: [string, 'null'], format: date-time }
+              closureCause:
+                type: [string, 'null']
+                enum: [MACHINE_UNLINKED, MACHINE_REVOKED, COMMUNICATION_LOST, null]
+                description: >
+                  Por que o SERVIDOR encerrou a tentativa (a maquina desvinculou-se, foi revogada, ou deixou de se comunicar
+                  alem da espera). Nulo: o desfecho veio da maquina. O servidor so encerra como REFUSED (nunca autorizou o
+                  inicio; refusalReason MACHINE_NOT_LINKED ou COMMUNICATION_LOST) ou ENDED_UNKNOWN (autorizada a iniciar ou
+                  em execucao): nunca sucesso, falha nem cancelamento.
+              lateReport:
+                type: [object, 'null']
+                description: >
+                  O que a maquina informou DEPOIS de um encerramento por COMMUNICATION_LOST. Fica ao lado: o estado da
+                  tentativa nao muda (uma nova tentativa pode ja ter sido pedida).
+                required: [state, exitCode, reportedAt]
+                properties:
+                  state: { type: string, enum: [SUCCEEDED, FAILED, CANCELLED, TIMED_OUT, ENDED_UNKNOWN] }
+                  exitCode: { type: [integer, 'null'] }
+                  reportedAt: { type: string, format: date-time }
     RemoteAttemptState:
       type: string
       enum: [QUEUED, OFFERED, RECEIVED, PREPARING, STARTING, RUNNING, SUCCEEDED, FAILED, CANCELLED, TIMED_OUT, REFUSED, EXPIRED, ENDED_UNKNOWN]

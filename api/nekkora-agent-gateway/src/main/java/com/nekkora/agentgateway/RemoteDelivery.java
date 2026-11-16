@@ -33,8 +33,11 @@ import tools.jackson.databind.json.JsonMapper;
  * ainda habilitada e compativel, autorizacao da versao ainda vigente para este Worker. Se algo deixou de valer durante a
  * espera ou a preparacao, a tentativa NAO inicia: fica REFUSED com o motivo, e a resposta diz a maquina para nao prosseguir.
  *
- * <p>Entregar nao prova recebimento; receber nao prova inicio. O prazo (lease) vencido so quer dizer comunicacao perdida:
- * nao muda o estado nem encerra a tentativa. Nao ha troca automatica de maquina.
+ * <p>Entregar nao prova recebimento; receber nao prova inicio. O prazo (lease) vencido so quer dizer comunicacao perdida.
+ * Vencido ha mais que a espera configurada (053), a tentativa recebida e encerrada pelo servidor, sem inventar desfecho: a que
+ * ele nunca autorizou a iniciar fica REFUSED (COMMUNICATION_LOST); a autorizada a iniciar ou em execucao fica ENDED_UNKNOWN.
+ * Se a maquina voltar e disser como o processo terminou, isso e guardado AO LADO (relato tardio) e o estado nao muda.
+ * Registros e resultados continuam aceitos. Nao ha troca automatica de maquina.
  */
 public final class RemoteDelivery {
 
@@ -68,16 +71,18 @@ public final class RemoteDelivery {
      * {@code refusalReason}: so em REFUSED. {@code cancelRequested}: a pessoa pediu o cancelamento.
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record Status(UUID attemptId, String state, boolean proceed, String refusalReason, boolean cancelRequested, int leaseSeconds) {
+    public record Status(UUID attemptId, String state, boolean proceed, String refusalReason, boolean cancelRequested, int leaseSeconds,
+                         String closureCause) {
     }
 
     private record Row(UUID attemptId, UUID execution, short state, String reason, String tokenHash, int epoch, UUID worker, UUID authorization,
-                       boolean cancelRequested, boolean offerExpired) {
+                       boolean cancelRequested, boolean offerExpired, String closureCause, boolean lateReported) {
     }
 
     private final OrgTransactions tx;
     private final MachineAuth auth;
     private final int leaseSeconds;
+    private final int lostMinutes;
     private final com.nekkora.core.artifact.ArtifactStore packages;
     private final com.nekkora.core.artifact.ResultStore results;
     /** Limites dos resultados de uma tentativa (pontos de partida de laboratorio; os mesmos da 050). */
@@ -89,8 +94,9 @@ public final class RemoteDelivery {
     private static final java.util.regex.Pattern SHA256 = java.util.regex.Pattern.compile("^[0-9a-f]{64}$");
 
     /** {@code leaseSeconds}: prazo da comunicacao, renovado a cada escrita aceita (ponto de partida de laboratorio: 90 s). */
-    public RemoteDelivery(OrgTransactions tx, MachineAuth auth, int leaseSeconds, com.nekkora.core.artifact.ArtifactStore packages,
+    public RemoteDelivery(OrgTransactions tx, MachineAuth auth, int leaseSeconds, int lostMinutes, com.nekkora.core.artifact.ArtifactStore packages,
                           com.nekkora.core.artifact.ResultStore results) {
+        this.lostMinutes = com.nekkora.core.remote.AttemptClosure.lostMinutes(lostMinutes);
         this.packages = packages;
         this.results = results;
         this.tx = tx;
@@ -109,6 +115,11 @@ public final class RemoteDelivery {
                     .param(m.organization()).param(m.agentId()).query(Short.class).optional().orElse(null);
             if (receiving == null) {
                 throw new ApiException(ApiError.REMOTE_EXECUTION_NOT_ENABLED, "maquina_nao_habilitada");
+            }
+            // 053: a tentativa que esta maquina recebeu e deixou sem comunicacao alem da espera ja nao e dela
+            if (com.nekkora.core.remote.AttemptClosure.lost(j, m.organization(), null, m.agentId(), null, lostMinutes) > 0) {
+                LOG.info("evento=execucao_remota.encerrada_pelo_servidor causa=COMMUNICATION_LOST agente={} correlacao={}", m.agentId(),
+                        RequestContext.correlation());
             }
             Row a = active(j, m).orElse(null);
             if (a == null) {
@@ -176,7 +187,14 @@ public final class RemoteDelivery {
             Machine m = auth.authenticate(j, t);
             Row a = owned(j, m, attemptId, token, epoch);
             if (a.state() >= 7) {
-                // ja terminada (pelo servidor ou por esta maquina): nada muda; a maquina nao segue
+                // ja terminada (pelo servidor ou por esta maquina): o estado nao muda; a maquina nao segue
+                if (a.state() == 13 && com.nekkora.core.remote.AttemptClosure.COMMUNICATION_LOST.equals(a.closureCause()) && !a.lateReported()
+                        && wanted >= 7 && wanted != 11) {
+                    // a maquina voltou e diz como o processo terminou: fica guardado ao lado, uma vez
+                    j.sql("UPDATE public.remote_attempts SET late_state = ?, late_exit_code = ? WHERE organization_id = ? AND attempt_id = ?")
+                            .param(wanted).param(exitCode).param(m.organization()).param(attemptId).update();
+                    LOG.info("evento=execucao_remota.relato_tardio tentativa={} informado={} correlacao={}", attemptId, state, RequestContext.correlation());
+                }
                 return status(j, m, attemptId, false);
             }
             if (a.state() == wanted) {
@@ -556,14 +574,14 @@ public final class RemoteDelivery {
 
     private static final String SELECT = """
             SELECT t.attempt_id, t.remote_execution_id, t.state, t.refusal_reason, t.token_hash, t.epoch, t.worker_id, t.authorization_id,
-                   x.cancel_requested_at IS NOT NULL, t.offer_valid_until <= clock_timestamp()
+                   x.cancel_requested_at IS NOT NULL, t.offer_valid_until <= clock_timestamp(), t.closure_cause, t.late_state IS NOT NULL
               FROM public.remote_attempts t
               JOIN public.remote_executions x ON x.organization_id = t.organization_id AND x.remote_execution_id = t.remote_execution_id
             """;
 
     private static Row row(java.sql.ResultSet rs) throws java.sql.SQLException {
         return new Row(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getShort(3), rs.getString(4), rs.getString(5), rs.getInt(6),
-                rs.getObject(7, UUID.class), rs.getObject(8, UUID.class), rs.getBoolean(9), rs.getBoolean(10));
+                rs.getObject(7, UUID.class), rs.getObject(8, UUID.class), rs.getBoolean(9), rs.getBoolean(10), rs.getString(11), rs.getBoolean(12));
     }
 
     /** A tentativa nao terminada desta maquina (no maximo uma: indice da 046), travada para esta transacao. */
@@ -576,9 +594,15 @@ public final class RemoteDelivery {
      * A tentativa DESTA maquina, com o token e a epoca vigentes. De outra maquina, ou inexistente: 404. Token ou epoca que nao
      * sao os vigentes: 409 remote_attempt_stale, e nada e alterado.
      */
-    private static Row owned(JdbcClient j, Machine m, UUID attemptId, String token, Integer epoch) {
+    private Row owned(JdbcClient j, Machine m, UUID attemptId, String token, Integer epoch) {
         if (attemptId == null || token == null || epoch == null || !Tokens.isValidFormat(token)) {
             throw ApiException.invalid("atribuicao");
+        }
+        // 053: sem comunicacao alem da espera, a tentativa ja esta encerrada quando a maquina volta - a mesma regra que as
+        // pessoas veem. O que ela disser depois e relato tardio; registros e resultados continuam aceitos
+        if (com.nekkora.core.remote.AttemptClosure.lost(j, m.organization(), null, m.agentId(), attemptId, lostMinutes) > 0) {
+            LOG.info("evento=execucao_remota.encerrada_pelo_servidor causa=COMMUNICATION_LOST tentativa={} correlacao={}", attemptId,
+                    RequestContext.correlation());
         }
         Row a = j.sql(SELECT + " WHERE t.organization_id = ? AND t.attempt_id = ? AND t.agent_id = ? FOR UPDATE OF t")
                 .param(m.organization()).param(attemptId).param(m.agentId()).query((rs, n) -> row(rs)).optional()
@@ -615,7 +639,8 @@ public final class RemoteDelivery {
 
     private Status status(JdbcClient j, Machine m, UUID attemptId, boolean proceed) {
         return j.sql(SELECT + " WHERE t.organization_id = ? AND t.attempt_id = ?").param(m.organization()).param(attemptId).query((rs, n) -> row(rs)).optional()
-                .map(a -> new Status(attemptId, STATES.get(a.state() - 1), proceed && a.state() < 7, a.reason(), a.cancelRequested(), leaseSeconds)).orElseThrow();
+                .map(a -> new Status(attemptId, STATES.get(a.state() - 1), proceed && a.state() < 7, a.reason(), a.cancelRequested(), leaseSeconds,
+                        a.closureCause())).orElseThrow();
     }
 
     private Offer offer(JdbcClient j, Machine m, UUID attemptId, String token, int epoch) {

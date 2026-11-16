@@ -358,6 +358,13 @@ public final class GatewayService {
         j.sql("UPDATE public.worker_agent_assignments SET status = 2, ended_at = clock_timestamp(), ended_by_agent_id = agent_id "
                 + "WHERE organization_id = ? AND assignment_id = ? AND status = 1").param(org).param(v.assignmentId()).update();
         j.sql("UPDATE public.agents SET status = 4 WHERE organization_id = ? AND agent_id = ? AND status = 2").param(org).param(agent).update();
+        // 053: a tentativa de execucao remota desta maquina nao fica aberta - o que nao iniciou fica "nao iniciou", o que podia
+        // estar em execucao fica "sem confirmacao". A maquina nao tem mais como informar nada depois deste commit
+        int attempts = com.nekkora.core.remote.AttemptClosure.linkEnded(j, org, agent, com.nekkora.core.remote.AttemptClosure.MACHINE_UNLINKED);
+        if (attempts > 0) {
+            LOG.info("evento=execucao_remota.encerrada_pelo_servidor causa=MACHINE_UNLINKED agente={} tentativas={} correlacao={}", agent, attempts,
+                    RequestContext.correlation());
+        }
         j.sql("INSERT INTO public.agent_admin_events (organization_id, act, actor_agent_id, agent_id, worker_id, credential_id, reason_code) "
                 + "VALUES (?, ?, ?, ?, ?, ?, 'MACHINE_UNLINK')").param(org).param((short) ACT_MACHINE_UNLINK).param(agent).param(agent)
                 .param(v.workerId()).param(v.credentialId()).update();

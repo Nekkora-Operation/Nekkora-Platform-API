@@ -886,4 +886,208 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
         assertThat(asRole("nekkora_platform", "UPDATE remote_attempts SET state = 9 WHERE attempt_id = '" + queued + "'")).isEqualTo("42501");
         assertThat(g).isNotBlank();
     }
+
+    // ------------------------------------------------------------------ 053: encerramento sem confirmacao
+
+    private String cause(String attempt) {
+        return fx.value("SELECT state || '|' || coalesce(refusal_reason, '-') || '|' || coalesce(closure_cause, '-') || '|' || coalesce(exit_code::text, '-') "
+                + "|| '|' || (ended_at IS NOT NULL) FROM remote_attempts WHERE attempt_id = '" + attempt + "'");
+    }
+
+    private String running(Machine m, String attempt) {
+        String grant = received(m, attempt);
+        for (String st : new String[] {"PREPARING", "STARTING", "RUNNING"}) {
+            assertThat(state(m, attempt, grant, st, null).status()).isEqualTo(200);
+        }
+        return grant;
+    }
+
+    private static MachineClient.Response unlink(Machine m) {
+        return m.client().unlinkWith(m.credential(), UUID.randomUUID().toString(), m.agent(), java.util.List.of());
+    }
+
+    @Test
+    void desvinculoPelaMaquinaEncerraATentativaDelaSemInventarDesfecho() {
+        // tres maquinas, tres momentos: na fila, em preparacao (o servidor nunca autorizou o inicio) e em execucao
+        Machine queued = machine(true);
+        String inQueue = queued(queued);
+        Machine preparing = machine(true);
+        String inPreparation = queued(preparing);
+        String gp = received(preparing, inPreparation);
+        assertThat(state(preparing, inPreparation, gp, "PREPARING", null).status()).isEqualTo(200);
+        Machine busy = machine(true);
+        String inExecution = queued(busy);
+        String gr = running(busy, inExecution);
+        assertThat(logs(busy, inExecution, gr, line(1, "STDOUT", "linha antes do desvinculo")).status()).isEqualTo(200);
+        // uma quarta, de outra maquina, nao e tocada
+        Machine other = machine(true);
+        String untouched = queued(other);
+        String go = running(other, untouched);
+
+        for (Machine m : new Machine[] {queued, preparing, busy}) {
+            MachineClient.Response r = unlink(m);
+            assertThat(r.status()).as(r.raw()).isEqualTo(200);
+        }
+        // o que o servidor nunca autorizou a iniciar: "nao iniciou", com o motivo. O que podia estar em execucao: sem confirmacao.
+        // Nunca sucesso, falha nem cancelamento; sem codigo de saida; a tentativa tem fim
+        assertThat(cause(inQueue)).isEqualTo("11|MACHINE_NOT_LINKED|MACHINE_UNLINKED|-|true");
+        assertThat(cause(inPreparation)).isEqualTo("11|MACHINE_NOT_LINKED|MACHINE_UNLINKED|-|true");
+        assertThat(cause(inExecution)).isEqualTo("13|-|MACHINE_UNLINKED|-|true");
+        assertThat(cause(untouched)).isEqualTo("6|-|-|-|false");
+        // a maquina desvinculada nao escreve mais nada: nem estado, nem registros (a revogacao nao e contornada)
+        assertThat(state(busy, inExecution, gr, "SUCCEEDED", "\"exitCode\":0").status()).isEqualTo(401);
+        assertThat(logs(busy, inExecution, gr, line(2, "STDOUT", "depois do desvinculo")).status()).isEqualTo(401);
+        assertThat(cause(inExecution)).isEqualTo("13|-|MACHINE_UNLINKED|-|true");
+        // o que ja tinha chegado continua la
+        assertThat(fx.value("SELECT count(*) FROM remote_attempt_log_lines WHERE attempt_id = '" + inExecution + "'")).isEqualTo("1");
+        // a outra maquina segue e termina normalmente
+        assertThat(state(other, untouched, go, "SUCCEEDED", "\"exitCode\":0").status()).isEqualTo(200);
+        assertThat(cause(untouched)).isEqualTo("7|-|-|0|true");
+    }
+
+    /** Recua o prazo da comunicacao (fixture): a maquina esta sem falar ha {@code minutes} alem do vencimento. */
+    private static void silentFor(String attempt, int minutes) {
+        untriggered("UPDATE remote_attempts SET lease_expires_at = clock_timestamp() - interval '" + minutes + " minutes' WHERE attempt_id = '" + attempt + "'");
+    }
+
+    @Test
+    void semComunicacaoAlemDaEsperaATentativaFicaSemConfirmacaoEORelatoTardioFicaAoLado() throws Exception {
+        Machine m = machine(true);
+        String attempt = queued(m);
+        JsonNode offer = next(m).body().get("attempt");
+        String grant = grant(offer);
+        assertThat(ack(m, attempt, grant).status()).isEqualTo(200);
+        for (String st : new String[] {"PREPARING", "STARTING", "RUNNING"}) {
+            assertThat(state(m, attempt, grant, st, null).status()).isEqualTo(200);
+        }
+        assertThat(logs(m, attempt, grant, line(1, "STDOUT", "primeira linha")).status()).isEqualTo(200);
+        // prazo vencido ha pouco (menos que a espera de 120 min): comunicacao perdida NAO encerra; a maquina volta e segue
+        silentFor(attempt, 30);
+        MachineClient.Response back = state(m, attempt, grant, "RUNNING", null);
+        assertThat(back.body().get("state").asString()).isEqualTo("RUNNING");
+        assertThat(back.body().get("proceed").asBoolean()).isTrue();
+        assertThat(cause(attempt)).isEqualTo("6|-|-|-|false");
+        // vencido ha mais que a espera: quando a maquina volta, a tentativa ja esta encerrada - sem confirmacao, sem desfecho inventado
+        silentFor(attempt, 121);
+        MachineClient.Response late = state(m, attempt, grant, "RUNNING", null);
+        assertThat(late.status()).as(late.raw()).isEqualTo(200);
+        assertThat(late.body().get("state").asString()).isEqualTo("ENDED_UNKNOWN");
+        assertThat(late.body().get("proceed").asBoolean()).isFalse();
+        assertThat(late.body().get("closureCause").asString()).isEqualTo("COMMUNICATION_LOST");
+        assertThat(cause(attempt)).isEqualTo("13|-|COMMUNICATION_LOST|-|true");
+        assertThat(fx.value("SELECT late_state IS NULL FROM remote_attempts WHERE attempt_id = '" + attempt + "'")).isEqualTo("t");
+        // a maquina diz como o processo terminou: fica AO LADO; o estado da tentativa nao muda
+        MachineClient.Response told = state(m, attempt, grant, "SUCCEEDED", "\"exitCode\":0");
+        assertThat(told.status()).isEqualTo(200);
+        assertThat(told.body().get("state").asString()).isEqualTo("ENDED_UNKNOWN");
+        assertThat(cause(attempt)).isEqualTo("13|-|COMMUNICATION_LOST|-|true");
+        assertThat(fx.value("SELECT late_state || '|' || late_exit_code || '|' || (late_reported_at IS NOT NULL) FROM remote_attempts WHERE attempt_id = '"
+                + attempt + "'")).isEqualTo("7|0|true");
+        // uma vez so: outro relato nao troca o primeiro
+        assertThat(state(m, attempt, grant, "FAILED", "\"exitCode\":3").status()).isEqualTo(200);
+        assertThat(fx.value("SELECT late_state || '|' || late_exit_code FROM remote_attempts WHERE attempt_id = '" + attempt + "'")).isEqualTo("7|0");
+        // encerrar o estado NAO encerra a entrega: registros e resultados continuam aceitos, e os fechamentos tambem
+        assertThat(logs(m, attempt, grant, line(2, "STDOUT", "linha enviada depois do encerramento")).status()).isEqualTo(200);
+        assertThat(logsComplete(m, attempt, grant, 2, 0).status()).isEqualTo(200);
+        byte[] file = "resultado entregue depois".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(upload(m, attempt, offer.get("token").asString(), offer.get("epoch").asInt(), 1, "saida.txt", file, sha256(file)).status()).isEqualTo(200);
+        assertThat(complete(m, attempt, grant, 1, 0).status()).isEqualTo(200);
+
+        // em preparacao (o servidor nunca autorizou o inicio): "nao iniciou", com o motivo proprio; a maquina que volta nao inicia
+        Machine p = machine(true);
+        String preparing = queued(p);
+        String gp = received(p, preparing);
+        assertThat(state(p, preparing, gp, "PREPARING", null).status()).isEqualTo(200);
+        silentFor(preparing, 500);
+        MachineClient.Response start = state(p, preparing, gp, "STARTING", null);
+        assertThat(start.status()).isEqualTo(200);
+        assertThat(start.body().get("state").asString()).isEqualTo("REFUSED");
+        assertThat(start.body().get("proceed").asBoolean()).isFalse();
+        assertThat(start.body().get("refusalReason").asString()).isEqualTo("COMMUNICATION_LOST");
+        assertThat(cause(preparing)).isEqualTo("11|COMMUNICATION_LOST|COMMUNICATION_LOST|-|true");
+        // quem nao iniciou nao tem relato tardio de desfecho
+        assertThat(state(p, preparing, gp, "ENDED_UNKNOWN", null).status()).isEqualTo(200);
+        assertThat(fx.value("SELECT late_state IS NULL FROM remote_attempts WHERE attempt_id = '" + preparing + "'")).isEqualTo("t");
+        // a consulta seguinte da maquina tambem aplica a regra (o diario dela pode ter se perdido)
+        Machine q = machine(true);
+        String forgotten = queued(q);
+        running(q, forgotten);
+        silentFor(forgotten, 200);
+        assertThat(next(q).status()).isEqualTo(200);
+        assertThat(cause(forgotten)).isEqualTo("13|-|COMMUNICATION_LOST|-|true");
+    }
+
+    @Test
+    void oBancoSoAceitaOEncerramentoPeloServidorComOFatoConferido() {
+        Machine m = machine(true);
+        String attempt = queued(m);
+        running(m, attempt);
+        String lost = "UPDATE remote_attempts SET state = 13, closure_cause = 'COMMUNICATION_LOST' WHERE attempt_id = '" + attempt + "'";
+        String revoked = "UPDATE remote_attempts SET state = 13, closure_cause = 'MACHINE_REVOKED' WHERE attempt_id = '" + attempt + "'";
+        for (String role : new String[] {"nekkora_platform", "nekkora_ingestion"}) {
+            // comunicacao em dia: nao esta perdida. Maquina vinculada: nao foi revogada nem desvinculada
+            assertThat(asRole(role, lost)).as(role).isEqualTo("23514");
+            assertThat(asRole(role, revoked)).as(role).isEqualTo("23514");
+            assertThat(asRole(role, revoked.replace("MACHINE_REVOKED", "MACHINE_UNLINKED"))).as(role).isEqualTo("23514");
+            // o servidor nunca grava sucesso, falha ou cancelamento como encerramento; nem causa sem encerrar; nem causa inventada
+            for (int state : new int[] {7, 8, 9, 10}) {
+                assertThat(asRole(role, "UPDATE remote_attempts SET state = " + state + ", closure_cause = 'COMMUNICATION_LOST' WHERE attempt_id = '" + attempt
+                        + "'")).as(role + " " + state).isEqualTo("23514");
+            }
+            assertThat(asRole(role, "UPDATE remote_attempts SET closure_cause = 'COMMUNICATION_LOST' WHERE attempt_id = '" + attempt + "'")).isEqualTo("23514");
+            assertThat(asRole(role, "UPDATE remote_attempts SET state = 13, closure_cause = 'OUTRA' WHERE attempt_id = '" + attempt + "'")).isEqualTo("23514");
+            // em execucao nao vira "nao iniciou"
+            assertThat(asRole(role, "UPDATE remote_attempts SET state = 11, refusal_reason = 'COMMUNICATION_LOST', closure_cause = 'COMMUNICATION_LOST' "
+                    + "WHERE attempt_id = '" + attempt + "'")).isEqualTo("23514");
+        }
+        // as pessoas continuam sem mudar o estado de uma tentativa recebida por outro caminho, e nao gravam relato tardio
+        assertThat(asRole("nekkora_platform", "UPDATE remote_attempts SET state = 13 WHERE attempt_id = '" + attempt + "'")).isEqualTo("42501");
+        assertThat(asRole("nekkora_platform", "UPDATE remote_attempts SET late_state = 7 WHERE attempt_id = '" + attempt + "'")).isEqualTo("42501");
+        // relato tardio so depois de um encerramento por comunicacao perdida
+        assertThat(asRole("nekkora_ingestion", "UPDATE remote_attempts SET late_state = 7 WHERE attempt_id = '" + attempt + "'")).isEqualTo("23514");
+        // com o prazo vencido, o banco aceita - das pessoas tambem (e o caminho da leitura na Platform)
+        silentFor(attempt, 1);
+        assertThat(asRole("nekkora_platform", lost)).isEqualTo("OK");
+        assertThat(cause(attempt)).isEqualTo("13|-|COMMUNICATION_LOST|-|true");
+        // terminada: nada mais muda, a nao ser o relato tardio, uma vez, e so ele
+        assertThat(asRole("nekkora_ingestion", "UPDATE remote_attempts SET state = 7 WHERE attempt_id = '" + attempt + "'")).isEqualTo("23514");
+        assertThat(asRole("nekkora_ingestion", "UPDATE remote_attempts SET late_state = 7, exit_code = 0 WHERE attempt_id = '" + attempt + "'")).isEqualTo("23514");
+        assertThat(asRole("nekkora_ingestion", "UPDATE remote_attempts SET late_state = 9, late_exit_code = 1 WHERE attempt_id = '" + attempt + "'")).isEqualTo("23514");
+        assertThat(asRole("nekkora_ingestion", "UPDATE remote_attempts SET late_state = 8, late_exit_code = 2 WHERE attempt_id = '" + attempt + "'")).isEqualTo("OK");
+        assertThat(asRole("nekkora_ingestion", "UPDATE remote_attempts SET late_state = 7, late_exit_code = 0 WHERE attempt_id = '" + attempt + "'")).isEqualTo("23514");
+        // um encerramento por desvinculo nao aceita relato tardio (a maquina nao tem mais como falar)
+        Machine u = machine(true);
+        String gone = queued(u);
+        running(u, gone);
+        assertThat(unlink(u).status()).isEqualTo(200);
+        assertThat(asRole("nekkora_ingestion", "UPDATE remote_attempts SET late_state = 7 WHERE attempt_id = '" + gone + "'")).isEqualTo("23514");
+    }
+
+    @Test
+    void pausarNovosTrabalhosNaoMexeNaExecucaoEmAndamentoQueSegueAcompanhadaAteTerminar() {
+        Machine m = machine(true);
+        String attempt = queued(m);
+        String grant = running(m, attempt);
+        assertThat(m.client().post("/remote/receiving", "{\"receiving\":\"PAUSED\"}", m.credential()).status()).isEqualTo(200);
+        // a tentativa em andamento nao muda, a maquina segue (proceed), a comunicacao e renovada e os registros chegam
+        assertThat(cause(attempt)).isEqualTo("6|-|-|-|false");
+        MachineClient.Response still = state(m, attempt, grant, "RUNNING", null);
+        assertThat(still.body().get("proceed").asBoolean()).isTrue();
+        assertThat(still.body().get("state").asString()).isEqualTo("RUNNING");
+        assertThat(fx.value("SELECT lease_expires_at > clock_timestamp() FROM remote_attempts WHERE attempt_id = '" + attempt + "'")).isEqualTo("t");
+        assertThat(logs(m, attempt, grant, line(1, "STDOUT", "linha com a maquina pausada")).status()).isEqualTo(200);
+        // pausada, ela nao recebe trabalho NOVO: nada e entregue alem do que ja tinha
+        assertThat(next(m).body().has("attempt")).isFalse();
+        // o desfecho verdadeiro, informado por ela, e gravado normalmente, com o codigo de saida
+        assertThat(state(m, attempt, grant, "SUCCEEDED", "\"exitCode\":0").status()).isEqualTo(200);
+        assertThat(cause(attempt)).isEqualTo("7|-|-|0|true");
+        assertThat(logsComplete(m, attempt, grant, 1, 0).status()).isEqualTo(200);
+        // e continua pausada: uma tentativa nova nao nasce para ela
+        try {
+            queued(m);
+            throw new AssertionError("maquina pausada nao recebe tentativa nova");
+        } catch (IllegalStateException e) {
+            assertThat(e.getMessage()).contains("23514");
+        }
+    }
 }
