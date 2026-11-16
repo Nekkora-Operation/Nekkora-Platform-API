@@ -142,10 +142,18 @@ class RemoteEnablementIT extends RemoteEnabledGatewayIT {
 
     @Test
     void batimentoAceitaAsCapacidadesNovasEDevolveORecebimento() {
-        MachineClient m = enabled(fx.worker("W-bat-" + UUID.randomUUID().toString().substring(0, 6)));
+        String workerName = "W-bat-" + UUID.randomUUID().toString().substring(0, 6);
+        MachineClient m = enabled(fx.worker(workerName));
         MachineClient.Response hb = m.post("/heartbeat", REMOTE_HEARTBEAT.formatted("true", "false"), m.credential);
         assertThat(hb.status()).as(hb.raw()).isEqualTo(200);
         assertThat(hb.body().get("remote").get("receiving").asString()).isEqualTo("ENABLED");
+        // o nome do Worker desta maquina, como esta na Platform agora (o aplicativo o mostra a pessoa)
+        assertThat(hb.body().get("remote").get("workerName").asString()).isEqualTo(workerName);
+        // trocado na Platform, o proximo batimento traz o novo; a resposta de pausar/retomar tambem o traz
+        DB.asSuperuser("UPDATE workers SET name = '" + workerName + "-novo' WHERE organization_id = '" + fx.org + "' AND name = '" + workerName + "'");
+        assertThat(m.post("/heartbeat", REMOTE_HEARTBEAT.formatted("true", "false"), m.credential).body().get("remote").get("workerName").asString())
+                .isEqualTo(workerName + "-novo");
+        assertThat(m.post("/remote/receiving", "{\"receiving\":\"ENABLED\"}", m.credential).body().get("workerName").asString()).isEqualTo(workerName + "-novo");
         String agent = fx.value("SELECT agent_id FROM agent_presence WHERE remote_busy AND NOT disk_pressure AND capabilities @> ARRAY['REMOTE_RUN_1_0','PY_INVENTORY_1_0'] "
                 + "ORDER BY reported_at DESC LIMIT 1");
         assertThat(agent).isNotNull();

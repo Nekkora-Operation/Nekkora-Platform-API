@@ -383,8 +383,12 @@ public final class GatewayService {
                            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) Receiving remote) {
     }
 
-    /** O recebimento de novos trabalhos remotos, como registrado no servidor. {@code receiving}: ENABLED ou PAUSED. */
-    public record Receiving(String receiving, OffsetDateTime changedAt) {
+    /**
+     * O recebimento de novos trabalhos remotos, como registrado no servidor. {@code receiving}: ENABLED ou PAUSED.
+     * {@code workerName}: o nome, na Platform, do Worker a que esta maquina esta associada - para o aplicativo mostrar a pessoa
+     * em nome de quem a maquina recebe trabalho. E o nome atual: se for trocado na Platform, o proximo batimento traz o novo.
+     */
+    public record Receiving(String receiving, OffsetDateTime changedAt, String workerName) {
     }
 
     /** O que a maquina diz de si no batimento (indicativo: a reserva de uma execucao e decidida pela solicitacao). */
@@ -421,9 +425,12 @@ public final class GatewayService {
     }
 
     private static Optional<Receiving> receiving(JdbcClient j, Machine m) {
-        return j.sql("SELECT receiving, receiving_changed_at FROM public.agent_remote_enablements WHERE organization_id = ? AND agent_id = ?")
-                .param(m.organization()).param(m.agentId())
-                .query((rs, n) -> new Receiving(rs.getShort(1) == 1 ? "ENABLED" : "PAUSED", rs.getObject(2, OffsetDateTime.class))).optional();
+        // o Worker e o da associacao ATIVA desta maquina (o mesmo que a autenticacao conferiu), nunca um identificador da requisicao
+        return j.sql("SELECT r.receiving, r.receiving_changed_at, w.name FROM public.agent_remote_enablements r "
+                        + "JOIN public.workers w ON w.organization_id = r.organization_id AND w.worker_id = ? "
+                        + "WHERE r.organization_id = ? AND r.agent_id = ?").param(m.workerId()).param(m.organization()).param(m.agentId())
+                .query((rs, n) -> new Receiving(rs.getShort(1) == 1 ? "ENABLED" : "PAUSED", rs.getObject(2, OffsetDateTime.class), rs.getString(3)))
+                .optional();
     }
 
     /**
