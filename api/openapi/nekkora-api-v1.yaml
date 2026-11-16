@@ -3574,7 +3574,7 @@ components:
     RemoteAttemptLogs:
       type: object
       additionalProperties: false
-      required: [attemptId, items, total, nextAfter, closure, retentionLoss, expiration]
+      required: [attemptId, items, total, automationLines, systemLines, nextAfter, closure, retentionLoss, expiration]
       properties:
         attemptId: { type: string, format: uuid }
         items:
@@ -3591,15 +3591,17 @@ components:
               truncated: { type: boolean, description: 'A linha passava de 8 KiB e foi cortada pela maquina' }
               message: { type: string }
               textRemoved: { type: boolean, description: 'O texto foi apagado pela retencao' }
-        total: { type: integer, minimum: 0 }
+        total: { type: integer, minimum: 0, description: 'Linhas que a Platform tem desta tentativa = automationLines + systemLines' }
+        automationLines: { type: integer, minimum: 0, description: 'Linhas que o PROCESSO DA AUTOMACAO escreveu (STDOUT e STDERR) e a Platform tem' }
+        systemLines: { type: integer, minimum: 0, description: 'Avisos do proprio aplicativo da maquina (EXECUTOR), por exemplo o aviso de limite atingido. Ocupam lugar no limite de linhas da tentativa, mas nao sao saida da automacao' }
         nextAfter: { type: [integer, 'null'] }
         closure:
           type: [object, 'null']
           additionalProperties: false
           required: [lines, droppedLines, closedAt]
           properties:
-            lines: { type: integer, minimum: 0 }
-            droppedLines: { type: integer, minimum: 0, description: 'Linhas que a maquina descartou por limite' }
+            lines: { type: integer, minimum: 0, description: 'Linhas que a maquina enviou, contando os avisos do proprio aplicativo (systemLines)' }
+            droppedLines: { type: integer, minimum: 0, description: 'Linhas DA AUTOMACAO que a maquina descartou por limite. O que a automacao escreveu = automationLines + droppedLines (com o envio fechado e sem perda)' }
             closedAt: { type: string, format: date-time }
         retentionLoss:
           type: [object, 'null']
