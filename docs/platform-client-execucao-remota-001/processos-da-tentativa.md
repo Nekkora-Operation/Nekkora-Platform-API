@@ -34,7 +34,7 @@ ORG_ADMIN libera a repetição em outra máquina; **não** libera a máquina.
 
 ## 3. Como o aplicativo identifica os descendentes (Windows)
 
-Exceção de arquitetura, restrita: `WindowsSupervision`, a única classe da camada de execução com código nativo. Declara onze
+Exceção de arquitetura, restrita: `WindowsProcessGroup`, a única classe da camada de execução com código nativo. Declara onze
 funções do Windows, conferidas por teste (`ArchitectureTest.aSupervisaoDeProcessosSoChamaAsFuncoesDeclaradas`); nenhuma cria
 processo, executa comando, abre shell ou lê outro processo.
 
