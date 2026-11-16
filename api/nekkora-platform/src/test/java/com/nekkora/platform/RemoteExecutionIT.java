@@ -1069,6 +1069,15 @@ class RemoteExecutionIT extends PlatformTestBase {
         assertThat(again.status()).as(again.body()).isEqualTo(429);
         assertThat(again.body()).isEqualTo("{\"error\":\"rate_limited\",\"reason\":\"remote_dependency_check_too_soon\"}");
         assertThat(value("SELECT count(*) FROM remote_dependency_checks WHERE agent_id = '" + m.agent() + "'")).isEqualTo("1");
+        // 056: o intervalo que vale e o da aplicacao (60 s nesta configuracao); o banco guarda so o piso de 10 s. Meio minuto depois
+        // a aplicacao ainda recusa - e o limite e desta maquina e desta automacao: outra maquina nao e segurada por este pedido
+        olderCheck(m, "requested_at = requested_at - interval '30 seconds', answer_valid_until = answer_valid_until - interval '30 seconds'");
+        assertThat(checkDependencies(s, m).status()).isEqualTo(429);
+        Machine neighbour = machine(s, "Vizinha", true);
+        heartbeat(s, neighbour, true);
+        BrowserClient.Response other = checkDependencies(s, neighbour);
+        assertThat(other.status()).as("o pedido para outra maquina nao e segurado: " + other.body()).isEqualTo(201);
+        olderCheck(m, "requested_at = requested_at + interval '30 seconds', answer_valid_until = answer_valid_until + interval '30 seconds'");
         // nada mudou alem do pedido: a escolha, as condicoes da solicitacao e a maquina continuam como estavam
         assertThat(missing(s, m)).containsExactly("AUTHORIZATION_MISSING");
         // a maquina responde (papel da ingestao, como o gateway): falta uma

@@ -41,8 +41,8 @@ dependências mudou depois).
 
 | Limite | Valor | Ao atingir |
 |---|---|---|
-| Pedidos por máquina e automação | 1 por minuto | `429` + `rate_limited` / `remote_dependency_check_too_soon`; nada é criado. A tela diz "não foi possível verificar agora" |
-| Prazo da resposta | 2 minutos (`CHECK_ANSWER_SECONDS`, fixo no programa) | o pedido fica `UNANSWERED`; resposta tardia: `409` + `remote_dependency_check_closed` |
+| Pedidos por máquina e automação | 1 por intervalo — padrão 60 s, `NEKKORA_EXECUCAO_REMOTA_VERIFICACAO_INTERVALO_SEGUNDOS` (10 a 3600) | `429` + `rate_limited` / `remote_dependency_check_too_soon`; nada é criado. A tela diz "não foi possível verificar agora" |
+| Prazo da resposta | padrão 120 s, `NEKKORA_EXECUCAO_REMOTA_VERIFICACAO_RESPOSTA_SEGUNDOS` (30 a 600) | o pedido fica `UNANSWERED`; resposta tardia: `409` + `remote_dependency_check_closed` |
 | Itens em `missing` | até 400, 200 caracteres cada, só do que foi perguntado | `400`; nada é gravado |
 
 São pontos de partida de laboratório.
@@ -66,3 +66,15 @@ Pessoas: `SELECT`, `INSERT`. Máquina: `SELECT` e `UPDATE` só das colunas da re
 |---|---|
 | O pedido congela escolha e lista; limite de um por minuto; resposta aparece na lista; mudança de escolha ou de revisão marca `current: false`; sem resposta fica `UNANSWERED`; recusas; permissões; guardas do banco | `RemoteExecutionIT.verificacaoSobDemandaCongelaOQueSeraConferidoTemLimiteESemRespostaNuncaViraIncompativel` |
 | A máquina recebe só o que é dela, responde uma vez, só com o que foi perguntado, dentro do prazo; chega pausada e ocupada sem mexer na tentativa; guardas do banco | `RemoteDeliveryIT.aMaquinaRecebeOPedidoDeVerificacaoDeDependenciasERespondeUmaVezDentroDoPrazoESoOQueEDela` |
+
+## Decisão de 16/11: parâmetros iniciais configuráveis (migration 056)
+
+A titular aceitou a permissão de executar, um pedido por minuto e dois minutos para responder como **parâmetros iniciais
+configuráveis**.
+
+- O intervalo e o prazo da resposta são configuração da Platform (tabela acima). A 054 fixava "60 segundos" dentro do gatilho; a
+  056 deixa no banco só um piso de 10 segundos.
+- **Escopo do limite: organização + automação + máquina.** Não existe limite por organização nem global: o pedido de um cliente
+  nunca segura o de outro, e o pedido para uma máquina não segura o de outra. A trava que serializa os pedidos também é por
+  máquina e automação.
+- **Tempo esgotado significa "Não foi possível verificar"** — nunca "incompatível". É o estado `UNANSWERED`.

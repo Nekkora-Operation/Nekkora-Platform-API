@@ -69,7 +69,21 @@ public class RemoteExecutionService {
 
     static final List<String> CHECK_OUTCOMES = List.of("SATISFIED", "MISSING", "ENVIRONMENT_GONE", "NOT_VERIFIED");
     /** Quanto tempo a maquina tem para responder a uma verificacao (ponto de partida de laboratorio). */
+    /** Parametros INICIAIS da verificacao sob demanda (decisao de 16/11): configuraveis, ver {@link #dependencyCheckLimits}. */
     static final int CHECK_ANSWER_SECONDS = 120;
+    static final int CHECK_INTERVAL_SECONDS = 60;
+    private int checkAnswerSeconds = CHECK_ANSWER_SECONDS;
+    private int checkIntervalSeconds = CHECK_INTERVAL_SECONDS;
+
+    /**
+     * Intervalo minimo entre pedidos para a MESMA maquina e automacao (10 a 3600 s; o banco guarda o piso de 10) e prazo da
+     * resposta (30 a 600 s). O escopo do limite nao muda: o pedido de um cliente nunca segura o de outro.
+     */
+    public RemoteExecutionService dependencyCheckLimits(int intervalSeconds, int answerSeconds) {
+        this.checkIntervalSeconds = Math.max(10, Math.min(intervalSeconds, 3600));
+        this.checkAnswerSeconds = Math.max(30, Math.min(answerSeconds, 600));
+        return this;
+    }
 
     private static DependencyCheck latestCheck(JdbcClient j, UUID org, UUID automation, UUID agent) {
         return j.sql("""
@@ -97,9 +111,9 @@ public class RemoteExecutionService {
     /**
      * Pede a maquina que confira, AGORA, as dependencias declaradas desta automacao no Python escolhido para ela (054). Exige
      * automation.execute no ambiente da automacao (quem pode mandar executar pode perguntar se vai dar certo). Congela o que sera
-     * conferido: a escolha vigente e a lista efetiva vigente. No maximo um pedido por minuto por maquina e automacao: o segundo
+     * conferido: a escolha vigente e a lista efetiva vigente. No maximo um pedido por intervalo (padrao: um minuto) por maquina e automacao: o segundo
      * recebe 429 + remote_dependency_check_too_soon e nada e criado. A resposta chega depois (a maquina consulta), em
-     * {@code candidates}; sem resposta em {@value #CHECK_ANSWER_SECONDS} s, o pedido fica UNANSWERED.
+     * {@code candidates}; sem resposta no prazo (padrao: {@value #CHECK_ANSWER_SECONDS} s), o pedido fica UNANSWERED.
      */
     public DependencyCheck checkDependencies(UUID org, ValidSession actor, String token, UUID automation, UUID agent) {
         if (!enabled) {
@@ -140,7 +154,8 @@ public class RemoteExecutionService {
                 throw new ApiException(ApiError.REMOTE_REQUIREMENTS_CONFLICT, "dependencias_em_conflito");
             }
             if (j.sql("SELECT count(*) FROM public.remote_dependency_checks WHERE organization_id = ? AND automation_id = ? AND agent_id = ? "
-                    + "AND requested_at > clock_timestamp() - interval '60 seconds'").param(org).param(automation).param(agent).query(Long.class).single() > 0) {
+                    + "AND requested_at > clock_timestamp() - make_interval(secs => ?)").param(org).param(automation).param(agent).param(checkIntervalSeconds)
+                    .query(Long.class).single() > 0) {
                 throw new ApiException(ApiError.REMOTE_DEPENDENCY_CHECK_TOO_SOON, "verificacao_recente");
             }
             ArrayNode frozen = JSON.createArrayNode();
@@ -150,7 +165,7 @@ public class RemoteExecutionService {
                         dependencies, requested_by_membership_id, answer_valid_until)
                     VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, clock_timestamp() + make_interval(secs => ?))
                     """).param(org).param(workspace).param(automation).param(agent).param(environment).param(requirements.declared().revision())
-                    .param(frozen.toString()).param(actor.membershipId()).param(CHECK_ANSWER_SECONDS).update();
+                    .param(frozen.toString()).param(actor.membershipId()).param(checkAnswerSeconds).update();
             LOG.info("evento=execucao_remota.verificacao_pedida automacao={} maquina={} correlacao={}", automation, agent, AccessActions.correlation());
             return latestCheck(j, org, automation, agent);
         });
