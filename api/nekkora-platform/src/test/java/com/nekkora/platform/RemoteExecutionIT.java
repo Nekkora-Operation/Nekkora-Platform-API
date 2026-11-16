@@ -86,6 +86,11 @@ class RemoteExecutionIT extends PlatformTestBase {
 
     /** Codigo marcado pela API real + resgate pela maquina (papel da ingestao, uma transacao). {@code inWorkspace}: autoriza o Worker no ambiente. */
     private Machine machine(Setup s, String name, boolean inWorkspace) throws Exception {
+        return machine(s, name, inWorkspace, true);
+    }
+
+    /** {@code python}: publica um ambiente e escolhe o Python da automacao nesta maquina (so com o Worker no ambiente). */
+    private Machine machine(Setup s, String name, boolean inWorkspace, boolean python) throws Exception {
         BrowserClient.Response r = s.admin().post(s.o() + "/agent-enrollments",
                 "{\"workerName\":\"" + name + "\",\"agentName\":\"Maquina " + name + "\",\"expiresInMinutes\":15,\"remoteExecution\":true}");
         assertThat(r.status()).as(r.body()).isEqualTo(201);
@@ -108,7 +113,29 @@ class RemoteExecutionIT extends PlatformTestBase {
         if (inWorkspace) {
             assertThat(put(s.admin(), s.o() + "/workers/" + worker + "/workspaces/" + s.workspace(), null).status()).isEqualTo(201);
         }
-        return new Machine(worker, UUID.fromString(value("SELECT agent_id FROM agents WHERE organization_id = '" + org + "' AND name = '" + agentName + "'")), agentName);
+        Machine m = new Machine(worker, UUID.fromString(value("SELECT agent_id FROM agents WHERE organization_id = '" + org + "' AND name = '" + agentName + "'")),
+                agentName);
+        if (inWorkspace && python) {
+            // 047: o inventario que a maquina publicaria e a escolha do Python desta automacao nela, pela API real
+            inventory(s, m, ENV_A, "3.12.10");
+            BrowserClient.Response chosen = selectPython(s, m, ENV_A);
+            assertThat(chosen.status()).as(chosen.body()).isEqualTo(200);
+        }
+        return m;
+    }
+
+    static final String ENV_A = "A".repeat(43);
+    static final String ENV_B = "B".repeat(43);
+
+    /** O inventario de Python da maquina, como o gateway gravaria (papel da ingestao). */
+    private static void inventory(Setup s, Machine m, String environment, String version) {
+        assertThat(as("nekkora_ingestion", s.org().id(), "INSERT INTO agent_python_environments (agent_id, environment_id, organization_id, python_version, kind, "
+                + "observed_at) VALUES ('" + m.agent() + "', '" + environment + "', '" + s.org().id() + "', '" + version + "', 1, clock_timestamp())")).isEqualTo("OK");
+    }
+
+    private BrowserClient.Response selectPython(Setup s, Machine m, String environment) {
+        return put(s.admin(), s.o() + "/automations/" + s.automation() + "/remote-machines/" + m.agent() + "/python-selection",
+                "{\"environmentId\":\"" + environment + "\"}");
     }
 
     /** A presenca da maquina, como o gateway: {@code capable} declara REMOTE_RUN_1_0. */
@@ -278,6 +305,68 @@ class RemoteExecutionIT extends PlatformTestBase {
         // nova autorizacao: volta a valer para novas solicitacoes, enquanto nao vencer nem for revogada
         authorize(s, m);
         assertThat(request(s, m).status()).isEqualTo(201);
+    }
+
+    @Test
+    void oPythonEEscolhidoPorMaquinaEAutomacaoESemEleNadaESolicitado() throws Exception {
+        Setup s = setup();
+        declare(s, null);
+        Machine m = machine(s, "Python", true, false);
+        heartbeat(s, m, true);
+        authorize(s, m);
+        // tudo vale, menos a escolha: a tela sabe o que falta e a solicitacao e recusada com o motivo; nada e gravado
+        assertThat(missing(s, m)).containsExactly("PYTHON_NOT_SELECTED");
+        refused(request(s, m), "remote_python_not_selected");
+        assertThat(value("SELECT count(*) FROM remote_executions WHERE organization_id = '" + s.org().id() + "'")).isEqualTo("0");
+        // so um ambiente do inventario ATUAL da maquina pode ser escolhido
+        refused(selectPython(s, m, ENV_A), "remote_python_not_in_inventory");
+        assertThat(selectPython(s, m, "C:\\\\Python312\\\\python.exe").status()).as("um caminho nunca e aceito").isEqualTo(400);
+        inventory(s, m, ENV_A, "3.12.10");
+        inventory(s, m, ENV_B, "3.13.1");
+        BrowserClient.Response chosen = selectPython(s, m, ENV_A);
+        assertThat(chosen.status()).as(chosen.body()).isEqualTo(200);
+        assertThat(chosen.field("pythonVersion")).as("a versao vem do inventario, nao de quem escolhe").isEqualTo("3.12.10");
+        assertThat(JSON.readTree(chosen.body()).get("inInventory").asBoolean()).isTrue();
+        assertThat(value("SELECT count(*) FROM automation_admin_events WHERE automation_id = '" + s.automation() + "' AND act = 11")).isEqualTo("1");
+        assertThat(missing(s, m)).isEmpty();
+        // a solicitacao guarda na tentativa o retrato da escolha; trocar depois nao muda a tentativa ja criada
+        BrowserClient.Response ok = request(s, m);
+        assertThat(ok.status()).as(ok.body()).isEqualTo(201);
+        String attempt = JSON.readTree(ok.body()).get("attempts").get(0).get("attemptId").asString();
+        assertThat(value("SELECT python_environment_id FROM remote_attempts WHERE attempt_id = '" + attempt + "'")).isEqualTo(ENV_A);
+        assertThat(selectPython(s, m, ENV_B).field("pythonVersion")).isEqualTo("3.13.1");
+        assertThat(value("SELECT count(*) || '|' || max(environment_id) FROM automation_python_selections WHERE agent_id = '" + m.agent() + "'")).isEqualTo("1|" + ENV_B);
+        assertThat(value("SELECT python_environment_id FROM remote_attempts WHERE attempt_id = '" + attempt + "'")).isEqualTo(ENV_A);
+        assertThat(as("nekkora_ingestion", s.org().id(), "UPDATE remote_attempts SET python_environment_id = '" + ENV_B + "' WHERE attempt_id = '" + attempt + "'"))
+                .as("o retrato da tentativa nao muda").isEqualTo("42501");
+        machineMoves(s, attempt, 2, 3, 9);
+        // a maquina publica um inventario sem o ambiente escolhido: a escolha deixa de servir, e nenhum outro e escolhido sozinho
+        assertThat(as("nekkora_ingestion", s.org().id(), "DELETE FROM agent_python_environments WHERE agent_id = '" + m.agent() + "' AND environment_id = '" + ENV_B
+                + "'")).isEqualTo("OK");
+        assertThat(missing(s, m)).containsExactly("PYTHON_NOT_IN_INVENTORY");
+        refused(request(s, m), "remote_python_not_in_inventory");
+        // a escolha de uma maquina nao vale para outra, nem para maquina de Worker fora do ambiente
+        Machine other = machine(s, "Python outra", true, false);
+        heartbeat(s, other, true);
+        authorize(s, other);
+        assertThat(missing(s, other)).containsExactly("PYTHON_NOT_SELECTED");
+        Machine outside = machine(s, "Python fora", false, false);
+        assertThat(selectPython(s, outside, ENV_A).status()).isEqualTo(404);
+        // quem so executa nao escolhe (automation.manage); outra organizacao nao enxerga a automacao
+        TestUser operator = internalUser(s.org(), true, 2);
+        grantWorkspaceRole(s.org(), operator, s.workspace(), "OPERATOR");
+        BrowserClient op = browser();
+        firstLogin(op, s.org().id(), operator);
+        assertThat(put(op, s.o() + "/automations/" + s.automation() + "/remote-machines/" + m.agent() + "/python-selection",
+                "{\"environmentId\":\"" + ENV_A + "\"}").status()).isIn(403, 404);
+        // guardas do banco: as pessoas nao inserem escolha fora do inventario; a maquina nao le nem escreve a escolha
+        String insert = "INSERT INTO automation_python_selections (automation_id, agent_id, organization_id, workspace_id, environment_id, python_version, "
+                + "selected_by_membership_id) VALUES ('" + s.automation() + "', '" + other.agent() + "', '" + s.org().id() + "', '" + s.workspace() + "', '" + ENV_B
+                + "', '3.13.1', '" + s.org().adminMembership() + "')";
+        assertThat(as("nekkora_platform", s.org().id(), insert)).isEqualTo("23514");
+        assertThat(as("nekkora_ingestion", s.org().id(), "SELECT count(*) FROM automation_python_selections")).isEqualTo("42501");
+        assertThat(as("nekkora_platform", s.org().id(), "UPDATE automation_python_selections SET environment_id = '" + ENV_A + "' WHERE agent_id = '" + m.agent()
+                + "'")).isEqualTo("42501");
     }
 
     @Test

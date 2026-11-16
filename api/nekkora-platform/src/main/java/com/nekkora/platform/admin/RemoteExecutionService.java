@@ -51,8 +51,18 @@ public class RemoteExecutionService {
      * pode). {@code authorization}: nula se nunca houve autorizacao desta versao para o Worker.
      */
     public record Candidate(UUID agentId, String agentName, UUID workerId, String workerName, boolean requestable, List<String> missing,
-                            AuthorizationInfo authorization) {
+                            AuthorizationInfo authorization, PythonChoice python) {
     }
+
+    /**
+     * O ambiente Python escolhido para a automacao NUMA maquina: o identificador opaco que a maquina publicou e a versao que o
+     * inventario dizia. {@code inInventory}: o ambiente ainda esta no inventario atual da maquina. Nunca um caminho.
+     */
+    public record PythonChoice(String environmentId, String pythonVersion, boolean inInventory, OffsetDateTime selectedAt) {
+    }
+
+    static final int ACT_PYTHON_SELECTED = 11;
+    private static final java.util.regex.Pattern ENVIRONMENT = java.util.regex.Pattern.compile("^[A-Za-z0-9_-]{43}$");
 
     /** {@code communication}: OK, LOST (o prazo da maquina venceu; NAO muda o estado) ou NONE (ainda sem entrega, ou terminada). */
     public record Attempt(UUID attemptId, int attemptNumber, UUID agentId, String agentName, UUID workerId, String workerName, String state,
@@ -98,7 +108,9 @@ public class RemoteExecutionService {
                     SELECT a.agent_id, a.name, w.worker_id, w.name, r.receiving, coalesce(p.capabilities @> ARRAY['REMOTE_RUN_1_0']::text[], false),
                            EXISTS (SELECT 1 FROM public.remote_attempts t WHERE t.agent_id = a.agent_id AND t.state BETWEEN 1 AND 6
                                       AND NOT (t.state IN (1, 2) AND t.offer_valid_until <= clock_timestamp())),
-                           la.authorization_id, la.valid_until, la.revoked_at IS NOT NULL, la.valid_until <= clock_timestamp()
+                           la.authorization_id, la.valid_until, la.revoked_at IS NOT NULL, la.valid_until <= clock_timestamp(),
+                           s.environment_id, s.python_version, s.selected_at,
+                           EXISTS (SELECT 1 FROM public.agent_python_environments e WHERE e.agent_id = a.agent_id AND e.environment_id = s.environment_id)
                       FROM public.agent_remote_enablements r
                       JOIN public.agents a ON a.organization_id = r.organization_id AND a.agent_id = r.agent_id AND a.status = 2
                       JOIN public.worker_agent_assignments wa ON wa.organization_id = a.organization_id AND wa.agent_id = a.agent_id AND wa.status = 1
@@ -110,8 +122,10 @@ public class RemoteExecutionService {
                                           WHERE z.organization_id = r.organization_id AND z.workspace_id = ? AND z.worker_id = w.worker_id
                                             AND z.automation_version_id = ? AND z.source_kind IN (1, 2)
                                           ORDER BY (z.revoked_at IS NULL AND z.valid_until > clock_timestamp()) DESC, z.granted_at DESC LIMIT 1) la ON true
+                      LEFT JOIN public.automation_python_selections s ON s.organization_id = r.organization_id AND s.automation_id = ?
+                                                                      AND s.agent_id = a.agent_id
                      WHERE r.organization_id = ? ORDER BY w.name, w.worker_id
-                    """).param(workspaceId).param(workspaceId).param(versionId).param(org).query((rs, n) -> {
+                    """).param(workspaceId).param(workspaceId).param(versionId).param(v.automationId()).param(org).query((rs, n) -> {
                 List<String> missing = new ArrayList<>(common);
                 UUID authorization = rs.getObject(8, UUID.class);
                 AuthorizationInfo info = null;
@@ -133,9 +147,69 @@ public class RemoteExecutionService {
                 if (rs.getBoolean(7)) {
                     missing.add("MACHINE_BUSY");
                 }
+                PythonChoice python = null;
+                if (rs.getString(12) == null) {
+                    missing.add("PYTHON_NOT_SELECTED");
+                } else {
+                    python = new PythonChoice(rs.getString(12), rs.getString(13), rs.getBoolean(15), rs.getObject(14, OffsetDateTime.class));
+                    if (!python.inInventory()) {
+                        missing.add("PYTHON_NOT_IN_INVENTORY");
+                    }
+                }
                 return new Candidate(rs.getObject(1, UUID.class), rs.getString(2), rs.getObject(3, UUID.class), rs.getString(4), missing.isEmpty(),
-                        List.copyOf(missing), info);
+                        List.copyOf(missing), info, python);
             }).list();
+        });
+    }
+
+    // ------------------------------------------------------------------ escolha do Python
+
+    /**
+     * Escolhe o ambiente Python de uma automacao NUMA maquina habilitada do ambiente dela (T01c, parte 3). Exige
+     * automation.manage. O ambiente tem de estar no inventario ATUAL da maquina: a Platform guarda so o identificador opaco que
+     * ela publicou, nunca um caminho. Trocar substitui a escolha; a de uma maquina nao vale para outra. Nao verifica
+     * dependencias nem instala nada: quem confere o ambiente, antes de iniciar, e a maquina.
+     */
+    public PythonChoice selectPython(UUID org, ValidSession actor, String token, UUID automation, UUID agent, String environmentId) {
+        if (environmentId == null || !ENVIRONMENT.matcher(environmentId).matches()) {
+            throw ApiException.invalid("ambiente");
+        }
+        if (!enabled) {
+            throw new ApiException(ApiError.REMOTE_EXECUTION_UNAVAILABLE, "execucao_remota_desligada");
+        }
+        return actions.write(org, j -> {
+            actions.requireActor(j, org, actor, token);
+            UUID workspace = access.requireAutomation(j, org, actor.membershipId(), automation, "automation.manage");
+            actions.lockOrganizationAndActor(j, org, actor.userId());
+            // a maquina so existe para esta automacao se estiver habilitada e o Worker dela estiver autorizado no ambiente
+            boolean machine = j.sql("""
+                    SELECT count(*) FROM public.agents a
+                      JOIN public.agent_remote_enablements r ON r.organization_id = a.organization_id AND r.agent_id = a.agent_id
+                      JOIN public.worker_agent_assignments wa ON wa.organization_id = a.organization_id AND wa.agent_id = a.agent_id AND wa.status = 1
+                      JOIN public.worker_workspace_assignments ww ON ww.organization_id = wa.organization_id AND ww.worker_id = wa.worker_id
+                                                                  AND ww.workspace_id = ? AND ww.status = 1
+                     WHERE a.organization_id = ? AND a.agent_id = ? AND a.status = 2
+                    """).param(workspace).param(org).param(agent).query(Long.class).single() > 0;
+            if (!machine) {
+                throw AccessActions.refuse(Failure.TARGET_NOT_FOUND, "maquina");
+            }
+            if (j.sql("SELECT count(*) FROM public.agent_python_environments WHERE organization_id = ? AND agent_id = ? AND environment_id = ?")
+                    .param(org).param(agent).param(environmentId).query(Long.class).single() == 0) {
+                throw new ApiException(ApiError.REMOTE_PYTHON_NOT_IN_INVENTORY, "python_fora_do_inventario");
+            }
+            j.sql("DELETE FROM public.automation_python_selections WHERE organization_id = ? AND automation_id = ? AND agent_id = ?")
+                    .param(org).param(automation).param(agent).update();
+            // a versao e preenchida pelo banco, a partir do inventario
+            j.sql("INSERT INTO public.automation_python_selections (automation_id, agent_id, organization_id, workspace_id, environment_id, python_version, "
+                    + "selected_by_membership_id) VALUES (?, ?, ?, ?, ?, '3.0.0', ?)").param(automation).param(agent).param(org).param(workspace)
+                    .param(environmentId).param(actor.membershipId()).update();
+            j.sql("INSERT INTO public.automation_admin_events (organization_id, act, actor_membership_id, workspace_id, automation_id, correlation_id) "
+                    + "VALUES (?, ?, ?, ?, ?, ?)").param(org).param((short) ACT_PYTHON_SELECTED).param(actor.membershipId()).param(workspace).param(automation)
+                    .param(AccessActions.correlation()).update();
+            LOG.info("evento=automacao.python_escolhido automacao={} maquina={} correlacao={}", automation, agent, AccessActions.correlation());
+            return j.sql("SELECT environment_id, python_version, selected_at FROM public.automation_python_selections "
+                            + "WHERE organization_id = ? AND automation_id = ? AND agent_id = ?").param(org).param(automation).param(agent)
+                    .query((rs, n) -> new PythonChoice(rs.getString(1), rs.getString(2), true, rs.getObject(3, OffsetDateTime.class))).single();
         });
     }
 
@@ -361,6 +435,19 @@ public class RemoteExecutionService {
         }
         if (g.expired()) {
             throw new ApiException(ApiError.REMOTE_AUTHORIZATION_EXPIRED, "autorizacao_vencida");
+        }
+        // o ambiente Python desta automacao NESTA maquina: escolhido por alguem e ainda no inventario dela
+        Boolean inInventory = j.sql("""
+                SELECT EXISTS (SELECT 1 FROM public.agent_python_environments e WHERE e.agent_id = s.agent_id AND e.environment_id = s.environment_id)
+                  FROM public.automation_python_selections s
+                  JOIN public.automation_versions v ON v.organization_id = s.organization_id AND v.automation_id = s.automation_id
+                 WHERE s.organization_id = ? AND s.agent_id = ? AND v.automation_version_id = ?
+                """).param(org).param(agentId).param(versionId).query(Boolean.class).optional().orElse(null);
+        if (inInventory == null) {
+            throw new ApiException(ApiError.REMOTE_PYTHON_NOT_SELECTED, "python_nao_escolhido");
+        }
+        if (!inInventory) {
+            throw new ApiException(ApiError.REMOTE_PYTHON_NOT_IN_INVENTORY, "python_fora_do_inventario");
         }
         return new Target(agentId, m.worker(), g.id());
     }
