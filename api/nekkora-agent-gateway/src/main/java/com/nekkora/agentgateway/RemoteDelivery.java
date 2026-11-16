@@ -487,6 +487,43 @@ public final class RemoteDelivery {
         });
     }
 
+    /** O aviso gravado: o tipo, quanto havia na maquina e quando o aviso chegou. */
+    public record RetentionLoss(String kind, int localCount, java.time.OffsetDateTime reportedAt) {
+    }
+
+    static final List<String> LOSS_KINDS = List.of("LOGS", "RESULTS");
+
+    /**
+     * A maquina avisa que REMOVEU, pelo prazo de guarda local, o que guardava de uma tentativa sem a confirmacao de recebimento:
+     * a fila de registros (LOGS) ou a pasta de saida (RESULTS). {@code localCount}: quanto havia nela - linhas capturadas, ou
+     * arquivos na pasta. So de tentativa que iniciou e terminou, com o token e a epoca da atribuicao. Um aviso por tentativa e
+     * por tipo: repetir devolve o que ja estava gravado (resposta perdida), mesmo com outro numero. Nao muda a tentativa, o
+     * resultado, as linhas, os arquivos nem o fechamento.
+     */
+    public RetentionLoss reportRetentionLoss(MachineToken t, UUID attemptId, String token, Integer epoch, String kind, Integer localCount) {
+        int code = kind == null ? -1 : LOSS_KINDS.indexOf(kind);
+        if (code < 0 || localCount == null || localCount < 0 || localCount > 1_000_000) {
+            throw ApiException.invalid("perda");
+        }
+        return tx.inOrganization(t.organization(), Mode.READ_WRITE, j -> {
+            Machine m = auth.authenticate(j, t);
+            Row a = owned(j, m, attemptId, token, epoch);
+            requireStarted(j, m, a);
+            if (a.state() < 7) {
+                throw new ApiException(ApiError.REMOTE_ATTEMPT_TRANSITION, "perda_antes_do_termino");
+            }
+            int created = j.sql("INSERT INTO public.remote_attempt_retention_losses (attempt_id, kind, organization_id, local_count) VALUES (?, ?, ?, ?) "
+                    + "ON CONFLICT (attempt_id, kind) DO NOTHING").param(attemptId).param((short) (code + 1)).param(m.organization()).param(localCount).update();
+            if (created == 1) {
+                LOG.info("evento=execucao_remota.perda_por_prazo_de_guarda tentativa={} tipo={} havia={} correlacao={}", attemptId, kind, localCount,
+                        RequestContext.correlation());
+            }
+            return j.sql("SELECT local_count, reported_at FROM public.remote_attempt_retention_losses WHERE organization_id = ? AND attempt_id = ? AND kind = ?")
+                    .param(m.organization()).param(attemptId).param((short) (code + 1))
+                    .query((rs, n) -> new RetentionLoss(kind, rs.getInt(1), rs.getObject(2, java.time.OffsetDateTime.class))).single();
+        });
+    }
+
     private static LogsClosure logsClosure(JdbcClient j, Machine m, UUID attemptId) {
         return j.sql("SELECT lines, dropped_lines FROM public.remote_attempt_log_closures WHERE organization_id = ? AND attempt_id = ?")
                 .param(m.organization()).param(attemptId).query((rs, n) -> new LogsClosure(rs.getInt(1), rs.getLong(2))).optional().orElse(null);

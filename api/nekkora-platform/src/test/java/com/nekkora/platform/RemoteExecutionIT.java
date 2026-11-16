@@ -489,6 +489,7 @@ class RemoteExecutionIT extends PlatformTestBase {
         assertThat(empty.get("total").asInt()).isZero();
         assertThat(empty.get("nextAfter").isNull()).isTrue();
         assertThat(empty.get("closure").isNull()).isTrue();
+        assertThat(empty.get("retentionLoss").isNull()).as("nenhum aviso de remocao pela maquina").isTrue();
         // a maquina executa e envia (como o gateway, com o papel da ingestao): 1.200 linhas, os tres canais
         machineMoves(s, attempt, 2, 3, 4, 5, 6);
         assertThat(as("nekkora_ingestion", s.org().id(), "INSERT INTO remote_attempt_log_lines (attempt_id, sequence, organization_id, captured_at, channel, "
@@ -528,7 +529,29 @@ class RemoteExecutionIT extends PlatformTestBase {
         JsonNode closed = JSON.readTree(s.admin().get(base + "?after=1199").body());
         assertThat(closed.get("closure").get("lines").asInt()).isEqualTo(1200);
         assertThat(closed.get("closure").get("droppedLines").asLong()).as("o que foi descartado por limite e dito").isEqualTo(73000);
-        // nem os registros nem o descarte mudaram o resultado da tentativa
+        assertThat(closed.get("retentionLoss").isNull()).isTrue();
+        // a maquina avisa que removeu, pelo prazo de guarda dela, registros e resultados sem confirmacao: a leitura diz quanto HAVIA
+        // nela, ao lado do que a Platform tem - e nada do que ja estava gravado muda
+        String results = s.o() + "/remote-executions/" + execution + "/attempts/" + attempt + "/results";
+        assertThat(JSON.readTree(s.admin().get(results).body()).get("retentionLoss").isNull()).isTrue();
+        String loss = "INSERT INTO remote_attempt_retention_losses (attempt_id, kind, organization_id, local_count) VALUES ('" + attempt + "', %d, '" + s.org().id()
+                + "', %d)";
+        assertThat(as("nekkora_ingestion", s.org().id(), loss.formatted(1, 1500))).isEqualTo("OK");
+        assertThat(as("nekkora_ingestion", s.org().id(), loss.formatted(2, 4))).isEqualTo("OK");
+        JsonNode lost = JSON.readTree(s.admin().get(base + "?after=1199").body());
+        assertThat(lost.get("retentionLoss").get("localCount").asInt()).isEqualTo(1500);
+        assertThat(lost.get("retentionLoss").get("reportedAt").asString()).isNotBlank();
+        assertThat(lost.get("total").asInt()).as("o que a Platform tem nao muda").isEqualTo(1200);
+        assertThat(lost.get("closure").get("lines").asInt()).isEqualTo(1200);
+        JsonNode lostResults = JSON.readTree(s.admin().get(results).body());
+        assertThat(lostResults.get("retentionLoss").get("localCount").asInt()).isEqualTo(4);
+        assertThat(lostResults.get("items").size()).isZero();
+        // as pessoas nao escrevem o aviso; ninguem o muda nem apaga; um por tentativa e por tipo
+        assertThat(as("nekkora_platform", s.org().id(), loss.formatted(1, 1))).isEqualTo("42501");
+        assertThat(as("nekkora_ingestion", s.org().id(), loss.formatted(1, 9))).isEqualTo("23505");
+        assertThat(as("nekkora_ingestion", s.org().id(), "UPDATE remote_attempt_retention_losses SET local_count = 0")).isEqualTo("42501");
+        assertThat(as("nekkora_ingestion", s.org().id(), "DELETE FROM remote_attempt_retention_losses")).isEqualTo("42501");
+        // nem os registros, nem o descarte, nem o aviso mudaram o resultado da tentativa
         assertThat(JSON.readTree(s.admin().get(s.o() + "/remote-executions/" + execution).body()).get("state").asString()).isEqualTo("FAILED");
         // tentativa que nao existe: 404
         assertThat(s.admin().get(s.o() + "/remote-executions/" + execution + "/attempts/" + UUID.randomUUID() + "/logs").status()).isEqualTo(404);

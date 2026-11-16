@@ -84,3 +84,31 @@ enviar; o servidor é a segunda barreira.
 - **Trilha de quem leu os registros**: a leitura não é auditada (o download de resultado é).
 - **Leitura ao vivo**: a Web relê; não há envio do servidor para o navegador.
 - Limite de corpo do proxy para o lote (até 256 KiB de texto mais o JSON): não testado fora do laboratório.
+
+## Aviso de remoção pelo prazo de guarda da máquina (migration 052)
+
+O aplicativo da máquina guarda por um prazo a fila de registros e a pasta de saída cujo recebimento a Platform não
+confirmou. Vencido o prazo, ele remove. Sem aviso, a Platform não distinguiria "nada mais a receber" de "havia mais e foi
+removido".
+
+| Onde | Mudança |
+|---|---|
+| Banco | `052_perda_por_prazo_de_guarda.sql`: `remote_attempt_retention_losses`, no máximo uma linha por tentativa e por tipo |
+| Máquina | `POST /agent/api/v1/remote/attempts/{attempt}/retention-loss` com `token`, `epoch`, `kind` (`LOGS` ou `RESULTS`) e `localCount` |
+| Pessoas | `retentionLoss` (`localCount`, `reportedAt`, ou `null`) nas leituras de registros e de resultados |
+
+Regras:
+
+- Só de tentativa que **iniciou e terminou**, com o token e a época da atribuição. Outra máquina: 404.
+- `localCount` é **quanto havia na máquina** (linhas capturadas, ou arquivos na pasta de saída). **Não é quanto se
+  perdeu.** A Platform mostra esse número ao lado do que ela tem.
+- Um aviso por tentativa e por tipo. Repetir devolve o que já estava gravado.
+- Não muda o estado da tentativa, as linhas, os arquivos nem o fechamento. O fechamento continua aceito depois do aviso.
+- As pessoas só leem. Ninguém altera nem apaga.
+
+**Isto não é a retenção do servidor.** A remoção de registros e de resultados guardados na Platform continua pendente.
+
+| Requisito | Teste |
+|---|---|
+| Recusa antes do término; pedido malformado; token errado; outra máquina; um por tipo; repetição devolve o gravado; nada mais muda; fechamento aceito depois | `RemoteDeliveryIT.aMaquinaAvisaQueRemoveuPeloPrazoDeGuardaUmaVezPorTipoSoDeTentativaTerminadaESemMudarNada` |
+| Leitura pelas pessoas; total e fechamento inalterados; papéis | `RemoteExecutionIT.osRegistrosDaTentativaSaoLidosEmPaginasSoPorQuemPodeVerRegistrosEDizemOQueFoiDescartado` |

@@ -377,6 +377,54 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /agent/api/v1/remote/attempts/{attempt}/retention-loss:
+    post:
+      tags: [Maquina]
+      operationId: reportRemoteAttemptRetentionLoss
+      summary: 'A maquina avisa que removeu, pelo prazo de guarda local, registros ou resultados nao confirmados'
+      description: >
+        O aplicativo da maquina guarda por um prazo a fila de registros e a pasta de saida cujo recebimento a Platform nao
+        confirmou. Vencido o prazo, ele remove e avisa aqui, quando consegue. kind: LOGS (a fila de registros) ou RESULTS (a pasta
+        de saida). localCount: quanto havia na maquina - linhas capturadas, ou arquivos na pasta; NAO e quanto se perdeu (a
+        Platform sabe o que tem). So de tentativa que iniciou e TERMINOU (antes: 409 + remote_attempt_transition), com o token e
+        a epoca da atribuicao. Um aviso por tentativa e por tipo: repetir devolve o que ja estava gravado, mesmo com outro
+        numero. Nao muda o estado da tentativa, as linhas, os arquivos nem o fechamento.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token, epoch, kind, localCount]
+              properties:
+                token: { type: string }
+                epoch: { type: integer, minimum: 1 }
+                kind: { type: string, enum: [LOGS, RESULTS] }
+                localCount: { type: integer, minimum: 0, maximum: 1000000 }
+      responses:
+        '200':
+          description: 'Aviso gravado (ou o que ja estava gravado)'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [kind, localCount, reportedAt]
+                properties:
+                  kind: { type: string, enum: [LOGS, RESULTS] }
+                  localCount: { type: integer }
+                  reportedAt: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /agent/api/v1/remote/attempts/{attempt}/package:
     get:
       tags: [Maquina]

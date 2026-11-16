@@ -301,6 +301,21 @@ public class GatewayController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(c);
     }
 
+    /**
+     * A maquina avisa que removeu, pelo prazo de guarda local, registros ou resultados nao confirmados. Corpo:
+     * {@code {"token", "epoch", "kind": "LOGS" | "RESULTS", "localCount"}}.
+     */
+    @PostMapping("/agent/api/v1/remote/attempts/{attempt}/retention-loss")
+    public ResponseEntity<RemoteDelivery.RetentionLoss> remoteRetentionLoss(@PathVariable String attempt, @RequestBody(required = false) String body,
+                                                                            HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(attempt);
+        JsonNode n = parse(body);
+        RemoteDelivery.RetentionLoss r = authenticated(req, () -> delivery.reportRetentionLoss(t, id, text(n, "token"), integer(n, "epoch"), text(n, "kind"),
+                integer(n, "localCount")));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
+    }
+
     /** T03: o pacote da versao fixada na tentativa, so para a maquina que a recebeu e so antes do inicio. */
     @GetMapping("/agent/api/v1/remote/attempts/{attempt}/package")
     public ResponseEntity<byte[]> remotePackage(@PathVariable String attempt, HttpServletRequest req) {
