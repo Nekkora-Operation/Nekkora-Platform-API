@@ -51,7 +51,7 @@ class GatewayContractTest {
         Map<String, Object> paths = (Map<String, Object>) spec.get("paths");
         Set<String> publicadas = new TreeSet<>();
         paths.forEach((path, ops) -> ((Map<String, Object>) ops).keySet().forEach(method -> publicadas.add(method + " " + path)));
-        assertThat(mapeadas).isEqualTo(publicadas).hasSize(23); // + retention-loss; T05: + logs e logs/complete; T03b: + results (PUT) e results/complete; T03: + attempts package; T02: + remote/next, attempts ack e state; T01c: + remote/python-environments; 030: + run-requests e decision; T13: + link/unlink; CATALOGO-001: + catalog (2); EXECUCAO-REMOTA-001 T01a: + remote/receiving; T01b: + remote/credential/renew
+        assertThat(mapeadas).isEqualTo(publicadas).hasSize(25); // 054: + dependency-checks/pending e dependency-checks/{check}/answer; + retention-loss; T05: + logs e logs/complete; T03b: + results (PUT) e results/complete; T03: + attempts package; T02: + remote/next, attempts ack e state; T01c: + remote/python-environments; 030: + run-requests e decision; T13: + link/unlink; CATALOGO-001: + catalog (2); EXECUCAO-REMOTA-001 T01a: + remote/receiving; T01b: + remote/credential/renew
 
         Map<String, Set<String>> exercitados = Map.of(
                 "post /agent/api/v1/enrollments/redeem", Set.of("200", "401", "409"),

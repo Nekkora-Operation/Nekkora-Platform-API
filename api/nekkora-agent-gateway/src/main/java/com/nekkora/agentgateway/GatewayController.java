@@ -186,6 +186,38 @@ public class GatewayController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(authenticated(req, () -> delivery.next(t)));
     }
 
+    /** 054: o pedido de verificacao de dependencias pendente desta maquina, para quando ela nao esta perguntando por trabalho. */
+    @GetMapping("/agent/api/v1/remote/dependency-checks/pending")
+    public ResponseEntity<RemoteDelivery.PendingCheck> remotePendingCheck(HttpServletRequest req) {
+        MachineToken t = machine(req);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(authenticated(req, () -> delivery.pendingCheck(t)));
+    }
+
+    /** 054: a maquina responde a verificacao. Corpo: {@code {"outcome", "missing": [...]}} ({@code missing} so com MISSING). */
+    @PostMapping("/agent/api/v1/remote/dependency-checks/{check}/answer")
+    public ResponseEntity<RemoteDelivery.CheckAnswer> remoteAnswerCheck(@PathVariable String check, @RequestBody(required = false) String body,
+                                                                        HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(check);
+        JsonNode n = parse(body);
+        List<String> missing = null;
+        if (n != null && n.has("missing") && !n.get("missing").isNull()) {
+            if (!n.get("missing").isArray()) {
+                throw ApiException.invalid("verificacao");
+            }
+            missing = new java.util.ArrayList<>();
+            for (JsonNode x : n.get("missing")) {
+                if (!x.isString()) {
+                    throw ApiException.invalid("verificacao");
+                }
+                missing.add(x.asString());
+            }
+        }
+        List<String> items = missing;
+        RemoteDelivery.CheckAnswer a = authenticated(req, () -> delivery.answerCheck(t, id, text(n, "outcome"), items));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(a);
+    }
+
     /** A maquina confirma o recebimento. Corpo: {@code {"token", "epoch"}}. */
     @PostMapping("/agent/api/v1/remote/attempts/{attempt}/ack")
     public ResponseEntity<RemoteDelivery.Status> remoteAck(@PathVariable String attempt, @RequestBody(required = false) String body, HttpServletRequest req) {

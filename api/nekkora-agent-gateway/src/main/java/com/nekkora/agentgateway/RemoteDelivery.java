@@ -61,9 +61,109 @@ public final class RemoteDelivery {
     public record CancelNotice(UUID attemptId) {
     }
 
-    /** Nada a fazer: os dois campos ausentes. */
+    /**
+     * Nada a fazer: os campos ausentes. {@code dependencyCheck} (054): um pedido de verificacao das dependencias de uma automacao
+     * no Python escolhido desta maquina, a responder em {@link #answerCheck}; vem junto com o resto, sem depender dele.
+     */
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record Next(Offer attempt, CancelNotice cancel) {
+    public record Next(Offer attempt, CancelNotice cancel, DependencyCheck dependencyCheck) {
+        Next(Offer attempt, CancelNotice cancel) {
+            this(attempt, cancel, null);
+        }
+    }
+
+    /** O que conferir: SO estas dependencias ({@code nome==versao}), SO no ambiente Python deste identificador opaco. */
+    public record DependencyCheck(UUID checkId, String pythonEnvironmentId, List<String> dependencies) {
+    }
+
+    /** Um pedido de verificacao pendente, quando ha; senao, o campo ausente. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record PendingCheck(DependencyCheck dependencyCheck) {
+    }
+
+    /** A resposta gravada. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record CheckAnswer(UUID checkId, String outcome, List<String> missing) {
+    }
+
+    static final List<String> CHECK_OUTCOMES = List.of("SATISFIED", "MISSING", "ENVIRONMENT_GONE", "NOT_VERIFIED");
+    private static final java.util.regex.Pattern CHECK_ITEM_BAD = java.util.regex.Pattern.compile("[\\x00-\\x1f\\x7f]");
+
+    /**
+     * O pedido de verificacao mais antigo desta maquina que ainda pode ser respondido (sem resposta e dentro do prazo). Marca a
+     * entrega na primeira vez. Nao depende de a maquina estar recebendo trabalho, ocupada ou pausada: conferir nao e executar.
+     */
+    private static DependencyCheck pendingCheck(JdbcClient j, Machine m) {
+        record Row(UUID id, String environment, String dependencies, boolean delivered) {
+        }
+        Row r = j.sql("SELECT check_id, environment_id, dependencies::text, delivered_at IS NOT NULL FROM public.remote_dependency_checks "
+                        + "WHERE organization_id = ? AND agent_id = ? AND outcome IS NULL AND answer_valid_until > clock_timestamp() "
+                        + "ORDER BY requested_at, check_id LIMIT 1").param(m.organization()).param(m.agentId())
+                .query((rs, n) -> new Row(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getBoolean(4))).optional().orElse(null);
+        if (r == null) {
+            return null;
+        }
+        if (!r.delivered()) {
+            j.sql("UPDATE public.remote_dependency_checks SET delivered_at = clock_timestamp() WHERE organization_id = ? AND check_id = ?")
+                    .param(m.organization()).param(r.id()).update();
+        }
+        List<String> deps = new ArrayList<>();
+        JSON.readTree(r.dependencies()).forEach(d -> deps.add(d.asString()));
+        return new DependencyCheck(r.id(), r.environment(), List.copyOf(deps));
+    }
+
+    /** O pedido de verificacao pendente desta maquina (para quando ela nao esta perguntando por trabalho). */
+    public PendingCheck pendingCheck(MachineToken t) {
+        return tx.inOrganization(t.organization(), Mode.READ_WRITE, j -> new PendingCheck(pendingCheck(j, auth.authenticate(j, t))));
+    }
+
+    /**
+     * A maquina responde UMA vez, dentro do prazo: SATISFIED, MISSING (com o que falta, do que foi perguntado), ENVIRONMENT_GONE
+     * ou NOT_VERIFIED. So o pedido que e DESTA maquina (de outra, ou inexistente: 404). Repetir a mesma resposta devolve o que
+     * esta gravado (resposta perdida); outra resposta, ou depois do prazo: 409 remote_dependency_check_closed. Nao muda a escolha
+     * do Python, a solicitacao nem tentativa nenhuma.
+     */
+    public CheckAnswer answerCheck(MachineToken t, UUID checkId, String outcome, List<String> missing) {
+        int code = outcome == null ? -1 : CHECK_OUTCOMES.indexOf(outcome);
+        boolean lists = missing != null && !missing.isEmpty();
+        if (checkId == null || code < 0 || ("MISSING".equals(outcome)) != lists || (lists && missing.size() > 400)
+                || (lists && missing.stream().anyMatch(s -> s == null || s.isBlank() || s.length() > 200 || CHECK_ITEM_BAD.matcher(s).find()))) {
+            throw ApiException.invalid("verificacao");
+        }
+        return tx.inOrganization(t.organization(), Mode.READ_WRITE, j -> {
+            Machine m = auth.authenticate(j, t);
+            record Row(Short outcome, String missing, boolean open, String asked) {
+            }
+            Row r = j.sql("SELECT outcome, missing::text, answer_valid_until > clock_timestamp(), dependencies::text FROM public.remote_dependency_checks "
+                            + "WHERE organization_id = ? AND check_id = ? AND agent_id = ? FOR UPDATE").param(m.organization()).param(checkId).param(m.agentId())
+                    .query((rs, n) -> new Row(rs.getObject(1) == null ? null : rs.getShort(1), rs.getString(2), rs.getBoolean(3), rs.getString(4))).optional()
+                    .orElseThrow(() -> new ApiException(ApiError.NOT_FOUND, "verificacao"));
+            tools.jackson.databind.node.ArrayNode list = JSON.createArrayNode();
+            if (lists) {
+                // so pode faltar o que foi perguntado: a resposta nao e um canal para a maquina descrever o que tem instalado
+                java.util.Set<String> asked = new java.util.HashSet<>();
+                JSON.readTree(r.asked()).forEach(d -> asked.add(d.asString()));
+                if (!asked.containsAll(missing) || new java.util.HashSet<>(missing).size() != missing.size()) {
+                    throw ApiException.invalid("verificacao");
+                }
+                missing.forEach(list::add);
+            }
+            if (r.outcome() != null) {
+                boolean same = r.outcome() == code + 1 && (lists ? JSON.readTree(r.missing()).equals(list) : r.missing() == null);
+                if (!same) {
+                    throw new ApiException(ApiError.REMOTE_DEPENDENCY_CHECK_CLOSED, "verificacao_ja_respondida");
+                }
+                return new CheckAnswer(checkId, outcome, lists ? missing : null);
+            }
+            if (!r.open()) {
+                throw new ApiException(ApiError.REMOTE_DEPENDENCY_CHECK_CLOSED, "prazo_da_resposta_vencido");
+            }
+            j.sql("UPDATE public.remote_dependency_checks SET outcome = ?, missing = ?::jsonb WHERE organization_id = ? AND check_id = ?")
+                    .param((short) (code + 1)).param(lists ? list.toString() : null).param(m.organization()).param(checkId).update();
+            LOG.info("evento=execucao_remota.dependencias_verificadas verificacao={} resultado={} faltam={} correlacao={}", checkId, outcome,
+                    lists ? missing.size() : 0, RequestContext.correlation());
+            return new CheckAnswer(checkId, outcome, lists ? missing : null);
+        });
     }
 
     /**
@@ -111,6 +211,14 @@ public final class RemoteDelivery {
     public Next next(MachineToken t) {
         return tx.inOrganization(t.organization(), Mode.READ_WRITE, j -> {
             Machine m = auth.authenticate(j, t);
+            Next work = nextWork(j, m);
+            // 054: o pedido de verificacao de dependencias vai junto com o que houver (ou sozinho)
+            return new Next(work.attempt(), work.cancel(), pendingCheck(j, m));
+        });
+    }
+
+    private Next nextWork(JdbcClient j, Machine m) {
+        {
             Short receiving = j.sql("SELECT receiving FROM public.agent_remote_enablements WHERE organization_id = ? AND agent_id = ?")
                     .param(m.organization()).param(m.agentId()).query(Short.class).optional().orElse(null);
             if (receiving == null) {
@@ -153,7 +261,7 @@ public final class RemoteDelivery {
             }
             // ja recebida por esta maquina: nada novo a entregar; so o aviso de cancelamento, se houver
             return new Next(null, a.cancelRequested() ? new CancelNotice(a.attemptId()) : null);
-        });
+        }
     }
 
     /** A maquina confirma que RECEBEU a tentativa (depois de grava-la no proprio diario). Idempotente com o mesmo token e epoca. */
