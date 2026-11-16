@@ -1,0 +1,123 @@
+{
+  "_": "Vetores comuns da leitura estatica de requirements.txt. Copia IDENTICA em Nekkora-Platform-API (api/nekkora-platform/src/test/resources) e em Nekkora-Agent-Client (src/test/resources). As duas implementacoes (RequirementsText na API, RequirementsFile no Client) tem de dar exatamente estas situacoes. Mudou a regra, mudam as duas e este arquivo.",
+  "vectors": [
+    {
+      "name": "vazio e so comentarios",
+      "text": "\n# so um comentario\n   \n   # outro\n",
+      "lines": [],
+      "dependencies": []
+    },
+    {
+      "name": "exatas, com extras, espacos e comentario no fim",
+      "text": "requests==2.32.3\npandas [excel , performance] == 2.2.2   # planilhas\nNekkora_RPA==0.3.0\n",
+      "lines": [
+        { "number": 1, "kind": "EXACT", "dependency": "requests==2.32.3" },
+        { "number": 2, "kind": "EXACT", "dependency": "pandas[excel,performance]==2.2.2" },
+        { "number": 3, "kind": "EXACT", "dependency": "Nekkora_RPA==0.3.0" }
+      ],
+      "dependencies": ["requests==2.32.3", "pandas[excel,performance]==2.2.2", "Nekkora_RPA==0.3.0"]
+    },
+    {
+      "name": "repetida igual e usada uma vez; nome normalizado",
+      "text": "requests==2.32.3\nRequests==2.32.3\nmy.pkg==1.0\nmy_pkg==1.0\n",
+      "lines": [
+        { "number": 1, "kind": "EXACT", "dependency": "requests==2.32.3" },
+        { "number": 2, "kind": "DUPLICATE", "dependency": null },
+        { "number": 3, "kind": "EXACT", "dependency": "my.pkg==1.0" },
+        { "number": 4, "kind": "DUPLICATE", "dependency": null }
+      ],
+      "dependencies": ["requests==2.32.3", "my.pkg==1.0"]
+    },
+    {
+      "name": "mesma biblioteca com versoes ou extras diferentes: todas em conflito",
+      "text": "requests==2.32.3\nrequests==2.31.0\nrequests==2.32.3\npandas==2.2.2\npandas[excel]==2.2.2\n",
+      "lines": [
+        { "number": 1, "kind": "CONFLICT", "dependency": null },
+        { "number": 2, "kind": "CONFLICT", "dependency": null },
+        { "number": 3, "kind": "CONFLICT", "dependency": null },
+        { "number": 4, "kind": "CONFLICT", "dependency": null },
+        { "number": 5, "kind": "CONFLICT", "dependency": null }
+      ],
+      "dependencies": []
+    },
+    {
+      "name": "faixa, sem versao e marcador",
+      "text": "requests>=2.0\nrequests~=2.31\nnumpy\nnumpy[extra]\ncolorama==0.4.6 ; sys_platform == 'win32'\nurllib3<3,>=2\nidna===3.7\n",
+      "lines": [
+        { "number": 1, "kind": "RANGE", "dependency": null },
+        { "number": 2, "kind": "RANGE", "dependency": null },
+        { "number": 3, "kind": "NO_VERSION", "dependency": null },
+        { "number": 4, "kind": "NO_VERSION", "dependency": null },
+        { "number": 5, "kind": "MARKER", "dependency": null },
+        { "number": 6, "kind": "RANGE", "dependency": null },
+        { "number": 7, "kind": "RANGE", "dependency": null }
+      ],
+      "dependencies": []
+    },
+    {
+      "name": "enderecos remotos e caminhos locais",
+      "text": "git+https://github.com/org/repo.git@v1#egg=pkg\nhttps://example.com/pkg-1.0.tar.gz\npkg @ https://example.com/pkg.whl\n./local/pkg\n../outro\n/abs/pkg\nC:\\libs\\pkg\n~/pkg\npkg-1.0-py3-none-any.whl\nfonte.tar.gz\n-e ./editavel\n--editable .\n",
+      "lines": [
+        { "number": 1, "kind": "REMOTE", "dependency": null },
+        { "number": 2, "kind": "REMOTE", "dependency": null },
+        { "number": 3, "kind": "REMOTE", "dependency": null },
+        { "number": 4, "kind": "LOCAL_PATH", "dependency": null },
+        { "number": 5, "kind": "LOCAL_PATH", "dependency": null },
+        { "number": 6, "kind": "LOCAL_PATH", "dependency": null },
+        { "number": 7, "kind": "LOCAL_PATH", "dependency": null },
+        { "number": 8, "kind": "LOCAL_PATH", "dependency": null },
+        { "number": 9, "kind": "LOCAL_PATH", "dependency": null },
+        { "number": 10, "kind": "LOCAL_PATH", "dependency": null },
+        { "number": 11, "kind": "LOCAL_PATH", "dependency": null },
+        { "number": 12, "kind": "LOCAL_PATH", "dependency": null }
+      ],
+      "dependencies": []
+    },
+    {
+      "name": "inclusoes, opcoes e hash",
+      "text": "-r base.txt\n--requirement outro.txt\n-c limites.txt\n--constraint c.txt\n--index-url https://pypi.org/simple\n-i https://pypi.org/simple\nrequests==2.32.3 --hash=sha256:abc\nflask==3.0.3 --no-binary flask\n",
+      "lines": [
+        { "number": 1, "kind": "INCLUDE", "dependency": null },
+        { "number": 2, "kind": "INCLUDE", "dependency": null },
+        { "number": 3, "kind": "INCLUDE", "dependency": null },
+        { "number": 4, "kind": "INCLUDE", "dependency": null },
+        { "number": 5, "kind": "OPTION", "dependency": null },
+        { "number": 6, "kind": "OPTION", "dependency": null },
+        { "number": 7, "kind": "HASH", "dependency": null },
+        { "number": 8, "kind": "OPTION", "dependency": null }
+      ],
+      "dependencies": []
+    },
+    {
+      "name": "continuacao de linha, fim de linha do Windows e numero da primeira linha",
+      "text": "requests==2.32.3\r\n# comentario\r\nflask==3.0.3 \\\r\n  --hash=sha256:abc\r\nidna==3.7\r\n",
+      "lines": [
+        { "number": 1, "kind": "EXACT", "dependency": "requests==2.32.3" },
+        { "number": 3, "kind": "HASH", "dependency": null },
+        { "number": 5, "kind": "EXACT", "dependency": "idna==3.7" }
+      ],
+      "dependencies": ["requests==2.32.3", "idna==3.7"]
+    },
+    {
+      "name": "linhas nao reconhecidas e versao fora do formato",
+      "text": "requests == \n== 1.0\nrequests==v2\n@@@\nrequests==2.32.3 extra\n",
+      "lines": [
+        { "number": 1, "kind": "RANGE", "dependency": null },
+        { "number": 2, "kind": "UNKNOWN", "dependency": null },
+        { "number": 3, "kind": "RANGE", "dependency": null },
+        { "number": 4, "kind": "UNKNOWN", "dependency": null },
+        { "number": 5, "kind": "RANGE", "dependency": null }
+      ],
+      "dependencies": []
+    },
+    {
+      "name": "exata misturada com problema: a exata continua contando, mas o texto nao esta resolvido",
+      "text": "requests==2.32.3\nnumpy\n",
+      "lines": [
+        { "number": 1, "kind": "EXACT", "dependency": "requests==2.32.3" },
+        { "number": 2, "kind": "NO_VERSION", "dependency": null }
+      ],
+      "dependencies": ["requests==2.32.3"]
+    }
+  ]
+}
