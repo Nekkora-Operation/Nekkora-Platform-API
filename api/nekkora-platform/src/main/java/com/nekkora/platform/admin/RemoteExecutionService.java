@@ -190,7 +190,57 @@ public class RemoteExecutionService {
     public record Attempt(UUID attemptId, int attemptNumber, UUID agentId, String agentName, UUID workerId, String workerName, String state,
                           String refusalReason, String communication, Integer exitCode, OffsetDateTime createdAt, OffsetDateTime offerValidUntil,
                           OffsetDateTime offeredAt, OffsetDateTime receivedAt, OffsetDateTime startedAt, OffsetDateTime endedAt, String closureCause,
-                          LateReport lateReport) {
+                          LateReport lateReport, List<Reconciliation> reconciliations, OffsetDateTime machineStillRunningAt) {
+    }
+
+    /**
+     * 058: como uma tentativa com resultado nao confirmado foi reconciliada. {@code kind}: MACHINE (a maquina confirmou que nao ha
+     * processo) ou MANUAL (declaracao de um ORG_ADMIN; so ai ha motivo, verificacao e autor). O estado da tentativa NAO muda.
+     */
+    public record Reconciliation(String kind, OffsetDateTime at, String reason, String verification, UUID byMembershipId) {
+    }
+
+    private static final List<String> MANUAL_REASONS = List.of("MACHINE_OFF_OUT_OF_OPERATION", "PROCESS_ENDED_BY_ADMINISTRATOR", "OTHER_VERIFIED");
+
+    /**
+     * Reconciliacao DECLARADA por uma pessoa (058): so ORG_ADMIN da propria organizacao, com confirmacao reforcada, motivo de uma
+     * lista fechada, descricao da verificacao feita (20 a 2000 caracteres) e a afirmacao explicita de que sabe que a execucao
+     * anterior pode ter causado efeitos parciais. So para tentativa com resultado nao confirmado e ainda sem declaracao. NAO
+     * executa nada, NAO muda o resultado da tentativa e NAO libera a maquina antiga: libera uma nova tentativa da solicitacao,
+     * sujeita as mesmas autorizacoes de sempre.
+     */
+    public Execution reconcileManually(UUID org, ValidSession actor, String token, UUID executionId, UUID attemptId, String reason, String verification,
+                                       boolean acknowledgePartialEffects) {
+        String text = verification == null ? "" : verification.strip();
+        if (reason == null || !MANUAL_REASONS.contains(reason) || text.length() < 20 || text.length() > 2000 || !acknowledgePartialEffects) {
+            throw ApiException.invalid("reconciliacao");
+        }
+        return actions.write(org, j -> {
+            actions.requireActor(j, org, actor, token);
+            scoped(j, org, actor, executionId, "automation.read");
+            if (!j.sql("SELECT EXISTS (SELECT 1 FROM public.organization_role_assignments a JOIN public.roles r ON r.role_id = a.role_id "
+                    + "WHERE a.organization_id = ? AND a.membership_id = ? AND a.status = 1 AND r.code = 'ORG_ADMIN')").param(org).param(actor.membershipId())
+                    .query(Boolean.class).single()) {
+                throw AccessActions.refuse(Failure.PERMISSION, "so_org_admin");
+            }
+            actions.requireStepUp(j, actor);
+            requireAttempt(j, org, executionId, attemptId);
+            j.sql("SELECT 1 FROM public.remote_executions WHERE organization_id = ? AND remote_execution_id = ? FOR UPDATE").param(org).param(executionId)
+                    .query(Integer.class).single();
+            reconcile(j, org, executionId, null);
+            Attempt a = execution(j, org, executionId).attempts().stream().filter(x -> x.attemptId().equals(attemptId)).findFirst().orElseThrow();
+            if (!"ENDED_UNKNOWN".equals(a.state())) {
+                throw new ApiException(ApiError.REMOTE_ATTEMPT_NOT_UNCONFIRMED, "tentativa_sem_resultado_nao_confirmado");
+            }
+            if (a.reconciliations().stream().anyMatch(r -> r.kind().equals("MANUAL"))) {
+                throw new ApiException(ApiError.REMOTE_ATTEMPT_ALREADY_RECONCILED, "ja_reconciliada");
+            }
+            j.sql("INSERT INTO public.remote_attempt_process_reports (attempt_id, kind, organization_id, agent_id, reason, verification, by_membership_id) "
+                    + "VALUES (?, 2, ?, ?, ?, ?, ?)").param(attemptId).param(org).param(a.agentId()).param(reason).param(text).param(actor.membershipId()).update();
+            LOG.info("evento=execucao_remota.reconciliacao_manual solicitacao={} tentativa={} maquina={} motivo={} correlacao={}", executionId, attemptId,
+                    a.agentId(), reason, AccessActions.correlation());
+            return execution(j, org, executionId);
+        });
     }
 
     /** O que a maquina informou DEPOIS de o servidor encerrar a tentativa por comunicacao perdida. */
@@ -218,9 +268,15 @@ public class RemoteExecutionService {
      * andamento la. Deixa de valer no primeiro contato da maquina depois do encerramento (ela mesma recusa o que nao puder
      * receber) ou quando ela relata o desfecho.
      */
-    private static final String UNCONFIRMED = "EXISTS (SELECT 1 FROM public.remote_attempts u WHERE u.organization_id = a.organization_id AND u.agent_id = a.agent_id "
-            + "AND u.state = 13 AND u.closure_cause = 'COMMUNICATION_LOST' AND u.late_state IS NULL "
-            + "AND (a.last_heartbeat_at IS NULL OR a.last_heartbeat_at <= u.ended_at))";
+    /**
+     * 058: a maquina {@code a} AINDA EXECUTA uma tentativa que o servidor ja encerrou como nao confirmada (ela voltou e disse).
+     */
+    private static final String STILL_RUNNING = com.nekkora.core.remote.AttemptReconciliation.machineHolds("a", true);
+    /**
+     * 058: a ocupacao da maquina {@code a} e INCERTA - ha tentativa dela nao confirmada cujo processo ELA ainda nao confirmou
+     * ausente. Um novo contato nao muda isso; a declaracao manual tambem nao (ela libera uma nova tentativa, nao a maquina).
+     */
+    private static final String UNCONFIRMED = com.nekkora.core.remote.AttemptReconciliation.machineHolds("a", false);
     private final com.nekkora.core.artifact.ResultStore results;
 
     /**
@@ -272,7 +328,7 @@ public class RemoteExecutionService {
                       LEFT JOIN public.automation_python_selections s ON s.organization_id = r.organization_id AND s.automation_id = ?
                                                                       AND s.agent_id = a.agent_id
                      WHERE r.organization_id = ? ORDER BY w.name, w.worker_id
-                    """.formatted(UNCONFIRMED)).param(workspaceId).param(workspaceId).param(versionId).param(v.automationId()).param(org).query((rs, n) -> {
+                    """.formatted(UNCONFIRMED + ", " + STILL_RUNNING)).param(workspaceId).param(workspaceId).param(versionId).param(v.automationId()).param(org).query((rs, n) -> {
                 List<String> missing = new ArrayList<>(common);
                 UUID authorization = rs.getObject(8, UUID.class);
                 AuthorizationInfo info = null;
@@ -291,7 +347,7 @@ public class RemoteExecutionService {
                 if (!rs.getBoolean(6)) {
                     missing.add("MACHINE_INCOMPATIBLE");
                 }
-                if (rs.getBoolean(7)) {
+                if (rs.getBoolean(7) || rs.getBoolean(17)) {
                     missing.add("MACHINE_BUSY");
                 } else if (rs.getBoolean(16)) {
                     missing.add("MACHINE_UNCONFIRMED");
@@ -429,7 +485,7 @@ public class RemoteExecutionService {
      * duas maquinas com a mesma solicitacao, e nada e trocado de maquina automaticamente. A autorizacao conferida e a da
      * versao para o Worker de DESTINO; a da maquina anterior nao e transferida.
      */
-    public Execution retry(UUID org, ValidSession actor, String token, UUID executionId, UUID agentId, boolean acknowledgeUnconfirmed) {
+    public Execution retry(UUID org, ValidSession actor, String token, UUID executionId, UUID agentId) {
         if (agentId == null) {
             throw ApiException.invalid("maquina");
         }
@@ -452,11 +508,10 @@ public class RemoteExecutionService {
             if (STATES.indexOf(last.state()) < 6) {
                 throw new ApiException(ApiError.REMOTE_ATTEMPT_NOT_FINISHED, "tentativa_anterior_nao_terminou");
             }
-            // a espera vencida consolida "resultado nao confirmado", mas NAO libera a repeticao sozinha: a automacao pode ainda
-            // estar em andamento naquele computador. Quem repete diz, de proposito, que sabe disso
-            if (AttemptClosure.COMMUNICATION_LOST.equals(last.closureCause()) && "ENDED_UNKNOWN".equals(last.state()) && last.lateReport() == null
-                    && !acknowledgeUnconfirmed) {
-                throw new ApiException(ApiError.REMOTE_PREVIOUS_RESULT_UNCONFIRMED, "resultado_anterior_nao_confirmado");
+            // 058: com resultado nao confirmado, a repeticao fica BLOQUEADA ate haver confirmacao de que o processo acabou - pela
+            // maquina, ou declarada por um ORG_ADMIN. Reconhecer o risco, revogar a maquina ou esperar nao liberam nada
+            if ("ENDED_UNKNOWN".equals(last.state()) && last.reconciliations().isEmpty()) {
+                throw new ApiException(ApiError.REMOTE_PREVIOUS_RESULT_UNCONFIRMED, "resultado_anterior_nao_reconciliado");
             }
             // a mesma recusa da solicitacao: uma solicitacao antiga de pacote que nao e externo nao ganha nova tentativa
             requireSupported(j.sql("SELECT package_fingerprint_rule FROM public.remote_executions WHERE organization_id = ? AND remote_execution_id = ?")
@@ -465,8 +520,8 @@ public class RemoteExecutionService {
                     + "WHERE organization_id = ? AND remote_execution_id = ?").param(org).param(executionId).query(String.class).single(), SUPPORTED_RULE);
             Target target = target(j, org, x.workspaceId(), x.automationVersionId(), agentId);
             attempt(j, org, executionId, last.attemptNumber() + 1, target, actor.membershipId());
-            LOG.info("evento=execucao_remota.nova_tentativa solicitacao={} tentativa={} anterior_sem_confirmacao_reconhecida={} correlacao={}", executionId,
-                    last.attemptNumber() + 1, acknowledgeUnconfirmed && AttemptClosure.COMMUNICATION_LOST.equals(last.closureCause()), AccessActions.correlation());
+            LOG.info("evento=execucao_remota.nova_tentativa solicitacao={} tentativa={} correlacao={}", executionId, last.attemptNumber() + 1,
+                    AccessActions.correlation());
             return execution(j, org, executionId);
         });
     }
@@ -819,7 +874,12 @@ public class RemoteExecutionService {
                 .query(Long.class).single() > 0) {
             throw new ApiException(ApiError.REMOTE_MACHINE_BUSY, "maquina_ocupada");
         }
-        // encerrar por falta de comunicacao NAO e saber que a maquina esta livre: so depois que ela voltar a se comunicar
+        // 058: resultado nao confirmado NAO e saber que a maquina esta livre. Se ela disse que ainda executa: ocupada. Se nao
+        // confirmou que o processo acabou: ocupacao incerta. Um novo contato nao muda nenhuma das duas
+        if (j.sql("SELECT " + STILL_RUNNING + " FROM public.agents a WHERE a.organization_id = ? AND a.agent_id = ?").param(org).param(agentId)
+                .query(Boolean.class).single()) {
+            throw new ApiException(ApiError.REMOTE_MACHINE_BUSY, "maquina_ainda_executa");
+        }
         if (j.sql("SELECT " + UNCONFIRMED + " FROM public.agents a WHERE a.organization_id = ? AND a.agent_id = ?").param(org).param(agentId)
                 .query(Boolean.class).single()) {
             throw new ApiException(ApiError.REMOTE_MACHINE_UNCONFIRMED, "maquina_sem_confirmacao");
@@ -915,7 +975,30 @@ public class RemoteExecutionService {
                 rs.getObject(13, OffsetDateTime.class), rs.getObject(14, OffsetDateTime.class), rs.getObject(15, OffsetDateTime.class),
                 rs.getObject(16, OffsetDateTime.class), rs.getString(17),
                 rs.getObject(18) == null ? null : new LateReport(STATES.get(rs.getShort(18) - 1), (Integer) rs.getObject(19),
-                        rs.getObject(20, OffsetDateTime.class)))).list();
+                        rs.getObject(20, OffsetDateTime.class)), new ArrayList<>(), null)).list();
+        // 058: o que se sabe do processo de cada tentativa nao confirmada (reconciliacoes e "ainda executa")
+        List<Attempt> known = new ArrayList<>();
+        for (Attempt a : attempts) {
+            List<Reconciliation> recs = new ArrayList<>();
+            OffsetDateTime[] running = new OffsetDateTime[1];
+            if ("ENDED_UNKNOWN".equals(a.state())) {
+                j.sql("SELECT kind, reported_at, reason, verification, by_membership_id FROM public.remote_attempt_process_reports "
+                        + "WHERE organization_id = ? AND attempt_id = ? ORDER BY reported_at, kind").param(org).param(a.attemptId()).query(rs -> {
+                            if (rs.getShort(1) == 3) {
+                                running[0] = rs.getObject(2, OffsetDateTime.class);
+                            } else {
+                                recs.add(new Reconciliation(rs.getShort(1) == 1 ? "MACHINE" : "MANUAL", rs.getObject(2, OffsetDateTime.class), rs.getString(3),
+                                        rs.getString(4), rs.getObject(5, UUID.class)));
+                            }
+                        });
+            }
+            // "ainda executa" deixa de valer quando a propria maquina confirma que o processo acabou
+            boolean byMachine = recs.stream().anyMatch(r -> r.kind().equals("MACHINE"));
+            known.add(new Attempt(a.attemptId(), a.attemptNumber(), a.agentId(), a.agentName(), a.workerId(), a.workerName(), a.state(), a.refusalReason(),
+                    a.communication(), a.exitCode(), a.createdAt(), a.offerValidUntil(), a.offeredAt(), a.receivedAt(), a.startedAt(), a.endedAt(),
+                    a.closureCause(), a.lateReport(), List.copyOf(recs), byMachine ? null : running[0]));
+        }
+        List<Attempt> resolved = List.copyOf(known);
         return j.sql("""
                 SELECT x.remote_execution_id, x.workspace_id, x.automation_id, x.automation_version_id, v.version_number, x.requirements_revision,
                        x.effective_dependencies::text, x.requested_at, x.cancel_requested_at
@@ -927,7 +1010,7 @@ public class RemoteExecutionService {
             JSON.readTree(rs.getString(7)).forEach(d -> deps.add(d.asString()));
             return new Execution(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getObject(3, UUID.class), rs.getObject(4, UUID.class),
                     rs.getInt(5), attempts.isEmpty() ? "QUEUED" : attempts.get(attempts.size() - 1).state(), rs.getInt(6), List.copyOf(deps),
-                    rs.getObject(8, OffsetDateTime.class), rs.getObject(9, OffsetDateTime.class), attempts);
+                    rs.getObject(8, OffsetDateTime.class), rs.getObject(9, OffsetDateTime.class), resolved);
         }).single();
     }
 }

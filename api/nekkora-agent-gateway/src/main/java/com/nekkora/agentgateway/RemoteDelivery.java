@@ -285,6 +285,17 @@ public final class RemoteDelivery {
      * maquina NAO inicia. Repetir o estado atual so renova o prazo.
      */
     public Status state(MachineToken t, UUID attemptId, String token, Integer epoch, String state, String refusalReason, Integer exitCode) {
+        return state(t, attemptId, token, epoch, state, refusalReason, exitCode, false);
+    }
+
+    /**
+     * {@code processAbsent} (058): junto de ENDED_UNKNOWN, a maquina afirma que CONFERIU que o processo daquela tentativa nao esta
+     * mais em execucao nela (o desfecho continua desconhecido). Um desfecho verdadeiro (concluida, falhou, cancelada, tempo
+     * esgotado) ja diz isso por si. Numa tentativa que o servidor ja encerrou como nao confirmada, a maquina que volta e repete
+     * RUNNING fica registrada como "ainda executa"; quando disser como terminou, como "processo ausente".
+     */
+    public Status state(MachineToken t, UUID attemptId, String token, Integer epoch, String state, String refusalReason, Integer exitCode,
+                        boolean processAbsent) {
         if (state == null || !REPORTABLE.contains(state) || ("REFUSED".equals(state)) != (refusalReason != null)
                 || (refusalReason != null && !MACHINE_REASONS.contains(refusalReason))
                 || (exitCode != null && !Set.of("SUCCEEDED", "FAILED", "TIMED_OUT").contains(state))) {
@@ -302,6 +313,14 @@ public final class RemoteDelivery {
                     j.sql("UPDATE public.remote_attempts SET late_state = ?, late_exit_code = ? WHERE organization_id = ? AND attempt_id = ?")
                             .param(wanted).param(exitCode).param(m.organization()).param(attemptId).update();
                     LOG.info("evento=execucao_remota.relato_tardio tentativa={} informado={} correlacao={}", attemptId, state, RequestContext.correlation());
+                }
+                if (a.state() == 13) {
+                    // 058: o que a maquina diz do PROCESSO de uma tentativa nao confirmada. Um novo contato, sozinho, nao diz nada
+                    short kind = wanted >= 7 && wanted <= 10 || (wanted == 13 && processAbsent) ? com.nekkora.core.remote.AttemptReconciliation.ABSENT_BY_MACHINE
+                            : wanted == 6 ? com.nekkora.core.remote.AttemptReconciliation.RUNNING_BY_MACHINE : 0;
+                    if (kind != 0 && com.nekkora.core.remote.AttemptReconciliation.byMachine(j, m.organization(), attemptId, kind) > 0) {
+                        LOG.info("evento=execucao_remota.processo_informado tentativa={} tipo={} correlacao={}", attemptId, kind, RequestContext.correlation());
+                    }
                 }
                 return status(j, m, attemptId, false);
             }
@@ -326,6 +345,10 @@ public final class RemoteDelivery {
                 }
             }
             move(j, m, a, wanted, refusalReason, exitCode);
+            if (wanted == 13 && processAbsent) {
+                // o desfecho e desconhecido, mas a maquina conferiu que o processo nao esta mais la: reconciliada por ela
+                com.nekkora.core.remote.AttemptReconciliation.byMachine(j, m.organization(), attemptId, com.nekkora.core.remote.AttemptReconciliation.ABSENT_BY_MACHINE);
+            }
             return status(j, m, attemptId, wanted < 7);
         });
     }

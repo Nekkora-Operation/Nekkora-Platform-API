@@ -236,7 +236,7 @@ public class GatewayController {
         UUID id = uuid(attempt);
         JsonNode n = parse(body);
         RemoteDelivery.Status s = authenticated(req, () -> delivery.state(t, id, text(n, "token"), integer(n, "epoch"), text(n, "state"),
-                text(n, "refusalReason"), integer(n, "exitCode")));
+                text(n, "refusalReason"), integer(n, "exitCode"), n != null && n.path("processAbsent").asBoolean(false)));
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(s);
     }
 
