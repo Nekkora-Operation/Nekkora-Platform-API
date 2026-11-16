@@ -46,7 +46,7 @@ class GatewayContractTest {
         Map<String, Object> paths = (Map<String, Object>) spec.get("paths");
         Set<String> publicadas = new TreeSet<>();
         paths.forEach((path, ops) -> ((Map<String, Object>) ops).keySet().forEach(method -> publicadas.add(method + " " + path)));
-        assertThat(mapeadas).isEqualTo(publicadas).hasSize(11); // 030: + run-requests e decision; T13: + link/unlink; CATALOGO-001: + catalog (2)
+        assertThat(mapeadas).isEqualTo(publicadas).hasSize(12); // 030: + run-requests e decision; T13: + link/unlink; CATALOGO-001: + catalog (2); EXECUCAO-REMOTA-001 T01a: + remote/receiving
 
         Map<String, Set<String>> exercitados = Map.of(
                 "post /agent/api/v1/enrollments/redeem", Set.of("200", "401", "409"),
@@ -70,7 +70,16 @@ class GatewayContractTest {
         Map<String, Object> redeem = (Map<String, Object>) ((Map<String, Object>) paths.get("/agent/api/v1/enrollments/redeem")).get("post");
         assertThat(redeem.get("parameters").toString()).contains("#/components/parameters/Intent");
         Map<String, Object> parameters = (Map<String, Object>) ((Map<String, Object>) spec.get("components")).get("parameters");
-        assertThat(parameters.get("Intent").toString()).contains(GatewayController.INTENT_HEADER).contains("pair").contains("rotate");
+        assertThat(parameters.get("Intent").toString()).contains(GatewayController.INTENT_HEADER).contains("pair").contains("rotate").contains("pair-remote");
+        // EXECUCAO-REMOTA-001 T01a: pausar/retomar e os motivos da habilitacao, publicados
+        Map<String, Object> receiving = (Map<String, Object>) ((Map<String, Object>) paths.get("/agent/api/v1/remote/receiving")).get("post");
+        assertThat(((Map<String, Object>) receiving.get("responses")).keySet()).contains("200", "400", "401", "409");
+        assertThat(receiving.get("parameters").toString()).contains("#/components/parameters/Contract");
+        assertThat(spec.toString()).contains("remote_execution_unavailable").contains("remote_code_without_enablement")
+                .contains("code_not_for_remote_execution").contains("remote_execution_not_enabled");
+        for (String capability : GatewayService.CAPABILITIES) {
+            assertThat(spec.toString()).as("capacidade publicada").contains(capability);
+        }
         String erros = ((Map<String, Object>) ((Map<String, Object>) ((Map<String, Object>) spec.get("components")).get("schemas")).get("Error")).toString();
         for (com.nekkora.core.web.ApiError e : Set.of(com.nekkora.core.web.ApiError.PAIRING_CODE_FOR_ROTATION,
                 com.nekkora.core.web.ApiError.ROTATION_CODE_FOR_PAIRING, com.nekkora.core.web.ApiError.LINK_ENDED_BY_MACHINE,

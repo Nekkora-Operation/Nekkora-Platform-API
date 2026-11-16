@@ -73,6 +73,11 @@ nekkora:
   # nao tem chave (encerrar sessao nunca depende de configuracao)
   entrada-geral:
     enabled: ${NEKKORA_ENTRADA_GERAL:false}
+  # execucao remota (PLATFORM-CLIENT-EXECUCAO-REMOTA-001): DESLIGADA por padrao. Ligada, um codigo de pareamento pode ser
+  # criado marcado para habilitar a maquina a receber execucoes solicitadas pela Platform. Tem de ter o mesmo valor no
+  # agent-gateway.
+  remote-execution:
+    enabled: ${NEKKORA_EXECUCAO_REMOTA:false}
   # login do aplicativo desktop pelo navegador (AGENT-CLIENT-LOGIN-001, contrato desktop-login/1): DESLIGADO por padrao; so
   # abre com a entrada geral tambem ligada. Prazos: pedido no navegador, codigo de autorizacao e sessao do aplicativo
   # (sem renovacao). Nenhum prazo das sessoes existentes muda.
