@@ -106,7 +106,9 @@ Regras:
 - Não muda o estado da tentativa, as linhas, os arquivos nem o fechamento. O fechamento continua aceito depois do aviso.
 - As pessoas só leem. Ninguém altera nem apaga.
 
-**Isto não é a retenção do servidor.** A remoção de registros e de resultados guardados na Platform continua pendente.
+**Isto não é a retenção do servidor.** Quando este documento foi escrito ela estava pendente; foi implementada depois, na
+migration 057 — ver `retencao-no-servidor.md`. (O comentário da migration 052 ainda diz "continua pendente": migration
+aplicada não é alterada.)
 
 | Requisito | Teste |
 |---|---|

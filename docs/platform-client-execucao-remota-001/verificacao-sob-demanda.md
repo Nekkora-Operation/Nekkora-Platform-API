@@ -55,7 +55,7 @@ São pontos de partida de laboratório.
 ## Banco (054)
 
 `remote_dependency_checks`: o pedido (imutável) e a resposta (gravada uma vez, dentro do prazo). Gatilhos conferem quem pede
-(`automation.execute`), que o ambiente é o escolhido, que a revisão é a vigente e o limite de um por minuto. RLS por organização.
+(`automation.execute`), que o ambiente é o escolhido, que a revisão é a vigente e o piso de 10 segundos entre pedidos (o intervalo que vale é configuração; ver o fim deste documento). RLS por organização.
 Pessoas: `SELECT`, `INSERT`. Máquina: `SELECT` e `UPDATE` só das colunas da resposta. Ninguém apaga. Sem elevação.
 
 **Não há retenção para esta tabela**: as linhas acumulam (no máximo uma por minuto por máquina e automação).
@@ -64,7 +64,7 @@ Pessoas: `SELECT`, `INSERT`. Máquina: `SELECT` e `UPDATE` só das colunas da re
 
 | Requisito | Teste |
 |---|---|
-| O pedido congela escolha e lista; limite de um por minuto; resposta aparece na lista; mudança de escolha ou de revisão marca `current: false`; sem resposta fica `UNANSWERED`; recusas; permissões; guardas do banco | `RemoteExecutionIT.verificacaoSobDemandaCongelaOQueSeraConferidoTemLimiteESemRespostaNuncaViraIncompativel` |
+| O pedido congela escolha e lista; limite por intervalo (padrão: um por minuto), por máquina e automação; resposta aparece na lista; mudança de escolha ou de revisão marca `current: false`; sem resposta fica `UNANSWERED`; recusas; permissões; guardas do banco | `RemoteExecutionIT.verificacaoSobDemandaCongelaOQueSeraConferidoTemLimiteESemRespostaNuncaViraIncompativel` |
 | A máquina recebe só o que é dela, responde uma vez, só com o que foi perguntado, dentro do prazo; chega pausada e ocupada sem mexer na tentativa; guardas do banco | `RemoteDeliveryIT.aMaquinaRecebeOPedidoDeVerificacaoDeDependenciasERespondeUmaVezDentroDoPrazoESoOQueEDela` |
 
 ## Decisão de 16/11: parâmetros iniciais configuráveis (migration 056)
