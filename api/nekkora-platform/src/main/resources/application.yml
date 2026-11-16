@@ -86,6 +86,11 @@ nekkora:
     # 055: de quanto em quanto tempo a Platform confere, sozinha, as tentativas que nao tem mais quem as conclua (segundos;
     # 0 desliga o ciclo). O encerramento nao depende de alguem abrir a tela
     reconcile-seconds: ${NEKKORA_EXECUCAO_REMOTA_RECONCILIACAO_SEGUNDOS:60}
+    # 054/056: verificacao de dependencias sob demanda - parametros iniciais. Intervalo minimo entre pedidos para a MESMA maquina
+    # e automacao (10 a 3600 s) e prazo da resposta (30 a 600 s; vencido, a tela diz "nao foi possivel verificar")
+    dependency-check:
+      interval-seconds: ${NEKKORA_EXECUCAO_REMOTA_VERIFICACAO_INTERVALO_SEGUNDOS:60}
+      answer-seconds: ${NEKKORA_EXECUCAO_REMOTA_VERIFICACAO_RESPOSTA_SEGUNDOS:120}
   # login do aplicativo desktop pelo navegador (AGENT-CLIENT-LOGIN-001, contrato desktop-login/1): DESLIGADO por padrao; so
   # abre com a entrada geral tambem ligada. Prazos: pedido no navegador, codigo de autorizacao e sessao do aplicativo
   # (sem renovacao). Nenhum prazo das sessoes existentes muda.
