@@ -547,6 +547,9 @@ public final class RemoteDelivery {
             }
             int stored = 0;
             long total = have.bytes();
+            // as linhas novas do lote vao num UNICO comando: a conferencia do banco (sequencia sem buraco, total por tentativa) roda
+            // uma vez por comando e rele todas as linhas da tentativa - linha a linha, o custo crescia com o quadrado do tamanho
+            List<Object> fresh = new ArrayList<>();
             for (int i = 0; i < lines.size(); i++) {
                 LogLine l = lines.get(i);
                 String text = LogRedaction.redact(l.message(), token);
@@ -565,10 +568,12 @@ public final class RemoteDelivery {
                 if (l.sequence() > MAX_LOG_LINES || total > MAX_LOG_BYTES) {
                     throw new ApiException(ApiError.REMOTE_LOG_LIMIT, "total_de_registros");
                 }
-                j.sql("INSERT INTO public.remote_attempt_log_lines (attempt_id, sequence, organization_id, captured_at, channel, truncated, message) "
-                                + "VALUES (?, ?, ?, ?, ?, ?, ?)").param(attemptId).param(l.sequence()).param(m.organization()).param(instants.get(i)).param(channel)
-                        .param(l.truncated()).param(text).update();
+                fresh.addAll(List.of(attemptId, l.sequence(), m.organization(), instants.get(i), channel, l.truncated(), text));
                 stored++;
+            }
+            if (stored > 0) {
+                j.sql("INSERT INTO public.remote_attempt_log_lines (attempt_id, sequence, organization_id, captured_at, channel, truncated, message) VALUES "
+                        + String.join(", ", java.util.Collections.nCopies(stored, "(?, ?, ?, ?, ?, ?, ?)"))).params(fresh).update();
             }
             if (a.state() < 7) {
                 renew(j, m, attemptId);
