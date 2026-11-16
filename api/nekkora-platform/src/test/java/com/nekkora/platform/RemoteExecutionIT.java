@@ -1240,6 +1240,9 @@ class RemoteExecutionIT extends PlatformTestBase {
         BrowserClient.Response denied = executor.post(declare, "{\"reason\":\"MACHINE_OFF_OUT_OF_OPERATION\",\"verification\":\"" + verified
                 + "\",\"acknowledgePartialEffects\":true}");
         assertThat(denied.status()).as(denied.body()).isEqualTo(403);
+        assertThat(value("SELECT count(*) FROM remote_attempt_process_reports WHERE attempt_id = '" + running + "'")).as("a chamada direta recusada nao grava nada")
+                .isEqualTo("0");
+        assertThat(JSON.readTree(s.admin().get(s.requests()).body()).toString()).as("nem aparece na leitura").doesNotContain("\"kind\":\"MANUAL\"");
         // a tentativa que nunca iniciou nao tem o que reconciliar
         refused(s.admin().post(s.o() + "/remote-executions/" + y.get("remoteExecutionId").asString() + "/attempts/" + preparing + "/reconciliation",
                 "{\"reason\":\"MACHINE_OFF_OUT_OF_OPERATION\",\"verification\":\"" + verified + "\",\"acknowledgePartialEffects\":true}"),

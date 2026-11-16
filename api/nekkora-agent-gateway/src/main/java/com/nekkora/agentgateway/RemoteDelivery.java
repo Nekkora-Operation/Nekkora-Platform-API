@@ -289,10 +289,13 @@ public final class RemoteDelivery {
     }
 
     /**
-     * {@code processAbsent} (058): junto de ENDED_UNKNOWN, a maquina afirma que CONFERIU que o processo daquela tentativa nao esta
-     * mais em execucao nela (o desfecho continua desconhecido). Um desfecho verdadeiro (concluida, falhou, cancelada, tempo
-     * esgotado) ja diz isso por si. Numa tentativa que o servidor ja encerrou como nao confirmada, a maquina que volta e repete
-     * RUNNING fica registrada como "ainda executa"; quando disser como terminou, como "processo ausente".
+     * {@code processAbsent} (058): junto de um estado FINAL, a maquina afirma que CONFERIU que nada daquela tentativa continua em
+     * execucao nela - nem o processo lancado, nem os processos filhos dele. So essa afirmacao reconcilia "pela maquina" uma
+     * tentativa nao confirmada. Dizer como o processo PRINCIPAL terminou (concluida, falhou, cancelada, tempo esgotado) NAO basta:
+     * um filho pode continuar, e a maquina pode nao ter como saber. Sem a afirmacao (ausente ou falsa - e o caso do aplicativo
+     * antigo, que nao a envia), o relato fica guardado ao lado, mas a tentativa continua incerta e a maquina indisponivel. A
+     * maquina pode repetir o mesmo relato depois, ja com a afirmacao. Numa tentativa que o servidor ja encerrou como nao
+     * confirmada, a maquina que volta e repete RUNNING fica registrada como "ainda executa".
      */
     public Status state(MachineToken t, UUID attemptId, String token, Integer epoch, String state, String refusalReason, Integer exitCode,
                         boolean processAbsent) {
@@ -316,7 +319,8 @@ public final class RemoteDelivery {
                 }
                 if (a.state() == 13) {
                     // 058: o que a maquina diz do PROCESSO de uma tentativa nao confirmada. Um novo contato, sozinho, nao diz nada
-                    short kind = wanted >= 7 && wanted <= 10 || (wanted == 13 && processAbsent) ? com.nekkora.core.remote.AttemptReconciliation.ABSENT_BY_MACHINE
+                    boolean ended = wanted >= 7 && wanted <= 10 || wanted == 13;
+                    short kind = ended && processAbsent ? com.nekkora.core.remote.AttemptReconciliation.ABSENT_BY_MACHINE
                             : wanted == 6 ? com.nekkora.core.remote.AttemptReconciliation.RUNNING_BY_MACHINE : 0;
                     if (kind != 0 && com.nekkora.core.remote.AttemptReconciliation.byMachine(j, m.organization(), attemptId, kind) > 0) {
                         LOG.info("evento=execucao_remota.processo_informado tentativa={} tipo={} correlacao={}", attemptId, kind, RequestContext.correlation());
