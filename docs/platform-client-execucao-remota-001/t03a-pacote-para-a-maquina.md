@@ -37,6 +37,15 @@ Depende da T02 (046) e da T01c parte 3 (047). A T03 foi dividida: esta parte ent
    é uma mudança de implantação que **não foi feita nem planejada em detalhe aqui**. Sem ela, o download responde 503 e
    nenhuma execução remota inicia.
 
+## Ajustes para a execução (migration 049)
+
+Dois acréscimos pedidos pelo Client para executar (PR próprio, empilhado sobre o do download):
+
+- **A tentativa entregue leva `workspaceId`**: o aplicativo grava o ambiente no registro da execução dele.
+- **Motivo de recusa `SESSION_UNAVAILABLE`** (migration `049_recusa_por_sessao_indisponivel.sql`): a máquina o informa quando
+  não há sessão interativa utilizável (tela do Windows bloqueada, sessão de serviço, sem área de trabalho). O aplicativo
+  não inicia uma automação nessas condições.
+
 ## Compatibilidade
 
 Aditivo. Mover as classes do armazenamento não muda rotas nem comportamento da Platform. O Agent anterior não usa a rota.
