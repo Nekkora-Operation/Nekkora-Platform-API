@@ -20,7 +20,7 @@ import com.nekkora.core.web.ApiException;
 import com.nekkora.core.web.RequestContext;
 import com.nekkora.platform.access.WorkspaceAccess;
 import com.nekkora.platform.admin.AccessActions.Failure;
-import com.nekkora.platform.artifact.ArtifactStore;
+import com.nekkora.core.artifact.ArtifactStore;
 import com.nekkora.platform.artifact.PackageInspector;
 import com.nekkora.platform.session.ValidSession;
 

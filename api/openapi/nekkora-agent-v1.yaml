@@ -173,6 +173,37 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /agent/api/v1/remote/attempts/{attempt}/package:
+    get:
+      tags: [Maquina]
+      operationId: downloadRemoteAttemptPackage
+      summary: 'A maquina baixa o pacote da tentativa que recebeu (T03)'
+      description: >
+        Os bytes do ZIP da versao FIXADA na solicitacao (a impressao congelada nela), so para a maquina da tentativa, com o token
+        e a epoca vigentes nos cabecalhos Nekkora-Attempt-Token e Nekkora-Attempt-Epoch (nunca na URL), e so entre o recebimento e
+        o inicio (estado RECEIVED ou PREPARING; fora disso 409 + remote_attempt_transition). Token ou epoca que nao sao os
+        vigentes: 409 + remote_attempt_stale. O servidor rele e confere os bytes pelo SHA-256 a cada download; ausentes ou
+        corrompidos: 409 + remote_package_unavailable (a maquina recusa a tentativa com PACKAGE_INVALID). Armazenamento fora: 503.
+        A resposta traz Nekkora-Package-Sha256; a maquina confere o tamanho, o SHA-256 e a impressao ANTES de usar - download
+        parcial nunca e executavel. Baixar renova o prazo da comunicacao. Nenhuma outra versao, pacote ou tentativa e alcancavel.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: Nekkora-Attempt-Token, in: header, required: true, schema: { type: string } }
+        - { name: Nekkora-Attempt-Epoch, in: header, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: 'Bytes do pacote'
+          headers:
+            Nekkora-Package-Sha256: { schema: { type: string, pattern: '^[0-9a-f]{64}$' }, description: 'SHA-256 dos bytes' }
+          content: { application/zip: { schema: { type: string, format: binary } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /agent/api/v1/remote/python-environments:
     put:
       tags: [Maquina]
@@ -445,7 +476,7 @@ components:
       required: [error]
       properties:
         error: { type: string, enum: [invalid_request, unsupported_contract, unauthenticated, forbidden, not_found, conflict, rate_limited, internal_error, service_unavailable] }
-        reason: { type: string, enum: [pairing_code_for_rotation, rotation_code_for_pairing, link_ended_by_machine, link_ended_by_administration, remote_execution_unavailable, remote_code_without_enablement, code_not_for_remote_execution, remote_execution_not_enabled, credential_renewal_not_due, remote_attempt_stale, remote_attempt_transition], description: 'Motivo opcional de um codigo conhecido (conflict): T06 (codigos de pareamento/rotacao), T13 (vinculo ja encerrado) e EXECUCAO-REMOTA-001 T01a (habilitacao). Cliente que nao o conhece trata o codigo como sempre' }
+        reason: { type: string, enum: [pairing_code_for_rotation, rotation_code_for_pairing, link_ended_by_machine, link_ended_by_administration, remote_execution_unavailable, remote_code_without_enablement, code_not_for_remote_execution, remote_execution_not_enabled, credential_renewal_not_due, remote_attempt_stale, remote_attempt_transition, remote_package_unavailable], description: 'Motivo opcional de um codigo conhecido (conflict): T06 (codigos de pareamento/rotacao), T13 (vinculo ja encerrado) e EXECUCAO-REMOTA-001 T01a (habilitacao). Cliente que nao o conhece trata o codigo como sempre' }
     UnlinkRequest:
       type: object
       required: [operationId, agentId, launchedRunRequests]

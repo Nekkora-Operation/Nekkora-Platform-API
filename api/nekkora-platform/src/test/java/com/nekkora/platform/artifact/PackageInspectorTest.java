@@ -1,5 +1,8 @@
 package com.nekkora.platform.artifact;
 
+import com.nekkora.core.artifact.ArtifactStore;
+import com.nekkora.core.artifact.LocalArtifactStore;
+
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

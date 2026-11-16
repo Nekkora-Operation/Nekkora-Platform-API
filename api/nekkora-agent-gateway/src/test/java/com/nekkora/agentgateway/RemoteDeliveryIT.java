@@ -117,6 +117,92 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
         return grant;
     }
 
+    private MachineClient.Response download(Machine m, String attempt, String token, Integer epoch) {
+        java.net.http.HttpRequest.Builder b = java.net.http.HttpRequest.newBuilder(
+                java.net.URI.create("http://localhost:" + port + "/agent/api/v1/remote/attempts/" + attempt + "/package")).GET();
+        if (token != null) {
+            b.header("Nekkora-Attempt-Token", token);
+        }
+        if (epoch != null) {
+            b.header("Nekkora-Attempt-Epoch", String.valueOf(epoch));
+        }
+        return m.client().send(b, m.credential());
+    }
+
+    private static String sha256(byte[] data) throws Exception {
+        return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(data));
+    }
+
+    /** O pacote publicado da versao da fixture: os bytes no armazenamento e a linha do artefato com a impressao da versao. */
+    private static String publishPackage(byte[] zip) throws Exception {
+        String sha = sha256(zip);
+        new com.nekkora.core.artifact.LocalArtifactStore(PACKAGES).put(fx.org, sha, zip);
+        untriggered("DELETE FROM automation_artifacts WHERE automation_version_id = '" + fx.version + "'");
+        untriggered("INSERT INTO automation_artifacts (organization_id, workspace_id, automation_id, automation_version_id, sha256, size_bytes, package_kind, "
+                + "fingerprint_rule, fingerprint, files_count, manifest_version, framework, execution_mode, storage_key, received_by_membership_id) SELECT '"
+                + fx.org + "', '" + fx.workspace + "', '" + fx.automation + "', '" + fx.version + "', '" + sha + "', " + zip.length + ", 1, "
+                + "command_json -> 'agent_package' ->> 'fingerprint_rule', command_json -> 'agent_package' ->> 'fingerprint', 3, '1.4.0', 'nekkora-rpa==1.0.0', "
+                + "'single', '" + sha + "', '" + fx.adminMembership + "' FROM automation_versions WHERE automation_version_id = '" + fx.version + "'");
+        return sha;
+    }
+
+    @Test
+    void aMaquinaBaixaSoOPacoteDaTentativaQueRecebeuEAntesDeIniciar() throws Exception {
+        byte[] zip = ("PK pacote sintetico " + UUID.randomUUID()).getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        String sha = publishPackage(zip);
+        Machine m = machine(true);
+        String attempt = queued(m);
+        JsonNode offer = next(m).body().get("attempt");
+        String token = offer.get("token").asString();
+        int epoch = offer.get("epoch").asInt();
+        // sem o token da atribuicao, ou antes de confirmar o recebimento: nada
+        assertThat(download(m, attempt, null, null).status()).isEqualTo(400);
+        MachineClient.Response early = download(m, attempt, token, epoch);
+        assertThat(early.status()).isEqualTo(409);
+        assertThat(early.body().get("reason").asString()).isEqualTo("remote_attempt_transition");
+        assertThat(ack(m, attempt, grant(offer)).status()).isEqualTo(200);
+        // recebida: os bytes da versao fixada, com o SHA-256, sem cache
+        MachineClient.Response ok = download(m, attempt, token, epoch);
+        assertThat(ok.status()).as(ok.raw()).isEqualTo(200);
+        assertThat(ok.raw()).isEqualTo(new String(zip, java.nio.charset.StandardCharsets.US_ASCII));
+        assertThat(ok.headers().firstValue("Nekkora-Package-Sha256").orElse("")).isEqualTo(sha);
+        assertThat(ok.headers().firstValue("Content-Type").orElse("")).startsWith("application/zip");
+        assertThat(ok.headers().firstValue("Cache-Control").orElse("")).contains("no-store");
+        // token ou epoca que nao sao os vigentes: 409, e nada muda
+        MachineClient.Response stale = download(m, attempt, Tokens.newToken(), epoch);
+        assertThat(stale.status()).isEqualTo(409);
+        assertThat(stale.body().get("reason").asString()).isEqualTo("remote_attempt_stale");
+        assertThat(download(m, attempt, token, epoch + 1).body().get("reason").asString()).isEqualTo("remote_attempt_stale");
+        // outra maquina, mesmo com o token: a tentativa nao existe para ela
+        Machine other = machine(true);
+        assertThat(download(other, attempt, token, epoch).status()).isEqualTo(404);
+        // preparando ainda pode; a partir do inicio, nao
+        assertThat(state(m, attempt, grant(offer), "PREPARING", null).status()).isEqualTo(200);
+        assertThat(download(m, attempt, token, epoch).status()).isEqualTo(200);
+        assertThat(state(m, attempt, grant(offer), "STARTING", null).status()).isEqualTo(200);
+        assertThat(download(m, attempt, token, epoch).body().get("reason").asString()).isEqualTo("remote_attempt_transition");
+
+        // bytes trocados no armazenamento, ou ausentes: 409 com o motivo proprio; nunca bytes que nao conferem
+        String attempt2 = queued(other);
+        JsonNode offer2 = next(other).body().get("attempt");
+        assertThat(ack(other, attempt2, grant(offer2)).status()).isEqualTo(200);
+        java.nio.file.Path file = PACKAGES.resolve(fx.org.toString()).resolve(sha + ".zip");
+        java.nio.file.Files.write(file, "outro conteudo".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        MachineClient.Response corrupted = download(other, attempt2, offer2.get("token").asString(), offer2.get("epoch").asInt());
+        assertThat(corrupted.status()).isEqualTo(409);
+        assertThat(corrupted.body().get("reason").asString()).isEqualTo("remote_package_unavailable");
+        assertThat(corrupted.raw()).doesNotContain("outro conteudo");
+        java.nio.file.Files.delete(file);
+        assertThat(download(other, attempt2, offer2.get("token").asString(), offer2.get("epoch").asInt()).body().get("reason").asString())
+                .isEqualTo("remote_package_unavailable");
+
+        // 048: a maquina le o sha256 e o tamanho do artefato da PROPRIA organizacao; nada alem disso
+        assertThat(asRole("nekkora_ingestion", "SELECT sha256, size_bytes FROM automation_artifacts")).isEqualTo("OK");
+        assertThat(asRole("nekkora_ingestion", "SELECT storage_key FROM automation_artifacts")).isEqualTo("42501");
+        assertThat(asRole("nekkora_ingestion", "SELECT received_by_membership_id FROM automation_artifacts")).isEqualTo("42501");
+        assertThat(asRole("nekkora_ingestion", "UPDATE automation_artifacts SET size_bytes = 1")).isEqualTo("42501");
+    }
+
     private String stateOf(String attempt) {
         return fx.value("SELECT state || '|' || coalesce(refusal_reason, '-') FROM remote_attempts WHERE attempt_id = '" + attempt + "'");
     }

@@ -1,4 +1,4 @@
-package com.nekkora.platform.artifact;
+package com.nekkora.core.artifact;
 
 import java.io.IOException;
 import java.util.Optional;

@@ -300,10 +300,10 @@ public class PlatformConfig {
      * definida (laboratorio); sem ela, as rotas de artefato respondem 503 e nada e gravado.
      */
     @Bean
-    com.nekkora.platform.artifact.ArtifactStore artifactStore(org.springframework.core.env.Environment env) throws java.io.IOException {
+    com.nekkora.core.artifact.ArtifactStore artifactStore(org.springframework.core.env.Environment env) throws java.io.IOException {
         String dir = env.getProperty("NEKKORA_ARTEFATOS_DIR", env.getProperty("nekkora.artefatos.dir", ""));
-        return dir.isBlank() ? com.nekkora.platform.artifact.ArtifactStore.NONE
-                : new com.nekkora.platform.artifact.LocalArtifactStore(java.nio.file.Path.of(dir));
+        return dir.isBlank() ? com.nekkora.core.artifact.ArtifactStore.NONE
+                : new com.nekkora.core.artifact.LocalArtifactStore(java.nio.file.Path.of(dir));
     }
 
     /** Solicitacao de execucao remota (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T02). Desligada, nenhuma solicitacao e aceita. */
@@ -326,7 +326,7 @@ public class PlatformConfig {
     @Bean
     com.nekkora.platform.admin.AutomationLifecycleService automationLifecycleService(com.nekkora.platform.admin.AccessActions actions,
                                                                                     com.nekkora.platform.access.WorkspaceAccess access,
-                                                                                    com.nekkora.platform.artifact.ArtifactStore store) {
+                                                                                    com.nekkora.core.artifact.ArtifactStore store) {
         return new com.nekkora.platform.admin.AutomationLifecycleService(actions, access, store);
     }
 }
