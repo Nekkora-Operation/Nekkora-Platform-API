@@ -11,7 +11,16 @@ public record GatewayProperties(List<String> trustedProxies, Database database, 
      * PLATFORM-CLIENT-EXECUCAO-REMOTA-001: chave do recurso (NEKKORA_EXECUCAO_REMOTA; ausente = desligado). Desligado, nenhuma
      * maquina e habilitada para execucao remota; o resto do canal nao muda.
      */
-    public record RemoteExecution(boolean enabled) {
+    public record RemoteExecution(boolean enabled, Integer renewalWindowDays) {
+    }
+
+    /**
+     * T01b: a maquina habilitada so renova a propria credencial quando faltarem ate estes dias para o vencimento
+     * (NEKKORA_EXECUCAO_REMOTA_RENOVACAO_DIAS; padrao 30; de 1 ao prazo da credencial).
+     */
+    public int renewalWindowDays() {
+        int days = remoteExecution == null || remoteExecution.renewalWindowDays() == null ? 30 : remoteExecution.renewalWindowDays();
+        return Math.max(1, Math.min(days, limits.credentialDays()));
     }
 
     public boolean remoteExecutionEnabled() {

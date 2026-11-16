@@ -42,6 +42,8 @@ nekkora:
   # receber execucoes solicitadas pela Platform. Tem de ter o mesmo valor no servico da Platform.
   remote-execution:
     enabled: ${NEKKORA_EXECUCAO_REMOTA:false}
+    # T01b: a maquina habilitada renova a propria credencial quando faltarem ate estes dias para o vencimento
+    renewal-window-days: ${NEKKORA_EXECUCAO_REMOTA_RENOVACAO_DIAS:30}
 
 logging:
   level:

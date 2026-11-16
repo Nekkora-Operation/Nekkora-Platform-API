@@ -83,6 +83,8 @@ public enum ApiError {
     CODE_NOT_FOR_REMOTE_EXECUTION(HttpStatus.CONFLICT, "conflict", "code_not_for_remote_execution"),
     /** Idem: a maquina desta credencial nao esta habilitada para execucao remota. */
     REMOTE_EXECUTION_NOT_ENABLED(HttpStatus.CONFLICT, "conflict", "remote_execution_not_enabled"),
+    /** Idem (T01b): a credencial ainda esta longe do vencimento; a renovacao so e aceita dentro da janela. */
+    CREDENTIAL_RENEWAL_NOT_DUE(HttpStatus.CONFLICT, "conflict", "credential_renewal_not_due"),
     /** Canal do Agent (contrato Platform-Agent 1.0, sec. 15): versao maior do contrato nao suportada. */
     UNSUPPORTED_CONTRACT(HttpStatus.BAD_REQUEST, "unsupported_contract"),
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "rate_limited"),
