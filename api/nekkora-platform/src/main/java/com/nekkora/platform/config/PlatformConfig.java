@@ -312,9 +312,10 @@ public class PlatformConfig {
             com.nekkora.platform.admin.AccessActions actions, com.nekkora.platform.access.WorkspaceAccess access,
             @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.enabled:false}") boolean remoteExecution,
             @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.offer-minutes:15}") int offerMinutes,
+            @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.lost-minutes:120}") int lostMinutes,
             org.springframework.core.env.Environment env) throws java.io.IOException {
         // os resultados das execucoes remotas: a Platform so LE (quem grava e o canal da maquina); pasta propria
-        return new com.nekkora.platform.admin.RemoteExecutionService(actions, access, remoteExecution, offerMinutes,
+        return new com.nekkora.platform.admin.RemoteExecutionService(actions, access, remoteExecution, offerMinutes, lostMinutes,
                 com.nekkora.core.artifact.ResultStore.at(env.getProperty("NEKKORA_RESULTADOS_DIR", env.getProperty("nekkora.resultados.dir", ""))));
     }
 

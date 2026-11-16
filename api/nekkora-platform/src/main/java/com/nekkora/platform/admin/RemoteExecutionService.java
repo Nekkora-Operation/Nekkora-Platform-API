@@ -11,6 +11,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
+import com.nekkora.core.remote.AttemptClosure;
 import com.nekkora.core.web.ApiError;
 import com.nekkora.core.web.ApiException;
 import com.nekkora.platform.access.WorkspaceAccess;
@@ -64,10 +65,20 @@ public class RemoteExecutionService {
     static final int ACT_PYTHON_SELECTED = 11;
     private static final java.util.regex.Pattern ENVIRONMENT = java.util.regex.Pattern.compile("^[A-Za-z0-9_-]{43}$");
 
-    /** {@code communication}: OK, LOST (o prazo da maquina venceu; NAO muda o estado) ou NONE (ainda sem entrega, ou terminada). */
+    /**
+     * {@code communication}: OK, LOST (o prazo da maquina venceu) ou NONE (ainda sem entrega, ou terminada).
+     * {@code closureCause} (053): por que o SERVIDOR encerrou a tentativa - MACHINE_UNLINKED, MACHINE_REVOKED ou
+     * COMMUNICATION_LOST; nulo quando o desfecho veio da maquina. {@code lateReport}: o que a maquina informou depois de um
+     * encerramento por COMMUNICATION_LOST; o estado da tentativa nao muda por isso.
+     */
     public record Attempt(UUID attemptId, int attemptNumber, UUID agentId, String agentName, UUID workerId, String workerName, String state,
                           String refusalReason, String communication, Integer exitCode, OffsetDateTime createdAt, OffsetDateTime offerValidUntil,
-                          OffsetDateTime offeredAt, OffsetDateTime receivedAt, OffsetDateTime startedAt, OffsetDateTime endedAt) {
+                          OffsetDateTime offeredAt, OffsetDateTime receivedAt, OffsetDateTime startedAt, OffsetDateTime endedAt, String closureCause,
+                          LateReport lateReport) {
+    }
+
+    /** O que a maquina informou DEPOIS de o servidor encerrar a tentativa por comunicacao perdida. */
+    public record LateReport(String state, Integer exitCode, OffsetDateTime reportedAt) {
     }
 
     /** {@code state}: o da tentativa mais recente. */
@@ -83,11 +94,17 @@ public class RemoteExecutionService {
     private final WorkspaceAccess access;
     private final boolean enabled;
     private final int offerMinutes;
+    private final int lostMinutes;
     private final com.nekkora.core.artifact.ResultStore results;
 
-    /** {@code offerMinutes}: quanto tempo a tentativa espera a maquina receber antes de expirar (padrao de laboratorio: 15). */
-    public RemoteExecutionService(AccessActions actions, WorkspaceAccess access, boolean enabled, int offerMinutes,
+    /**
+     * {@code offerMinutes}: quanto tempo a tentativa espera a maquina receber antes de expirar (padrao de laboratorio: 15).
+     * {@code lostMinutes}: quanto tempo, depois de o prazo da comunicacao vencer, a tentativa recebida e encerrada como sem
+     * confirmacao (053; padrao 120; o mesmo valor do agent-gateway).
+     */
+    public RemoteExecutionService(AccessActions actions, WorkspaceAccess access, boolean enabled, int offerMinutes, int lostMinutes,
                                   com.nekkora.core.artifact.ResultStore results) {
+        this.lostMinutes = AttemptClosure.lostMinutes(lostMinutes);
         this.results = results;
         this.actions = actions;
         this.access = access;
@@ -296,7 +313,7 @@ public class RemoteExecutionService {
             actions.lockOrganizationAndActor(j, org, actor.userId());
             j.sql("SELECT 1 FROM public.remote_executions WHERE organization_id = ? AND remote_execution_id = ? FOR UPDATE").param(org).param(executionId)
                     .query(Integer.class).single();
-            expireStale(j, org, executionId, null);
+            reconcile(j, org, executionId, null);
             x = execution(j, org, executionId);
             if (x.cancelRequestedAt() != null) {
                 throw new ApiException(ApiError.REMOTE_EXECUTION_CANCEL_REQUESTED, "cancelamento_pedido");
@@ -329,6 +346,7 @@ public class RemoteExecutionService {
             actions.requireStepUp(j, actor);
             j.sql("SELECT 1 FROM public.remote_executions WHERE organization_id = ? AND remote_execution_id = ? FOR UPDATE").param(org).param(executionId)
                     .query(Integer.class).single();
+            reconcile(j, org, executionId, null);
             x = execution(j, org, executionId);
             Attempt last = x.attempts().get(x.attempts().size() - 1);
             if (STATES.indexOf(last.state()) >= 6) {
@@ -348,14 +366,47 @@ public class RemoteExecutionService {
     // ------------------------------------------------------------------ consultar
 
     public Execution get(UUID org, ValidSession actor, String token, UUID executionId) {
+        boolean stale = actions.read(org, j -> {
+            actions.requireActor(j, org, actor, token);
+            scoped(j, org, actor, executionId, "automation.read");
+            return AttemptClosure.pending(j, org, new UUID[] {executionId}, lostMinutes);
+        });
+        if (stale) {
+            settle(org, new UUID[] {executionId});
+        }
         return actions.read(org, j -> {
             actions.requireActor(j, org, actor, token);
             return scoped(j, org, actor, executionId, "automation.read");
         });
     }
 
+    /**
+     * 053: a leitura nunca mostra "em execucao" uma tentativa que ja nao tem quem a conclua. Quando a consulta acha alguma
+     * (maquina desvinculada ou sem comunicacao alem da espera), ela e encerrada aqui, numa transacao propria de escrita, pelas
+     * mesmas regras do canal das maquinas; a consulta e refeita em seguida. Nao depende de quem le: o banco confere o fato.
+     */
+    private void settle(UUID org, UUID[] executions) {
+        actions.write(org, j -> {
+            for (UUID id : executions) {
+                reconcile(j, org, id, null);
+            }
+            return null;
+        });
+    }
+
     /** As solicitacoes mais recentes do ambiente (ate {@code limit}, 1 a 100). */
     public List<Execution> list(UUID org, ValidSession actor, String token, UUID workspaceId, int limit) {
+        UUID[] stale = actions.read(org, j -> {
+            actions.requireActor(j, org, actor, token);
+            access.requireWorkspace(j, org, actor.membershipId(), workspaceId, "automation.read");
+            UUID[] ids = j.sql("SELECT remote_execution_id FROM public.remote_executions WHERE organization_id = ? AND workspace_id = ? "
+                    + "ORDER BY requested_at DESC, remote_execution_id DESC LIMIT ?").param(org).param(workspaceId).param(limit).query(UUID.class).list()
+                    .toArray(UUID[]::new);
+            return ids.length > 0 && AttemptClosure.pending(j, org, ids, lostMinutes) ? ids : null;
+        });
+        if (stale != null) {
+            settle(org, stale);
+        }
         return actions.read(org, j -> {
             actions.requireActor(j, org, actor, token);
             access.requireWorkspace(j, org, actor.membershipId(), workspaceId, "automation.read");
@@ -603,7 +654,7 @@ public class RemoteExecutionService {
         if (!m.compatible()) {
             throw new ApiException(ApiError.REMOTE_MACHINE_INCOMPATIBLE, "maquina_incompativel");
         }
-        expireStale(j, org, null, agentId);
+        reconcile(j, org, null, agentId);
         if (j.sql("SELECT count(*) FROM public.remote_attempts WHERE organization_id = ? AND agent_id = ? AND state BETWEEN 1 AND 6").param(org).param(agentId)
                 .query(Long.class).single() > 0) {
             throw new ApiException(ApiError.REMOTE_MACHINE_BUSY, "maquina_ocupada");
@@ -658,10 +709,20 @@ public class RemoteExecutionService {
         }
     }
 
-    /** Quem a maquina nao recebeu dentro do prazo deixa de ocupar a vaga: QUEUED/OFFERED vencidos viram EXPIRED. */
-    private static void expireStale(JdbcClient j, UUID org, UUID executionId, UUID agentId) {
+    /**
+     * O que nao tem mais quem conclua deixa de ocupar a vaga, sem inventar desfecho. QUEUED/OFFERED vencidos viram EXPIRED;
+     * tentativa de maquina que nao esta mais vinculada, ou recebida e sem comunicacao alem da espera (053): "nao iniciou" se o
+     * servidor nunca autorizou o inicio, senao "sem confirmacao". Da solicitacao, ou da maquina.
+     */
+    private void reconcile(JdbcClient j, UUID org, UUID executionId, UUID agentId) {
         j.sql("UPDATE public.remote_attempts SET state = 12 WHERE organization_id = ? AND state IN (1, 2) AND offer_valid_until <= clock_timestamp() "
                         + "AND (remote_execution_id = ? OR agent_id = ?)").param(org).param(executionId).param(agentId).update();
+        int orphans = AttemptClosure.orphans(j, org, executionId, agentId);
+        int lost = AttemptClosure.lost(j, org, executionId, agentId, null, lostMinutes);
+        if (orphans + lost > 0) {
+            LOG.info("evento=execucao_remota.encerrada_pelo_servidor maquina_desvinculada={} sem_comunicacao={} correlacao={}", orphans, lost,
+                    AccessActions.correlation());
+        }
     }
 
     private Execution scoped(JdbcClient j, UUID org, ValidSession actor, UUID executionId, String permission) {
@@ -677,7 +738,8 @@ public class RemoteExecutionService {
                        CASE WHEN t.state IN (1, 2) AND t.offer_valid_until <= clock_timestamp() THEN 12 ELSE t.state END, t.refusal_reason,
                        CASE WHEN t.state BETWEEN 2 AND 6 AND t.lease_expires_at IS NOT NULL
                             THEN CASE WHEN t.lease_expires_at > clock_timestamp() THEN 'OK' ELSE 'LOST' END ELSE 'NONE' END,
-                       t.exit_code, t.created_at, t.offer_valid_until, t.offered_at, t.received_at, t.started_at, t.ended_at
+                       t.exit_code, t.created_at, t.offer_valid_until, t.offered_at, t.received_at, t.started_at, t.ended_at,
+                       t.closure_cause, t.late_state, t.late_exit_code, t.late_reported_at
                   FROM public.remote_attempts t
                   JOIN public.agents a ON a.organization_id = t.organization_id AND a.agent_id = t.agent_id
                   JOIN public.workers w ON w.organization_id = t.organization_id AND w.worker_id = t.worker_id
@@ -686,7 +748,9 @@ public class RemoteExecutionService {
                 rs.getObject(5, UUID.class), rs.getString(6), STATES.get(rs.getShort(7) - 1), rs.getString(8), rs.getString(9),
                 (Integer) rs.getObject(10), rs.getObject(11, OffsetDateTime.class), rs.getObject(12, OffsetDateTime.class),
                 rs.getObject(13, OffsetDateTime.class), rs.getObject(14, OffsetDateTime.class), rs.getObject(15, OffsetDateTime.class),
-                rs.getObject(16, OffsetDateTime.class))).list();
+                rs.getObject(16, OffsetDateTime.class), rs.getString(17),
+                rs.getObject(18) == null ? null : new LateReport(STATES.get(rs.getShort(18) - 1), (Integer) rs.getObject(19),
+                        rs.getObject(20, OffsetDateTime.class)))).list();
         return j.sql("""
                 SELECT x.remote_execution_id, x.workspace_id, x.automation_id, x.automation_version_id, v.version_number, x.requirements_revision,
                        x.effective_dependencies::text, x.requested_at, x.cancel_requested_at

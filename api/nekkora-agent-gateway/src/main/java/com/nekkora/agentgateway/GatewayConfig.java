@@ -128,7 +128,7 @@ public class GatewayConfig {
     @Bean
     RemoteDelivery remoteDelivery(OrgTransactions tx, MachineAuth auth, GatewayProperties p, com.nekkora.core.artifact.ArtifactStore packages,
                                   com.nekkora.core.artifact.ResultStore results) {
-        return new RemoteDelivery(tx, auth, p.leaseSeconds(), packages, results);
+        return new RemoteDelivery(tx, auth, p.leaseSeconds(), p.lostMinutes(), packages, results);
     }
 
     /**

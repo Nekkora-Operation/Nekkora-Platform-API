@@ -47,6 +47,9 @@ nekkora:
     # T02: prazo da comunicacao de uma tentativa (ponto de partida de laboratorio). Vencido, a comunicacao esta perdida;
     # isso nao muda o estado nem encerra a tentativa
     lease-seconds: ${NEKKORA_EXECUCAO_REMOTA_LEASE_SEGUNDOS:90}
+    # 053: depois de o prazo da comunicacao vencer, quanto esperar antes de encerrar a tentativa como sem confirmacao.
+    # Tem de ter o mesmo valor na Platform
+    lost-minutes: ${NEKKORA_EXECUCAO_REMOTA_SEM_COMUNICACAO_MINUTOS:120}
 
 logging:
   level:
