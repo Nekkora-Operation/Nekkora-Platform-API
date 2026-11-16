@@ -224,14 +224,9 @@ public final class RemoteDelivery {
                 throw new ApiException(ApiError.REMOTE_ATTEMPT_TRANSITION, "pacote_fora_da_preparacao");
             }
             renew(j, m, attemptId);
-            return j.sql("""
-                    SELECT f.sha256, f.size_bytes
-                      FROM public.remote_executions x
-                      JOIN public.automation_artifacts f ON f.organization_id = x.organization_id AND f.automation_version_id = x.automation_version_id
-                                                        AND f.fingerprint = x.package_fingerprint AND f.fingerprint_rule = x.package_fingerprint_rule
-                     WHERE x.organization_id = ? AND x.remote_execution_id = ?
-                     ORDER BY f.received_at DESC LIMIT 1
-                    """).param(m.organization()).param(a.execution()).query((rs, n) -> new Key(rs.getString(1), rs.getLong(2))).optional()
+            // 048: o banco so mostra esta linha a maquina autenticada nesta transacao, e so com a tentativa em preparacao
+            return j.sql("SELECT p.sha256, p.size_bytes FROM public.remote_attempt_packages p WHERE p.organization_id = ? AND p.attempt_id = ?")
+                    .param(m.organization()).param(attemptId).query((rs, n) -> new Key(rs.getString(1), rs.getLong(2))).optional()
                     .orElseThrow(() -> new ApiException(ApiError.REMOTE_PACKAGE_UNAVAILABLE, "pacote_sem_registro"));
         });
         if (!packages.available()) {

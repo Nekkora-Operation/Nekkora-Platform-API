@@ -69,7 +69,7 @@ previstos; os arquivos de implantação ficam fora deste repositório e **não f
 
 | Ponto | Situação |
 |---|---|
-| Migration 048 (o gateway lê o SHA-256 e o tamanho do pacote) | **não aprovada**; descrição completa e alternativa no PR do download do pacote |
+| Migration 048 (versão restrita: o pacote fixado na tentativa, visível só à máquina dela e só na preparação) | desenho aprovado pela titular em 16/11 para implementação e laboratório; **aplicação em homologação e produção não autorizada** |
 | Retenção de resultados e de registros | não implementada; sem ela o disco só cresce |
 | Limites do proxy para envio e download | não testados |
 | Cópia de segurança dos resultados | a decidir |

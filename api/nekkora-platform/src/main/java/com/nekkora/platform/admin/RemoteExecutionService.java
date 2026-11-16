@@ -106,7 +106,7 @@ public class RemoteExecutionService {
             actions.requireActor(j, org, actor, token);
             access.requireWorkspace(j, org, actor.membershipId(), workspaceId, "automation.read");
             Version v = version(j, org, workspaceId, versionId);
-            List<String> common = commonMissing(j, org, v);
+            List<String> common = commonMissing(j, org, versionId, v);
             return j.sql("""
                     SELECT a.agent_id, a.name, w.worker_id, w.name, r.receiving, coalesce(p.capabilities @> ARRAY['REMOTE_RUN_1_0']::text[], false),
                            EXISTS (SELECT 1 FROM public.remote_attempts t WHERE t.agent_id = a.agent_id AND t.state BETWEEN 1 AND 6
@@ -253,6 +253,7 @@ public class RemoteExecutionService {
             Version v = version(j, org, workspaceId, versionId);
             // antes de qualquer outra exigencia, e antes de gravar: so pacote Python externo e executado remotamente
             requireSupported(v.rule());
+            requireRegistered(j, org, versionId, v.fingerprint(), v.rule());
             RuntimeRequirementsService.View requirements = RuntimeRequirementsService.view(j, org, v.automationId());
             if (requirements.declared() == null) {
                 throw new ApiException(ApiError.REMOTE_REQUIREMENTS_NOT_DECLARED, "dependencias_nao_declaradas");
@@ -307,6 +308,8 @@ public class RemoteExecutionService {
             // a mesma recusa da solicitacao: uma solicitacao antiga de pacote que nao e externo nao ganha nova tentativa
             requireSupported(j.sql("SELECT package_fingerprint_rule FROM public.remote_executions WHERE organization_id = ? AND remote_execution_id = ?")
                     .param(org).param(executionId).query(String.class).single());
+            requireRegistered(j, org, x.automationVersionId(), j.sql("SELECT package_fingerprint FROM public.remote_executions "
+                    + "WHERE organization_id = ? AND remote_execution_id = ?").param(org).param(executionId).query(String.class).single(), SUPPORTED_RULE);
             Target target = target(j, org, x.workspaceId(), x.automationVersionId(), agentId);
             attempt(j, org, executionId, last.attemptNumber() + 1, target, actor.membershipId());
             LOG.info("evento=execucao_remota.nova_tentativa solicitacao={} tentativa={} correlacao={}", executionId, last.attemptNumber() + 1,
@@ -521,11 +524,28 @@ public class RemoteExecutionService {
         }
     }
 
-    /** O que falta e nao depende da maquina: o tipo do pacote da versao e a declaracao das dependencias. */
-    private static List<String> commonMissing(JdbcClient j, UUID org, Version v) {
+    /**
+     * O pacote da versao, com a impressao fixada, precisa estar REGISTRADO na Platform: e dele que o banco tira, quando a
+     * tentativa nasce, o que a maquina podera baixar (048). Sem registro, a tentativa nao seria criada; a recusa vem antes.
+     */
+    private static boolean registered(JdbcClient j, UUID org, UUID versionId, String fingerprint, String rule) {
+        return j.sql("SELECT EXISTS (SELECT 1 FROM public.automation_artifacts f WHERE f.organization_id = ? AND f.automation_version_id = ? "
+                + "AND f.fingerprint = ? AND f.fingerprint_rule = ?)").param(org).param(versionId).param(fingerprint).param(rule).query(Boolean.class).single();
+    }
+
+    private static void requireRegistered(JdbcClient j, UUID org, UUID versionId, String fingerprint, String rule) {
+        if (!registered(j, org, versionId, fingerprint, rule)) {
+            throw new ApiException(ApiError.REMOTE_PACKAGE_NOT_REGISTERED, "pacote_sem_registro");
+        }
+    }
+
+    /** O que falta e nao depende da maquina: o tipo do pacote da versao, o registro dele e a declaracao das dependencias. */
+    private static List<String> commonMissing(JdbcClient j, UUID org, UUID versionId, Version v) {
         List<String> out = new ArrayList<>();
         if (!SUPPORTED_RULE.equals(v.rule())) {
             out.add("PACKAGE_NOT_SUPPORTED");
+        } else if (!registered(j, org, versionId, v.fingerprint(), v.rule())) {
+            out.add("PACKAGE_NOT_REGISTERED");
         }
         RuntimeRequirementsService.View r = RuntimeRequirementsService.view(j, org, v.automationId());
         if (r.declared() == null) {

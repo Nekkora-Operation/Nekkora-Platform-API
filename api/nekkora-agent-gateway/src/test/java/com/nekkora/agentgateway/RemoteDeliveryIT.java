@@ -39,6 +39,12 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
         DB.asSuperuser("INSERT INTO automation_runtime_requirements (automation_id, revision_number, organization_id, workspace_id, source, dependencies, "
                 + "content_sha256, declared_by_membership_id) VALUES ('" + fx.automation + "', 1, '" + fx.org + "', '" + fx.workspace + "', 3, '[\"idna==3.7\"]'::jsonb, '"
                 + "a".repeat(64) + "', '" + fx.adminMembership + "')");
+        // 048: toda tentativa nasce com o pacote da versao fixado; sem pacote registrado, a tentativa nao nasce
+        try {
+            publishPackage(("PK pacote da fixture " + UUID.randomUUID()).getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /** O identificador opaco de um ambiente Python (43 caracteres base64url), como a maquina o publicaria. */
@@ -439,11 +445,85 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
         assertThat(download(other, attempt2, offer2.get("token").asString(), offer2.get("epoch").asInt()).body().get("reason").asString())
                 .isEqualTo("remote_package_unavailable");
 
-        // 048: a maquina le o sha256 e o tamanho do artefato da PROPRIA organizacao; nada alem disso
-        assertThat(asRole("nekkora_ingestion", "SELECT sha256, size_bytes FROM automation_artifacts")).isEqualTo("OK");
+        // 048 (restrita): o canal da maquina NAO le a chave do armazenamento em automation_artifacts, nem por coluna
+        assertThat(asRole("nekkora_ingestion", "SELECT sha256, size_bytes FROM automation_artifacts")).isEqualTo("42501");
         assertThat(asRole("nekkora_ingestion", "SELECT storage_key FROM automation_artifacts")).isEqualTo("42501");
         assertThat(asRole("nekkora_ingestion", "SELECT received_by_membership_id FROM automation_artifacts")).isEqualTo("42501");
         assertThat(asRole("nekkora_ingestion", "UPDATE automation_artifacts SET size_bytes = 1")).isEqualTo("42501");
+    }
+
+    /** Quantas linhas de pacote o canal da maquina enxerga com este contexto de transacao (organizacao e maquina; nulo = nao definido). */
+    private static String visible(String org, String agent, String attempt) {
+        try (Connection c = DB.connectAs("nekkora_ingestion")) {
+            c.setAutoCommit(false);
+            try (Statement st = c.createStatement()) {
+                if (org != null) {
+                    st.execute("SELECT set_config('nekkora.organization_id', '" + org + "', true)");
+                }
+                if (agent != null) {
+                    st.execute("SELECT set_config('nekkora.agent_id', '" + agent + "', true)");
+                }
+                try (java.sql.ResultSet rs = st.executeQuery("SELECT count(*) || '/' || coalesce(max(sha256), '-') FROM remote_attempt_packages"
+                        + (attempt == null ? "" : " WHERE attempt_id = '" + attempt + "'"))) {
+                    rs.next();
+                    return rs.getString(1);
+                }
+            } finally {
+                c.rollback();
+            }
+        } catch (SQLException e) {
+            return e.getSQLState();
+        }
+    }
+
+    @Test
+    void oBancoSoMostraOPacoteAMaquinaDaTentativaNaOrganizacaoDelaEDuranteAPreparacao() throws Exception {
+        byte[] zip = ("PK pacote isolado " + UUID.randomUUID()).getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        String sha = publishPackage(zip);
+        String org = fx.org.toString();
+        Machine a = machine(true);
+        Machine b = machine(true);
+        String attemptA = queued(a);
+        String attemptB = queued(b);
+        // a linha nasceu com a tentativa, com a maquina e o pacote lidos pelo banco
+        assertThat(fx.value("SELECT agent_id || '|' || sha256 || '|' || size_bytes FROM remote_attempt_packages WHERE attempt_id = '" + attemptA + "'"))
+                .isEqualTo(a.agent() + "|" + sha + "|" + zip.length);
+        // na fila e oferecida: ainda nao e preparacao - nem a propria maquina ve
+        assertThat(visible(org, a.agent(), attemptA)).isEqualTo("0/-");
+        JsonNode offerA = next(a).body().get("attempt");
+        assertThat(visible(org, a.agent(), attemptA)).isEqualTo("0/-");
+        assertThat(ack(a, attemptA, grant(offerA)).status()).isEqualTo(200);
+        String grantB = received(b, attemptB);
+        // recebida: SO a maquina da tentativa, na organizacao dela
+        assertThat(visible(org, a.agent(), attemptA)).isEqualTo("1/" + sha);
+        assertThat(visible(org, a.agent(), null)).as("a maquina A so ve a propria linha").isEqualTo("1/" + sha);
+        assertThat(visible(org, b.agent(), attemptA)).as("outra maquina da mesma organizacao").isEqualTo("0/-");
+        assertThat(visible(org, null, attemptA)).as("transacao sem maquina autenticada").isEqualTo("0/-");
+        assertThat(visible(org, "", attemptA)).as("maquina vazia").isEqualTo("0/-");
+        assertThat(visible(org, UUID.randomUUID().toString(), attemptA)).as("maquina que nao existe").isEqualTo("0/-");
+        assertThat(visible(UUID.randomUUID().toString(), a.agent(), attemptA)).as("outra organizacao, mesmo com a maquina certa").isEqualTo("0/-");
+        assertThat(visible(null, a.agent(), attemptA)).as("sem organizacao").isEqualTo("0/-");
+        // pelo canal real: a credencial de B nao alcanca o pacote da tentativa de A, mesmo com o token e a epoca de A
+        assertThat(download(b, attemptA, offerA.get("token").asString(), offerA.get("epoch").asInt()).status()).isEqualTo(404);
+        assertThat(download(a, attemptA, offerA.get("token").asString(), offerA.get("epoch").asInt()).status()).isEqualTo(200);
+        // preparando: ainda ve; iniciando, executando e terminada: nao ve mais
+        assertThat(state(a, attemptA, grant(offerA), "PREPARING", null).status()).isEqualTo(200);
+        assertThat(visible(org, a.agent(), attemptA)).isEqualTo("1/" + sha);
+        assertThat(state(a, attemptA, grant(offerA), "STARTING", null).status()).isEqualTo(200);
+        assertThat(visible(org, a.agent(), attemptA)).as("iniciando").isEqualTo("0/-");
+        assertThat(state(a, attemptA, grant(offerA), "RUNNING", null).status()).isEqualTo(200);
+        assertThat(visible(org, a.agent(), attemptA)).as("executando").isEqualTo("0/-");
+        assertThat(state(a, attemptA, grant(offerA), "SUCCEEDED", "\"exitCode\":0").status()).isEqualTo(200);
+        assertThat(visible(org, a.agent(), attemptA)).as("terminada").isEqualTo("0/-");
+        // tentativa encerrada por recusa, ainda na preparacao: tambem deixa de ser visivel
+        assertThat(visible(org, b.agent(), attemptB)).isEqualTo("1/" + sha);
+        assertThat(state(b, attemptB, grantB, "REFUSED", "\"refusalReason\":\"PACKAGE_INVALID\"").status()).isEqualTo(200);
+        assertThat(visible(org, b.agent(), attemptB)).as("recusada").isEqualTo("0/-");
+        // o canal da maquina so le: nao insere, nao muda, nao apaga
+        assertThat(asRole("nekkora_ingestion", "INSERT INTO remote_attempt_packages (attempt_id, organization_id) VALUES ('" + attemptA + "', '" + org + "')"))
+                .isEqualTo("42501");
+        assertThat(asRole("nekkora_ingestion", "UPDATE remote_attempt_packages SET size_bytes = 1")).isEqualTo("42501");
+        assertThat(asRole("nekkora_ingestion", "DELETE FROM remote_attempt_packages")).isEqualTo("42501");
     }
 
     private String stateOf(String attempt) {
