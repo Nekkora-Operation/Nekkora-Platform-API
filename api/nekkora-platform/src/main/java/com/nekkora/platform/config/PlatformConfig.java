@@ -356,6 +356,43 @@ public class PlatformConfig {
         return s;
     }
 
+    /**
+     * Retencao dos registros e dos arquivos de resultado das execucoes remotas (057). E o UNICO componente que recebe a remocao de
+     * bytes do armazenamento de resultados. Prazo em dias (padrao 30), contado do fim da entrega.
+     */
+    @Bean
+    com.nekkora.platform.admin.RemoteRetention remoteRetention(OrgTransactions tx,
+            @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.retention.days:30}") int days,
+            org.springframework.core.env.Environment env) throws java.io.IOException {
+        return new com.nekkora.platform.admin.RemoteRetention(tx,
+                com.nekkora.core.artifact.ResultPurge.at(env.getProperty("NEKKORA_RESULTADOS_DIR", env.getProperty("nekkora.resultados.dir", ""))), days);
+    }
+
+    /**
+     * O ciclo da retencao: DESLIGADO por padrao. Ligar e uma decisao operacional de cada ambiente
+     * ({@code nekkora.remote-execution.retention.enabled=true}), e so vale com a execucao remota ligada.
+     */
+    @Bean(destroyMethod = "shutdownNow")
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnExpression(
+            "'${nekkora.remote-execution.enabled:false}' == 'true' and '${nekkora.remote-execution.retention.enabled:false}' == 'true'")
+    java.util.concurrent.ScheduledExecutorService remoteRetentionScheduler(com.nekkora.platform.admin.RemoteRetention retention,
+            @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.retention.cycle-minutes:60}") int minutes) {
+        java.util.concurrent.ScheduledExecutorService s = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "retencao-execucao-remota");
+            t.setDaemon(true);
+            return t;
+        });
+        int every = Math.max(1, Math.min(minutes, 24 * 60));
+        s.scheduleWithFixedDelay(() -> {
+            try {
+                retention.cycle();
+            } catch (RuntimeException e) {
+                org.slf4j.LoggerFactory.getLogger(PlatformConfig.class).warn("evento=execucao_remota.retencao_ciclo_falhou causa={}", e.getClass().getSimpleName());
+            }
+        }, 1, every, java.util.concurrent.TimeUnit.MINUTES);
+        return s;
+    }
+
     /** Dependencias de execucao declaradas para uma automacao (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01c). */
     @Bean
     com.nekkora.platform.admin.RuntimeRequirementsService runtimeRequirementsService(com.nekkora.platform.admin.AccessActions actions,

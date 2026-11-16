@@ -91,6 +91,13 @@ nekkora:
     dependency-check:
       interval-seconds: ${NEKKORA_EXECUCAO_REMOTA_VERIFICACAO_INTERVALO_SEGUNDOS:60}
       answer-seconds: ${NEKKORA_EXECUCAO_REMOTA_VERIFICACAO_RESPOSTA_SEGUNDOS:120}
+    # 057: retencao, no servidor, dos registros e dos arquivos de resultado. DESLIGADA por padrao: ligar e decisao operacional de
+    # cada ambiente. Prazo em dias (1 a 3650), contado do fim da entrega de cada tentativa; entrega aberta nao vence. O historico
+    # da execucao e a auditoria nao sao removidos. O processo da Platform precisa poder REMOVER arquivos em NEKKORA_RESULTADOS_DIR
+    retention:
+      enabled: ${NEKKORA_EXECUCAO_REMOTA_RETENCAO:false}
+      days: ${NEKKORA_EXECUCAO_REMOTA_RETENCAO_DIAS:30}
+      cycle-minutes: ${NEKKORA_EXECUCAO_REMOTA_RETENCAO_CICLO_MINUTOS:60}
   # login do aplicativo desktop pelo navegador (AGENT-CLIENT-LOGIN-001, contrato desktop-login/1): DESLIGADO por padrao; so
   # abre com a entrada geral tambem ligada. Prazos: pedido no navegador, codigo de autorizacao e sessao do aplicativo
   # (sem renovacao). Nenhum prazo das sessoes existentes muda.
