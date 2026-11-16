@@ -389,7 +389,9 @@ paths:
         vigentes: 409 + remote_attempt_stale. O servidor rele e confere os bytes pelo SHA-256 a cada download; ausentes ou
         corrompidos: 409 + remote_package_unavailable (a maquina recusa a tentativa com PACKAGE_INVALID). Armazenamento fora: 503.
         A resposta traz Nekkora-Package-Sha256; a maquina confere o tamanho, o SHA-256 e a impressao ANTES de usar - download
-        parcial nunca e executavel. Baixar renova o prazo da comunicacao. Nenhuma outra versao, pacote ou tentativa e alcancavel.
+        parcial nunca e executavel. Baixar renova o prazo da comunicacao. Nenhuma outra versao, pacote ou tentativa e alcancavel:
+        alem das conferencias acima, o BANCO so mostra ao canal da maquina o pacote fixado na tentativa da propria maquina
+        (a que a credencial autenticou), e so enquanto a tentativa esta em RECEIVED ou PREPARING.
       parameters:
         - { $ref: '#/components/parameters/Contract' }
         - { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }

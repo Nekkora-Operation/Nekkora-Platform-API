@@ -51,6 +51,7 @@ class RemoteExecutionIT extends PlatformTestBase {
     }
 
     private static final String EXTERNAL = "nekkora-agent/external-python-fingerprint/1";
+    private static final String PACKAGE_SHA = "5e".repeat(32);
     private static final String STUDIO = "nekkora-agent/package-fingerprint/1";
 
     /** A versao publicada e de um pacote Python externo: o unico tipo que a execucao remota aceita. */
@@ -76,6 +77,18 @@ class RemoteExecutionIT extends PlatformTestBase {
                         + "'arguments','[]'::jsonb,'parameters','{}'::jsonb,'secret_bindings','{}'::jsonb), '" + o.adminMembership() + "')",
                 "UPDATE automation_versions SET status = 2, published_at = now(), published_by_membership_id = '" + o.adminMembership()
                         + "' WHERE automation_version_id = '" + version + "'");
+        // 048: a tentativa so nasce com o pacote da versao REGISTRADO (e dele que o banco fixa o que a maquina podera baixar)
+        String common = "INSERT INTO automation_artifacts (organization_id, workspace_id, automation_id, automation_version_id, sha256, size_bytes, "
+                + "package_kind, fingerprint_rule, fingerprint, files_count, manifest_version, storage_key, received_by_membership_id, ";
+        String ids = "'" + o.id() + "', '" + ws + "', '" + automation + "', '" + version + "', '" + PACKAGE_SHA + "', 1234, ";
+        String tail = "'" + PACKAGE_SHA + "', '" + o.adminMembership() + "', ";
+        DB.asSuperuser("ALTER TABLE automation_artifacts DISABLE TRIGGER USER",
+                EXTERNAL.equals(rule)
+                        ? common + "python_requirement, dependencies, package_name, package_version) VALUES (" + ids + "2, '" + rule + "', '" + FINGERPRINT
+                                + "', 3, '1.0.0', " + tail + "'>=3.12', '[]'::jsonb, 'conciliacao', '1.0.0')"
+                        : common + "framework, execution_mode) VALUES (" + ids + "1, '" + rule + "', '" + FINGERPRINT + "', 3, '1.4.0', " + tail
+                                + "'nekkora-rpa==1.0.0', 'single')",
+                "ALTER TABLE automation_artifacts ENABLE TRIGGER USER");
         BrowserClient b = browser();
         firstLogin(b, o.id(), new TestUser(o.adminId(), o.adminEmail(), PASSWORD.toCharArray()));
         Setup s = new Setup(o, b, ws, automation, version);
@@ -352,6 +365,48 @@ class RemoteExecutionIT extends PlatformTestBase {
                 "ALTER TABLE remote_executions ENABLE TRIGGER USER");
         refused(e.admin().post(e.o() + "/remote-executions/" + execution + "/attempts", "{\"agentId\":\"" + b.agent() + "\"}"), "remote_package_not_supported");
         assertThat(value("SELECT count(*) FROM remote_attempts WHERE remote_execution_id = '" + execution + "'")).isEqualTo("1");
+    }
+
+    @Test
+    void versaoSemPacoteRegistradoNaoGanhaSolicitacaoNemTentativaEOPacoteFixadoNaoEEscolhidoPorQuemInsere() throws Exception {
+        Setup s = setup();
+        declare(s, null);
+        Machine a = machine(s, "Pacote-A", true);
+        Machine b = machine(s, "Pacote-B", true);
+        heartbeat(s, a, true);
+        heartbeat(s, b, true);
+        String authorization = authorize(s, a);
+        authorize(s, b);
+        // com o pacote registrado: a tentativa nasce com o pacote FIXADO pelo banco (maquina, sha256 e tamanho lidos das fontes)
+        BrowserClient.Response created = request(s, a);
+        assertThat(created.status()).as(created.body()).isEqualTo(201);
+        String execution = created.field("remoteExecutionId");
+        String attempt = value("SELECT attempt_id FROM remote_attempts WHERE remote_execution_id = '" + execution + "'");
+        assertThat(value("SELECT agent_id || '|' || sha256 || '|' || size_bytes FROM remote_attempt_packages WHERE attempt_id = '" + attempt + "'"))
+                .isEqualTo(a.agent() + "|" + PACKAGE_SHA + "|1234");
+        // as pessoas (nekkora_platform) nao escolhem o que a maquina baixa: nem informando valores, nem mudando, nem apagando
+        String org = s.org().id().toString();
+        assertThat(as("nekkora_platform", s.org().id(), "INSERT INTO remote_attempt_packages (attempt_id, organization_id, agent_id, sha256, size_bytes) VALUES ('"
+                + attempt + "', '" + org + "', '" + b.agent() + "', '" + "9".repeat(64) + "', 1)")).as("valores informados").isEqualTo("42501");
+        assertThat(as("nekkora_platform", s.org().id(), "INSERT INTO remote_attempt_packages (attempt_id, organization_id) VALUES ('" + attempt + "', '" + org
+                + "')")).as("segunda linha da mesma tentativa").isIn("23505", "23514");
+        assertThat(as("nekkora_platform", s.org().id(), "UPDATE remote_attempt_packages SET sha256 = '" + "9".repeat(64) + "'")).isEqualTo("42501");
+        assertThat(as("nekkora_platform", s.org().id(), "DELETE FROM remote_attempt_packages")).isEqualTo("42501");
+        // o registro do pacote some (so a fixture consegue): a versao deixa de ser solicitavel, em qualquer maquina, com o motivo proprio
+        machineMoves(s, attempt, 2, 11);
+        DB.asSuperuser("ALTER TABLE automation_artifacts DISABLE TRIGGER USER", "DELETE FROM automation_artifacts WHERE automation_version_id = '" + s.version() + "'",
+                "ALTER TABLE automation_artifacts ENABLE TRIGGER USER");
+        assertThat(missing(s, a)).containsExactly("PACKAGE_NOT_REGISTERED");
+        assertThat(missing(s, b)).containsExactly("PACKAGE_NOT_REGISTERED");
+        refused(request(s, b), "remote_package_not_registered");
+        refused(s.admin().post(s.o() + "/remote-executions/" + execution + "/attempts", "{\"agentId\":\"" + b.agent() + "\"}"), "remote_package_not_registered");
+        assertThat(value("SELECT count(*) FROM remote_executions WHERE organization_id = '" + org + "'")).isEqualTo("1");
+        assertThat(value("SELECT count(*) FROM remote_attempts WHERE organization_id = '" + org + "'")).isEqualTo("1");
+        // e o banco reconfere por conta propria: sem pacote registrado, a tentativa nao nasce, mesmo com tudo o mais valendo
+        assertThat(as("nekkora_platform", s.org().id(), "INSERT INTO remote_attempts (organization_id, remote_execution_id, attempt_number, agent_id, worker_id, "
+                + "authorization_id, created_by_membership_id, offer_valid_until) VALUES ('" + org + "', '" + execution + "', 2, '" + a.agent() + "', '" + a.worker()
+                + "', '" + authorization + "', '" + s.org().adminMembership() + "', clock_timestamp() + interval '15 minutes')")).isEqualTo("23514");
+        assertThat(value("SELECT count(*) FROM remote_attempts WHERE organization_id = '" + org + "'")).isEqualTo("1");
     }
 
     @Test
