@@ -294,4 +294,59 @@ class RemoteMachinesIT extends PlatformTestBase {
         assertThat(as("nekkora_ingestion", s.org().id(), "DELETE FROM agent_remote_enablements WHERE worker_id = '" + ok[1] + "'")).isEqualTo("42501");
         assertThat(value("SELECT enabled_by_membership_id FROM agent_remote_enablements WHERE worker_id = '" + ok[1] + "'")).isEqualTo(s.org().adminMembership().toString());
     }
+
+    @Test
+    void inventarioDePythonDaMaquinaSoParaQuemExecutaNoAmbienteESemCaminho() throws Exception {
+        Setup s = setup();
+        UUID[] c = markedCode(s, "Inventario");
+        assertThat(redeem(s, c[0], c[1], "Maquina Inventario", true)).isEqualTo("OK");
+        authorize(s, c[1], s.workspace());
+        String agent = value("SELECT agent_id FROM agent_remote_enablements WHERE worker_id = '" + c[1] + "'");
+        String base = s.o() + "/workspaces/" + s.workspace() + "/remote-machines/";
+        // ainda sem inventario: lista vazia (a maquina nao publicou)
+        BrowserClient.Response empty = s.admin().get(base + agent + "/python-environments");
+        assertThat(empty.status()).as(empty.body()).isEqualTo(200);
+        assertThat(empty.body()).isEqualTo("{\"items\":[]}");
+        // a maquina publica (papel real da ingestao, como o gateway)
+        String insert = "INSERT INTO agent_python_environments (agent_id, environment_id, organization_id, python_version, kind, observed_at) VALUES ('" + agent
+                + "', '%s', '" + s.org().id() + "', '%s', %d, clock_timestamp() - interval '1 minute')";
+        assertThat(as("nekkora_ingestion", s.org().id(), insert.formatted("a".repeat(43), "3.12.4", 1), insert.formatted("b".repeat(43), "3.13.1", 2))).isEqualTo("OK");
+        JsonNode items = JSON.readTree(s.admin().get(base + agent + "/python-environments").body()).get("items");
+        assertThat(items.size()).isEqualTo(2);
+        assertThat(items.get(0).propertyNames()).containsExactlyInAnyOrder("environmentId", "pythonVersion", "kind", "observedAt", "reportedAt");
+        assertThat(items.get(0).get("pythonVersion").asString()).as("mais novo primeiro").isEqualTo("3.13.1");
+        assertThat(items.get(0).get("kind").asString()).isEqualTo("VIRTUAL_ENVIRONMENT");
+        assertThat(items.get(1).get("environmentId").asString()).isEqualTo("a".repeat(43));
+        assertThat(items.get(1).get("kind").asString()).isEqualTo("INSTALLATION");
+        // quem ve: OPERATOR do ambiente; VIEWER, outro ambiente, outra organizacao e sem sessao nao
+        TestUser operator = internalUser(s.org(), true, 2);
+        grantWorkspaceRole(s.org(), operator, s.workspace(), "OPERATOR");
+        BrowserClient op = browser();
+        firstLogin(op, s.org().id(), operator);
+        assertThat(op.get(base + agent + "/python-environments").status()).isEqualTo(200);
+        TestUser viewer = internalUser(s.org(), true, 2);
+        grantWorkspaceRole(s.org(), viewer, s.workspace(), "VIEWER");
+        BrowserClient v = browser();
+        firstLogin(v, s.org().id(), viewer);
+        assertThat(v.get(base + agent + "/python-environments").status()).isEqualTo(404);
+        UUID other = newWorkspace(s.org(), newClient(s.org()));
+        assertThat(s.admin().get(s.o() + "/workspaces/" + other + "/remote-machines/" + agent + "/python-environments").status())
+                .as("Worker nao autorizado nesse ambiente").isEqualTo(404);
+        Setup foreign = setup();
+        assertThat(foreign.admin().get(foreign.o() + "/workspaces/" + s.workspace() + "/remote-machines/" + agent + "/python-environments").status()).isEqualTo(404);
+        assertThat(browser().get(base + agent + "/python-environments").status()).isEqualTo(401);
+        // maquina que nao existe, malformada, ou pareada por codigo comum: 404 / 400
+        assertThat(s.admin().get(base + UUID.randomUUID() + "/python-environments").status()).isEqualTo(404);
+        assertThat(s.admin().get(base + "nao-e-uuid/python-environments").status()).isEqualTo(400);
+        BrowserClient.Response plain = s.admin().post(s.o() + "/agent-enrollments", "{\"workerName\":\"Comum inv\",\"agentName\":\"Maquina Comum inv\",\"expiresInMinutes\":15}");
+        UUID plainWorker = UUID.fromString(plain.field("workerId"));
+        assertThat(redeem(s, UUID.fromString(plain.field("enrollmentId")), plainWorker, "Maquina Comum inv", false)).isEqualTo("OK");
+        authorize(s, plainWorker, s.workspace());
+        String plainAgent = value("SELECT agent_id FROM agents WHERE organization_id = '" + s.org().id() + "' AND name = 'Maquina Comum inv'");
+        assertThat(s.admin().get(base + plainAgent + "/python-environments").status()).isEqualTo(404);
+        // Agent revogado deixa de existir para a consulta; o retrato nao precisa ser apagado
+        assertThat(s.admin().post(s.o() + "/auth/mfa/step-up", "{\"code\":\"" + code(s.org().adminId()) + "\"}").status()).isEqualTo(204);
+        assertThat(s.admin().post(s.o() + "/agents/" + agent + "/revoke", "{\"reason\":\"ADMINISTRATIVE\"}").status()).isEqualTo(204);
+        assertThat(s.admin().get(base + agent + "/python-environments").status()).isEqualTo(404);
+    }
 }

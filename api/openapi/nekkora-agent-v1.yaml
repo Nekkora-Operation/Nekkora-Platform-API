@@ -101,6 +101,28 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /agent/api/v1/remote/python-environments:
+    put:
+      tags: [Maquina]
+      operationId: publishPythonInventory
+      summary: 'A maquina habilitada publica o inventario de Python (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01c)'
+      description: >
+        Substitui, numa transacao, o retrato do Python que a maquina disse ter. Por ambiente: um identificador OPACO derivado na
+        maquina (43 caracteres base64url, estavel para o mesmo ambiente na mesma maquina), a versao, o tipo e o instante da
+        observacao. NENHUM caminho, nome de usuario, lista de pacotes ou outro campo e aceito: campo a mais, valor fora do
+        formato, identificador repetido ou mais de 32 ambientes -> 400 e nada muda. Lista vazia e valida (a maquina nao achou
+        Python). Maquina vinculada mas nao habilitada: 409 conflict + reason remote_execution_not_enabled. Limite: 6 publicacoes
+        por minuto por maquina (429 com Retry-After). Publicar nao escolhe ambiente nem autoriza execucao.
+      parameters: [ { $ref: '#/components/parameters/Contract' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PythonInventory' } } } }
+      responses:
+        '200': { description: 'Retrato gravado', content: { application/json: { schema: { $ref: '#/components/schemas/PythonInventoryPublished' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /agent/api/v1/remote/credential/renew:
     post:
       tags: [Maquina]
@@ -389,6 +411,29 @@ components:
         credentialExpiresAt: { type: string, format: date-time }
         contractVersion: { type: string }
         remoteExecution: { type: boolean, enum: [true], description: 'Presente (true) so quando o resgate habilitou a maquina para execucao remota; ausente nos demais' }
+    PythonInventory:
+      type: object
+      additionalProperties: false
+      required: [environments]
+      properties:
+        environments:
+          type: array
+          maxItems: 32
+          items:
+            type: object
+            additionalProperties: false
+            required: [environmentId, pythonVersion, kind, observedAt]
+            properties:
+              environmentId: { type: string, pattern: '^[A-Za-z0-9_-]{43}$', description: 'Opaco; derivado na maquina; nunca um caminho' }
+              pythonVersion: { type: string, pattern: '^3\.[0-9]{1,2}\.[0-9]{1,3}([abc]|rc)?[0-9]{0,2}$' }
+              kind: { type: string, enum: [INSTALLATION, VIRTUAL_ENVIRONMENT] }
+              observedAt: { type: string, format: date-time, description: 'Quando a maquina sondou o ambiente; ate 5 minutos a frente do servidor' }
+    PythonInventoryPublished:
+      type: object
+      required: [count, reportedAt]
+      properties:
+        count: { type: integer, minimum: 0, maximum: 32 }
+        reportedAt: { type: string, format: date-time }
     RenewCredentialRequest:
       type: object
       additionalProperties: false
