@@ -969,6 +969,25 @@ class RemoteExecutionIT extends PlatformTestBase {
         assertThat(unknown.get("state").asString()).isEqualTo("ENDED_UNKNOWN");
         assertThat(unknown.get("closureCause").asString()).isEqualTo("COMMUNICATION_LOST");
         assertThat(unknown.get("lateReport").isNull()).isTrue();
+        // decisao de 16/11: a espera vencida consolida o resultado, mas NAO da a maquina por livre nem libera a repeticao sozinha
+        assertThat(missing(s, silent)).contains("MACHINE_UNCONFIRMED").doesNotContain("MACHINE_BUSY");
+        refused(request(s, silent), "remote_machine_unconfirmed");
+        stepUp(s);
+        String retryPath = s.o() + "/remote-executions/" + lostExecution + "/attempts";
+        refused(s.admin().post(retryPath, "{\"agentId\":\"" + next.agent() + "\"}"), "remote_previous_result_unconfirmed");
+        refused(s.admin().post(retryPath, "{\"agentId\":\"" + next.agent() + "\",\"acknowledgeUnconfirmed\":false}"), "remote_previous_result_unconfirmed");
+        assertThat(value("SELECT count(*) FROM remote_attempts WHERE remote_execution_id = '" + lostExecution + "'")).as("nada foi gravado").isEqualTo("1");
+        // nem reconhecendo se repete na PROPRIA maquina que sumiu
+        refused(s.admin().post(retryPath, "{\"agentId\":\"" + silent.agent() + "\",\"acknowledgeUnconfirmed\":true}"), "remote_machine_unconfirmed");
+        // a maquina que nunca iniciou (o servidor nao autorizou o inicio) nao tem processo: nao fica "sem confirmacao"
+        assertThat(missing(s, waiting)).doesNotContain("MACHINE_UNCONFIRMED");
+        // reconhecendo, a repeticao em OUTRA maquina e aceita - e continua sendo um ato de uma pessoa
+        BrowserClient.Response acknowledged = s.admin().post(retryPath, "{\"agentId\":\"" + next.agent() + "\",\"acknowledgeUnconfirmed\":true}");
+        assertThat(acknowledged.status()).as(acknowledged.body()).isEqualTo(201);
+        machineMoves(s, JSON.readTree(acknowledged.body()).get("attempts").get(1).get("attemptId").asString(), 2, 3, 11);
+        // a maquina voltou a se comunicar (sem dizer ainda como terminou): ela mesma e a autoridade sobre estar ocupada
+        heartbeat(s, silent, true);
+        assertThat(missing(s, silent)).doesNotContain("MACHINE_UNCONFIRMED");
         // a maquina voltou e disse como terminou (papel da ingestao, como o gateway): aparece AO LADO; o estado nao muda
         assertThat(as("nekkora_ingestion", s.org().id(), "UPDATE remote_attempts SET late_state = 7, late_exit_code = 0 WHERE attempt_id = '" + lost + "'"))
                 .isEqualTo("OK");

@@ -84,3 +84,20 @@ a causa tirada de como o vínculo acabou.
 | O banco só aceita o encerramento com o fato conferido, e nunca como sucesso, falha ou cancelamento | `RemoteDeliveryIT.oBancoSoAceitaOEncerramentoPeloServidorComOFatoConferido` |
 | Revogação, leitura que nunca fica "em execução", tentativa já parada, máquina liberada, repetição por ato de pessoa | `RemoteExecutionIT.revogacaoEPerdaDeComunicacaoEncerramATentativaSemInventarDesfechoEALeituraNuncaFicaEmExecucao` |
 | Pausar não altera a tentativa em andamento: ela segue acompanhada até o desfecho informado pela máquina; só não chega trabalho novo | `RemoteDeliveryIT.pausarNovosTrabalhosNaoMexeNaExecucaoEmAndamentoQueSegueAcompanhadaAteTerminar` |
+
+## Decisão de 16/11: a espera vencida não libera nada sozinha
+
+A titular aceitou a espera configurável (padrão 120 minutos) para **consolidar** "Resultado não confirmado", com duas condições:
+
+1. **A máquina não é dada por livre.** Encerrar por falta de comunicação não é saber que o processo terminou. Enquanto a
+   máquina não voltar a se comunicar (nem relatar o desfecho), ela aparece com `MACHINE_UNCONFIRMED` nos candidatos e uma
+   solicitação para ela responde 409 `remote_machine_unconfirmed`. Deixa de valer no primeiro contato dela depois do
+   encerramento: a própria máquina é a autoridade sobre estar ocupada e recusa o que não puder receber.
+   Tentativa que **nunca iniciou** (o servidor não autorizou o início) não tem processo e não deixa a máquina nessa condição.
+2. **A repetição não é liberada sozinha.** "Executar novamente em outra máquina" depois de um encerramento por
+   `COMMUNICATION_LOST` sem relato tardio exige `acknowledgeUnconfirmed = true`: a pessoa reconhece que a automação pode ainda
+   estar em andamento naquele computador. Sem isso, 409 `remote_previous_result_unconfirmed` e nada é gravado. Continua
+   exigindo a confirmação reforçada, e nunca acontece sem uma pessoa.
+
+**Evidências posteriores continuam aceitas.** O relato tardio da máquina (como o processo terminou) é guardado ao lado, uma vez,
+sem mudar o estado. Registros e resultados continuam aceitos depois do encerramento, com o token da atribuição.
