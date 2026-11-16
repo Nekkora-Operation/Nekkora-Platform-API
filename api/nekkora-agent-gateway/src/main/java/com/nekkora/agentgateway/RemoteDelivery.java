@@ -424,6 +424,9 @@ public final class RemoteDelivery {
             if (total + data.length > MAX_RESULTS_TOTAL_BYTES) {
                 throw new ApiException(ApiError.REMOTE_RESULT_LIMIT, "total_de_resultados");
             }
+            // 057: a mesma trava que a retencao usa antes de remover bytes: ela nunca remove os bytes que este envio esta gravando
+            j.sql("SELECT pg_advisory_xact_lock(hashtextextended(?, 57))").param(m.organization() + "|" + sha256).query(rs -> {
+            });
             try {
                 results.put(m.organization(), sha256, data);
             } catch (java.io.IOException x) {

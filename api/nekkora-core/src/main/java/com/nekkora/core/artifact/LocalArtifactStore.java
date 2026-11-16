@@ -105,6 +105,27 @@ public final class LocalArtifactStore implements ArtifactStore {
         return true;
     }
 
+    /**
+     * Remove os bytes desta chave e so retorna depois de CONFERIR que nao estao mais la. Repetir e seguro: ausente ja e removido.
+     * Nao faz parte de {@link ArtifactStore} de proposito: pacote publicado nunca e removido por aqui; so a retencao dos
+     * resultados recebe este metodo, por {@link ResultPurge}.
+     */
+    void remove(UUID organization, String sha256) throws IOException {
+        Path f = file(organization, sha256);
+        Path dir = f.getParent();
+        if (!Files.exists(dir, LinkOption.NOFOLLOW_LINKS)) {
+            return;
+        }
+        if (Files.isSymbolicLink(dir) || !dir.toRealPath().startsWith(root)) {
+            throw new IOException("pasta da organizacao fora da raiz");
+        }
+        Files.deleteIfExists(f);
+        syncDirectory(dir);
+        if (Files.exists(f, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("os bytes continuam no armazenamento");
+        }
+    }
+
     private static void syncDirectory(Path dir) {
         try (FileChannel ch = FileChannel.open(dir, StandardOpenOption.READ)) {
             ch.force(true);

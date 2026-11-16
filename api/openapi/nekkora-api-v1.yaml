@@ -3574,7 +3574,7 @@ components:
     RemoteAttemptLogs:
       type: object
       additionalProperties: false
-      required: [attemptId, items, total, nextAfter, closure, retentionLoss]
+      required: [attemptId, items, total, nextAfter, closure, retentionLoss, expiration]
       properties:
         attemptId: { type: string, format: uuid }
         items:
@@ -3611,10 +3611,25 @@ components:
           properties:
             localCount: { type: integer, minimum: 0, description: 'Linhas que a maquina tinha capturado. Compare com total (o que a Platform tem)' }
             reportedAt: { type: string, format: date-time, description: 'Quando o aviso chegou a Platform' }
+        expiration:
+          type: [object, 'null']
+          additionalProperties: false
+          required: [expiredAt, confirmedAt, retentionDays, deliveryEndedAt, deliveryEnd, items]
+          description: >-
+            057: o conteudo desta tentativa VENCEU pela retencao do servidor (o texto das linhas foi apagado; cada linha continua existindo, com textRemoved = true). null = nao venceu. O prazo conta do fim da
+            entrega (deliveryEndedAt): a maquina fechou o envio (CLOSED), avisou que perdeu o que guardava (LOSS_NOTICE) ou o vinculo
+            sob o qual a tentativa rodou foi encerrado (LINK_ENDED). Entrega aberta nao vence. O historico da tentativa nao e removido.
+          properties:
+            expiredAt: { type: string, format: date-time, description: 'Quando o vencimento foi registrado' }
+            confirmedAt: { type: [string, 'null'], format: date-time, description: 'Quando a remocao do conteudo foi confirmada; null = em andamento' }
+            retentionDays: { type: integer, minimum: 1, description: 'O prazo aplicado, em dias' }
+            deliveryEndedAt: { type: string, format: date-time }
+            deliveryEnd: { type: string, enum: [CLOSED, LOSS_NOTICE, LINK_ENDED] }
+            items: { type: integer, minimum: 0, description: 'Linhas que tinham texto quando venceu' }
     RemoteAttemptResults:
       type: object
       additionalProperties: false
-      required: [attemptId, items, closure, retentionLoss]
+      required: [attemptId, items, closure, retentionLoss, expiration]
       properties:
         attemptId: { type: string, format: uuid }
         items:
@@ -3648,6 +3663,21 @@ components:
           properties:
             localCount: { type: integer, minimum: 0, description: 'Arquivos que havia na pasta de saida da maquina. Compare com items (o que a Platform tem)' }
             reportedAt: { type: string, format: date-time, description: 'Quando o aviso chegou a Platform' }
+        expiration:
+          type: [object, 'null']
+          additionalProperties: false
+          required: [expiredAt, confirmedAt, retentionDays, deliveryEndedAt, deliveryEnd, items]
+          description: >-
+            057: o conteudo desta tentativa VENCEU pela retencao do servidor (os bytes dos arquivos foram removidos; nome, tamanho e SHA-256 continuam, com available = false). null = nao venceu. O prazo conta do fim da
+            entrega (deliveryEndedAt): a maquina fechou o envio (CLOSED), avisou que perdeu o que guardava (LOSS_NOTICE) ou o vinculo
+            sob o qual a tentativa rodou foi encerrado (LINK_ENDED). Entrega aberta nao vence. O historico da tentativa nao e removido.
+          properties:
+            expiredAt: { type: string, format: date-time, description: 'Quando o vencimento foi registrado' }
+            confirmedAt: { type: [string, 'null'], format: date-time, description: 'Quando a remocao do conteudo foi confirmada; null = em andamento' }
+            retentionDays: { type: integer, minimum: 1, description: 'O prazo aplicado, em dias' }
+            deliveryEndedAt: { type: string, format: date-time }
+            deliveryEnd: { type: string, enum: [CLOSED, LOSS_NOTICE, LINK_ENDED] }
+            items: { type: integer, minimum: 0, description: 'Arquivos que estavam guardados quando venceu' }
     RemoteExecution:
       type: object
       required: [remoteExecutionId, workspaceId, automationId, automationVersionId, versionNumber, state, requirementsRevision, dependencies, requestedAt, cancelRequestedAt, attempts]
