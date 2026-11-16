@@ -417,6 +417,76 @@ class RemoteExecutionIT extends PlatformTestBase {
     }
 
     @Test
+    void osRegistrosDaTentativaSaoLidosEmPaginasSoPorQuemPodeVerRegistrosEDizemOQueFoiDescartado() throws Exception {
+        Setup s = setup();
+        declare(s, null);
+        Machine m = machine(s, "Registros", true);
+        heartbeat(s, m, true);
+        authorize(s, m);
+        BrowserClient.Response ok = request(s, m);
+        assertThat(ok.status()).as(ok.body()).isEqualTo(201);
+        String execution = ok.field("remoteExecutionId");
+        String attempt = JSON.readTree(ok.body()).get("attempts").get(0).get("attemptId").asString();
+        String base = s.o() + "/remote-executions/" + execution + "/attempts/" + attempt + "/logs";
+        // sem nada enviado: nenhuma linha, envio nao fechado
+        JsonNode empty = JSON.readTree(s.admin().get(base).body());
+        assertThat(empty.get("items").size()).isZero();
+        assertThat(empty.get("total").asInt()).isZero();
+        assertThat(empty.get("nextAfter").isNull()).isTrue();
+        assertThat(empty.get("closure").isNull()).isTrue();
+        // a maquina executa e envia (como o gateway, com o papel da ingestao): 1.200 linhas, os tres canais
+        machineMoves(s, attempt, 2, 3, 4, 5, 6);
+        assertThat(as("nekkora_ingestion", s.org().id(), "INSERT INTO remote_attempt_log_lines (attempt_id, sequence, organization_id, captured_at, channel, "
+                + "truncated, message) SELECT '" + attempt + "', g, '" + s.org().id() + "', clock_timestamp(), 1 + (g % 3), g = 7, 'linha ' || g FROM "
+                + "generate_series(1, 1200) g")).isEqualTo("OK");
+        // com a execucao em andamento ja se le o que chegou; o envio ainda nao foi fechado
+        BrowserClient.Response page = s.admin().get(base);
+        assertThat(page.status()).as(page.body()).isEqualTo(200);
+        assertThat(page.headers().firstValue("Cache-Control").orElse("")).contains("no-store");
+        JsonNode p1 = JSON.readTree(page.body());
+        assertThat(p1.get("items").size()).isEqualTo(500);
+        assertThat(p1.get("total").asInt()).isEqualTo(1200);
+        assertThat(p1.get("nextAfter").asInt()).isEqualTo(500);
+        assertThat(p1.get("closure").isNull()).isTrue();
+        JsonNode first = p1.get("items").get(0);
+        assertThat(first.get("sequence").asInt()).isEqualTo(1);
+        assertThat(first.get("channel").asString()).isEqualTo("STDERR");
+        assertThat(first.get("level").asString()).as("STDERR e canal, nao nivel").isEqualTo("UNKNOWN");
+        assertThat(first.get("message").asString()).isEqualTo("linha 1");
+        assertThat(p1.get("items").get(1).get("channel").asString()).isEqualTo("EXECUTOR");
+        assertThat(p1.get("items").get(2).get("channel").asString()).isEqualTo("STDOUT");
+        assertThat(p1.get("items").get(6).get("truncated").asBoolean()).isTrue();
+        // paginas seguintes, pela sequencia; a ultima diz que acabou
+        JsonNode p2 = JSON.readTree(s.admin().get(base + "?after=500").body());
+        assertThat(p2.get("items").get(0).get("sequence").asInt()).isEqualTo(501);
+        assertThat(p2.get("nextAfter").asInt()).isEqualTo(1000);
+        JsonNode p3 = JSON.readTree(s.admin().get(base + "?after=1000&limit=200").body());
+        assertThat(p3.get("items").size()).isEqualTo(200);
+        assertThat(p3.get("nextAfter").isNull()).as("chegou ao fim do que ha agora").isTrue();
+        assertThat(JSON.readTree(s.admin().get(base + "?after=1190&limit=5").body()).get("nextAfter").asInt()).isEqualTo(1195);
+        assertThat(s.admin().get(base + "?limit=501").status()).isEqualTo(400);
+        assertThat(s.admin().get(base + "?after=-1").status()).isEqualTo(400);
+        // o robo falha; a maquina fecha o envio dizendo quantas linhas descartou por limite
+        machineMoves(s, attempt, 8);
+        assertThat(as("nekkora_ingestion", s.org().id(), "INSERT INTO remote_attempt_log_closures (attempt_id, organization_id, lines, dropped_lines) VALUES ('"
+                + attempt + "', '" + s.org().id() + "', 1200, 73000)")).isEqualTo("OK");
+        JsonNode closed = JSON.readTree(s.admin().get(base + "?after=1199").body());
+        assertThat(closed.get("closure").get("lines").asInt()).isEqualTo(1200);
+        assertThat(closed.get("closure").get("droppedLines").asLong()).as("o que foi descartado por limite e dito").isEqualTo(73000);
+        // nem os registros nem o descarte mudaram o resultado da tentativa
+        assertThat(JSON.readTree(s.admin().get(s.o() + "/remote-executions/" + execution).body()).get("state").asString()).isEqualTo("FAILED");
+        // tentativa que nao existe: 404
+        assertThat(s.admin().get(s.o() + "/remote-executions/" + execution + "/attempts/" + UUID.randomUUID() + "/logs").status()).isEqualTo(404);
+        // quem nao tem permissao no ambiente nao le; a Platform nao escreve nem apaga linha
+        TestUser outsider = internalUser(s.org(), true, 2);
+        BrowserClient ob = browser();
+        firstLogin(ob, s.org().id(), outsider);
+        assertThat(ob.get(base).status()).isIn(403, 404);
+        assertThat(as("nekkora_platform", s.org().id(), "DELETE FROM remote_attempt_log_lines WHERE attempt_id = '" + attempt + "'")).isEqualTo("42501");
+        assertThat(as("nekkora_platform", s.org().id(), "UPDATE remote_attempt_log_lines SET message = '' WHERE attempt_id = '" + attempt + "'")).isEqualTo("42501");
+    }
+
+    @Test
     void osResultadosSaoListadosEBaixadosSoPorQuemPodeVerRegistrosEODownloadFicaNaTrilha() throws Exception {
         Setup s = setup();
         declare(s, null);

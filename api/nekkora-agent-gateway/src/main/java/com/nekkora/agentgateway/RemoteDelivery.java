@@ -357,6 +357,146 @@ public final class RemoteDelivery {
         }
     }
 
+    // ------------------------------------------------------------------ T05: registros (saida do processo)
+
+    static final int MAX_LOG_LINES = 50_000;
+    static final long MAX_LOG_BYTES = 20L * 1024 * 1024;
+    static final int MAX_LOG_LINE_BYTES = 8 * 1024;
+    static final int MAX_LOG_BATCH_LINES = 200;
+    static final long MAX_LOG_BATCH_BYTES = 256L * 1024;
+    private static final List<String> LOG_CHANNELS = List.of("STDOUT", "STDERR", "EXECUTOR");
+    private static final java.util.regex.Pattern LOG_TEXT_BAD = java.util.regex.Pattern.compile("[\\x00-\\x08\\x0a-\\x1f\\x7f]");
+
+    /** Uma linha capturada pela maquina. {@code capturedAt}: instante ISO-8601 com fuso. */
+    public record LogLine(int sequence, String capturedAt, String channel, boolean truncated, String message) {
+    }
+
+    /** {@code lastSequence}: a ultima linha que a Platform tem desta tentativa depois deste lote. */
+    public record LogsAccepted(int received, int stored, int lastSequence) {
+    }
+
+    public record LogsClosure(int lines, long droppedLines) {
+    }
+
+    /**
+     * Um lote de linhas da saida do processo, de uma tentativa que INICIOU e cujo envio nao foi fechado. A sequencia e continua:
+     * o lote comeca, no maximo, na linha seguinte a ultima guardada. Linha ja guardada com o mesmo conteudo e ignorada (lote
+     * repetido depois de resposta perdida); com outro conteudo, 409 remote_log_conflict. Buraco na sequencia: 409
+     * remote_log_conflict. Passar de 50.000 linhas ou 20 MiB: 409 remote_log_limit (a maquina conta o excedente como descartado).
+     * O texto passa pela remocao de segredos antes de ser gravado. Com a tentativa em andamento, o lote renova o prazo da
+     * comunicacao. Nao muda o estado da tentativa.
+     */
+    public LogsAccepted storeLogs(MachineToken t, UUID attemptId, String token, Integer epoch, List<LogLine> lines) {
+        if (lines == null || lines.isEmpty() || lines.size() > MAX_LOG_BATCH_LINES) {
+            throw ApiException.invalid("lote");
+        }
+        long batchBytes = 0;
+        List<java.time.OffsetDateTime> instants = new java.util.ArrayList<>();
+        for (int i = 0; i < lines.size(); i++) {
+            LogLine l = lines.get(i);
+            if (l == null || l.sequence() < 1 || (i > 0 && l.sequence() != lines.get(i - 1).sequence() + 1)
+                    || l.channel() == null || !LOG_CHANNELS.contains(l.channel()) || l.message() == null || LOG_TEXT_BAD.matcher(l.message()).find()
+                    || l.message().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_LOG_LINE_BYTES || l.capturedAt() == null) {
+                throw ApiException.invalid("linha");
+            }
+            try {
+                instants.add(java.time.OffsetDateTime.parse(l.capturedAt()));
+            } catch (java.time.DateTimeException e) {
+                throw ApiException.invalid("instante");
+            }
+            batchBytes += l.message().getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+        }
+        if (batchBytes > MAX_LOG_BATCH_BYTES) {
+            throw ApiException.invalid("lote");
+        }
+        return tx.inOrganization(t.organization(), Mode.READ_WRITE, j -> {
+            Machine m = auth.authenticate(j, t);
+            Row a = owned(j, m, attemptId, token, epoch);
+            requireStarted(j, m, a);
+            if (logsClosure(j, m, attemptId) != null) {
+                throw new ApiException(ApiError.REMOTE_LOG_CONFLICT, "envio_fechado");
+            }
+            record Have(int last, long bytes) {
+            }
+            Have have = j.sql("SELECT coalesce(max(sequence), 0), coalesce(sum(octet_length(message)), 0) FROM public.remote_attempt_log_lines "
+                            + "WHERE organization_id = ? AND attempt_id = ?").param(m.organization()).param(attemptId)
+                    .query((rs, n) -> new Have(rs.getInt(1), rs.getLong(2))).single();
+            if (lines.get(0).sequence() > have.last() + 1) {
+                throw new ApiException(ApiError.REMOTE_LOG_CONFLICT, "buraco_na_sequencia");
+            }
+            int stored = 0;
+            long total = have.bytes();
+            for (int i = 0; i < lines.size(); i++) {
+                LogLine l = lines.get(i);
+                String text = LogRedaction.redact(l.message(), token);
+                short channel = (short) (LOG_CHANNELS.indexOf(l.channel()) + 1);
+                if (l.sequence() <= have.last()) {
+                    // lote repetido: a linha guardada tem de ser a mesma
+                    boolean same = j.sql("SELECT channel = ? AND truncated = ? AND (message = ? OR redacted_at IS NOT NULL) FROM public.remote_attempt_log_lines "
+                                    + "WHERE organization_id = ? AND attempt_id = ? AND sequence = ?").param(channel).param(l.truncated()).param(text)
+                            .param(m.organization()).param(attemptId).param(l.sequence()).query(Boolean.class).single();
+                    if (!same) {
+                        throw new ApiException(ApiError.REMOTE_LOG_CONFLICT, "linha_com_outro_conteudo");
+                    }
+                    continue;
+                }
+                total += text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+                if (l.sequence() > MAX_LOG_LINES || total > MAX_LOG_BYTES) {
+                    throw new ApiException(ApiError.REMOTE_LOG_LIMIT, "total_de_registros");
+                }
+                j.sql("INSERT INTO public.remote_attempt_log_lines (attempt_id, sequence, organization_id, captured_at, channel, truncated, message) "
+                                + "VALUES (?, ?, ?, ?, ?, ?, ?)").param(attemptId).param(l.sequence()).param(m.organization()).param(instants.get(i)).param(channel)
+                        .param(l.truncated()).param(text).update();
+                stored++;
+            }
+            if (a.state() < 7) {
+                renew(j, m, attemptId);
+            }
+            int last = Math.max(have.last(), lines.get(lines.size() - 1).sequence());
+            LOG.info("evento=execucao_remota.registros_recebidos tentativa={} linhas={} ultima={} correlacao={}", attemptId, stored, last,
+                    RequestContext.correlation());
+            return new LogsAccepted(lines.size(), stored, last);
+        });
+    }
+
+    /**
+     * Fecha o envio dos registros de uma tentativa que iniciou e TERMINOU: quantas linhas a maquina enviou e quantas descartou
+     * por limite. Repetir o mesmo fechamento devolve o mesmo; outro fechamento, ou contagem que nao bate com o que chegou: 409
+     * remote_log_conflict. Nao muda o estado da tentativa.
+     */
+    public LogsClosure closeLogs(MachineToken t, UUID attemptId, String token, Integer epoch, Integer sent, Long dropped) {
+        if (sent == null || dropped == null || sent < 0 || sent > MAX_LOG_LINES || dropped < 0 || dropped > 1_000_000_000_000L) {
+            throw ApiException.invalid("fechamento");
+        }
+        return tx.inOrganization(t.organization(), Mode.READ_WRITE, j -> {
+            Machine m = auth.authenticate(j, t);
+            Row a = owned(j, m, attemptId, token, epoch);
+            requireStarted(j, m, a);
+            LogsClosure existing = logsClosure(j, m, attemptId);
+            if (existing != null) {
+                if (existing.lines() == sent && existing.droppedLines() == dropped) {
+                    return existing;
+                }
+                throw new ApiException(ApiError.REMOTE_LOG_CONFLICT, "fechamento_diferente");
+            }
+            long received = j.sql("SELECT count(*) FROM public.remote_attempt_log_lines WHERE organization_id = ? AND attempt_id = ?")
+                    .param(m.organization()).param(attemptId).query(Long.class).single();
+            if (a.state() < 7 || received != sent) {
+                throw new ApiException(a.state() < 7 ? ApiError.REMOTE_ATTEMPT_TRANSITION : ApiError.REMOTE_LOG_CONFLICT, "fechamento_fora_de_hora_ou_contagem");
+            }
+            j.sql("INSERT INTO public.remote_attempt_log_closures (attempt_id, organization_id, lines, dropped_lines) VALUES (?, ?, ?, ?)")
+                    .param(attemptId).param(m.organization()).param(sent).param(dropped).update();
+            LOG.info("evento=execucao_remota.registros_fechados tentativa={} linhas={} descartadas={} correlacao={}", attemptId, sent, dropped,
+                    RequestContext.correlation());
+            return new LogsClosure(sent, dropped);
+        });
+    }
+
+    private static LogsClosure logsClosure(JdbcClient j, Machine m, UUID attemptId) {
+        return j.sql("SELECT lines, dropped_lines FROM public.remote_attempt_log_closures WHERE organization_id = ? AND attempt_id = ?")
+                .param(m.organization()).param(attemptId).query((rs, n) -> new LogsClosure(rs.getInt(1), rs.getLong(2))).optional().orElse(null);
+    }
+
     private static void requireStarted(JdbcClient j, Machine m, Row a) {
         boolean started = j.sql("SELECT started_at IS NOT NULL FROM public.remote_attempts WHERE organization_id = ? AND attempt_id = ?")
                 .param(m.organization()).param(a.attemptId()).query(Boolean.class).single();

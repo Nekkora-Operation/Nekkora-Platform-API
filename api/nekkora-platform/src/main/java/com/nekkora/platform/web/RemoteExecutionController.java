@@ -91,6 +91,15 @@ public class RemoteExecutionController {
                 .body(service.get(org, SessionFilter.principal(req), SessionFilter.token(req), execution));
     }
 
+    /** T05: as linhas da saida do processo de uma tentativa, paginadas pela sequencia, e o fechamento do envio (logs.read). */
+    @GetMapping("/api/v1/o/{org}/remote-executions/{execution}/attempts/{attempt}/logs")
+    public ResponseEntity<RemoteExecutionService.Logs> logs(@PathVariable UUID org, @PathVariable UUID execution, @PathVariable UUID attempt,
+                                                            @RequestParam(required = false) Integer after, @RequestParam(required = false) Integer limit,
+                                                            HttpServletRequest req) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(service.logs(org, SessionFilter.principal(req), SessionFilter.token(req), execution, attempt, after, limit));
+    }
+
     /** T03b: os arquivos de resultado de uma tentativa e o fechamento do envio (logs.read). */
     @GetMapping("/api/v1/o/{org}/remote-executions/{execution}/attempts/{attempt}/results")
     public ResponseEntity<RemoteExecutionService.Results> results(@PathVariable UUID org, @PathVariable UUID execution, @PathVariable UUID attempt,

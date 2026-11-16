@@ -258,6 +258,122 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
                 + "VALUES ('" + never + "', 1, '" + fx.org + "', 'x.txt', 1, '" + "a".repeat(64) + "')")).isEqualTo("23514");
     }
 
+    private static String line(int sequence, String channel, String message) {
+        return "{\"sequence\":" + sequence + ",\"capturedAt\":\"2026-11-15T12:00:0" + (sequence % 10) + "Z\",\"channel\":\"" + channel + "\",\"message\":"
+                + tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(message) + "}";
+    }
+
+    private MachineClient.Response logs(Machine m, String attempt, String grant, String... lines) {
+        return m.client().post("/remote/attempts/" + attempt + "/logs", "{" + grant + ",\"lines\":[" + String.join(",", lines) + "]}", m.credential());
+    }
+
+    private MachineClient.Response logsComplete(Machine m, String attempt, String grant, int lines, long dropped) {
+        return m.client().post("/remote/attempts/" + attempt + "/logs/complete", "{" + grant + ",\"lines\":" + lines + ",\"droppedLines\":" + dropped + "}",
+                m.credential());
+    }
+
+    @Test
+    void aMaquinaEnviaASaidaDoProcessoEmLotesEFechaOEnvioSemMudarOResultado() {
+        Machine m = machine(true);
+        String attempt = queued(m);
+        JsonNode offer = next(m).body().get("attempt");
+        String token = offer.get("token").asString();
+        String grant = grant(offer);
+        assertThat(ack(m, attempt, grant).status()).isEqualTo(200);
+        // tentativa que ainda nao iniciou: nenhuma linha e aceita
+        assertThat(state(m, attempt, grant, "PREPARING", null).status()).isEqualTo(200);
+        assertThat(state(m, attempt, grant, "STARTING", null).status()).isEqualTo(200);
+        assertThat(logs(m, attempt, grant, line(1, "STDOUT", "cedo demais")).body().get("reason").asString()).isEqualTo("remote_attempt_transition");
+        assertThat(state(m, attempt, grant, "RUNNING", null).status()).isEqualTo(200);
+        // o que nao e aceito, sem gravar nada: lote vazio, canal desconhecido, quebra de linha no texto, linha de mais de 8 KiB,
+        // sequencia que pula dentro do lote, sem token
+        assertThat(logs(m, attempt, grant).status()).isEqualTo(400);
+        assertThat(logs(m, attempt, grant, line(1, "ERROR", "x")).status()).isEqualTo(400);
+        assertThat(logs(m, attempt, grant, line(1, "STDOUT", "duas\nlinhas")).status()).isEqualTo(400);
+        assertThat(logs(m, attempt, grant, line(1, "STDOUT", "x".repeat(8193))).status()).isEqualTo(400);
+        assertThat(logs(m, attempt, grant, line(1, "STDOUT", "a"), line(3, "STDOUT", "c")).status()).isEqualTo(400);
+        assertThat(logs(m, attempt, "\"epoch\":1", line(1, "STDOUT", "a")).status()).isEqualTo(400);
+        assertThat(fx.value("SELECT count(*) FROM remote_attempt_log_lines WHERE attempt_id = '" + attempt + "'")).isEqualTo("0");
+        // o lote comeca na linha seguinte a ultima guardada: buraco e conflito
+        assertThat(logs(m, attempt, grant, line(2, "STDOUT", "pulou a primeira")).body().get("reason").asString()).isEqualTo("remote_log_conflict");
+        // aceito, com a tentativa em andamento: os dois canais, na ordem da captura; STDERR e canal, nao nivel
+        MachineClient.Response first = logs(m, attempt, grant, line(1, "STDOUT", "iniciando"), line(2, "STDERR", "Traceback (most recent call last):"),
+                line(3, "STDERR", "\tValueError: acentuação e tabulação"));
+        assertThat(first.status()).as(first.raw()).isEqualTo(200);
+        assertThat(first.body().get("stored").asInt()).isEqualTo(3);
+        assertThat(first.body().get("lastSequence").asInt()).isEqualTo(3);
+        assertThat(first.headers().firstValue("Cache-Control").orElse("")).contains("no-store");
+        assertThat(fx.value("SELECT string_agg(sequence || ':' || channel || ':' || level || ':' || message, '|' ORDER BY sequence) FROM remote_attempt_log_lines "
+                + "WHERE attempt_id = '" + attempt + "'")).isEqualTo("1:1:0:iniciando|2:2:0:Traceback (most recent call last):|3:2:0:\tValueError: acentuação e tabulação");
+        // lote repetido (resposta perdida), inteiro ou sobreposto: nada duplica; o que e novo entra
+        assertThat(logs(m, attempt, grant, line(1, "STDOUT", "iniciando"), line(2, "STDERR", "Traceback (most recent call last):")).body().get("stored").asInt())
+                .isZero();
+        MachineClient.Response overlap = logs(m, attempt, grant, line(3, "STDERR", "\tValueError: acentuação e tabulação"), line(4, "EXECUTOR", "aviso do aplicativo"));
+        assertThat(overlap.body().get("stored").asInt()).isEqualTo(1);
+        // a mesma sequencia com outro conteudo: conflito, nada muda
+        assertThat(logs(m, attempt, grant, line(4, "EXECUTOR", "outro texto")).body().get("reason").asString()).isEqualTo("remote_log_conflict");
+        // segredos nunca sao gravados: credencial de maquina, codigo de pareamento, cabecalho de autorizacao, o token da atribuicao
+        MachineClient.Response secret = logs(m, attempt, grant, line(5, "STDOUT", "cred nka1." + "A".repeat(20) + ".x fim"),
+                line(6, "STDOUT", "codigo nkp1.org.enr." + "B".repeat(43)), line(7, "STDERR", "Authorization: Bearer abcdefghijklmnop resto"),
+                line(8, "STDOUT", "token " + token + " ok"), line(9, "STDOUT", "curl -H 'authorization=Basic dXNlcjpzZW5oYQ=='"));
+        assertThat(secret.status()).as(secret.raw()).isEqualTo(200);
+        String stored = fx.value("SELECT string_agg(message, '|' ORDER BY sequence) FROM remote_attempt_log_lines WHERE attempt_id = '" + attempt + "' AND sequence >= 5");
+        assertThat(stored).isEqualTo("cred [removido] fim|codigo [removido]|Authorization: [removido] resto|token [removido] ok|curl -H 'authorization=[removido]");
+        assertThat(stored).doesNotContain("nka1.").doesNotContain("nkp1.").doesNotContain(token).doesNotContain("abcdefghijklmnop").doesNotContain("dXNlcjpzZW5oYQ");
+        // repetir o lote com os segredos e reconhecido como o mesmo (a comparacao e com o texto ja limpo)
+        assertThat(logs(m, attempt, grant, line(8, "STDOUT", "token " + token + " ok")).body().get("stored").asInt()).isZero();
+        // token que nao e o vigente; outra maquina
+        assertThat(logs(m, attempt, "\"token\":\"" + Tokens.newToken() + "\",\"epoch\":" + offer.get("epoch").asInt(), line(10, "STDOUT", "x")).body()
+                .get("reason").asString()).isEqualTo("remote_attempt_stale");
+        Machine stranger = machine(true);
+        assertThat(logs(stranger, attempt, grant, line(10, "STDOUT", "x")).status()).isEqualTo(404);
+        // fechar antes do termino: nao
+        assertThat(logsComplete(m, attempt, grant, 9, 0).body().get("reason").asString()).isEqualTo("remote_attempt_transition");
+        assertThat(state(m, attempt, grant, "FAILED", "\"exitCode\":3").status()).isEqualTo(200);
+        // depois do termino o token continua valendo para o que faltava enviar
+        assertThat(logs(m, attempt, grant, "{\"sequence\":10,\"capturedAt\":\"2026-11-15T12:00:09Z\",\"channel\":\"STDOUT\",\"truncated\":true,\"message\":\"cortada\"}")
+                .status()).isEqualTo(200);
+        assertThat(fx.value("SELECT truncated FROM remote_attempt_log_lines WHERE attempt_id = '" + attempt + "' AND sequence = 10")).isEqualTo("t");
+        // o resultado do robo nao mudou por causa dos registros
+        assertThat(stateOf(attempt)).isEqualTo("8|-");
+        // fechamento: a contagem tem de ser a que o servidor recebeu; as descartadas por limite sao ditas; repetir nao muda; outro, conflito
+        assertThat(logsComplete(m, attempt, grant, 9, 0).body().get("reason").asString()).isEqualTo("remote_log_conflict");
+        MachineClient.Response closed = logsComplete(m, attempt, grant, 10, 1234);
+        assertThat(closed.status()).as(closed.raw()).isEqualTo(200);
+        assertThat(closed.body().get("droppedLines").asLong()).isEqualTo(1234);
+        assertThat(logsComplete(m, attempt, grant, 10, 1234).status()).isEqualTo(200);
+        assertThat(logsComplete(m, attempt, grant, 10, 0).body().get("reason").asString()).isEqualTo("remote_log_conflict");
+        assertThat(fx.value("SELECT lines || '|' || dropped_lines FROM remote_attempt_log_closures WHERE attempt_id = '" + attempt + "'")).isEqualTo("10|1234");
+        assertThat(logs(m, attempt, grant, line(11, "STDOUT", "tarde")).body().get("reason").asString()).isEqualTo("remote_log_conflict");
+        assertThat(stateOf(attempt)).isEqualTo("8|-");
+
+        // limite por tentativa (20 MiB): o lote que passaria nao entra, com o motivo; guardado tambem no banco
+        Machine big = machine(true);
+        String attempt2 = queued(big);
+        String grant2 = received(big, attempt2);
+        for (String st : new String[] {"PREPARING", "STARTING", "RUNNING"}) {
+            assertThat(state(big, attempt2, grant2, st, null).status()).isEqualTo(200);
+        }
+        String rows = "INSERT INTO remote_attempt_log_lines (attempt_id, sequence, organization_id, captured_at, channel, message) SELECT '" + attempt2
+                + "', g, '" + fx.org + "', clock_timestamp(), 1, repeat('x', 8192) FROM generate_series(%d, %d) g";
+        assertThat(asRole("nekkora_ingestion", rows.formatted(1, 2559))).isEqualTo("OK");
+        MachineClient.Response over = logs(big, attempt2, grant2, line(2560, "STDOUT", "y".repeat(8000)), line(2561, "STDOUT", "y".repeat(8000)));
+        assertThat(over.status()).as(over.raw()).isEqualTo(409);
+        assertThat(over.body().get("reason").asString()).isEqualTo("remote_log_limit");
+        assertThat(fx.value("SELECT count(*) FROM remote_attempt_log_lines WHERE attempt_id = '" + attempt2 + "'")).isEqualTo("2559");
+        assertThat(asRole("nekkora_ingestion", rows.formatted(2560, 2561))).as("o banco tambem guarda o total").isEqualTo("23514");
+        // guardas do banco: buraco na sequencia; a maquina nao altera nem apaga; as pessoas nao escrevem; so de tentativa que iniciou
+        String one = "INSERT INTO remote_attempt_log_lines (attempt_id, sequence, organization_id, captured_at, channel, message) VALUES ('%s', %d, '" + fx.org
+                + "', clock_timestamp(), 1, 'x')";
+        assertThat(asRole("nekkora_ingestion", one.formatted(attempt2, 2565))).isEqualTo("23514");
+        assertThat(asRole("nekkora_ingestion", "UPDATE remote_attempt_log_lines SET message = 'x' WHERE attempt_id = '" + attempt + "'")).isEqualTo("42501");
+        assertThat(asRole("nekkora_ingestion", "DELETE FROM remote_attempt_log_lines WHERE attempt_id = '" + attempt + "'")).isEqualTo("42501");
+        assertThat(asRole("nekkora_platform", one.formatted(attempt2, 2560))).isEqualTo("42501");
+        Machine idle = machine(true);
+        String never = queued(idle);
+        assertThat(asRole("nekkora_ingestion", one.formatted(never, 1))).isEqualTo("23514");
+    }
+
     @Test
     void aMaquinaRecusaQuandoNaoHaSessaoUtilizavelEOMotivoFicaGravado() {
         // 049: tela bloqueada ou sem sessao interativa - o aplicativo nao inicia, e diz por que
