@@ -50,7 +50,15 @@ class RemoteExecutionIT extends PlatformTestBase {
     private record Machine(UUID worker, UUID agent, String name) {
     }
 
+    private static final String EXTERNAL = "nekkora-agent/external-python-fingerprint/1";
+    private static final String STUDIO = "nekkora-agent/package-fingerprint/1";
+
+    /** A versao publicada e de um pacote Python externo: o unico tipo que a execucao remota aceita. */
     private Setup setup() {
+        return setup(EXTERNAL);
+    }
+
+    private Setup setup(String rule) {
         Org o = newOrganization();
         for (int code = 1; code <= 5; code++) {
             DB.asSuperuser("INSERT INTO organization_resource_limit_revisions (organization_id, resource_code, revision_number, effective_from, limit_mode, "
@@ -64,7 +72,7 @@ class RemoteExecutionIT extends PlatformTestBase {
                 "INSERT INTO automation_versions (automation_version_id, organization_id, workspace_id, automation_id, status, command_json, created_by_membership_id) "
                         + "VALUES ('" + version + "', '" + o.id() + "', '" + ws + "', '" + automation + "', 1, jsonb_build_object('contract_version',1,'artifact',"
                         + "jsonb_build_object('reference','conciliacao','sha256','" + "ab".repeat(32) + "'),'agent_package',jsonb_build_object('fingerprint_rule',"
-                        + "'nekkora-agent/package-fingerprint/1','fingerprint','" + FINGERPRINT + "'),'runtime','python3.12','entrypoint','main.py',"
+                        + "'" + rule + "','fingerprint','" + FINGERPRINT + "'),'runtime','python3.12','entrypoint','main.py',"
                         + "'arguments','[]'::jsonb,'parameters','{}'::jsonb,'secret_bindings','{}'::jsonb), '" + o.adminMembership() + "')",
                 "UPDATE automation_versions SET status = 2, published_at = now(), published_by_membership_id = '" + o.adminMembership()
                         + "' WHERE automation_version_id = '" + version + "'");
@@ -305,6 +313,45 @@ class RemoteExecutionIT extends PlatformTestBase {
         // nova autorizacao: volta a valer para novas solicitacoes, enquanto nao vencer nem for revogada
         authorize(s, m);
         assertThat(request(s, m).status()).isEqualTo(201);
+    }
+
+    @Test
+    void pacoteNoFormatoStudioERecusadoAntesDeCriarASolicitacaoMesmoComTodoORestoValendo() throws Exception {
+        Setup s = setup(STUDIO);
+        declare(s, null);
+        Machine m = machine(s, "Studio", true);
+        heartbeat(s, m, true);
+        authorize(s, m);
+        // tudo o mais vale (maquina habilitada, compativel, livre, autorizacao vigente, Python escolhido, dependencias declaradas):
+        // o unico impedimento e o tipo do pacote, e ele vale para qualquer maquina
+        assertThat(missing(s, m)).containsExactly("PACKAGE_NOT_SUPPORTED");
+        refused(request(s, m), "remote_package_not_supported");
+        assertThat(value("SELECT count(*) FROM remote_executions WHERE organization_id = '" + s.org().id() + "'")).isEqualTo("0");
+        assertThat(value("SELECT count(*) FROM remote_attempts WHERE organization_id = '" + s.org().id() + "'")).isEqualTo("0");
+        // a recusa vem antes das outras exigencias: sem autorizacao e sem Python escolhido, o motivo continua sendo o pacote
+        Machine bare = machine(s, "Studio-2", true, false);
+        heartbeat(s, bare, true);
+        assertThat(missing(s, bare)).startsWith("PACKAGE_NOT_SUPPORTED");
+        refused(request(s, bare), "remote_package_not_supported");
+        // uma solicitacao que ja existia com pacote Studio (anterior a esta regra) nao ganha nova tentativa em outra maquina
+        Setup e = setup();
+        declare(e, null);
+        Machine a = machine(e, "Antiga-A", true);
+        Machine b = machine(e, "Antiga-B", true);
+        heartbeat(e, a, true);
+        heartbeat(e, b, true);
+        authorize(e, a);
+        authorize(e, b);
+        BrowserClient.Response created = request(e, a);
+        assertThat(created.status()).as(created.body()).isEqualTo(201);
+        String execution = created.field("remoteExecutionId");
+        String attempt = value("SELECT attempt_id FROM remote_attempts WHERE remote_execution_id = '" + execution + "'");
+        machineMoves(e, attempt, 2, 11);
+        DB.asSuperuser("ALTER TABLE remote_executions DISABLE TRIGGER USER",
+                "UPDATE remote_executions SET package_fingerprint_rule = '" + STUDIO + "' WHERE remote_execution_id = '" + execution + "'",
+                "ALTER TABLE remote_executions ENABLE TRIGGER USER");
+        refused(e.admin().post(e.o() + "/remote-executions/" + execution + "/attempts", "{\"agentId\":\"" + b.agent() + "\"}"), "remote_package_not_supported");
+        assertThat(value("SELECT count(*) FROM remote_attempts WHERE remote_execution_id = '" + execution + "'")).isEqualTo("1");
     }
 
     @Test
