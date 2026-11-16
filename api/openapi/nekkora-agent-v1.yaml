@@ -265,6 +265,118 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /agent/api/v1/remote/attempts/{attempt}/logs:
+    post:
+      tags: [Maquina]
+      operationId: sendRemoteAttemptLogs
+      summary: 'A maquina envia um lote de linhas da saida do processo da tentativa (T05)'
+      description: >
+        Linhas que o processo da automacao escreveu na saida padrao (STDOUT) e na saida de erro (STDERR), e avisos do proprio
+        aplicativo (EXECUTOR), na ordem em que a maquina as capturou. So de tentativa que INICIOU (antes: 409 +
+        remote_attempt_transition) e ate o fechamento do envio. Lote: 1 a 200 linhas, ate 256 KiB de texto; linha: ate 8 KiB em
+        UTF-8, sem quebra de linha nem caractere de controle (tabulacao pode); truncated diz que a maquina cortou a linha no
+        limite. sequence: 1 em diante, continua dentro do lote; o lote comeca, no maximo, na linha seguinte a ultima guardada
+        (buraco: 409 + remote_log_conflict). Linha ja guardada com o mesmo conteudo e ignorada (lote repetido depois de resposta
+        perdida); com outro conteudo: 409 + remote_log_conflict. Passar de 50.000 linhas ou de 20 MiB por tentativa: 409 +
+        remote_log_limit, nada do lote e gravado e a maquina conta o excedente como descartado no fechamento. STDERR e um canal,
+        nao um nivel: nenhuma linha e classificada pelo texto. Antes de gravar, o servidor remove credencial de maquina, codigo de
+        pareamento, cabecalho de autorizacao e o token da atribuicao. Com a tentativa em andamento, o lote renova o prazo da
+        comunicacao. Enviar registro NAO muda o estado da tentativa. So existe registro de tentativa remota: execucao iniciada no
+        proprio computador nao tem rota aqui.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token, epoch, lines]
+              properties:
+                token: { type: string }
+                epoch: { type: integer, minimum: 1 }
+                lines:
+                  type: array
+                  minItems: 1
+                  maxItems: 200
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [sequence, capturedAt, channel, message]
+                    properties:
+                      sequence: { type: integer, minimum: 1 }
+                      capturedAt: { type: string, format: date-time }
+                      channel: { type: string, enum: [STDOUT, STDERR, EXECUTOR] }
+                      truncated: { type: boolean }
+                      message: { type: string }
+      responses:
+        '200':
+          description: 'Lote guardado (ou ja guardado)'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [received, stored, lastSequence]
+                properties:
+                  received: { type: integer, description: 'Linhas do lote' }
+                  stored: { type: integer, description: 'Linhas novas gravadas (as repetidas nao contam)' }
+                  lastSequence: { type: integer, description: 'A ultima linha que a Platform tem desta tentativa' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/attempts/{attempt}/logs/complete:
+    post:
+      tags: [Maquina]
+      operationId: completeRemoteAttemptLogs
+      summary: 'A maquina fecha o envio dos registros da tentativa (T05)'
+      description: >
+        Depois que a tentativa que iniciou TERMINOU (antes: 409 + remote_attempt_transition). lines: quantas linhas a maquina
+        enviou - tem de ser o que o servidor recebeu (um lote perdido aparece aqui: 409 + remote_log_conflict). droppedLines:
+        quantas linhas ela DESCARTOU por limite (a captura nao para: o excedente e lido e contado, nao guardado). Repetir o mesmo
+        fechamento nao muda nada; outro: 409 + remote_log_conflict. Depois do fechamento nenhuma linha e aceita. Fechar NAO muda
+        o estado da tentativa.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token, epoch, lines, droppedLines]
+              properties:
+                token: { type: string }
+                epoch: { type: integer, minimum: 1 }
+                lines: { type: integer, minimum: 0, maximum: 50000 }
+                droppedLines: { type: integer, minimum: 0 }
+      responses:
+        '200':
+          description: 'Envio fechado'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [lines, droppedLines]
+                properties:
+                  lines: { type: integer }
+                  droppedLines: { type: integer }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /agent/api/v1/remote/attempts/{attempt}/package:
     get:
       tags: [Maquina]
@@ -568,7 +680,7 @@ components:
       required: [error]
       properties:
         error: { type: string, enum: [invalid_request, unsupported_contract, unauthenticated, forbidden, not_found, conflict, rate_limited, internal_error, service_unavailable] }
-        reason: { type: string, enum: [pairing_code_for_rotation, rotation_code_for_pairing, link_ended_by_machine, link_ended_by_administration, remote_execution_unavailable, remote_code_without_enablement, code_not_for_remote_execution, remote_execution_not_enabled, credential_renewal_not_due, remote_attempt_stale, remote_attempt_transition, remote_package_unavailable, remote_result_conflict, remote_result_limit], description: 'Motivo opcional de um codigo conhecido (conflict): T06 (codigos de pareamento/rotacao), T13 (vinculo ja encerrado) e EXECUCAO-REMOTA-001 T01a (habilitacao). Cliente que nao o conhece trata o codigo como sempre' }
+        reason: { type: string, enum: [pairing_code_for_rotation, rotation_code_for_pairing, link_ended_by_machine, link_ended_by_administration, remote_execution_unavailable, remote_code_without_enablement, code_not_for_remote_execution, remote_execution_not_enabled, credential_renewal_not_due, remote_attempt_stale, remote_attempt_transition, remote_package_unavailable, remote_result_conflict, remote_result_limit, remote_log_conflict, remote_log_limit], description: 'Motivo opcional de um codigo conhecido (conflict): T06 (codigos de pareamento/rotacao), T13 (vinculo ja encerrado) e EXECUCAO-REMOTA-001 T01a (habilitacao). Cliente que nao o conhece trata o codigo como sempre' }
     UnlinkRequest:
       type: object
       required: [operationId, agentId, launchedRunRequests]

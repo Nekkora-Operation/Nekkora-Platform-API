@@ -385,6 +385,48 @@ public class RemoteExecutionService {
     static final int ACT_RESULT_DOWNLOADED = 12;
 
     /** Os arquivos de resultado de uma tentativa e o fechamento do envio. Exige logs.read no ambiente da solicitacao. */
+    /** {@code message}: vazio quando {@code textRemoved} (a retencao apagou o texto; a linha existiu). */
+    public record LogLine(int sequence, OffsetDateTime capturedAt, String channel, String level, boolean truncated, String message, boolean textRemoved) {
+    }
+
+    public record LogsClosure(int lines, long droppedLines, OffsetDateTime closedAt) {
+    }
+
+    /** {@code nextAfter}: o valor de {@code after} para a pagina seguinte; nulo quando esta pagina chegou ao fim do que ha agora. */
+    public record Logs(UUID attemptId, List<LogLine> items, int total, Integer nextAfter, LogsClosure closure) {
+    }
+
+    private static final List<String> LOG_CHANNELS = List.of("STDOUT", "STDERR", "EXECUTOR");
+    static final int LOG_PAGE_MAX = 500;
+
+    /**
+     * As linhas da saida do processo de uma tentativa, na ordem da captura, a partir da sequencia {@code after} (exclusiva), e o
+     * fechamento do envio. Exige logs.read no ambiente da solicitacao. So existem linhas de tentativa REMOTA.
+     */
+    public Logs logs(UUID org, ValidSession actor, String token, UUID executionId, UUID attemptId, Integer after, Integer limit) {
+        int from = after == null ? 0 : after;
+        int page = limit == null ? LOG_PAGE_MAX : limit;
+        if (from < 0 || page < 1 || page > LOG_PAGE_MAX) {
+            throw ApiException.invalid("pagina");
+        }
+        return actions.read(org, j -> {
+            actions.requireActor(j, org, actor, token);
+            scoped(j, org, actor, executionId, "logs.read");
+            requireAttempt(j, org, executionId, attemptId);
+            List<LogLine> items = j.sql("SELECT sequence, captured_at, channel, truncated, message, redacted_at IS NOT NULL FROM public.remote_attempt_log_lines "
+                            + "WHERE organization_id = ? AND attempt_id = ? AND sequence > ? ORDER BY sequence LIMIT ?").param(org).param(attemptId).param(from)
+                    .param(page).query((rs, n) -> new LogLine(rs.getInt(1), rs.getObject(2, OffsetDateTime.class), LOG_CHANNELS.get(rs.getShort(3) - 1),
+                            "UNKNOWN", rs.getBoolean(4), rs.getString(5), rs.getBoolean(6))).list();
+            int total = j.sql("SELECT count(*) FROM public.remote_attempt_log_lines WHERE organization_id = ? AND attempt_id = ?").param(org).param(attemptId)
+                    .query(Integer.class).single();
+            LogsClosure closure = j.sql("SELECT lines, dropped_lines, closed_at FROM public.remote_attempt_log_closures WHERE organization_id = ? "
+                            + "AND attempt_id = ?").param(org).param(attemptId)
+                    .query((rs, n) -> new LogsClosure(rs.getInt(1), rs.getLong(2), rs.getObject(3, OffsetDateTime.class))).optional().orElse(null);
+            Integer next = items.size() == page && items.get(items.size() - 1).sequence() < total ? items.get(items.size() - 1).sequence() : null;
+            return new Logs(attemptId, items, total, next, closure);
+        });
+    }
+
     public Results results(UUID org, ValidSession actor, String token, UUID executionId, UUID attemptId) {
         return actions.read(org, j -> {
             actions.requireActor(j, org, actor, token);

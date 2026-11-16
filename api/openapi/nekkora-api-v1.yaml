@@ -2645,6 +2645,38 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /api/v1/o/{org}/remote-executions/{execution}/attempts/{attempt}/logs:
+    get:
+      tags: [Execucao remota]
+      operationId: listRemoteAttemptLogs
+      summary: 'As linhas da saida do processo de uma tentativa e o fechamento do envio'
+      description: >
+        Exige logs.read no ambiente da solicitacao (fora do alcance: 404). Sao as linhas que o processo da automacao escreveu na
+        saida padrao (STDOUT) e na saida de erro (STDERR), e avisos do aplicativo da maquina (EXECUTOR), na ordem em que a maquina
+        as capturou - que nao e uma ordem global entre os dois canais. STDERR e um canal, nao um nivel: level e sempre UNKNOWN
+        nesta versao e nada e classificado pelo texto. Paginacao pela sequencia: after (exclusivo, padrao 0) e limit (1 a 500,
+        padrao 500); nextAfter null = esta pagina chegou ao fim do que ha agora. total: quantas linhas a Platform tem. closure
+        null: a maquina ainda nao fechou o envio (a execucao pode estar em andamento, ou ha linha a caminho, ou ela nao voltou).
+        closure.droppedLines: quantas linhas a maquina descartou por limite (8 KiB por linha - a linha cortada vem com truncated;
+        50.000 linhas e 20 MiB por tentativa). Linha que falta, cortada ou descartada NAO muda o estado da tentativa.
+        textRemoved true: o texto foi apagado pela retencao; o registro de que a linha existiu fica. So existem linhas de
+        tentativa remota: a saida de uma execucao iniciada no proprio computador nunca chega a Platform.
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: execution, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+        - { name: after, in: query, required: false, schema: { type: integer, minimum: 0 } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 500 } }
+      responses:
+        '200': { description: 'Registros da tentativa', content: { application/json: { schema: { $ref: '#/components/schemas/RemoteAttemptLogs' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /api/v1/o/{org}/remote-executions/{execution}/attempts/{attempt}/results:
     get:
       tags: [Execucao remota]
@@ -3478,6 +3510,36 @@ components:
         pythonVersion: { type: string, description: 'A versao que o inventario da maquina dizia quando a escolha foi feita' }
         inInventory: { type: boolean, description: 'O ambiente ainda esta no inventario atual da maquina' }
         selectedAt: { type: string, format: date-time }
+    RemoteAttemptLogs:
+      type: object
+      additionalProperties: false
+      required: [attemptId, items, total, nextAfter, closure]
+      properties:
+        attemptId: { type: string, format: uuid }
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [sequence, capturedAt, channel, level, truncated, message, textRemoved]
+            properties:
+              sequence: { type: integer, minimum: 1, maximum: 50000 }
+              capturedAt: { type: string, format: date-time, description: 'Quando a maquina capturou a linha (relogio dela)' }
+              channel: { type: string, enum: [STDOUT, STDERR, EXECUTOR] }
+              level: { type: string, enum: [UNKNOWN] }
+              truncated: { type: boolean, description: 'A linha passava de 8 KiB e foi cortada pela maquina' }
+              message: { type: string }
+              textRemoved: { type: boolean, description: 'O texto foi apagado pela retencao' }
+        total: { type: integer, minimum: 0 }
+        nextAfter: { type: [integer, 'null'] }
+        closure:
+          type: [object, 'null']
+          additionalProperties: false
+          required: [lines, droppedLines, closedAt]
+          properties:
+            lines: { type: integer, minimum: 0 }
+            droppedLines: { type: integer, minimum: 0, description: 'Linhas que a maquina descartou por limite' }
+            closedAt: { type: string, format: date-time }
     RemoteAttemptResults:
       type: object
       additionalProperties: false
