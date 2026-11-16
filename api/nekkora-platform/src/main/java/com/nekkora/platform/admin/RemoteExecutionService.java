@@ -52,7 +52,108 @@ public class RemoteExecutionService {
      * pode). {@code authorization}: nula se nunca houve autorizacao desta versao para o Worker.
      */
     public record Candidate(UUID agentId, String agentName, UUID workerId, String workerName, boolean requestable, List<String> missing,
-                            AuthorizationInfo authorization, PythonChoice python) {
+                            AuthorizationInfo authorization, PythonChoice python, DependencyCheck dependencyCheck) {
+    }
+
+    /**
+     * A verificacao sob demanda mais recente das dependencias desta automacao nesta maquina (054); nula se nunca houve.
+     * {@code state}: PENDING (aguardando a maquina, dentro do prazo), ANSWERED ou UNANSWERED (o prazo venceu sem resposta: nao
+     * foi possivel verificar - nunca "incompativel"). {@code outcome}, so em ANSWERED: SATISFIED, MISSING (com {@code missing}),
+     * ENVIRONMENT_GONE ou NOT_VERIFIED. {@code current}: o que foi conferido ainda e a escolha do Python e a revisao das
+     * dependencias de agora; senao, a resposta e de outra configuracao. E informacao: a conferencia que vale para executar e a
+     * da maquina, antes de iniciar.
+     */
+    public record DependencyCheck(UUID checkId, String environmentId, int requirementsRevision, OffsetDateTime requestedAt, OffsetDateTime answerValidUntil,
+                                  String state, String outcome, List<String> missing, OffsetDateTime answeredAt, boolean current) {
+    }
+
+    static final List<String> CHECK_OUTCOMES = List.of("SATISFIED", "MISSING", "ENVIRONMENT_GONE", "NOT_VERIFIED");
+    /** Quanto tempo a maquina tem para responder a uma verificacao (ponto de partida de laboratorio). */
+    static final int CHECK_ANSWER_SECONDS = 120;
+
+    private static DependencyCheck latestCheck(JdbcClient j, UUID org, UUID automation, UUID agent) {
+        return j.sql("""
+                SELECT c.check_id, c.environment_id, c.requirements_revision, c.requested_at, c.answer_valid_until, c.outcome, c.missing::text, c.answered_at,
+                       c.answer_valid_until > clock_timestamp(),
+                       EXISTS (SELECT 1 FROM public.automation_python_selections s WHERE s.organization_id = c.organization_id
+                                  AND s.automation_id = c.automation_id AND s.agent_id = c.agent_id AND s.environment_id = c.environment_id)
+                       AND c.requirements_revision = (SELECT max(r.revision_number) FROM public.automation_runtime_requirements r
+                                                       WHERE r.organization_id = c.organization_id AND r.automation_id = c.automation_id)
+                  FROM public.remote_dependency_checks c
+                 WHERE c.organization_id = ? AND c.automation_id = ? AND c.agent_id = ? ORDER BY c.requested_at DESC, c.check_id LIMIT 1
+                """).param(org).param(automation).param(agent).query((rs, n) -> {
+            Short outcome = rs.getObject(6) == null ? null : rs.getShort(6);
+            List<String> missing = new ArrayList<>();
+            if (rs.getString(7) != null) {
+                JSON.readTree(rs.getString(7)).forEach(d -> missing.add(d.asString()));
+            }
+            String state = outcome != null ? "ANSWERED" : rs.getBoolean(9) ? "PENDING" : "UNANSWERED";
+            return new DependencyCheck(rs.getObject(1, UUID.class), rs.getString(2), rs.getInt(3), rs.getObject(4, OffsetDateTime.class),
+                    rs.getObject(5, OffsetDateTime.class), state, outcome == null ? null : CHECK_OUTCOMES.get(outcome - 1), List.copyOf(missing),
+                    rs.getObject(8, OffsetDateTime.class), rs.getBoolean(10));
+        }).optional().orElse(null);
+    }
+
+    /**
+     * Pede a maquina que confira, AGORA, as dependencias declaradas desta automacao no Python escolhido para ela (054). Exige
+     * automation.execute no ambiente da automacao (quem pode mandar executar pode perguntar se vai dar certo). Congela o que sera
+     * conferido: a escolha vigente e a lista efetiva vigente. No maximo um pedido por minuto por maquina e automacao: o segundo
+     * recebe 429 + remote_dependency_check_too_soon e nada e criado. A resposta chega depois (a maquina consulta), em
+     * {@code candidates}; sem resposta em {@value #CHECK_ANSWER_SECONDS} s, o pedido fica UNANSWERED.
+     */
+    public DependencyCheck checkDependencies(UUID org, ValidSession actor, String token, UUID automation, UUID agent) {
+        if (!enabled) {
+            throw new ApiException(ApiError.REMOTE_EXECUTION_UNAVAILABLE, "execucao_remota_desligada");
+        }
+        return actions.write(org, j -> {
+            actions.requireActor(j, org, actor, token);
+            UUID workspace = access.requireAutomation(j, org, actor.membershipId(), automation, "automation.execute");
+            // a maquina so existe para esta automacao se estiver habilitada e o Worker dela estiver autorizado no ambiente
+            boolean machine = j.sql("""
+                    SELECT count(*) FROM public.agents a
+                      JOIN public.agent_remote_enablements r ON r.organization_id = a.organization_id AND r.agent_id = a.agent_id
+                      JOIN public.worker_agent_assignments wa ON wa.organization_id = a.organization_id AND wa.agent_id = a.agent_id AND wa.status = 1
+                      JOIN public.worker_workspace_assignments ww ON ww.organization_id = wa.organization_id AND ww.worker_id = wa.worker_id
+                                                                  AND ww.workspace_id = ? AND ww.status = 1
+                     WHERE a.organization_id = ? AND a.agent_id = ? AND a.status = 2
+                    """).param(workspace).param(org).param(agent).query(Long.class).single() > 0;
+            if (!machine) {
+                throw AccessActions.refuse(Failure.TARGET_NOT_FOUND, "maquina");
+            }
+            // um pedido de cada vez para a mesma maquina e automacao (o limite e conferido com a fila parada)
+            j.sql("SELECT pg_advisory_xact_lock(hashtextextended(?, 54))").param(agent + "|" + automation).query(rs -> {
+            });
+            String environment = j.sql("SELECT s.environment_id FROM public.automation_python_selections s JOIN public.agent_python_environments e "
+                            + "ON e.agent_id = s.agent_id AND e.environment_id = s.environment_id "
+                            + "WHERE s.organization_id = ? AND s.automation_id = ? AND s.agent_id = ?").param(org).param(automation).param(agent)
+                    .query(String.class).optional().orElse(null);
+            if (environment == null) {
+                boolean chosen = j.sql("SELECT count(*) FROM public.automation_python_selections WHERE organization_id = ? AND automation_id = ? AND agent_id = ?")
+                        .param(org).param(automation).param(agent).query(Long.class).single() > 0;
+                throw new ApiException(chosen ? ApiError.REMOTE_PYTHON_NOT_IN_INVENTORY : ApiError.REMOTE_PYTHON_NOT_SELECTED, "python");
+            }
+            RuntimeRequirementsService.View requirements = RuntimeRequirementsService.view(j, org, automation);
+            if (requirements.declared() == null) {
+                throw new ApiException(ApiError.REMOTE_REQUIREMENTS_NOT_DECLARED, "dependencias_nao_declaradas");
+            }
+            if (!requirements.effective().resolved()) {
+                throw new ApiException(ApiError.REMOTE_REQUIREMENTS_CONFLICT, "dependencias_em_conflito");
+            }
+            if (j.sql("SELECT count(*) FROM public.remote_dependency_checks WHERE organization_id = ? AND automation_id = ? AND agent_id = ? "
+                    + "AND requested_at > clock_timestamp() - interval '60 seconds'").param(org).param(automation).param(agent).query(Long.class).single() > 0) {
+                throw new ApiException(ApiError.REMOTE_DEPENDENCY_CHECK_TOO_SOON, "verificacao_recente");
+            }
+            ArrayNode frozen = JSON.createArrayNode();
+            requirements.effective().dependencies().forEach(frozen::add);
+            j.sql("""
+                    INSERT INTO public.remote_dependency_checks (organization_id, workspace_id, automation_id, agent_id, environment_id, requirements_revision,
+                        dependencies, requested_by_membership_id, answer_valid_until)
+                    VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?, clock_timestamp() + make_interval(secs => ?))
+                    """).param(org).param(workspace).param(automation).param(agent).param(environment).param(requirements.declared().revision())
+                    .param(frozen.toString()).param(actor.membershipId()).param(CHECK_ANSWER_SECONDS).update();
+            LOG.info("evento=execucao_remota.verificacao_pedida automacao={} maquina={} correlacao={}", automation, agent, AccessActions.correlation());
+            return latestCheck(j, org, automation, agent);
+        });
     }
 
     /**
@@ -177,8 +278,9 @@ public class RemoteExecutionService {
                     }
                 }
                 return new Candidate(rs.getObject(1, UUID.class), rs.getString(2), rs.getObject(3, UUID.class), rs.getString(4), missing.isEmpty(),
-                        List.copyOf(missing), info, python);
-            }).list();
+                        List.copyOf(missing), info, python, null);
+            }).list().stream().map(c -> new Candidate(c.agentId(), c.agentName(), c.workerId(), c.workerName(), c.requestable(), c.missing(),
+                    c.authorization(), c.python(), latestCheck(j, org, v.automationId(), c.agentId()))).toList();
         });
     }
 
