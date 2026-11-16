@@ -278,6 +278,61 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
                 m.credential());
     }
 
+    private MachineClient.Response loss(Machine m, String attempt, String grant, String kind, Integer localCount) {
+        return m.client().post("/remote/attempts/" + attempt + "/retention-loss", "{" + grant + (kind == null ? "" : ",\"kind\":\"" + kind + "\"")
+                + (localCount == null ? "" : ",\"localCount\":" + localCount) + "}", m.credential());
+    }
+
+    @Test
+    void aMaquinaAvisaQueRemoveuPeloPrazoDeGuardaUmaVezPorTipoSoDeTentativaTerminadaESemMudarNada() {
+        Machine m = machine(true);
+        String attempt = queued(m);
+        JsonNode offer = next(m).body().get("attempt");
+        String grant = grant(offer);
+        assertThat(ack(m, attempt, grant).status()).isEqualTo(200);
+        // antes de iniciar e com a execucao em andamento nao ha o que remover por prazo: o aviso e recusado
+        assertThat(loss(m, attempt, grant, "LOGS", 10).body().get("reason").asString()).isEqualTo("remote_attempt_transition");
+        for (String st : new String[] {"PREPARING", "STARTING", "RUNNING"}) {
+            assertThat(state(m, attempt, grant, st, null).status()).isEqualTo(200);
+        }
+        assertThat(loss(m, attempt, grant, "LOGS", 10).body().get("reason").asString()).isEqualTo("remote_attempt_transition");
+        assertThat(logs(m, attempt, grant, line(1, "STDOUT", "uma linha que chegou")).status()).isEqualTo(200);
+        assertThat(state(m, attempt, grant, "FAILED", "\"exitCode\":2").status()).isEqualTo(200);
+        // pedido malformado: nada e gravado
+        assertThat(loss(m, attempt, grant, "OUTRO", 1).status()).isEqualTo(400);
+        assertThat(loss(m, attempt, grant, null, 1).status()).isEqualTo(400);
+        assertThat(loss(m, attempt, grant, "LOGS", null).status()).isEqualTo(400);
+        assertThat(loss(m, attempt, grant, "LOGS", -1).status()).isEqualTo(400);
+        assertThat(loss(m, attempt, grant, "LOGS", 1_000_001).status()).isEqualTo(400);
+        // token que nao e o da atribuicao, e outra maquina: nada
+        assertThat(loss(m, attempt, "\"token\":\"" + Tokens.newToken() + "\",\"epoch\":" + offer.get("epoch").asInt(), "LOGS", 5).body().get("reason").asString())
+                .isEqualTo("remote_attempt_stale");
+        Machine other = machine(true);
+        assertThat(loss(other, attempt, grant, "LOGS", 5).status()).isEqualTo(404);
+        assertThat(fx.value("SELECT count(*) FROM remote_attempt_retention_losses WHERE attempt_id = '" + attempt + "'")).isEqualTo("0");
+        // o aviso: a fila de registros tinha 300 linhas na maquina (a Platform recebeu 1) e foi removida sem fechamento
+        MachineClient.Response logsLost = loss(m, attempt, grant, "LOGS", 300);
+        assertThat(logsLost.status()).as(logsLost.raw()).isEqualTo(200);
+        assertThat(logsLost.body().get("kind").asString()).isEqualTo("LOGS");
+        assertThat(logsLost.body().get("localCount").asInt()).isEqualTo(300);
+        String at = logsLost.body().get("reportedAt").asString();
+        // repetir (resposta perdida), mesmo com outro numero: devolve o que ja estava gravado
+        MachineClient.Response again = loss(m, attempt, grant, "LOGS", 999);
+        assertThat(again.status()).isEqualTo(200);
+        assertThat(again.body().get("localCount").asInt()).isEqualTo(300);
+        assertThat(again.body().get("reportedAt").asString()).isEqualTo(at);
+        // o outro tipo tem o aviso dele
+        assertThat(loss(m, attempt, grant, "RESULTS", 0).body().get("localCount").asInt()).isZero();
+        assertThat(fx.value("SELECT string_agg(kind || ':' || local_count, ',' ORDER BY kind) FROM remote_attempt_retention_losses WHERE attempt_id = '" + attempt
+                + "'")).isEqualTo("1:300,2:0");
+        // nada mais mudou: o estado, a linha que chegou, e o envio continua sem fechamento
+        assertThat(stateOf(attempt)).isEqualTo("8|-");
+        assertThat(fx.value("SELECT count(*) FROM remote_attempt_log_lines WHERE attempt_id = '" + attempt + "'")).isEqualTo("1");
+        assertThat(fx.value("SELECT count(*) FROM remote_attempt_log_closures WHERE attempt_id = '" + attempt + "'")).isEqualTo("0");
+        // e o fechamento, se a maquina ainda conseguir, continua aceito depois do aviso
+        assertThat(logsComplete(m, attempt, grant, 1, 0).status()).isEqualTo(200);
+    }
+
     @Test
     void aMaquinaEnviaASaidaDoProcessoEmLotesEFechaOEnvioSemMudarOResultado() {
         Machine m = machine(true);
