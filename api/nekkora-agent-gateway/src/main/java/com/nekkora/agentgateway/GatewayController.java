@@ -229,6 +229,18 @@ public class GatewayController {
     }
 
     /** A maquina informa o estado e renova o prazo. Corpo: {@code {"token", "epoch", "state", "refusalReason"?, "exitCode"?}}. */
+    /** O que a maquina diz dos processos da tentativa: ABSENT, ACTIVE ou UNCERTAIN; nulo quando nao diz (aplicativo antigo). */
+    private static String processTree(JsonNode n) {
+        if (n == null) {
+            return null;
+        }
+        String t = n.path("processTree").isTextual() ? n.path("processTree").asText() : null;
+        if (t != null && !java.util.Set.of("ABSENT", "ACTIVE", "UNCERTAIN").contains(t)) {
+            throw com.nekkora.core.web.ApiException.invalid("processTree");
+        }
+        return t != null ? t : n.path("processAbsent").asBoolean(false) ? "ABSENT" : null;
+    }
+
     @PostMapping("/agent/api/v1/remote/attempts/{attempt}/state")
     public ResponseEntity<RemoteDelivery.Status> remoteState(@PathVariable String attempt, @RequestBody(required = false) String body,
                                                              HttpServletRequest req) {
@@ -236,7 +248,7 @@ public class GatewayController {
         UUID id = uuid(attempt);
         JsonNode n = parse(body);
         RemoteDelivery.Status s = authenticated(req, () -> delivery.state(t, id, text(n, "token"), integer(n, "epoch"), text(n, "state"),
-                text(n, "refusalReason"), integer(n, "exitCode"), n != null && n.path("processAbsent").asBoolean(false)));
+                text(n, "refusalReason"), integer(n, "exitCode"), processTree(n)));
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(s);
     }
 

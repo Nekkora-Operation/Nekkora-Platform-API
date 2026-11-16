@@ -190,7 +190,12 @@ public class RemoteExecutionService {
     public record Attempt(UUID attemptId, int attemptNumber, UUID agentId, String agentName, UUID workerId, String workerName, String state,
                           String refusalReason, String communication, Integer exitCode, OffsetDateTime createdAt, OffsetDateTime offerValidUntil,
                           OffsetDateTime offeredAt, OffsetDateTime receivedAt, OffsetDateTime startedAt, OffsetDateTime endedAt, String closureCause,
-                          LateReport lateReport, List<Reconciliation> reconciliations, OffsetDateTime machineStillRunningAt) {
+                          LateReport lateReport, List<Reconciliation> reconciliations, OffsetDateTime machineStillRunningAt, String processes,
+                          OffsetDateTime processesAt) {
+        /** Tem processo pendente e ninguem o confirmou ausente (nem a maquina, nem uma declaracao): bloqueia a repeticao. */
+        public boolean unresolved() {
+            return ("ENDED_UNKNOWN".equals(state) || processes != null) && reconciliations.isEmpty();
+        }
     }
 
     /**
@@ -229,8 +234,8 @@ public class RemoteExecutionService {
                     .query(Integer.class).single();
             reconcile(j, org, executionId, null);
             Attempt a = execution(j, org, executionId).attempts().stream().filter(x -> x.attemptId().equals(attemptId)).findFirst().orElseThrow();
-            if (!"ENDED_UNKNOWN".equals(a.state())) {
-                throw new ApiException(ApiError.REMOTE_ATTEMPT_NOT_UNCONFIRMED, "tentativa_sem_resultado_nao_confirmado");
+            if (!"ENDED_UNKNOWN".equals(a.state()) && a.processes() == null) {
+                throw new ApiException(ApiError.REMOTE_ATTEMPT_NOT_UNCONFIRMED, "tentativa_sem_processo_pendente");
             }
             if (a.reconciliations().stream().anyMatch(r -> r.kind().equals("MANUAL"))) {
                 throw new ApiException(ApiError.REMOTE_ATTEMPT_ALREADY_RECONCILED, "ja_reconciliada");
@@ -268,15 +273,15 @@ public class RemoteExecutionService {
      * andamento la. Deixa de valer no primeiro contato da maquina depois do encerramento (ela mesma recusa o que nao puder
      * receber) ou quando ela relata o desfecho.
      */
+    /** 058: a maquina {@code a} AINDA EXECUTA uma tentativa que o servidor ja encerrou como nao confirmada (ela voltou e disse). */
+    private static final String STILL_RUNNING = com.nekkora.core.remote.AttemptReconciliation.machineHolds("a", com.nekkora.core.remote.AttemptReconciliation.Hold.RUNNING);
+    /** 060: o processo principal de uma tentativa da maquina {@code a} terminou e ha processos da automacao ainda ativos nela. */
+    private static final String FINISHING = com.nekkora.core.remote.AttemptReconciliation.machineHolds("a", com.nekkora.core.remote.AttemptReconciliation.Hold.FINISHING);
     /**
-     * 058: a maquina {@code a} AINDA EXECUTA uma tentativa que o servidor ja encerrou como nao confirmada (ela voltou e disse).
+     * 058, 060: a ocupacao da maquina {@code a} e INCERTA - ha tentativa dela com processo pendente e ela nao sabe (ou nao disse)
+     * se ele acabou. Tempo, novo contato e a declaracao manual nao mudam isso (a declaracao libera uma nova tentativa, nao a maquina).
      */
-    private static final String STILL_RUNNING = com.nekkora.core.remote.AttemptReconciliation.machineHolds("a", true);
-    /**
-     * 058: a ocupacao da maquina {@code a} e INCERTA - ha tentativa dela nao confirmada cujo processo ELA ainda nao confirmou
-     * ausente. Um novo contato nao muda isso; a declaracao manual tambem nao (ela libera uma nova tentativa, nao a maquina).
-     */
-    private static final String UNCONFIRMED = com.nekkora.core.remote.AttemptReconciliation.machineHolds("a", false);
+    private static final String UNCONFIRMED = com.nekkora.core.remote.AttemptReconciliation.machineHolds("a", com.nekkora.core.remote.AttemptReconciliation.Hold.UNCERTAIN);
     private final com.nekkora.core.artifact.ResultStore results;
 
     /**
@@ -328,7 +333,7 @@ public class RemoteExecutionService {
                       LEFT JOIN public.automation_python_selections s ON s.organization_id = r.organization_id AND s.automation_id = ?
                                                                       AND s.agent_id = a.agent_id
                      WHERE r.organization_id = ? ORDER BY w.name, w.worker_id
-                    """.formatted(UNCONFIRMED + ", " + STILL_RUNNING)).param(workspaceId).param(workspaceId).param(versionId).param(v.automationId()).param(org).query((rs, n) -> {
+                    """.formatted(UNCONFIRMED + ", " + STILL_RUNNING + ", " + FINISHING)).param(workspaceId).param(workspaceId).param(versionId).param(v.automationId()).param(org).query((rs, n) -> {
                 List<String> missing = new ArrayList<>(common);
                 UUID authorization = rs.getObject(8, UUID.class);
                 AuthorizationInfo info = null;
@@ -347,10 +352,15 @@ public class RemoteExecutionService {
                 if (!rs.getBoolean(6)) {
                     missing.add("MACHINE_INCOMPATIBLE");
                 }
-                if (rs.getBoolean(7) || rs.getBoolean(17)) {
+                // sem a confirmacao da maquina vale o mais grave: incerta sobre finalizando sobre ainda executa
+                if (rs.getBoolean(7)) {
                     missing.add("MACHINE_BUSY");
                 } else if (rs.getBoolean(16)) {
                     missing.add("MACHINE_UNCONFIRMED");
+                } else if (rs.getBoolean(18)) {
+                    missing.add("MACHINE_FINISHING");
+                } else if (rs.getBoolean(17)) {
+                    missing.add("MACHINE_BUSY");
                 }
                 PythonChoice python = null;
                 if (rs.getString(12) == null) {
@@ -512,6 +522,10 @@ public class RemoteExecutionService {
             // maquina, ou declarada por um ORG_ADMIN. Reconhecer o risco, revogar a maquina ou esperar nao liberam nada
             if ("ENDED_UNKNOWN".equals(last.state()) && last.reconciliations().isEmpty()) {
                 throw new ApiException(ApiError.REMOTE_PREVIOUS_RESULT_UNCONFIRMED, "resultado_anterior_nao_reconciliado");
+            }
+            // 060: o mesmo quando a tentativa terminou mas os processos dela nao foram confirmados ausentes
+            if (last.unresolved()) {
+                throw new ApiException(ApiError.REMOTE_PREVIOUS_PROCESSES_PENDING, "processos_da_tentativa_anterior_pendentes");
             }
             // a mesma recusa da solicitacao: uma solicitacao antiga de pacote que nao e externo nao ganha nova tentativa
             requireSupported(j.sql("SELECT package_fingerprint_rule FROM public.remote_executions WHERE organization_id = ? AND remote_execution_id = ?")
@@ -876,13 +890,17 @@ public class RemoteExecutionService {
         }
         // 058: resultado nao confirmado NAO e saber que a maquina esta livre. Se ela disse que ainda executa: ocupada. Se nao
         // confirmou que o processo acabou: ocupacao incerta. Um novo contato nao muda nenhuma das duas
-        if (j.sql("SELECT " + STILL_RUNNING + " FROM public.agents a WHERE a.organization_id = ? AND a.agent_id = ?").param(org).param(agentId)
-                .query(Boolean.class).single()) {
-            throw new ApiException(ApiError.REMOTE_MACHINE_BUSY, "maquina_ainda_executa");
-        }
         if (j.sql("SELECT " + UNCONFIRMED + " FROM public.agents a WHERE a.organization_id = ? AND a.agent_id = ?").param(org).param(agentId)
                 .query(Boolean.class).single()) {
             throw new ApiException(ApiError.REMOTE_MACHINE_UNCONFIRMED, "maquina_sem_confirmacao");
+        }
+        if (j.sql("SELECT " + FINISHING + " FROM public.agents a WHERE a.organization_id = ? AND a.agent_id = ?").param(org).param(agentId)
+                .query(Boolean.class).single()) {
+            throw new ApiException(ApiError.REMOTE_MACHINE_FINISHING, "maquina_finalizando");
+        }
+        if (j.sql("SELECT " + STILL_RUNNING + " FROM public.agents a WHERE a.organization_id = ? AND a.agent_id = ?").param(org).param(agentId)
+                .query(Boolean.class).single()) {
+            throw new ApiException(ApiError.REMOTE_MACHINE_BUSY, "maquina_ainda_executa");
         }
         record Grant(UUID id, boolean revoked, boolean expired) {
         }
@@ -975,28 +993,33 @@ public class RemoteExecutionService {
                 rs.getObject(13, OffsetDateTime.class), rs.getObject(14, OffsetDateTime.class), rs.getObject(15, OffsetDateTime.class),
                 rs.getObject(16, OffsetDateTime.class), rs.getString(17),
                 rs.getObject(18) == null ? null : new LateReport(STATES.get(rs.getShort(18) - 1), (Integer) rs.getObject(19),
-                        rs.getObject(20, OffsetDateTime.class)), new ArrayList<>(), null)).list();
+                        rs.getObject(20, OffsetDateTime.class)), new ArrayList<>(), null, null, null)).list();
         // 058: o que se sabe do processo de cada tentativa nao confirmada (reconciliacoes e "ainda executa")
         List<Attempt> known = new ArrayList<>();
         for (Attempt a : attempts) {
             List<Reconciliation> recs = new ArrayList<>();
-            OffsetDateTime[] running = new OffsetDateTime[1];
-            if ("ENDED_UNKNOWN".equals(a.state())) {
+            // 3 = ainda executa; 4 = finalizando; 5 = a maquina nao sabe
+            OffsetDateTime[] said = new OffsetDateTime[6];
+            if (STATES.indexOf(a.state()) >= 6) {
                 j.sql("SELECT kind, reported_at, reason, verification, by_membership_id FROM public.remote_attempt_process_reports "
                         + "WHERE organization_id = ? AND attempt_id = ? ORDER BY reported_at, kind").param(org).param(a.attemptId()).query(rs -> {
-                            if (rs.getShort(1) == 3) {
-                                running[0] = rs.getObject(2, OffsetDateTime.class);
+                            short kind = rs.getShort(1);
+                            if (kind >= 3 && kind <= 5) {
+                                said[kind] = rs.getObject(2, OffsetDateTime.class);
                             } else {
-                                recs.add(new Reconciliation(rs.getShort(1) == 1 ? "MACHINE" : "MANUAL", rs.getObject(2, OffsetDateTime.class), rs.getString(3),
+                                recs.add(new Reconciliation(kind == 1 ? "MACHINE" : "MANUAL", rs.getObject(2, OffsetDateTime.class), rs.getString(3),
                                         rs.getString(4), rs.getObject(5, UUID.class)));
                             }
                         });
             }
-            // "ainda executa" deixa de valer quando a propria maquina confirma que o processo acabou
+            // o que a maquina disse deixa de valer quando ELA confirma que nao ha mais processo. Sem isso vale o mais grave:
+            // "nao sei" (5) sobre "finalizando" (4) sobre "ainda executa" (3)
             boolean byMachine = recs.stream().anyMatch(r -> r.kind().equals("MACHINE"));
+            String processes = byMachine ? null : said[5] != null ? "UNCERTAIN" : said[4] != null ? "ACTIVE" : null;
+            OffsetDateTime processesAt = processes == null ? null : said[5] != null ? said[5] : said[4];
             known.add(new Attempt(a.attemptId(), a.attemptNumber(), a.agentId(), a.agentName(), a.workerId(), a.workerName(), a.state(), a.refusalReason(),
                     a.communication(), a.exitCode(), a.createdAt(), a.offerValidUntil(), a.offeredAt(), a.receivedAt(), a.startedAt(), a.endedAt(),
-                    a.closureCause(), a.lateReport(), List.copyOf(recs), byMachine ? null : running[0]));
+                    a.closureCause(), a.lateReport(), List.copyOf(recs), byMachine || processes != null ? null : said[3], processes, processesAt));
         }
         List<Attempt> resolved = List.copyOf(known);
         return j.sql("""
