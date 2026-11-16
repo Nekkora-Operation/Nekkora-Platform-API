@@ -951,6 +951,40 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
     }
 
     @Test
+    void resultadoNaoConfirmadoSoEReconciliadoPelaMaquinaQuandoElaAfirmaQueOProcessoNaoEstaMaisLa() throws Exception {
+        String reports = "SELECT coalesce(string_agg(kind::text, ',' ORDER BY kind), '-') FROM remote_attempt_process_reports WHERE attempt_id = '%s'";
+        // sem a afirmacao: o desfecho e desconhecido e nada diz que o processo acabou
+        Machine m = machine(true);
+        String attempt = queued(m);
+        String grant = grant(next(m).body().get("attempt"));
+        assertThat(ack(m, attempt, grant).status()).isEqualTo(200);
+        for (String st : new String[] {"PREPARING", "STARTING", "RUNNING"}) {
+            assertThat(state(m, attempt, grant, st, null).status()).isEqualTo(200);
+        }
+        assertThat(state(m, attempt, grant, "ENDED_UNKNOWN", null).status()).isEqualTo(200);
+        assertThat(fx.value(reports.formatted(attempt))).isEqualTo("-");
+        assertThat(state(m, attempt, grant, "ENDED_UNKNOWN", "\"processAbsent\":false").status()).isEqualTo(200);
+        assertThat(fx.value(reports.formatted(attempt))).isEqualTo("-");
+        // a maquina CONFERIU que o processo nao esta mais em execucao: reconciliada por ela; o estado continua "nao confirmado"
+        assertThat(state(m, attempt, grant, "ENDED_UNKNOWN", "\"processAbsent\":true").status()).isEqualTo(200);
+        assertThat(fx.value(reports.formatted(attempt))).isEqualTo("1");
+        assertThat(cause(attempt)).startsWith("13|-|-|-|");
+        // ja junto do proprio desfecho desconhecido
+        Machine n = machine(true);
+        String other = queued(n);
+        String grantN = grant(next(n).body().get("attempt"));
+        assertThat(ack(n, other, grantN).status()).isEqualTo(200);
+        for (String st : new String[] {"PREPARING", "STARTING", "RUNNING"}) {
+            assertThat(state(n, other, grantN, st, null).status()).isEqualTo(200);
+        }
+        assertThat(state(n, other, grantN, "ENDED_UNKNOWN", "\"processAbsent\":true").status()).isEqualTo(200);
+        assertThat(fx.value(reports.formatted(other))).isEqualTo("1");
+        // a afirmacao nao vale para tentativa que terminou com desfecho verdadeiro, nem cria nada nela
+        assertThat(asRole("nekkora_platform", "INSERT INTO remote_attempt_process_reports (attempt_id, kind, organization_id, agent_id) SELECT attempt_id, 1, "
+                + "organization_id, agent_id FROM remote_attempts WHERE attempt_id = '" + attempt + "'")).as("so a maquina informa o que ela executa").isIn("42501", "23505");
+    }
+
+    @Test
     void semComunicacaoAlemDaEsperaATentativaFicaSemConfirmacaoEORelatoTardioFicaAoLado() throws Exception {
         Machine m = machine(true);
         String attempt = queued(m);
@@ -976,6 +1010,11 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
         assertThat(late.body().get("closureCause").asString()).isEqualTo("COMMUNICATION_LOST");
         assertThat(cause(attempt)).isEqualTo("13|-|COMMUNICATION_LOST|-|true");
         assertThat(fx.value("SELECT late_state IS NULL FROM remote_attempts WHERE attempt_id = '" + attempt + "'")).isEqualTo("t");
+        // 058: ela voltou repetindo RUNNING - fica dito que AINDA EXECUTA (uma vez); isso nao reconcilia nada
+        String reports = "SELECT coalesce(string_agg(kind::text, ',' ORDER BY kind), '-') FROM remote_attempt_process_reports WHERE attempt_id = '" + attempt + "'";
+        assertThat(fx.value(reports)).isEqualTo("3");
+        assertThat(state(m, attempt, grant, "RUNNING", null).status()).isEqualTo(200);
+        assertThat(fx.value(reports)).isEqualTo("3");
         // a maquina diz como o processo terminou: fica AO LADO; o estado da tentativa nao muda
         MachineClient.Response told = state(m, attempt, grant, "SUCCEEDED", "\"exitCode\":0");
         assertThat(told.status()).isEqualTo(200);
@@ -983,6 +1022,10 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
         assertThat(cause(attempt)).isEqualTo("13|-|COMMUNICATION_LOST|-|true");
         assertThat(fx.value("SELECT late_state || '|' || late_exit_code || '|' || (late_reported_at IS NOT NULL) FROM remote_attempts WHERE attempt_id = '"
                 + attempt + "'")).isEqualTo("7|0|true");
+        // 058: dizer como terminou e confirmar que o processo nao esta mais la - reconciliada pela maquina
+        assertThat(fx.value(reports)).isEqualTo("1,3");
+        assertThat(state(m, attempt, grant, "RUNNING", null).status()).isEqualTo(200);
+        assertThat(fx.value(reports)).as("depois de ausente, 'ainda executa' nao e mais gravado").isEqualTo("1,3");
         // uma vez so: outro relato nao troca o primeiro
         assertThat(state(m, attempt, grant, "FAILED", "\"exitCode\":3").status()).isEqualTo(200);
         assertThat(fx.value("SELECT late_state || '|' || late_exit_code FROM remote_attempts WHERE attempt_id = '" + attempt + "'")).isEqualTo("7|0");

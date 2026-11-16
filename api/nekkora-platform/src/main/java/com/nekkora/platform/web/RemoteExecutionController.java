@@ -34,7 +34,7 @@ public class RemoteExecutionController {
     public record CreateRequest(String automationVersionId, String agentId, String requestKey) {
     }
 
-    public record RetryRequest(String agentId, Boolean acknowledgeUnconfirmed) {
+    public record RetryRequest(String agentId) {
     }
 
     public record PythonSelection(String environmentId) {
@@ -142,8 +142,22 @@ public class RemoteExecutionController {
             throw ApiException.invalid("corpo");
         }
         return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore())
-                .body(service.retry(org, SessionFilter.principal(req), SessionFilter.token(req), execution, uuid(body.agentId()),
-                        Boolean.TRUE.equals(body.acknowledgeUnconfirmed())));
+                .body(service.retry(org, SessionFilter.principal(req), SessionFilter.token(req), execution, uuid(body.agentId())));
+    }
+
+    public record ReconciliationRequest(String reason, String verification, Boolean acknowledgePartialEffects) {
+    }
+
+    /** 058: reconciliacao DECLARADA por um ORG_ADMIN, com confirmacao reforcada. Nao executa nada; libera uma nova tentativa. */
+    @PostMapping("/api/v1/o/{org}/remote-executions/{execution}/attempts/{attempt}/reconciliation")
+    public ResponseEntity<RemoteExecutionService.Execution> reconcile(@PathVariable UUID org, @PathVariable UUID execution, @PathVariable UUID attempt,
+                                                                      @RequestBody(required = false) ReconciliationRequest body, HttpServletRequest req) {
+        if (body == null) {
+            throw ApiException.invalid("corpo");
+        }
+        return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore())
+                .body(service.reconcileManually(org, SessionFilter.principal(req), SessionFilter.token(req), execution, attempt, body.reason(),
+                        body.verification(), Boolean.TRUE.equals(body.acknowledgePartialEffects())));
     }
 
     private static UUID uuid(String v) {
