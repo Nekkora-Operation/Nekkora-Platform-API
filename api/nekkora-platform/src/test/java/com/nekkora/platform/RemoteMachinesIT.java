@@ -23,7 +23,7 @@ import tools.jackson.databind.json.JsonMapper;
  * O resgate pela maquina e simulado com o papel REAL nekkora_ingestion por SQL, numa unica transacao, como o gateway faz
  * (que tem os proprios testes, por HTTP): os gatilhos da 042 valem igual. O recurso DESLIGADO e conferido no AgentAdminIT.
  */
-@TestPropertySource(properties = "nekkora.remote-execution.enabled=true")
+@TestPropertySource(properties = {"nekkora.remote-execution.enabled=true", "nekkora.remote-execution.reconcile-seconds=0"})
 class RemoteMachinesIT extends PlatformTestBase {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
