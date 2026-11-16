@@ -25,28 +25,9 @@ import tools.jackson.databind.JsonNode;
  * papel nekkora_ingestion, PostgreSQL com as migrations ate a 043, recurso LIGADO, janela padrao de 30 dias). O vencimento
  * proximo e preparado por fixture (como superusuario): a aplicacao nao tem como encurtar a validade de uma credencial.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = AgentGatewayApplication.class)
-class CredentialRenewalIT {
+class CredentialRenewalIT extends RemoteEnabledGatewayIT {
 
-    static final RealDatabase DB = RealDatabase.shared();
     static AgentFixture fx;
-
-    @LocalServerPort
-    int port;
-
-    @DynamicPropertySource
-    static void configureProperties(DynamicPropertyRegistry r) {
-        RealRedis redis = RealRedis.shared();
-        r.add("nekkora.database.url", DB::url);
-        r.add("nekkora.database.user", () -> "nekkora_ingestion");
-        r.add("nekkora.database.password", () -> DB.password("nekkora_ingestion"));
-        r.add("spring.data.redis.host", redis::host);
-        r.add("spring.data.redis.port", redis::port);
-        r.add("nekkora.trusted-proxies", () -> "127.0.0.1/32,::1/128");
-        r.add("nekkora.limits.batches-per-minute", () -> "100000");
-        r.add("nekkora.limits.redeem-failures-per-hour", () -> "1000");
-        r.add("nekkora.remote-execution.enabled", () -> "true");
-    }
 
     @BeforeAll
     static void fixture() {

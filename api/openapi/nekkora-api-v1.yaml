@@ -37,6 +37,8 @@ tags:
     description: 'Workspace, automacao, versao DRAFT, artefato (pacote do Studio ou pacote Python externo, 030) recebido e conferido pela API e publicacao com step-up (PLATFORM-AUTOMATION-LIFECYCLE-001; 028). Publicar nao autoriza nem dispara execucao'
   - name: Dependencias de execucao
     description: 'Dependencias declaradas na Platform para uma automacao (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01c; 045). Leitura estatica, com as mesmas regras do aplicativo; nada e instalado. Declarar nao muda o pacote publicado e nao autoriza execucao'
+  - name: Execucao remota
+    description: 'Solicitacao de execucao de uma versao publicada numa maquina habilitada (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T02; 046). Exige automation.execute, Worker autorizado no ambiente, maquina habilitada, nao pausada e compativel, e autorizacao vigente da versao para o Worker. Solicitar nao prova inicio'
   - name: Pedido de execucao
     description: 'Pedido duravel de uma pessoa para uma versao autorizada rodar num Agent (AGENT-PYTHON-001; 030). A maquina puxa pelo gateway e decide; entregar ou aceitar nao prova inicio; inicio e desfecho vem do supervisor da execucao ligada'
   - name: Portal externo
@@ -2505,6 +2507,154 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/o/{org}/workspaces/{workspace}/remote-executions/candidates:
+    get:
+      tags: [Execucao remota]
+      operationId: listRemoteExecutionCandidates
+      summary: 'Maquinas habilitadas do ambiente para uma versao, com o que falta em cada uma'
+      description: >
+        Exige automation.read no ambiente. automationVersion: uma versao PUBLICADA do ambiente (outra: 404). Para cada maquina
+        habilitada cujo Worker esta autorizado no ambiente: requestable e missing, a lista do que impede solicitar nela agora -
+        REQUIREMENTS_NOT_DECLARED, REQUIREMENTS_CONFLICT (da automacao), AUTHORIZATION_MISSING, AUTHORIZATION_REVOKED,
+        AUTHORIZATION_EXPIRED (a autorizacao de execucao desta versao para o Worker da maquina), MACHINE_PAUSED,
+        MACHINE_INCOMPATIBLE, MACHINE_BUSY. authorization: a autorizacao vigente da versao para o Worker, ou a mais recente que
+        deixou de valer (null = nunca houve). E indicativo: a solicitacao reconfere tudo, de forma atomica.
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: workspace, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+        - { name: automationVersion, in: query, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: 'Maquinas e o que falta', content: { application/json: { schema: { $ref: '#/components/schemas/RemoteExecutionCandidateList' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/workspaces/{workspace}/remote-executions:
+    post:
+      tags: [Execucao remota]
+      operationId: requestRemoteExecution
+      summary: 'Solicita a execucao de uma versao publicada numa maquina habilitada (step-up)'
+      description: >
+        Exige automation.execute no ambiente e step-up recente. Para ACEITAR, exige ainda: Worker da maquina autorizado no
+        ambiente; maquina habilitada, nao pausada, compativel e livre; autorizacao de execucao VIGENTE desta versao para o Worker
+        da maquina; dependencias da automacao declaradas e sem conflito com o pacote. Cada exigencia que falta responde 409
+        conflict com o seu reason (remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired,
+        remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy,
+        remote_requirements_not_declared, remote_requirements_conflict) e nada e gravado. Nenhuma autorizacao e criada por
+        aqui. A solicitacao fixa a versao, a impressao do pacote e a revisao das dependencias. requestKey: UUID gerado pelo
+        navegador; repetir com a mesma chave e o mesmo conteudo devolve 200 com a mesma solicitacao (resposta perdida); com outro
+        conteudo, 409. Recurso desligado: 409 + remote_execution_unavailable. Solicitar nao prova inicio: a maquina puxa, e o
+        servidor revalida as mesmas condicoes antes de entregar e antes de iniciar.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: workspace, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RemoteExecutionRequest' } } } }
+      responses:
+        '201': { description: 'Solicitacao criada, com a primeira tentativa na fila', content: { application/json: { schema: { $ref: '#/components/schemas/RemoteExecution' } } } }
+        '200': { description: 'A mesma solicitacao (repeticao com a mesma chave)', content: { application/json: { schema: { $ref: '#/components/schemas/RemoteExecution' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    get:
+      tags: [Execucao remota]
+      operationId: listRemoteExecutions
+      summary: 'Solicitacoes mais recentes do ambiente'
+      description: >
+        Exige automation.read no ambiente. limit de 1 a 100 (padrao 25). Cada item traz as tentativas, com o estado, o motivo de
+        uma recusa e a comunicacao (OK, LOST ou NONE). LOST nao muda o estado nem encerra a tentativa.
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: workspace, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        '200': { description: 'Solicitacoes', content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/RemoteExecution' } } } } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/remote-executions/{execution}:
+    get:
+      tags: [Execucao remota]
+      operationId: getRemoteExecution
+      summary: 'Uma solicitacao e as tentativas dela'
+      description: 'Exige automation.read no ambiente da solicitacao (fora do alcance: 404).'
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: execution, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+      responses:
+        '200': { description: 'Solicitacao', content: { application/json: { schema: { $ref: '#/components/schemas/RemoteExecution' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/remote-executions/{execution}/cancel:
+    post:
+      tags: [Execucao remota]
+      operationId: cancelRemoteExecution
+      summary: 'Pede o cancelamento da tentativa atual (step-up)'
+      description: >
+        Exige automation.execute no ambiente e step-up. A tentativa que a maquina ainda NAO recebeu (QUEUED, OFFERED) e
+        cancelada na hora. A que ja foi recebida so para quando a maquina obedecer e informar: o pedido fica gravado
+        (cancelRequestedAt) e o estado so muda com a palavra da maquina. Tentativa ja terminada: 409 +
+        remote_attempt_already_finished. Repetir o pedido e idempotente.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: execution, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+      responses:
+        '200': { description: 'Solicitacao com o pedido de cancelamento', content: { application/json: { schema: { $ref: '#/components/schemas/RemoteExecution' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/remote-executions/{execution}/attempts:
+    post:
+      tags: [Execucao remota]
+      operationId: retryRemoteExecution
+      summary: 'Executa novamente em outra maquina (step-up)'
+      description: >
+        Exige automation.execute no ambiente e step-up. Cria uma tentativa nova da MESMA solicitacao (mesma versao, mesmo pacote,
+        mesmo retrato de dependencias) na maquina indicada. So depois que a tentativa anterior TERMINOU: enquanto ela nao
+        terminar, 409 + remote_attempt_not_finished - nao ha troca automatica de maquina nem duas maquinas com a mesma
+        solicitacao. As exigencias sao as da solicitacao, conferidas para a maquina de DESTINO; em especial, a autorizacao
+        vigente da versao tem de ser do Worker de destino: a da maquina anterior NAO e transferida (sem ela, 409 +
+        remote_authorization_missing). Cancelamento ja pedido: 409 + remote_execution_cancel_requested.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: execution, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: false, required: [agentId], properties: { agentId: { type: string, format: uuid } } } } } }
+      responses:
+        '201': { description: 'Solicitacao com a tentativa nova', content: { application/json: { schema: { $ref: '#/components/schemas/RemoteExecution' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /api/v1/o/{org}/automations/{automation}/runtime-requirements:
     get:
       tags: [Dependencias de execucao]
@@ -2687,7 +2837,7 @@ components:
     Error:
       type: object
       required: [error]
-      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
+      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_requirements_not_declared, remote_requirements_conflict, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
     WorkspacePermissionCode:
       description: 'Permissoes de workspace (13): podem aparecer em allWorkspaces e em atribuicoes de workspace.'
       type: string
@@ -3186,6 +3336,78 @@ components:
       required: [items]
       properties:
         items: { type: array, maxItems: 1000, items: { type: object, required: [type, receivedAt], properties: { type: { type: string, enum: [process_started, process_succeeded, process_failed, process_start_failed, process_cancelled] }, receivedAt: { type: string, format: date-time } } } }
+    RemoteExecutionRequest:
+      type: object
+      additionalProperties: false
+      required: [automationVersionId, agentId, requestKey]
+      properties:
+        automationVersionId: { type: string, format: uuid }
+        agentId: { type: string, format: uuid }
+        requestKey: { type: string, format: uuid, description: 'Gerado pelo navegador; repeticao idempotente' }
+    RemoteExecutionCandidateList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [agentId, agentName, workerId, workerName, requestable, missing, authorization]
+            properties:
+              agentId: { type: string, format: uuid }
+              agentName: { type: string }
+              workerId: { type: string, format: uuid }
+              workerName: { type: string }
+              requestable: { type: boolean }
+              missing:
+                type: array
+                items: { type: string, enum: [REQUIREMENTS_NOT_DECLARED, REQUIREMENTS_CONFLICT, AUTHORIZATION_MISSING, AUTHORIZATION_REVOKED, AUTHORIZATION_EXPIRED, MACHINE_PAUSED, MACHINE_INCOMPATIBLE, MACHINE_BUSY] }
+              authorization:
+                type: [object, 'null']
+                required: [authorizationId, validUntil, status]
+                properties:
+                  authorizationId: { type: string, format: uuid }
+                  validUntil: { type: string, format: date-time }
+                  status: { type: string, enum: [VALID, REVOKED, EXPIRED] }
+    RemoteExecution:
+      type: object
+      required: [remoteExecutionId, workspaceId, automationId, automationVersionId, versionNumber, state, requirementsRevision, dependencies, requestedAt, cancelRequestedAt, attempts]
+      properties:
+        remoteExecutionId: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        automationId: { type: string, format: uuid }
+        automationVersionId: { type: string, format: uuid }
+        versionNumber: { type: integer }
+        state: { $ref: '#/components/schemas/RemoteAttemptState' }
+        requirementsRevision: { type: integer }
+        dependencies: { type: array, items: { type: string }, description: 'O efetivo congelado na solicitacao' }
+        requestedAt: { type: string, format: date-time }
+        cancelRequestedAt: { type: [string, 'null'], format: date-time }
+        attempts:
+          type: array
+          items:
+            type: object
+            required: [attemptId, attemptNumber, agentId, agentName, workerId, workerName, state, refusalReason, communication, exitCode, createdAt, offerValidUntil, offeredAt, receivedAt, startedAt, endedAt]
+            properties:
+              attemptId: { type: string, format: uuid }
+              attemptNumber: { type: integer }
+              agentId: { type: string, format: uuid }
+              agentName: { type: string }
+              workerId: { type: string, format: uuid }
+              workerName: { type: string }
+              state: { $ref: '#/components/schemas/RemoteAttemptState' }
+              refusalReason: { type: [string, 'null'], enum: [BUSY, PAUSED, PACKAGE_INVALID, ENVIRONMENT_GONE, ENVIRONMENT_INCOMPATIBLE, DEPENDENCIES_MISSING, DISK_PRESSURE, CLIENT_INCOMPATIBLE, AUTHORIZATION_MISSING, AUTHORIZATION_REVOKED, AUTHORIZATION_EXPIRED, WORKER_NOT_AUTHORIZED, MACHINE_NOT_LINKED, MACHINE_NOT_ENABLED, MACHINE_INCOMPATIBLE, null] }
+              communication: { type: string, enum: [OK, LOST, NONE], description: 'LOST: o prazo da maquina venceu; nao muda o estado' }
+              exitCode: { type: [integer, 'null'] }
+              createdAt: { type: string, format: date-time }
+              offerValidUntil: { type: string, format: date-time }
+              offeredAt: { type: [string, 'null'], format: date-time }
+              receivedAt: { type: [string, 'null'], format: date-time }
+              startedAt: { type: [string, 'null'], format: date-time }
+              endedAt: { type: [string, 'null'], format: date-time }
+    RemoteAttemptState:
+      type: string
+      enum: [QUEUED, OFFERED, RECEIVED, PREPARING, STARTING, RUNNING, SUCCEEDED, FAILED, CANCELLED, TIMED_OUT, REFUSED, EXPIRED, ENDED_UNKNOWN]
     RuntimeRequirementsDeclaration:
       type: object
       additionalProperties: false

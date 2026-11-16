@@ -237,6 +237,12 @@ class AgentAdminIT extends PlatformTestBase {
         BrowserClient.Response list = s.admin().get("/api/v1/o/" + org + "/workspaces/" + s.workspace() + "/remote-machines");
         assertThat(list.status()).isEqualTo(200);
         assertThat(list.body()).isEqualTo("{\"items\":[]}");
+        // T02: nenhuma solicitacao de execucao remota e aceita com o recurso desligado; nada e gravado
+        BrowserClient.Response request = s.admin().post("/api/v1/o/" + org + "/workspaces/" + s.workspace() + "/remote-executions",
+                "{\"automationVersionId\":\"" + s.version() + "\",\"agentId\":\"" + UUID.randomUUID() + "\",\"requestKey\":\"" + UUID.randomUUID() + "\"}");
+        assertThat(request.status()).isEqualTo(409);
+        assertThat(request.body()).isEqualTo("{\"error\":\"conflict\",\"reason\":\"remote_execution_unavailable\"}");
+        assertThat(count("SELECT count(*) FROM remote_executions WHERE organization_id = '" + org + "'")).isZero();
     }
 
     private BrowserClient.Response putWorker(Setup s, String path) {

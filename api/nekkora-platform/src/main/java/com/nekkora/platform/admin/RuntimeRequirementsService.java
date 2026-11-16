@@ -157,7 +157,8 @@ public class RuntimeRequirementsService {
         return new Analysis(lines, p.dependencies(), p.resolved() && p.dependencies().size() <= MAX_DEPENDENCIES);
     }
 
-    private static View view(JdbcClient j, UUID org, UUID automation) {
+    /** Tambem para a solicitacao de execucao remota (T02), que congela a revisao vigente e a lista efetiva. */
+    static View view(JdbcClient j, UUID org, UUID automation) {
         Declared declared = j.sql("SELECT revision_number, source, dependencies::text, content_sha256, declared_at FROM public.automation_runtime_requirements "
                         + "WHERE organization_id = ? AND automation_id = ? ORDER BY revision_number DESC LIMIT 1").param(org).param(automation)
                 .query((rs, n) -> new Declared(rs.getInt(1), SOURCES.get(rs.getShort(2) - 1), strings(rs.getString(3)), rs.getString(4),

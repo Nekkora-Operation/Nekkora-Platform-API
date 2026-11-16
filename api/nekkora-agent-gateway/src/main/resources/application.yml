@@ -44,6 +44,9 @@ nekkora:
     enabled: ${NEKKORA_EXECUCAO_REMOTA:false}
     # T01b: a maquina habilitada renova a propria credencial quando faltarem ate estes dias para o vencimento
     renewal-window-days: ${NEKKORA_EXECUCAO_REMOTA_RENOVACAO_DIAS:30}
+    # T02: prazo da comunicacao de uma tentativa (ponto de partida de laboratorio). Vencido, a comunicacao esta perdida;
+    # isso nao muda o estado nem encerra a tentativa
+    lease-seconds: ${NEKKORA_EXECUCAO_REMOTA_LEASE_SEGUNDOS:90}
 
 logging:
   level:
