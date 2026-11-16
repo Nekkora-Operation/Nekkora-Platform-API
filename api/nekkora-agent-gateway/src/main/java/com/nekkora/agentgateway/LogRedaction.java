@@ -16,7 +16,7 @@ final class LogRedaction {
 
     /** Credencial de maquina (nka1.) e codigo de pareamento ou de troca (nkp1.). */
     private static final Pattern MACHINE_SECRET = Pattern.compile("nk[ap]1\\.[A-Za-z0-9._~-]+");
-    private static final Pattern AUTHORIZATION = Pattern.compile("(?i)\\b((?:proxy-)?authorization)\\b(\\s*[:=]\\s*)(?:\\S+)(?:[ \\t]+\\S+)?");
+    private static final Pattern AUTHORIZATION = Pattern.compile("(?i)\\b((?:proxy-)?authorization)\\b(\\s*[:=]\\s*)(?!\\[removido\\])(?:\\S+)(?:[ \\t]+(?!\\[removido\\])\\S+)?");
     private static final Pattern BEARER = Pattern.compile("(?i)\\b(bearer)[ \\t]+[A-Za-z0-9._~+/=-]{8,}");
 
     private LogRedaction() {
