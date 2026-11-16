@@ -83,6 +83,9 @@ nekkora:
     # 053: depois de o prazo da comunicacao vencer, quanto esperar antes de encerrar a tentativa recebida como sem
     # confirmacao. Tem de ter o mesmo valor no agent-gateway
     lost-minutes: ${NEKKORA_EXECUCAO_REMOTA_SEM_COMUNICACAO_MINUTOS:120}
+    # 055: de quanto em quanto tempo a Platform confere, sozinha, as tentativas que nao tem mais quem as conclua (segundos;
+    # 0 desliga o ciclo). O encerramento nao depende de alguem abrir a tela
+    reconcile-seconds: ${NEKKORA_EXECUCAO_REMOTA_RECONCILIACAO_SEGUNDOS:60}
   # login do aplicativo desktop pelo navegador (AGENT-CLIENT-LOGIN-001, contrato desktop-login/1): DESLIGADO por padrao; so
   # abre com a entrada geral tambem ligada. Prazos: pedido no navegador, codigo de autorizacao e sessao do aplicativo
   # (sem renovacao). Nenhum prazo das sessoes existentes muda.

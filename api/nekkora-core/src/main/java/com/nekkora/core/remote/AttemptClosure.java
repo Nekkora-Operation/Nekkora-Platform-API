@@ -24,9 +24,9 @@ public final class AttemptClosure {
     private AttemptClosure() {
     }
 
-    /** Entre 5 minutos e 30 dias. */
+    /** Entre 1 minuto e 30 dias. */
     public static int lostMinutes(int configured) {
-        return Math.max(5, Math.min(configured, 30 * 24 * 60));
+        return Math.max(1, Math.min(configured, 30 * 24 * 60));
     }
 
     private static final String SET = """
@@ -87,5 +87,11 @@ public final class AttemptClosure {
                         + "AND (?::uuid[] IS NULL OR t.remote_execution_id = ANY (?)) AND ((t.state >= 3 AND t.lease_expires_at IS NOT NULL "
                         + "AND t.lease_expires_at <= clock_timestamp() - make_interval(mins => ?)) OR " + NOT_LINKED + "))")
                 .param(org).param(executions).param(executions).param(lostMinutes(minutes)).query(Boolean.class).single();
+    }
+
+    /** QUEUED/OFFERED que a maquina nao recebeu dentro do prazo da oferta viram EXPIRED. Da organizacao inteira. */
+    public static int expiredOffers(JdbcClient j, UUID org) {
+        return j.sql("UPDATE public.remote_attempts SET state = 12 WHERE organization_id = ? AND state IN (1, 2) AND offer_valid_until <= clock_timestamp()")
+                .param(org).update();
     }
 }

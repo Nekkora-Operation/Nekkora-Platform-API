@@ -30,7 +30,7 @@ import tools.jackson.databind.json.JsonMapper;
  * de destino, nunca transferida. A maquina e simulada por SQL com o papel real nekkora_ingestion (o canal dela, por HTTP, e
  * conferido no modulo do gateway: RemoteDeliveryIT).
  */
-@TestPropertySource(properties = {"nekkora.remote-execution.enabled=true", "nekkora.resultados.dir=${java.io.tmpdir}/nekkora-platform-it-resultados"})
+@TestPropertySource(properties = {"nekkora.remote-execution.enabled=true", "nekkora.remote-execution.reconcile-seconds=0", "nekkora.resultados.dir=${java.io.tmpdir}/nekkora-platform-it-resultados"})
 class RemoteExecutionIT extends PlatformTestBase {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
@@ -242,6 +242,13 @@ class RemoteExecutionIT extends PlatformTestBase {
 
     private static String value(String sql) throws Exception {
         try (Connection c = DB.connectAsSuperuser(); Statement st = c.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            return rs.next() ? rs.getString(1) : null;
+        }
+    }
+
+    /** Como o papel, SEM contexto de organizacao. */
+    private static String valueAs(String role, String sql) throws Exception {
+        try (Connection c = DB.connectAs(role); Statement st = c.createStatement(); ResultSet rs = st.executeQuery(sql)) {
             return rs.next() ? rs.getString(1) : null;
         }
     }
@@ -778,6 +785,92 @@ class RemoteExecutionIT extends PlatformTestBase {
                 + execution + "'")).isEqualTo("42501");
         assertThat(as("nekkora_platform", s.org().id(), "UPDATE remote_executions SET cancel_requested_by_membership_id = '" + viewerMembership
                 + "' WHERE remote_execution_id = '" + execution + "'")).as("cancelamento por quem nao executa").isEqualTo("42501");
+    }
+
+    // ------------------------------------------------------------------ 055: reconciliacao periodica
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.nekkora.platform.admin.RemoteReconciler reconciler;
+
+    /**
+     * Ninguem abre a tela e a maquina nao volta: o ciclo do servidor encerra, sozinho, o que nao tem mais quem conclua - com as
+     * mesmas regras da leitura, sem inventar desfecho, e sem tocar no que ainda esta dentro do prazo nem em outra organizacao.
+     */
+    @Test
+    void oCicloDoServidorEncerraSemLeituraESemAMaquinaOQueNaoTemMaisQuemConclua() throws Exception {
+        Setup s = setup();
+        declare(s, null);
+        Machine silent = machine(s, "Silenciosa", true);
+        Machine waiting = machine(s, "SilenciosaAntes", true);
+        Machine orphan = machine(s, "Orfa", true);
+        Machine recent = machine(s, "Recente", true);
+        Machine offered = machine(s, "NuncaRecebeu", true);
+        for (Machine m : new Machine[] {silent, waiting, orphan, recent, offered}) {
+            heartbeat(s, m, true);
+            authorize(s, m);
+        }
+        // a organizacao entra na lista do ciclo na primeira tentativa, pela propria transacao que a criou
+        assertThat(value("SELECT count(*) FROM remote_execution_organizations WHERE organization_id = '" + s.org().id() + "'")).isEqualTo("0");
+        String lost = JSON.readTree(request(s, silent).body()).get("attempts").get(0).get("attemptId").asString();
+        assertThat(value("SELECT count(*) FROM remote_execution_organizations WHERE organization_id = '" + s.org().id() + "'")).isEqualTo("1");
+        machineMoves(s, lost, 2, 3, 4, 5, 6);
+        String neverStarted = JSON.readTree(request(s, waiting).body()).get("attempts").get(0).get("attemptId").asString();
+        machineMoves(s, neverStarted, 2, 3);
+        String stuck = JSON.readTree(request(s, orphan).body()).get("attempts").get(0).get("attemptId").asString();
+        machineMoves(s, stuck, 2, 3, 4, 5, 6);
+        String inTime = JSON.readTree(request(s, recent).body()).get("attempts").get(0).get("attemptId").asString();
+        machineMoves(s, inTime, 2, 3, 4, 5, 6);
+        String neverReceived = JSON.readTree(request(s, offered).body()).get("attempts").get(0).get("attemptId").asString();
+        // outra organizacao, com uma tentativa em execucao e dentro do prazo: o ciclo passa por ela e nao mexe
+        Setup other = setup();
+        declare(other, null);
+        Machine far = machine(other, "DeOutra", true);
+        heartbeat(other, far, true);
+        authorize(other, far);
+        String foreign = JSON.readTree(request(other, far).body()).get("attempts").get(0).get("attemptId").asString();
+        machineMoves(other, foreign, 2, 3, 4, 5, 6);
+
+        // dentro do prazo, o ciclo nao encerra nada destas organizacoes
+        reconciler.cycle();
+        assertThat(row(lost)).isEqualTo("6|-|-|-");
+        assertThat(row(neverStarted)).isEqualTo("3|-|-|-");
+
+        silentFor(s, lost, 121);
+        silentFor(s, neverStarted, 121);
+        silentFor(s, inTime, 100);
+        try (Connection c = DB.connectAsSuperuser(); Statement st = c.createStatement()) {
+            st.execute("SET session_replication_role = replica");
+            st.execute("UPDATE agents SET status = 4 WHERE agent_id = '" + orphan.agent() + "'");
+            st.execute("UPDATE remote_attempts SET offer_valid_until = clock_timestamp() - interval '1 minute', created_at = clock_timestamp() - interval '1 hour' "
+                    + "WHERE attempt_id = '" + neverReceived + "'");
+        }
+        // NENHUMA leitura, nenhum contato de maquina: so o ciclo
+        com.nekkora.platform.admin.RemoteReconciler.Cycle c = reconciler.cycle();
+        assertThat(c.failed()).isZero();
+        assertThat(c.lost()).isGreaterThanOrEqualTo(2);
+        assertThat(c.unlinked()).isGreaterThanOrEqualTo(1);
+        assertThat(c.expired()).isGreaterThanOrEqualTo(1);
+        assertThat(row(lost)).as("em execucao, sem comunicacao alem da espera: sem confirmacao, sem codigo de saida").isEqualTo("13|-|COMMUNICATION_LOST|-");
+        assertThat(row(neverStarted)).as("o servidor nunca autorizou o inicio: nao iniciou").isEqualTo("11|COMMUNICATION_LOST|COMMUNICATION_LOST|-");
+        assertThat(row(stuck)).as("maquina que nao esta mais vinculada").isEqualTo("13|-|MACHINE_REVOKED|-");
+        assertThat(row(neverReceived)).as("oferta vencida").isEqualTo("12|-|-|-");
+        assertThat(row(inTime)).as("vencido ha menos que a espera: continua em execucao").isEqualTo("6|-|-|-");
+        assertThat(row(foreign)).as("outra organizacao, dentro do prazo").isEqualTo("6|-|-|-");
+        // repetir o ciclo nao muda nada
+        com.nekkora.platform.admin.RemoteReconciler.Cycle again = reconciler.cycle();
+        assertThat(row(lost)).isEqualTo("13|-|COMMUNICATION_LOST|-");
+        assertThat(row(inTime)).isEqualTo("6|-|-|-");
+        assertThat(again.failed()).isZero();
+
+        // a lista do ciclo: a Platform le so identificadores; nao altera nem apaga; o canal das maquinas nao le; sem contexto,
+        // as tentativas continuam invisiveis
+        assertThat(valueAs("nekkora_platform", "SELECT count(*) FROM remote_attempts")).as("sem contexto, nenhuma tentativa").isEqualTo("0");
+        assertThat(Integer.parseInt(valueAs("nekkora_platform", "SELECT count(*) FROM remote_execution_organizations"))).isGreaterThanOrEqualTo(2);
+        assertThat(as("nekkora_platform", s.org().id(), "DELETE FROM remote_execution_organizations")).isEqualTo("42501");
+        assertThat(as("nekkora_platform", s.org().id(), "UPDATE remote_execution_organizations SET first_attempt_at = now()")).isEqualTo("42501");
+        assertThat(as("nekkora_platform", s.org().id(), "INSERT INTO remote_execution_organizations (organization_id) VALUES ('" + UUID.randomUUID() + "')"))
+                .as("so a propria organizacao, com contexto").isEqualTo("42501");
+        assertThat(as("nekkora_ingestion", s.org().id(), "SELECT count(*) FROM remote_execution_organizations")).isEqualTo("42501");
     }
 
     // ------------------------------------------------------------------ 053: encerramento sem confirmacao
