@@ -893,6 +893,8 @@ components:
           description: 'So para a maquina habilitada para execucao remota'
           properties:
             receiving: { type: string, enum: [ENABLED, PAUSED] }
+            changedAt: { type: string, format: date-time }
+            workerName: { type: string, description: 'O nome atual, na Platform, do Worker a que esta maquina esta associada' }
     AuthorizationList:
       type: object
       properties:
