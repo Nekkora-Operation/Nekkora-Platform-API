@@ -2642,6 +2642,60 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /api/v1/o/{org}/remote-executions/{execution}/attempts/{attempt}/results:
+    get:
+      tags: [Execucao remota]
+      operationId: listRemoteAttemptResults
+      summary: 'Os arquivos de resultado de uma tentativa e o fechamento do envio'
+      description: >
+        Exige logs.read no ambiente da solicitacao (fora do alcance: 404). Resultado e o que a automacao gravou na pasta de saida
+        e a maquina enviou depois do termino: no maximo 50 arquivos, 20 MiB cada, 50 MiB no total por tentativa. closure null: a
+        maquina ainda nao fechou o envio (pode haver arquivo a caminho, ou ela nao voltou). closure.skippedByLimit: quantos
+        arquivos ela deixou de enviar por limite. Arquivo que falta ou excede o limite NAO muda o estado da tentativa.
+        available false: os bytes foram removidos pela retencao; o metadado fica.
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: execution, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+      responses:
+        '200': { description: 'Resultados da tentativa', content: { application/json: { schema: { $ref: '#/components/schemas/RemoteAttemptResults' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/remote-executions/{execution}/attempts/{attempt}/results/{number}/content:
+    get:
+      tags: [Execucao remota]
+      operationId: downloadRemoteAttemptResult
+      summary: 'Baixa um arquivo de resultado'
+      description: >
+        Exige logs.read no ambiente da solicitacao. Os bytes sao relidos e conferidos pelo SHA-256; a resposta e sempre um anexo
+        (application/octet-stream, nosniff), nunca interpretada pelo navegador. O download fica na trilha da automacao. Bytes
+        removidos pela retencao, ausentes ou que nao conferem: 409 conflict, reason remote_result_unavailable.
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: execution, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+        - { name: number, in: path, required: true, schema: { type: integer, minimum: 1, maximum: 50 } }
+      responses:
+        '200':
+          description: 'Bytes do arquivo'
+          headers:
+            Nekkora-Result-Sha256: { schema: { type: string, pattern: '^[0-9a-f]{64}$' }, description: 'SHA-256 dos bytes' }
+          content: { application/octet-stream: { schema: { type: string, format: binary } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /api/v1/o/{org}/remote-executions/{execution}/cancel:
     post:
       tags: [Execucao remota]
@@ -2875,7 +2929,7 @@ components:
     Error:
       type: object
       required: [error]
-      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_requirements_not_declared, remote_requirements_conflict, remote_python_not_selected, remote_python_not_in_inventory, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
+      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_requirements_not_declared, remote_requirements_conflict, remote_python_not_selected, remote_python_not_in_inventory, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
     WorkspacePermissionCode:
       description: 'Permissoes de workspace (13): podem aparecer em allWorkspaces e em atribuicoes de workspace.'
       type: string
@@ -3421,6 +3475,33 @@ components:
         pythonVersion: { type: string, description: 'A versao que o inventario da maquina dizia quando a escolha foi feita' }
         inInventory: { type: boolean, description: 'O ambiente ainda esta no inventario atual da maquina' }
         selectedAt: { type: string, format: date-time }
+    RemoteAttemptResults:
+      type: object
+      additionalProperties: false
+      required: [attemptId, items, closure]
+      properties:
+        attemptId: { type: string, format: uuid }
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [number, fileName, sizeBytes, sha256, receivedAt, available]
+            properties:
+              number: { type: integer, minimum: 1, maximum: 50 }
+              fileName: { type: string, description: 'Nome relativo a pasta de saida da execucao; nunca um caminho absoluto' }
+              sizeBytes: { type: integer, minimum: 0 }
+              sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+              receivedAt: { type: string, format: date-time }
+              available: { type: boolean, description: 'Os bytes ainda estao guardados' }
+        closure:
+          type: [object, 'null']
+          additionalProperties: false
+          required: [sent, skippedByLimit, closedAt]
+          properties:
+            sent: { type: integer, minimum: 0 }
+            skippedByLimit: { type: integer, minimum: 0, description: 'Arquivos que a maquina deixou de enviar por limite' }
+            closedAt: { type: string, format: date-time }
     RemoteExecution:
       type: object
       required: [remoteExecutionId, workspaceId, automationId, automationVersionId, versionNumber, state, requirementsRevision, dependencies, requestedAt, cancelRequestedAt, attempts]

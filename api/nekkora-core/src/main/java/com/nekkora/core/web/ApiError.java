@@ -119,6 +119,12 @@ public enum ApiError {
     REMOTE_ATTEMPT_TRANSITION(HttpStatus.CONFLICT, "conflict", "remote_attempt_transition"),
     /** Canal da maquina: os bytes do pacote da tentativa nao estao no armazenamento, ou nao conferem com o que foi publicado. */
     REMOTE_PACKAGE_UNAVAILABLE(HttpStatus.CONFLICT, "conflict", "remote_package_unavailable"),
+    /** Canal da maquina: o numero do resultado ja foi usado com outro arquivo, ou o envio desta tentativa ja foi fechado. */
+    REMOTE_RESULT_CONFLICT(HttpStatus.CONFLICT, "conflict", "remote_result_conflict"),
+    /** Canal da maquina: o arquivo faria a tentativa passar do limite total de resultados. */
+    REMOTE_RESULT_LIMIT(HttpStatus.CONFLICT, "conflict", "remote_result_limit"),
+    /** Os bytes do resultado nao estao mais no armazenamento (removidos pela retencao, ausentes ou que nao conferem). */
+    REMOTE_RESULT_UNAVAILABLE(HttpStatus.CONFLICT, "conflict", "remote_result_unavailable"),
     /** Canal do Agent (contrato Platform-Agent 1.0, sec. 15): versao maior do contrato nao suportada. */
     UNSUPPORTED_CONTRACT(HttpStatus.BAD_REQUEST, "unsupported_contract"),
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "rate_limited"),

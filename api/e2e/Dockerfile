@@ -4,6 +4,8 @@ FROM eclipse-temurin:21-jre-alpine
 RUN addgroup -S nekkora && adduser -S -G nekkora -H nekkora
 # pasta do armazenamento local de artefatos (so usada com NEKKORA_ARTEFATOS_DIR; um volume montado nela herda o dono)
 RUN mkdir -p /var/lib/nekkora/artefatos && chown nekkora:nekkora /var/lib/nekkora/artefatos && chmod 700 /var/lib/nekkora/artefatos
+# pasta dos resultados das execucoes remotas (so usada com NEKKORA_RESULTADOS_DIR; o gateway grava, a Platform le)
+RUN mkdir -p /var/lib/nekkora/resultados && chown nekkora:nekkora /var/lib/nekkora/resultados && chmod 700 /var/lib/nekkora/resultados
 ARG JAR
 COPY --chown=root:root ${JAR} /app/app.jar
 USER nekkora
