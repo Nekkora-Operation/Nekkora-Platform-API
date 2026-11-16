@@ -639,6 +639,96 @@ class RemoteExecutionIT extends PlatformTestBase {
                 .isEqualTo("1");
     }
 
+    /**
+     * 060 (decisoes de 16/11): terminar o processo PRINCIPAL nao libera a maquina enquanto houver processo da tentativa ativo,
+     * tambem numa execucao NORMAL. O estado e o codigo de saida ficam registrados; a ocupacao e a repeticao esperam. Se a maquina
+     * deixar de saber, a ocupacao passa a incerta. A declaracao de um ORG_ADMIN libera a repeticao, nunca a maquina.
+     */
+    @Test
+    void terminarOProcessoPrincipalNaoLiberaAMaquinaNemARepeticaoEnquantoHouverProcessoDaTentativa() throws Exception {
+        Setup s = setup();
+        declare(s, null);
+        Machine a = machine(s, "Finalizando", true);
+        Machine b = machine(s, "OutraMaquina", true);
+        heartbeat(s, a, true);
+        heartbeat(s, b, true);
+        authorize(s, a);
+        authorize(s, b);
+        JsonNode x = JSON.readTree(request(s, a).body());
+        String execution = x.get("remoteExecutionId").asString();
+        String first = x.get("attempts").get(0).get("attemptId").asString();
+        String retry = s.o() + "/remote-executions/" + execution + "/attempts";
+        String report = "INSERT INTO remote_attempt_process_reports (attempt_id, kind, organization_id, agent_id) SELECT attempt_id, %d, organization_id, agent_id "
+                + "FROM remote_attempts WHERE attempt_id = '%s'";
+        machineMoves(s, first, 2, 3, 4, 5, 6);
+        // em execucao: nenhum relato de processos e aceito
+        assertThat(as("nekkora_ingestion", s.org().id(), report.formatted(4, first))).isEqualTo("23514");
+        // o processo principal falhou com codigo 3, e ha processos da automacao ainda ativos (papel da ingestao, como o gateway)
+        assertThat(as("nekkora_ingestion", s.org().id(), "UPDATE remote_attempts SET state = 8, exit_code = 3 WHERE attempt_id = '" + first + "'",
+                report.formatted(4, first))).isEqualTo("OK");
+        JsonNode finishing = attemptOf(s, execution, 0);
+        assertThat(finishing.get("state").asString()).as("o desfecho do processo principal fica registrado").isEqualTo("FAILED");
+        assertThat(finishing.get("exitCode").asInt()).isEqualTo(3);
+        assertThat(finishing.get("processes").asString()).isEqualTo("ACTIVE");
+        assertThat(finishing.get("processesAt").asString()).isNotBlank();
+        assertThat(finishing.get("reconciliations").size()).isZero();
+        assertThat(missing(s, a)).as("finalizando: a maquina continua ocupada").contains("MACHINE_FINISHING").doesNotContain("MACHINE_BUSY", "MACHINE_UNCONFIRMED");
+        stepUp(s);
+        refused(request(s, a), "remote_machine_finishing");
+        refused(s.admin().post(retry, "{\"agentId\":\"" + b.agent() + "\"}"), "remote_previous_processes_pending");
+        // tempo e novo contato nao liberam
+        heartbeat(s, a, true);
+        assertThat(missing(s, a)).contains("MACHINE_FINISHING");
+        // "ainda executa" e fato de tentativa NAO CONFIRMADA: aqui nao cabe; e so a maquina informa
+        assertThat(as("nekkora_ingestion", s.org().id(), report.formatted(3, first))).isEqualTo("23514");
+        assertThat(as("nekkora_platform", s.org().id(), report.formatted(4, first))).isIn("42501", "23505");
+        // 059: com processos ativos a execucao esta ATIVA - o teto por falta de progresso nao se aplica, por mais antiga que seja
+        String ceiling = "SELECT coalesce(how::text, 'nulo') FROM remote_attempt_delivery_ended_at('" + s.org().id() + "', '" + first + "', 1::smallint)";
+        assertThat(value(ceiling)).isEqualTo("nulo");
+        // a maquina perdeu a capacidade de identificar os processos: a ocupacao passa a INCERTA
+        assertThat(as("nekkora_ingestion", s.org().id(), report.formatted(5, first))).isEqualTo("OK");
+        assertThat(attemptOf(s, execution, 0).get("processes").asString()).isEqualTo("UNCERTAIN");
+        assertThat(missing(s, a)).contains("MACHINE_UNCONFIRMED").doesNotContain("MACHINE_FINISHING", "MACHINE_BUSY");
+        refused(request(s, a), "remote_machine_unconfirmed");
+        refused(s.admin().post(retry, "{\"agentId\":\"" + b.agent() + "\"}"), "remote_previous_processes_pending");
+        assertThat(value(ceiling)).isEqualTo("nulo");
+        // a declaracao de um ORG_ADMIN libera a repeticao em OUTRA maquina; o desfecho nao muda; a maquina antiga continua indisponivel
+        String declare = s.o() + "/remote-executions/" + execution + "/attempts/" + first + "/reconciliation";
+        assertThat(s.admin().post(declare, "{\"reason\":\"PROCESS_ENDED_BY_ADMINISTRATOR\",\"verification\":\"Processos encerrados no computador por quem o administra.\","
+                + "\"acknowledgePartialEffects\":true}").status()).isEqualTo(201);
+        JsonNode declared = attemptOf(s, execution, 0);
+        assertThat(declared.get("state").asString()).isEqualTo("FAILED");
+        assertThat(declared.get("exitCode").asInt()).isEqualTo(3);
+        assertThat(declared.get("processes").asString()).as("a declaracao nao muda o que a maquina disse").isEqualTo("UNCERTAIN");
+        assertThat(missing(s, a)).as("a declaracao nao libera a maquina").contains("MACHINE_UNCONFIRMED");
+        refused(request(s, a), "remote_machine_unconfirmed");
+        assertThat(value(ceiling)).as("declarada, a execucao deixa de ser incerta para o teto").isEqualTo("4");
+        BrowserClient.Response again = s.admin().post(retry, "{\"agentId\":\"" + b.agent() + "\"}");
+        assertThat(again.status()).as(again.body()).isEqualTo(201);
+        machineMoves(s, JSON.readTree(again.body()).get("attempts").get(1).get("attemptId").asString(), 2, 3, 11);
+        // a propria maquina confirma que nao ha mais processo (o grupo esvaziou, ou a sessao do Windows acabou): so isso a libera
+        assertThat(as("nekkora_ingestion", s.org().id(), report.formatted(1, first))).isEqualTo("OK");
+        JsonNode freed = attemptOf(s, execution, 0);
+        assertThat(freed.get("processes").isNull()).isTrue();
+        List<String> kinds = new ArrayList<>();
+        freed.get("reconciliations").forEach(r -> kinds.add(r.get("kind").asString()));
+        assertThat(kinds).containsExactly("MANUAL", "MACHINE");
+        assertThat(missing(s, a)).doesNotContain("MACHINE_UNCONFIRMED", "MACHINE_FINISHING", "MACHINE_BUSY");
+        // depois de "ausente" a maquina nao volta atras
+        assertThat(as("nekkora_ingestion", s.org().id(), "INSERT INTO remote_attempt_process_reports (attempt_id, kind, organization_id, agent_id) VALUES ('"
+                + first + "', 4, '" + s.org().id() + "', '" + a.agent() + "')")).isIn("23514", "23505");
+        // uma execucao normal de um aplicativo que nao diz nada dos processos (o antigo) continua liberando a maquina como antes
+        JsonNode y = JSON.readTree(request(s, a).body());
+        String legacy = y.get("attempts").get(0).get("attemptId").asString();
+        machineMoves(s, legacy, 2, 3, 4, 5, 6, 7);
+        assertThat(attemptOf(s, y.get("remoteExecutionId").asString(), 0).get("processes").isNull()).isTrue();
+        assertThat(missing(s, a)).doesNotContain("MACHINE_UNCONFIRMED", "MACHINE_FINISHING", "MACHINE_BUSY");
+        // e uma tentativa sem processo pendente nao tem o que declarar
+        refused(s.admin().post(s.o() + "/remote-executions/" + y.get("remoteExecutionId").asString() + "/attempts/" + legacy + "/reconciliation",
+                "{\"reason\":\"OTHER_VERIFIED\",\"verification\":\"Verificacao feita no computador pela equipe.\",\"acknowledgePartialEffects\":true}"),
+                "remote_attempt_not_unconfirmed");
+    }
+
     @Test
     void repetirEmOutraMaquinaUsaAAutorizacaoDoWorkerDeDestinoENuncaATransfere() throws Exception {
         Setup s = setup();
@@ -1344,6 +1434,14 @@ class RemoteExecutionIT extends PlatformTestBase {
         BrowserClient.Response released = s.admin().post(retryPath, "{\"agentId\":\"" + next.agent() + "\"}");
         assertThat(released.status()).as(released.body()).isEqualTo(201);
         machineMoves(s, JSON.readTree(released.body()).get("attempts").get(1).get("attemptId").asString(), 2, 3, 11);
+        // 060: a maquina que disse "ainda executa" informa depois o fim SEM confirmar os processos: a ocupacao dela passa a
+        // INCERTA - nao continua "em andamento"
+        assertThat(as("nekkora_ingestion", s.org().id(), "INSERT INTO remote_attempt_process_reports (attempt_id, kind, organization_id, agent_id) VALUES ('"
+                + lost + "', 5, '" + s.org().id() + "', '" + silent.agent() + "')")).isEqualTo("OK");
+        assertThat(missing(s, silent)).contains("MACHINE_UNCONFIRMED").doesNotContain("MACHINE_BUSY");
+        refused(request(s, silent), "remote_machine_unconfirmed");
+        assertThat(attemptOf(s, lostExecution, 0).get("machineStillRunningAt").isNull()).as("'ainda executa' deixou de valer").isTrue();
+        assertThat(attemptOf(s, lostExecution, 0).get("processes").asString()).isEqualTo("UNCERTAIN");
         // a maquina diz como terminou (evidencia tardia): fica AO LADO da decisao manual, que nao e alterada; o estado nao muda
         assertThat(as("nekkora_ingestion", s.org().id(), "UPDATE remote_attempts SET late_state = 7, late_exit_code = 0 WHERE attempt_id = '" + lost + "'",
                 "INSERT INTO remote_attempt_process_reports (attempt_id, kind, organization_id, agent_id) VALUES ('" + lost + "', 1, '" + s.org().id() + "', '"

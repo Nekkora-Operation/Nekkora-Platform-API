@@ -962,12 +962,17 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
             assertThat(state(m, attempt, grant, st, null).status()).isEqualTo(200);
         }
         assertThat(state(m, attempt, grant, "ENDED_UNKNOWN", null).status()).isEqualTo(200);
-        assertThat(fx.value(reports.formatted(attempt))).isEqualTo("-");
+        // 060: informar o fim sem dizer nada dos processos e NAO SABER (5); nada e reconciliado
+        assertThat(fx.value(reports.formatted(attempt))).isEqualTo("5");
         assertThat(state(m, attempt, grant, "ENDED_UNKNOWN", "\"processAbsent\":false").status()).isEqualTo(200);
-        assertThat(fx.value(reports.formatted(attempt))).isEqualTo("-");
-        // a maquina CONFERIU que o processo nao esta mais em execucao: reconciliada por ela; o estado continua "nao confirmado"
-        assertThat(state(m, attempt, grant, "ENDED_UNKNOWN", "\"processAbsent\":true").status()).isEqualTo(200);
-        assertThat(fx.value(reports.formatted(attempt))).isEqualTo("1");
+        assertThat(fx.value(reports.formatted(attempt))).isEqualTo("5");
+        assertThat(state(m, attempt, grant, "ENDED_UNKNOWN", "\"processTree\":\"NAO_EXISTE\"").status()).isEqualTo(400);
+        // a maquina tem PROVA de que nada da tentativa continua em execucao: reconciliada por ela; o estado continua "nao confirmado"
+        assertThat(state(m, attempt, grant, "ENDED_UNKNOWN", "\"processTree\":\"ABSENT\"").status()).isEqualTo(200);
+        assertThat(fx.value(reports.formatted(attempt))).isEqualTo("1,5");
+        // depois de "ausente" nada mais e gravado
+        assertThat(state(m, attempt, grant, "ENDED_UNKNOWN", "\"processTree\":\"ACTIVE\"").status()).isEqualTo(200);
+        assertThat(fx.value(reports.formatted(attempt))).isEqualTo("1,5");
         assertThat(cause(attempt)).startsWith("13|-|-|-|");
         // ja junto do proprio desfecho desconhecido
         Machine n = machine(true);
@@ -982,6 +987,58 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
         // a afirmacao nao vale para tentativa que terminou com desfecho verdadeiro, nem cria nada nela
         assertThat(asRole("nekkora_platform", "INSERT INTO remote_attempt_process_reports (attempt_id, kind, organization_id, agent_id) SELECT attempt_id, 1, "
                 + "organization_id, agent_id FROM remote_attempts WHERE attempt_id = '" + attempt + "'")).as("so a maquina informa o que ela executa").isIn("42501", "23505");
+    }
+
+    /**
+     * 060: numa execucao NORMAL a maquina diz, junto do fim, o que sabe dos processos da tentativa - e repete o mesmo relato
+     * quando isso muda. O estado e o codigo de saida nao mudam por causa disso.
+     */
+    @Test
+    void juntoDoFimNormalAMaquinaDizOQueSabeDosProcessosDaTentativa() throws Exception {
+        String reports = "SELECT coalesce(string_agg(kind::text, ',' ORDER BY kind), '-') FROM remote_attempt_process_reports WHERE attempt_id = '%s'";
+        Machine m = machine(true);
+        String attempt = queued(m);
+        String grant = grant(next(m).body().get("attempt"));
+        assertThat(ack(m, attempt, grant).status()).isEqualTo(200);
+        for (String st : new String[] {"PREPARING", "STARTING", "RUNNING"}) {
+            assertThat(state(m, attempt, grant, st, null).status()).isEqualTo(200);
+        }
+        // em execucao, dizer algo dos processos nao grava nada
+        assertThat(state(m, attempt, grant, "RUNNING", "\"processTree\":\"ACTIVE\"").status()).isEqualTo(200);
+        assertThat(fx.value(reports.formatted(attempt))).isEqualTo("-");
+        // o processo principal terminou com sucesso e ha processo da automacao vivo: "finalizando"
+        assertThat(state(m, attempt, grant, "SUCCEEDED", "\"exitCode\":0,\"processTree\":\"ACTIVE\"").status()).isEqualTo(200);
+        assertThat(stateOf(attempt)).isEqualTo("7|-");
+        assertThat(fx.value(reports.formatted(attempt))).isEqualTo("4");
+        assertThat(state(m, attempt, grant, "SUCCEEDED", "\"exitCode\":0,\"processTree\":\"ACTIVE\"").status()).isEqualTo(200);
+        assertThat(state(m, attempt, grant, "RUNNING", null).status()).isEqualTo(200);
+        assertThat(fx.value(reports.formatted(attempt))).as("repetir nao duplica; 'ainda executa' nao cabe numa execucao normal").isEqualTo("4");
+        // perdeu a capacidade de identificar: "nao sei"; depois, com prova: ausente
+        assertThat(state(m, attempt, grant, "SUCCEEDED", "\"exitCode\":0,\"processTree\":\"UNCERTAIN\"").status()).isEqualTo(200);
+        assertThat(fx.value(reports.formatted(attempt))).isEqualTo("4,5");
+        assertThat(state(m, attempt, grant, "SUCCEEDED", "\"exitCode\":0,\"processTree\":\"ABSENT\"").status()).isEqualTo(200);
+        assertThat(fx.value(reports.formatted(attempt))).isEqualTo("1,4,5");
+        assertThat(stateOf(attempt)).as("o desfecho nao mudou").isEqualTo("7|-");
+        // com prova ja no fim: so "ausente"
+        Machine n = machine(true);
+        String clean = queued(n);
+        String grantN = grant(next(n).body().get("attempt"));
+        assertThat(ack(n, clean, grantN).status()).isEqualTo(200);
+        for (String st : new String[] {"PREPARING", "STARTING", "RUNNING"}) {
+            assertThat(state(n, clean, grantN, st, null).status()).isEqualTo(200);
+        }
+        assertThat(state(n, clean, grantN, "FAILED", "\"exitCode\":3,\"processTree\":\"ABSENT\"").status()).isEqualTo(200);
+        assertThat(fx.value(reports.formatted(clean))).isEqualTo("1");
+        // o aplicativo antigo nao diz nada: numa execucao normal nada e gravado, e a maquina fica livre como antes
+        Machine old = machine(true);
+        String legacy = queued(old);
+        String grantO = grant(next(old).body().get("attempt"));
+        assertThat(ack(old, legacy, grantO).status()).isEqualTo(200);
+        for (String st : new String[] {"PREPARING", "STARTING", "RUNNING"}) {
+            assertThat(state(old, legacy, grantO, st, null).status()).isEqualTo(200);
+        }
+        assertThat(state(old, legacy, grantO, "SUCCEEDED", "\"exitCode\":0").status()).isEqualTo(200);
+        assertThat(fx.value(reports.formatted(legacy))).isEqualTo("-");
     }
 
     /**
@@ -1081,15 +1138,15 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
                 + attempt + "'")).isEqualTo("7|0|true");
         // dizer como o processo PRINCIPAL terminou nao reconcilia: um filho pode continuar, ou a maquina nao tem como saber (e o
         // que o aplicativo antigo envia). O relato fica ao lado; a tentativa continua incerta
-        assertThat(fx.value(reports)).isEqualTo("3");
+        assertThat(fx.value(reports)).as("060: informou o fim sem confirmar os processos - passa a 'nao sei' (5)").isEqualTo("3,5");
         assertThat(state(m, attempt, grant, "SUCCEEDED", "\"exitCode\":0,\"processAbsent\":false").status()).isEqualTo(200);
-        assertThat(fx.value(reports)).isEqualTo("3");
+        assertThat(fx.value(reports)).isEqualTo("3,5");
         // 058: o MESMO relato, repetido depois ja com a afirmacao de que nada da tentativa continua em execucao (processo e
         // filhos) - reconciliada pela maquina
         assertThat(state(m, attempt, grant, "SUCCEEDED", "\"exitCode\":0,\"processAbsent\":true").status()).isEqualTo(200);
-        assertThat(fx.value(reports)).isEqualTo("1,3");
+        assertThat(fx.value(reports)).isEqualTo("1,3,5");
         assertThat(state(m, attempt, grant, "RUNNING", null).status()).isEqualTo(200);
-        assertThat(fx.value(reports)).as("depois de ausente, 'ainda executa' nao e mais gravado").isEqualTo("1,3");
+        assertThat(fx.value(reports)).as("depois de ausente, 'ainda executa' nao e mais gravado").isEqualTo("1,3,5");
         // uma vez so: outro relato nao troca o primeiro
         assertThat(state(m, attempt, grant, "FAILED", "\"exitCode\":3").status()).isEqualTo(200);
         assertThat(fx.value("SELECT late_state || '|' || late_exit_code FROM remote_attempts WHERE attempt_id = '" + attempt + "'")).isEqualTo("7|0");
