@@ -3661,13 +3661,13 @@ components:
           description: >-
             057: o conteudo desta tentativa VENCEU pela retencao do servidor (o texto das linhas foi apagado; cada linha continua existindo, com textRemoved = true). null = nao venceu. O prazo conta do fim da
             entrega (deliveryEndedAt): a maquina fechou o envio (CLOSED), avisou que perdeu o que guardava (LOSS_NOTICE) ou o vinculo
-            sob o qual a tentativa rodou foi encerrado (LINK_ENDED). Entrega aberta nao vence. O historico da tentativa nao e removido.
+            sob o qual a tentativa rodou foi encerrado (LINK_ENDED); ou, na entrega que nao se concluiu, o ultimo progresso dela (NO_PROGRESS, 059). Tentativa em andamento ou com resultado nao confirmado sem reconciliacao nao vence. O historico da tentativa nao e removido.
           properties:
             expiredAt: { type: string, format: date-time, description: 'Quando o vencimento foi registrado' }
             confirmedAt: { type: [string, 'null'], format: date-time, description: 'Quando a remocao do conteudo foi confirmada; null = em andamento' }
             retentionDays: { type: integer, minimum: 1, description: 'O prazo aplicado, em dias' }
             deliveryEndedAt: { type: string, format: date-time }
-            deliveryEnd: { type: string, enum: [CLOSED, LOSS_NOTICE, LINK_ENDED] }
+            deliveryEnd: { type: string, enum: [CLOSED, LOSS_NOTICE, LINK_ENDED, NO_PROGRESS], description: 'NO_PROGRESS (059): entrega INCOMPLETA - venceu o teto sem progresso de entrega; a maquina nao fechou o envio e nenhum recebimento e indicado' }
             items: { type: integer, minimum: 0, description: 'Linhas que tinham texto quando venceu' }
     RemoteAttemptResults:
       type: object
@@ -3713,13 +3713,13 @@ components:
           description: >-
             057: o conteudo desta tentativa VENCEU pela retencao do servidor (os bytes dos arquivos foram removidos; nome, tamanho e SHA-256 continuam, com available = false). null = nao venceu. O prazo conta do fim da
             entrega (deliveryEndedAt): a maquina fechou o envio (CLOSED), avisou que perdeu o que guardava (LOSS_NOTICE) ou o vinculo
-            sob o qual a tentativa rodou foi encerrado (LINK_ENDED). Entrega aberta nao vence. O historico da tentativa nao e removido.
+            sob o qual a tentativa rodou foi encerrado (LINK_ENDED); ou, na entrega que nao se concluiu, o ultimo progresso dela (NO_PROGRESS, 059). Tentativa em andamento ou com resultado nao confirmado sem reconciliacao nao vence. O historico da tentativa nao e removido.
           properties:
             expiredAt: { type: string, format: date-time, description: 'Quando o vencimento foi registrado' }
             confirmedAt: { type: [string, 'null'], format: date-time, description: 'Quando a remocao do conteudo foi confirmada; null = em andamento' }
             retentionDays: { type: integer, minimum: 1, description: 'O prazo aplicado, em dias' }
             deliveryEndedAt: { type: string, format: date-time }
-            deliveryEnd: { type: string, enum: [CLOSED, LOSS_NOTICE, LINK_ENDED] }
+            deliveryEnd: { type: string, enum: [CLOSED, LOSS_NOTICE, LINK_ENDED, NO_PROGRESS], description: 'NO_PROGRESS (059): entrega INCOMPLETA - venceu o teto sem progresso de entrega; a maquina nao fechou o envio e nenhum recebimento e indicado' }
             items: { type: integer, minimum: 0, description: 'Arquivos que estavam guardados quando venceu' }
     RemoteExecution:
       type: object

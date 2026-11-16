@@ -871,7 +871,9 @@ class RemoteExecutionIT extends PlatformTestBase {
         Machine d = machine(s, "MesmosBytes", true);
         Machine e = machine(s, "AindaNoPrazo", true);
         Machine f = machine(s, "FalhaNaRemocao", true);
-        for (Machine m : new Machine[] {a, b, c, d, e, f}) {
+        Machine g = machine(s, "SemProgresso", true);
+        Machine h = machine(s, "Incerta", true);
+        for (Machine m : new Machine[] {a, b, c, d, e, f, g, h}) {
             heartbeat(s, m, true);
             authorize(s, m);
         }
@@ -914,6 +916,26 @@ class RemoteExecutionIT extends PlatformTestBase {
                     + "WHERE agent_id = '" + c.agent() + "'");
             st.execute("UPDATE agents SET updated_at = updated_at - interval '31 days' WHERE agent_id = '" + c.agent() + "'");
         }
+        // 059 - G: terminou ha 31 dias, a maquina NUNCA fechou o envio e nada mais chegou: venceu o teto sem progresso de entrega
+        String stalled = runningWithLines(s, g, 7);
+        machineMoves(s, stalled, 7);
+        // 059 - H: resultado nao confirmado, sem reconciliacao, ha 31 dias: execucao INCERTA - nada vence
+        String uncertain = runningWithLines(s, h, 3);
+        machineMoves(s, uncertain, 13);
+        try (Connection cn = DB.connectAsSuperuser(); Statement st = cn.createStatement()) {
+            st.execute("SET session_replication_role = replica");
+            for (String id : new String[] {stalled, uncertain}) {
+                st.execute("UPDATE remote_attempts SET created_at = created_at - interval '31 days', offer_valid_until = offer_valid_until - interval '31 days', "
+                        + "offered_at = offered_at - interval '31 days', received_at = received_at - interval '31 days', started_at = started_at - interval '31 days', "
+                        + "ended_at = ended_at - interval '31 days', state_changed_at = state_changed_at - interval '31 days', "
+                        + "lease_expires_at = lease_expires_at - interval '31 days' WHERE attempt_id = '" + id + "'");
+                st.execute("UPDATE remote_attempt_log_lines SET received_at = received_at - interval '31 days', captured_at = captured_at - interval '31 days' "
+                        + "WHERE attempt_id = '" + id + "'");
+            }
+        }
+        // a presenca da maquina NAO renova o prazo
+        heartbeat(s, g, true);
+        heartbeat(s, h, true);
         String before = value("SELECT count(*) FROM remote_attempt_log_lines WHERE organization_id = '" + s.org().id() + "'");
 
         // antes do ciclo o banco nao deixa a Platform apagar nada: sem vencimento registrado nao ha remocao; e nao aceita vencimento
@@ -924,7 +946,8 @@ class RemoteExecutionIT extends PlatformTestBase {
                 .isEqualTo("42501");
         String ins = "INSERT INTO remote_attempt_content_expirations (attempt_id, kind, organization_id, delivery_ended_at, delivery_end, retention_days, "
                 + "items, bytes) VALUES ('%s', 1, '" + s.org().id() + "', clock_timestamp() - interval '90 days', 1, %d, 0, 0)";
-        assertThat(as("nekkora_platform", s.org().id(), ins.formatted(open, 30))).as("entrega aberta nao vence").isEqualTo("23514");
+        assertThat(as("nekkora_platform", s.org().id(), ins.formatted(open, 30))).as("o teto da entrega aberta ainda nao venceu").isEqualTo("23514");
+        assertThat(as("nekkora_platform", s.org().id(), ins.formatted(uncertain, 30))).as("execucao incerta nao vence").isEqualTo("23514");
         assertThat(as("nekkora_platform", s.org().id(), ins.formatted(inTime, 30))).as("o banco usa a data dele, nao a de quem insere").isEqualTo("23514");
         assertThat(as("nekkora_platform", s.org().id(), ins.formatted(expired, 0))).isEqualTo("23514");
         assertThat(as("nekkora_ingestion", s.org().id(), ins.formatted(expired, 30))).as("o canal das maquinas nao registra vencimento").isEqualTo("42501");
@@ -990,13 +1013,25 @@ class RemoteExecutionIT extends PlatformTestBase {
         assertThat(value("SELECT count(*) FROM remote_attempt_result_closures WHERE attempt_id = '" + expired + "'")).isEqualTo("1");
 
         // D: mesmos bytes, no prazo - intacta e baixavel
-        JsonNode kept = read(s, keeps, "results");
-        assertThat(kept.get("expiration").isNull()).isTrue();
-        assertThat(kept.get("items").get(0).get("available").asBoolean()).isTrue();
+        JsonNode keptFiles = read(s, keeps, "results");
+        assertThat(keptFiles.get("expiration").isNull()).isTrue();
+        assertThat(keptFiles.get("items").get(0).get("available").asBoolean()).isTrue();
         String keptExecution = value("SELECT remote_execution_id FROM remote_attempts WHERE attempt_id = '" + keeps + "'");
         assertThat(s.admin().get(s.o() + "/remote-executions/" + keptExecution + "/attempts/" + keeps + "/results/1/content").body())
                 .isEqualTo("bytes iguais em duas tentativas\n");
-        // B: entrega aberta ha mais de 30 dias - nada vence
+        // G (059): entrega INCOMPLETA - o teto venceu sem progresso; o conteudo sai, e nada indica recebimento (nao ha fechamento)
+        JsonNode incomplete = read(s, stalled, "logs");
+        assertThat(incomplete.get("expiration").get("deliveryEnd").asString()).isEqualTo("NO_PROGRESS");
+        assertThat(incomplete.get("expiration").get("retentionDays").asInt()).isEqualTo(30);
+        assertThat(incomplete.get("closure").isNull()).as("a maquina nao fechou o envio, e a leitura nao inventa um fechamento").isTrue();
+        assertThat(incomplete.get("items").get(0).get("textRemoved").asBoolean()).isTrue();
+        assertThat(value("SELECT count(*) FROM remote_attempt_log_closures WHERE attempt_id = '" + stalled + "'")).isEqualTo("0");
+        assertThat(row(stalled)).isEqualTo("7|-|-|-");
+        // H (059): execucao incerta - nada vence, por mais antiga que seja, com ou sem presenca da maquina
+        JsonNode kept = read(s, uncertain, "logs");
+        assertThat(kept.get("expiration").isNull()).isTrue();
+        assertThat(kept.get("items").get(0).get("message").asString()).isEqualTo("linha 1");
+        // B: terminou agora e a entrega esta aberta - o teto ainda nao venceu
         JsonNode stillOpen = read(s, open, "logs");
         assertThat(stillOpen.get("expiration").isNull()).isTrue();
         assertThat(stillOpen.get("items").get(0).get("message").asString()).isEqualTo("linha 1");
