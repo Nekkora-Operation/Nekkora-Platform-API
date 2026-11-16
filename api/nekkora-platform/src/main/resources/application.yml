@@ -97,6 +97,9 @@ nekkora:
     retention:
       enabled: ${NEKKORA_EXECUCAO_REMOTA_RETENCAO:false}
       days: ${NEKKORA_EXECUCAO_REMOTA_RETENCAO_DIAS:30}
+      # 059: teto da entrega que nao se conclui - dias SEM PROGRESSO de entrega, so para tentativa terminada e nao incerta. A
+      # presenca da maquina nao renova. Vencido: entrega incompleta, e a retencao se aplica
+      stalled-days: ${NEKKORA_EXECUCAO_REMOTA_RETENCAO_SEM_PROGRESSO_DIAS:30}
       cycle-minutes: ${NEKKORA_EXECUCAO_REMOTA_RETENCAO_CICLO_MINUTOS:60}
   # login do aplicativo desktop pelo navegador (AGENT-CLIENT-LOGIN-001, contrato desktop-login/1): DESLIGADO por padrao; so
   # abre com a entrada geral tambem ligada. Prazos: pedido no navegador, codigo de autorizacao e sessao do aplicativo

@@ -639,7 +639,7 @@ public class RemoteExecutionService {
                                     String deliveryEnd, int items) {
     }
 
-    private static final List<String> DELIVERY_ENDS = List.of("CLOSED", "LOSS_NOTICE", "LINK_ENDED");
+    private static final List<String> DELIVERY_ENDS = List.of("CLOSED", "LOSS_NOTICE", "LINK_ENDED", "NO_PROGRESS");
 
     private static ContentExpiration expiration(JdbcClient j, UUID org, UUID attemptId, int kind) {
         return j.sql("SELECT expired_at, confirmed_at, retention_days, delivery_ended_at, delivery_end, items FROM public.remote_attempt_content_expirations "

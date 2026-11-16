@@ -363,9 +363,11 @@ public class PlatformConfig {
     @Bean
     com.nekkora.platform.admin.RemoteRetention remoteRetention(OrgTransactions tx,
             @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.retention.days:30}") int days,
+            @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.retention.stalled-days:30}") int stalledDays,
             org.springframework.core.env.Environment env) throws java.io.IOException {
         return new com.nekkora.platform.admin.RemoteRetention(tx,
-                com.nekkora.core.artifact.ResultPurge.at(env.getProperty("NEKKORA_RESULTADOS_DIR", env.getProperty("nekkora.resultados.dir", ""))), days);
+                com.nekkora.core.artifact.ResultPurge.at(env.getProperty("NEKKORA_RESULTADOS_DIR", env.getProperty("nekkora.resultados.dir", ""))), days,
+                stalledDays);
     }
 
     /**
