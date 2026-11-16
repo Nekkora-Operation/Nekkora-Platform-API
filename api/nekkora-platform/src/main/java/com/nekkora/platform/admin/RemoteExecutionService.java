@@ -196,6 +196,16 @@ public class RemoteExecutionService {
     private final boolean enabled;
     private final int offerMinutes;
     private final int lostMinutes;
+
+    /**
+     * A ocupacao da maquina {@code a} NAO esta confirmada: a ultima palavra sobre uma tentativa dela foi o encerramento por falta
+     * de comunicacao (053), e desde entao ela nao se comunicou nem disse como o processo terminou. O processo pode estar em
+     * andamento la. Deixa de valer no primeiro contato da maquina depois do encerramento (ela mesma recusa o que nao puder
+     * receber) ou quando ela relata o desfecho.
+     */
+    private static final String UNCONFIRMED = "EXISTS (SELECT 1 FROM public.remote_attempts u WHERE u.organization_id = a.organization_id AND u.agent_id = a.agent_id "
+            + "AND u.state = 13 AND u.closure_cause = 'COMMUNICATION_LOST' AND u.late_state IS NULL "
+            + "AND (a.last_heartbeat_at IS NULL OR a.last_heartbeat_at <= u.ended_at))";
     private final com.nekkora.core.artifact.ResultStore results;
 
     /**
@@ -231,7 +241,8 @@ public class RemoteExecutionService {
                                       AND NOT (t.state IN (1, 2) AND t.offer_valid_until <= clock_timestamp())),
                            la.authorization_id, la.valid_until, la.revoked_at IS NOT NULL, la.valid_until <= clock_timestamp(),
                            s.environment_id, s.python_version, s.selected_at,
-                           EXISTS (SELECT 1 FROM public.agent_python_environments e WHERE e.agent_id = a.agent_id AND e.environment_id = s.environment_id)
+                           EXISTS (SELECT 1 FROM public.agent_python_environments e WHERE e.agent_id = a.agent_id AND e.environment_id = s.environment_id),
+                           %s
                       FROM public.agent_remote_enablements r
                       JOIN public.agents a ON a.organization_id = r.organization_id AND a.agent_id = r.agent_id AND a.status = 2
                       JOIN public.worker_agent_assignments wa ON wa.organization_id = a.organization_id AND wa.agent_id = a.agent_id AND wa.status = 1
@@ -246,7 +257,7 @@ public class RemoteExecutionService {
                       LEFT JOIN public.automation_python_selections s ON s.organization_id = r.organization_id AND s.automation_id = ?
                                                                       AND s.agent_id = a.agent_id
                      WHERE r.organization_id = ? ORDER BY w.name, w.worker_id
-                    """).param(workspaceId).param(workspaceId).param(versionId).param(v.automationId()).param(org).query((rs, n) -> {
+                    """.formatted(UNCONFIRMED)).param(workspaceId).param(workspaceId).param(versionId).param(v.automationId()).param(org).query((rs, n) -> {
                 List<String> missing = new ArrayList<>(common);
                 UUID authorization = rs.getObject(8, UUID.class);
                 AuthorizationInfo info = null;
@@ -267,6 +278,8 @@ public class RemoteExecutionService {
                 }
                 if (rs.getBoolean(7)) {
                     missing.add("MACHINE_BUSY");
+                } else if (rs.getBoolean(16)) {
+                    missing.add("MACHINE_UNCONFIRMED");
                 }
                 PythonChoice python = null;
                 if (rs.getString(12) == null) {
@@ -401,7 +414,7 @@ public class RemoteExecutionService {
      * duas maquinas com a mesma solicitacao, e nada e trocado de maquina automaticamente. A autorizacao conferida e a da
      * versao para o Worker de DESTINO; a da maquina anterior nao e transferida.
      */
-    public Execution retry(UUID org, ValidSession actor, String token, UUID executionId, UUID agentId) {
+    public Execution retry(UUID org, ValidSession actor, String token, UUID executionId, UUID agentId, boolean acknowledgeUnconfirmed) {
         if (agentId == null) {
             throw ApiException.invalid("maquina");
         }
@@ -424,6 +437,12 @@ public class RemoteExecutionService {
             if (STATES.indexOf(last.state()) < 6) {
                 throw new ApiException(ApiError.REMOTE_ATTEMPT_NOT_FINISHED, "tentativa_anterior_nao_terminou");
             }
+            // a espera vencida consolida "resultado nao confirmado", mas NAO libera a repeticao sozinha: a automacao pode ainda
+            // estar em andamento naquele computador. Quem repete diz, de proposito, que sabe disso
+            if (AttemptClosure.COMMUNICATION_LOST.equals(last.closureCause()) && "ENDED_UNKNOWN".equals(last.state()) && last.lateReport() == null
+                    && !acknowledgeUnconfirmed) {
+                throw new ApiException(ApiError.REMOTE_PREVIOUS_RESULT_UNCONFIRMED, "resultado_anterior_nao_confirmado");
+            }
             // a mesma recusa da solicitacao: uma solicitacao antiga de pacote que nao e externo nao ganha nova tentativa
             requireSupported(j.sql("SELECT package_fingerprint_rule FROM public.remote_executions WHERE organization_id = ? AND remote_execution_id = ?")
                     .param(org).param(executionId).query(String.class).single());
@@ -431,8 +450,8 @@ public class RemoteExecutionService {
                     + "WHERE organization_id = ? AND remote_execution_id = ?").param(org).param(executionId).query(String.class).single(), SUPPORTED_RULE);
             Target target = target(j, org, x.workspaceId(), x.automationVersionId(), agentId);
             attempt(j, org, executionId, last.attemptNumber() + 1, target, actor.membershipId());
-            LOG.info("evento=execucao_remota.nova_tentativa solicitacao={} tentativa={} correlacao={}", executionId, last.attemptNumber() + 1,
-                    AccessActions.correlation());
+            LOG.info("evento=execucao_remota.nova_tentativa solicitacao={} tentativa={} anterior_sem_confirmacao_reconhecida={} correlacao={}", executionId,
+                    last.attemptNumber() + 1, acknowledgeUnconfirmed && AttemptClosure.COMMUNICATION_LOST.equals(last.closureCause()), AccessActions.correlation());
             return execution(j, org, executionId);
         });
     }
@@ -760,6 +779,11 @@ public class RemoteExecutionService {
         if (j.sql("SELECT count(*) FROM public.remote_attempts WHERE organization_id = ? AND agent_id = ? AND state BETWEEN 1 AND 6").param(org).param(agentId)
                 .query(Long.class).single() > 0) {
             throw new ApiException(ApiError.REMOTE_MACHINE_BUSY, "maquina_ocupada");
+        }
+        // encerrar por falta de comunicacao NAO e saber que a maquina esta livre: so depois que ela voltar a se comunicar
+        if (j.sql("SELECT " + UNCONFIRMED + " FROM public.agents a WHERE a.organization_id = ? AND a.agent_id = ?").param(org).param(agentId)
+                .query(Boolean.class).single()) {
+            throw new ApiException(ApiError.REMOTE_MACHINE_UNCONFIRMED, "maquina_sem_confirmacao");
         }
         record Grant(UUID id, boolean revoked, boolean expired) {
         }

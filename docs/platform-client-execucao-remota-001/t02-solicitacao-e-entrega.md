@@ -84,6 +84,7 @@ O que falta, na lista de máquinas (`missing`) e na recusa da solicitação (`40
 | `MACHINE_PAUSED` | `remote_machine_paused` |
 | `MACHINE_INCOMPATIBLE` | `remote_machine_incompatible` |
 | `MACHINE_BUSY` | `remote_machine_busy` |
+| `MACHINE_UNCONFIRMED` (decisao de 16/11) | `remote_machine_unconfirmed` |
 | — (máquina vinculada, não habilitada) | `remote_machine_not_enabled` |
 
 A lista de máquinas exige só `automation.read`: quem consulta vê o que falta; a tela oferece a ação que resolve só a quem
