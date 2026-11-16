@@ -984,6 +984,63 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
                 + "organization_id, agent_id FROM remote_attempts WHERE attempt_id = '" + attempt + "'")).as("so a maquina informa o que ela executa").isIn("42501", "23505");
     }
 
+    /**
+     * 059, cuidado de 16/11: "progresso de entrega" e CONTEUDO NOVO efetivamente recebido. Reenviar o mesmo lote de linhas ou o
+     * mesmo arquivo (resposta perdida, nova tentativa de envio) nao grava nada e nao renova o prazo; a presenca tambem nao.
+     */
+    @Test
+    void reenviarOMesmoItemNaoRenovaOPrazoDaEntregaSoConteudoNovoEProgresso() throws Exception {
+        Machine m = machine(true);
+        String attempt = queued(m);
+        JsonNode offer = next(m).body().get("attempt");
+        String token = offer.get("token").asString();
+        int epoch = offer.get("epoch").asInt();
+        String grant = grant(offer);
+        assertThat(ack(m, attempt, grant).status()).isEqualTo(200);
+        for (String st : new String[] {"PREPARING", "STARTING", "RUNNING"}) {
+            assertThat(state(m, attempt, grant, st, null).status()).isEqualTo(200);
+        }
+        byte[] file = "resultado um\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(logs(m, attempt, grant, line(1, "STDOUT", "um"), line(2, "STDOUT", "dois")).body().get("stored").asInt()).isEqualTo(2);
+        assertThat(upload(m, attempt, token, epoch, 1, "um.txt", file, sha256(file)).status()).isEqualTo(200);
+        assertThat(state(m, attempt, grant, "SUCCEEDED", "\"exitCode\":0").status()).isEqualTo(200);
+        // tudo isso aconteceu ha 20 dias (o relogio do teste)
+        untriggered("UPDATE remote_attempts SET created_at = created_at - interval '20 days', offer_valid_until = offer_valid_until - interval '20 days', "
+                + "offered_at = offered_at - interval '20 days', received_at = received_at - interval '20 days', started_at = started_at - interval '20 days', "
+                + "ended_at = ended_at - interval '20 days', state_changed_at = state_changed_at - interval '20 days', "
+                + "lease_expires_at = lease_expires_at - interval '20 days' WHERE attempt_id = '" + attempt + "'");
+        untriggered("UPDATE remote_attempt_log_lines SET received_at = received_at - interval '20 days', captured_at = captured_at - interval '20 days' "
+                + "WHERE attempt_id = '" + attempt + "'");
+        untriggered("UPDATE remote_attempt_results SET received_at = received_at - interval '20 days' WHERE attempt_id = '" + attempt + "'");
+        String end = "SELECT how || '|' || ended_at || '|' || (ended_at < clock_timestamp() - interval '19 days') FROM remote_attempt_delivery_ended_at('"
+                + fx.org + "', '" + attempt + "', %d::smallint)";
+        String got = "SELECT count(*) || '|' || max(received_at) FROM %s WHERE attempt_id = '" + attempt + "'";
+        String logsEnd = fx.value(end.formatted(1));
+        String resultsEnd = fx.value(end.formatted(2));
+        String linesGot = fx.value(got.formatted("remote_attempt_log_lines"));
+        String filesGot = fx.value(got.formatted("remote_attempt_results"));
+        assertThat(logsEnd).startsWith("4|").endsWith("|true");
+        assertThat(resultsEnd).startsWith("4|").endsWith("|true");
+        // reenvio do MESMO lote e do MESMO arquivo, hoje (varias vezes), e a maquina presente: nada novo foi recebido
+        for (int i = 0; i < 3; i++) {
+            assertThat(logs(m, attempt, grant, line(1, "STDOUT", "um"), line(2, "STDOUT", "dois")).body().get("stored").asInt()).isZero();
+            assertThat(logs(m, attempt, grant, line(2, "STDOUT", "dois")).body().get("stored").asInt()).isZero();
+            assertThat(upload(m, attempt, token, epoch, 1, "um.txt", file, sha256(file)).status()).isEqualTo(200);
+            assertThat(state(m, attempt, grant, "SUCCEEDED", "\"exitCode\":0").status()).isEqualTo(200);
+        }
+        assertThat(fx.value(got.formatted("remote_attempt_log_lines"))).as("nenhuma linha gravada nem tocada").isEqualTo(linesGot);
+        assertThat(fx.value(got.formatted("remote_attempt_results"))).as("nenhum arquivo gravado nem tocado").isEqualTo(filesGot);
+        assertThat(fx.value(end.formatted(1))).as("o prazo dos registros nao foi renovado").isEqualTo(logsEnd);
+        assertThat(fx.value(end.formatted(2))).as("o prazo dos resultados nao foi renovado").isEqualTo(resultsEnd);
+        // conteudo NOVO e progresso, e so do tipo que progrediu: uma linha nova move o prazo dos registros, nao o dos resultados
+        assertThat(logs(m, attempt, grant, line(2, "STDOUT", "dois"), line(3, "STDOUT", "tres")).body().get("stored").asInt()).isEqualTo(1);
+        assertThat(fx.value(end.formatted(1))).startsWith("4|").endsWith("|false");
+        assertThat(fx.value(end.formatted(2))).isEqualTo(resultsEnd);
+        byte[] second = "resultado dois\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(upload(m, attempt, token, epoch, 2, "dois.txt", second, sha256(second)).status()).isEqualTo(200);
+        assertThat(fx.value(end.formatted(2))).startsWith("4|").endsWith("|false");
+    }
+
     @Test
     void semComunicacaoAlemDaEsperaATentativaFicaSemConfirmacaoEORelatoTardioFicaAoLado() throws Exception {
         Machine m = machine(true);
@@ -1022,7 +1079,14 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
         assertThat(cause(attempt)).isEqualTo("13|-|COMMUNICATION_LOST|-|true");
         assertThat(fx.value("SELECT late_state || '|' || late_exit_code || '|' || (late_reported_at IS NOT NULL) FROM remote_attempts WHERE attempt_id = '"
                 + attempt + "'")).isEqualTo("7|0|true");
-        // 058: dizer como terminou e confirmar que o processo nao esta mais la - reconciliada pela maquina
+        // dizer como o processo PRINCIPAL terminou nao reconcilia: um filho pode continuar, ou a maquina nao tem como saber (e o
+        // que o aplicativo antigo envia). O relato fica ao lado; a tentativa continua incerta
+        assertThat(fx.value(reports)).isEqualTo("3");
+        assertThat(state(m, attempt, grant, "SUCCEEDED", "\"exitCode\":0,\"processAbsent\":false").status()).isEqualTo(200);
+        assertThat(fx.value(reports)).isEqualTo("3");
+        // 058: o MESMO relato, repetido depois ja com a afirmacao de que nada da tentativa continua em execucao (processo e
+        // filhos) - reconciliada pela maquina
+        assertThat(state(m, attempt, grant, "SUCCEEDED", "\"exitCode\":0,\"processAbsent\":true").status()).isEqualTo(200);
         assertThat(fx.value(reports)).isEqualTo("1,3");
         assertThat(state(m, attempt, grant, "RUNNING", null).status()).isEqualTo(200);
         assertThat(fx.value(reports)).as("depois de ausente, 'ainda executa' nao e mais gravado").isEqualTo("1,3");
