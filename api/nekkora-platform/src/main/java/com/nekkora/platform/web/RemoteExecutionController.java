@@ -93,6 +93,34 @@ public class RemoteExecutionController {
         return Map.of("items", service.list(org, SessionFilter.principal(req), SessionFilter.token(req), workspace, Paging.limit(limit)));
     }
 
+    /**
+     * As solicitacoes dos ambientes visiveis para a pessoa (telas Execucoes e Supervisao). Sem cursor: as {@code limit} mais
+     * recentes do periodo; periodo invertido ou instante sem fuso: 400.
+     */
+    @GetMapping("/api/v1/o/{org}/remote-executions")
+    public ResponseEntity<Map<String, List<RemoteExecutionService.Execution>>> listVisible(@PathVariable UUID org,
+            @RequestParam(required = false) UUID workspaceId, @RequestParam(required = false) UUID automationId, @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to, @RequestParam(required = false) Integer limit, HttpServletRequest req) {
+        java.time.OffsetDateTime fromTime = instant(from);
+        java.time.OffsetDateTime toTime = instant(to);
+        if (fromTime != null && toTime != null && toTime.isBefore(fromTime)) {
+            throw ApiException.invalid("periodo");
+        }
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(Map.of("items", service.listVisible(org, SessionFilter.principal(req),
+                SessionFilter.token(req), workspaceId, automationId, fromTime, toTime, Paging.limit(limit))));
+    }
+
+    private static java.time.OffsetDateTime instant(String s) {
+        if (s == null) {
+            return null;
+        }
+        try {
+            return java.time.OffsetDateTime.parse(s);
+        } catch (java.time.format.DateTimeParseException e) {
+            throw ApiException.invalid("instante");
+        }
+    }
+
     @GetMapping("/api/v1/o/{org}/remote-executions/{execution}")
     public ResponseEntity<RemoteExecutionService.Execution> get(@PathVariable UUID org, @PathVariable UUID execution, HttpServletRequest req) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())

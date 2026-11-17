@@ -837,6 +837,66 @@ class RemoteExecutionIT extends PlatformTestBase {
         assertThat(list.get(0).get("remoteExecutionId").asString()).isEqualTo(running);
     }
 
+    /** Telas Execucoes e Supervisao: a lista por organizacao mostra a MESMA solicitacao, so dos ambientes visiveis para quem le. */
+    @Test
+    void listaPorOrganizacaoMostraAMesmaSolicitacaoSoDosAmbientesVisiveis() throws Exception {
+        Setup s = setup();
+        declare(s, null);
+        Machine m = machine(s, "Lista", true);
+        heartbeat(s, m, true);
+        authorize(s, m);
+        BrowserClient.Response created = request(s, m);
+        assertThat(created.status()).as(created.body()).isEqualTo(201);
+        String execution = created.field("remoteExecutionId");
+        String all = s.o() + "/remote-executions";
+
+        JsonNode items = JSON.readTree(s.admin().get(all).body()).get("items");
+        assertThat(items).hasSize(1);
+        JsonNode x = items.get(0);
+        assertThat(x.get("remoteExecutionId").asString()).as("a mesma solicitacao, nao uma copia").isEqualTo(execution);
+        assertThat(x.get("automationName").asString()).isEqualTo("Conciliacao");
+        assertThat(x.get("workspaceName").asString()).isNotBlank();
+        assertThat(x.get("versionNumber").asInt()).isPositive();
+        assertThat(x.get("attempts")).hasSize(1);
+        assertThat(x.get("attempts").get(0).get("agentName").asString()).isEqualTo("Maquina Lista");
+        assertThat(x.get("attempts").get(0).get("workerId").asString()).isEqualTo(m.worker().toString());
+        assertThat(value("SELECT count(*) FROM remote_executions WHERE organization_id = '" + s.org().id() + "'")).as("ler nao cria nada").isEqualTo("1");
+        assertThat(value("SELECT count(*) FROM executions WHERE organization_id = '" + s.org().id() + "'")).as("nenhuma execucao do modelo anterior").isEqualTo("0");
+        // a leitura unitaria traz os mesmos nomes
+        assertThat(JSON.readTree(s.admin().get(all + "/" + execution).body()).get("automationName").asString()).isEqualTo("Conciliacao");
+
+        // filtros: ambiente, automacao e periodo da solicitacao
+        assertThat(JSON.readTree(s.admin().get(all + "?workspaceId=" + s.workspace()).body()).get("items")).hasSize(1);
+        assertThat(JSON.readTree(s.admin().get(all + "?workspaceId=" + UUID.randomUUID()).body()).get("items")).isEmpty();
+        assertThat(JSON.readTree(s.admin().get(all + "?automationId=" + s.automation()).body()).get("items")).hasSize(1);
+        assertThat(JSON.readTree(s.admin().get(all + "?automationId=" + UUID.randomUUID()).body()).get("items")).isEmpty();
+        assertThat(JSON.readTree(s.admin().get(all + "?from=2000-01-01T00:00:00Z&to=2000-01-02T00:00:00Z").body()).get("items")).isEmpty();
+        assertThat(JSON.readTree(s.admin().get(all + "?from=2000-01-01T00:00:00Z").body()).get("items")).hasSize(1);
+        assertThat(s.admin().get(all + "?from=2000-01-02T00:00:00Z&to=2000-01-01T00:00:00Z").status()).isEqualTo(400);
+        assertThat(s.admin().get(all + "?from=ontem").status()).isEqualTo(400);
+        assertThat(s.admin().get(all + "?limit=0").status()).isEqualTo(400);
+
+        // quem so tem outro ambiente nao ve esta solicitacao; com papel de leitura neste ambiente, ve
+        UUID other = newWorkspace(s.org(), newClient(s.org()));
+        TestUser person = internalUser(s.org(), true, 2);
+        grantWorkspaceRole(s.org(), person, other, "VIEWER");
+        BrowserClient p = browser();
+        firstLogin(p, s.org().id(), person);
+        assertThat(JSON.readTree(p.get(all).body()).get("items")).as("sem acesso ao ambiente da solicitacao").isEmpty();
+        assertThat(JSON.readTree(p.get(all + "?workspaceId=" + s.workspace()).body()).get("items")).as("nem pedindo o ambiente pelo id").isEmpty();
+        grantWorkspaceRole(s.org(), person, s.workspace(), "VIEWER");
+        assertThat(JSON.readTree(p.get(all).body()).get("items")).hasSize(1);
+        // pessoa sem ambiente nenhum, outra organizacao, sem sessao
+        TestUser outsider = internalUser(s.org(), true, 2);
+        BrowserClient ob = browser();
+        firstLogin(ob, s.org().id(), outsider);
+        assertThat(JSON.readTree(ob.get(all).body()).get("items")).isEmpty();
+        Setup foreign = setup();
+        assertThat(JSON.readTree(foreign.admin().get(foreign.o() + "/remote-executions").body()).get("items")).isEmpty();
+        assertThat(foreign.admin().get(all).status()).as("a sessao de outra organizacao nao le").isIn(401, 403, 404);
+        assertThat(browser().get(all).status()).isEqualTo(401);
+    }
+
     @Test
     void permissoesConfirmacaoReforcadaIsolamentoEGuardasDoBanco() throws Exception {
         Setup s = setup();
