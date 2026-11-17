@@ -2590,7 +2590,10 @@ paths:
         nao confirmou ausente: a ocupacao e incerta. Um novo contato, o fim do vinculo ou a declaracao manual NAO mudam isso; so a confirmacao da propria
         maquina. Se ela disse que ainda executa, o motivo e MACHINE_BUSY), MACHINE_FINISHING (060: o processo principal da ultima tentativa
         desta maquina terminou, mas ha processos da automacao ainda ativos nela - "finalizando"; libera quando a propria maquina confirmar que
-        acabaram; se ela deixar de saber, o motivo passa a MACHINE_UNCONFIRMED), PYTHON_NOT_SELECTED (ninguem escolheu o ambiente Python desta automacao nesta maquina),
+        acabaram; se ela deixar de saber, o motivo passa a MACHINE_UNCONFIRMED), MACHINE_OCCUPIED (a propria maquina informou, na presenca,
+        que esta ocupada, sem dizer com o que - por exemplo uma execucao iniciada nela pela pessoa; a Platform nao recebe nada dessa execucao,
+        so o sim/nao. E o ultimo sinal recebido: pode estar atrasado, e quem decide na hora e a maquina, que recusa a tentativa com BUSY),
+        MACHINE_DISK_PRESSURE (a maquina informou pouco espaco livre: recusa trabalho novo com DISK_PRESSURE ate haver espaco), PYTHON_NOT_SELECTED (ninguem escolheu o ambiente Python desta automacao nesta maquina),
         PYTHON_NOT_IN_INVENTORY (o escolhido nao esta mais no inventario dela). authorization: a autorizacao vigente da versao para
         o Worker, ou a mais recente que deixou de valer (null = nunca houve). python: o ambiente escolhido para a automacao nesta
         maquina (null = nenhum). E indicativo: a solicitacao reconfere tudo, de forma atomica.
@@ -3573,7 +3576,7 @@ components:
               requestable: { type: boolean }
               missing:
                 type: array
-                items: { type: string, enum: [PACKAGE_NOT_SUPPORTED, PACKAGE_NOT_REGISTERED, REQUIREMENTS_NOT_DECLARED, REQUIREMENTS_CONFLICT, AUTHORIZATION_MISSING, AUTHORIZATION_REVOKED, AUTHORIZATION_EXPIRED, MACHINE_PAUSED, MACHINE_INCOMPATIBLE, MACHINE_BUSY, MACHINE_UNCONFIRMED, MACHINE_FINISHING, PYTHON_NOT_SELECTED, PYTHON_NOT_IN_INVENTORY] }
+                items: { type: string, enum: [PACKAGE_NOT_SUPPORTED, PACKAGE_NOT_REGISTERED, REQUIREMENTS_NOT_DECLARED, REQUIREMENTS_CONFLICT, AUTHORIZATION_MISSING, AUTHORIZATION_REVOKED, AUTHORIZATION_EXPIRED, MACHINE_PAUSED, MACHINE_INCOMPATIBLE, MACHINE_BUSY, MACHINE_UNCONFIRMED, MACHINE_FINISHING, MACHINE_OCCUPIED, MACHINE_DISK_PRESSURE, PYTHON_NOT_SELECTED, PYTHON_NOT_IN_INVENTORY] }
               authorization:
                 type: [object, 'null']
                 required: [authorizationId, validUntil, status]

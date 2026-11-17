@@ -333,7 +333,7 @@ public class RemoteExecutionService {
                       LEFT JOIN public.automation_python_selections s ON s.organization_id = r.organization_id AND s.automation_id = ?
                                                                       AND s.agent_id = a.agent_id
                      WHERE r.organization_id = ? ORDER BY w.name, w.worker_id
-                    """.formatted(UNCONFIRMED + ", " + STILL_RUNNING + ", " + FINISHING)).param(workspaceId).param(workspaceId).param(versionId).param(v.automationId()).param(org).query((rs, n) -> {
+                    """.formatted(UNCONFIRMED + ", " + STILL_RUNNING + ", " + FINISHING + ", coalesce(p.remote_busy, false), coalesce(p.disk_pressure, false)")).param(workspaceId).param(workspaceId).param(versionId).param(v.automationId()).param(org).query((rs, n) -> {
                 List<String> missing = new ArrayList<>(common);
                 UUID authorization = rs.getObject(8, UUID.class);
                 AuthorizationInfo info = null;
@@ -361,6 +361,13 @@ public class RemoteExecutionService {
                     missing.add("MACHINE_FINISHING");
                 } else if (rs.getBoolean(17)) {
                     missing.add("MACHINE_BUSY");
+                } else if (rs.getBoolean(19)) {
+                    // a propria maquina informou, na presenca, que esta ocupada - sem dizer com o que (pode ser uma execucao
+                    // iniciada nela pela pessoa: a Platform nao recebe nada dessa execucao, so este sim/nao)
+                    missing.add("MACHINE_OCCUPIED");
+                }
+                if (rs.getBoolean(20)) {
+                    missing.add("MACHINE_DISK_PRESSURE");
                 }
                 PythonChoice python = null;
                 if (rs.getString(12) == null) {
