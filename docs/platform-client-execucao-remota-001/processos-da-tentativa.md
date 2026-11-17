@@ -34,7 +34,7 @@ ORG_ADMIN libera a repetição em outra máquina; **não** libera a máquina.
 
 ## 3. Como o aplicativo identifica os descendentes (Windows)
 
-Exceção de arquitetura, restrita: `WindowsProcessGroup`, a única classe da camada de execução com código nativo. Declara onze
+Exceção de arquitetura, restrita: `WindowsProcessGroup`, a única classe da camada de execução com código nativo. Declara doze
 funções do Windows, conferidas por teste (`ArchitectureTest.aSupervisaoDeProcessosSoChamaAsFuncoesDeclaradas`); nenhuma cria
 processo, executa comando, abre shell ou lê outro processo.
 
@@ -49,10 +49,18 @@ no grupo qualquer descendente que tenha nascido antes; se algum ficar de fora, o
 **Anotação.** Os processos vistos vivos são anotados (PID + instante de início) num arquivo da execução, no computador. Serve
 para dizer "há processo vivo" depois de reabrir o aplicativo; **não** serve de prova de que acabou. Nada dele é enviado.
 
-**Marca da sessão do Windows.** No lançamento o aplicativo grava um nome na tabela da sessão do Windows. Esse nome só deixa de
-existir quando a sessão acaba — saída do usuário ou reinício do Windows — e quando ela acaba nenhum processo dela continua.
-Não depende do relógio nem de PID. A falta da marca encerra a dúvida sobre os **processos**; não diz nada sobre o **resultado**
-da automação, que continua como estava.
+**Fim da sessão do Windows.** O fim da sessão que hospedava a execução — saída do usuário ou reinício — encerra a dúvida sobre os
+**processos** (não sobre o **resultado** da automação), desde que **comprovado**. Todas as evidências têm de concordar:
+
+| Evidência | O que afasta |
+|---|---|
+| no lançamento, a marca da execução foi gravada na sessão **e lida de volta**, e o número da sessão foi anotado | inicialização incompleta |
+| a marca não existe agora | — |
+| a tabela de marcas funciona agora (o aplicativo grava, lê e retira uma sonda) | erro de leitura |
+| pelos processos que existem agora, nenhum é daquela sessão desde antes do lançamento | remoção da marca por outro programa; outra sessão ainda aberta |
+
+A falta da marca, **sozinha, não libera nada**. Se existe processo daquela sessão que começou até o início da execução, a sessão é
+a mesma. Se há processo antigo cuja sessão o Windows não informa, não dá para saber — e nada é liberado.
 
 ## 4. O que sobrevive ao encerramento do aplicativo
 
@@ -74,11 +82,22 @@ da automação, que continua como estava.
 
 Nesses casos a máquina informa `UNCERTAIN` e continua indisponível até a sessão do Windows acabar. Não há outro ato que a libere.
 
+## 5a. Execução local (iniciada pela pessoa no aplicativo)
+
+A regra "uma automação por máquina" vale também para ela. A execução local entra no mesmo grupo de processos; terminado o processo
+principal com descendentes vivos — ou sem prova de que terminaram — o computador continua **ocupado**: não inicia outra execução
+local e recusa o trabalho da Platform (`REFUSED` / `BUSY`, como já fazia com uma execução local em andamento). Nada da execução
+local chega à Platform: registros, resultado e identificadores ficam só no computador; à camada da Platform só chega o estado da vaga.
+
 ## 6. Limpeza no computador
 
 Nada da pasta de uma tentativa (código, cópia executada, pasta de saída) é apagado enquanto não houver prova de que os processos
 dela acabaram — nem pela limpeza ao terminar, nem pela varredura periódica, nem pelo prazo de guarda. Quando a prova chega, o
 aplicativo faz a limpeza que estava esperando.
+
+**Acúmulo e espaço em disco.** As pastas mantidas aparecem na tela do aplicativo como pendência (quantas execuções e quanto
+ocupam). Com menos de 1 GiB livre no disco das execuções, o aplicativo **não aceita trabalho novo**: recusa a tentativa por falta de
+espaço (`DISK_PRESSURE`) antes de baixar o pacote. Nada do que está guardado é apagado para abrir espaço.
 
 ## 7. Retenção no servidor: dois prazos diferentes
 
@@ -100,4 +119,4 @@ processo, **não** libera a máquina e **não** transforma o conteúdo removido 
 - **Desligamento com "inicialização rápida":** a sessão do usuário é encerrada no desligamento, então espera-se que a marca suma.
   **Não verificado.**
 - **Não exercitado em laboratório:** o fim real da sessão do Windows (o computador de laboratório não pode ser desligado nem ter a
-  sessão encerrada). Coberto só por teste que retira a marca.
+  sessão encerrada). Os testes comprovam a reação do código a cada combinação de evidências, não o encerramento real dos processos.
