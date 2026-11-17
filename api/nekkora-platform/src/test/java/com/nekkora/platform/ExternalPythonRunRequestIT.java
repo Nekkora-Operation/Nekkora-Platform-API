@@ -123,6 +123,44 @@ class ExternalPythonRunRequestIT extends PlatformTestBase {
 
     // =========================================================================== M2: pedido de execucao
 
+    /** O Nekkora Agent Client declara outras capacidades e nunca le este pedido: a lista continua no contrato e o pedido e recusado. */
+    @Test
+    void maquinaQueNaoDeclaraOPedidoDeExecucaoApareceNaListaENaoRecebePedido() throws Exception {
+        Setup s = setup();
+        stepUp(s);
+        UUID pkgAuth = authorizePackage(s);
+        String url = s.o() + "/workspaces/" + s.workspace() + "/run-requests";
+        String body = "{\"authorizationId\":\"" + pkgAuth + "\",\"agentId\":\"" + s.agent() + "\",\"validForSeconds\":600,\"requestKey\":\"";
+        presence(s, "{PY_INVENTORY_1_0,REMOTE_RUN_1_0,REMOTE_LOGS_1_0,REMOTE_RESULTS_1_0}");
+
+        BrowserClient.Response list = s.admin().get(s.o() + "/agents");
+        assertThat(list.status()).isEqualTo(200);
+        assertThat(list.body()).contains("\"capabilities\":[\"PY_INVENTORY_1_0\",\"REMOTE_RUN_1_0\",\"REMOTE_LOGS_1_0\",\"REMOTE_RESULTS_1_0\"]");
+        assertThat(OPENAPI).as("as capacidades do Client estao publicadas na lista de Agents")
+                .contains("RUN_REQUEST_1_0, REMOTE_RUN_1_0, REMOTE_LOGS_1_0, REMOTE_RESULTS_1_0, PY_INVENTORY_1_0] }, description: 'As capacidades");
+
+        assertThat(s.admin().post(url, body + UUID.randomUUID() + "\"}").status()).as("a maquina nao atende este pedido").isEqualTo(409);
+        assertThat(count("SELECT count(*) FROM run_requests WHERE organization_id = '" + s.org().id() + "'")).as("nenhum pedido criado").isZero();
+
+        presence(s, "{RUN_LOCAL,RUN_REQUEST_1_0}");
+        assertThat(s.admin().post(url, body + UUID.randomUUID() + "\"}").status()).as("declarando o pedido, a mesma maquina recebe").isEqualTo(201);
+    }
+
+    private static final String OPENAPI = openapi();
+
+    private static String openapi() {
+        try {
+            return java.nio.file.Files.readString(java.nio.file.Path.of("..", "openapi", "nekkora-api-v1.yaml"));
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
+    private static void presence(Setup s, String capabilities) throws Exception {
+        DB.asSuperuser("INSERT INTO agent_presence (agent_id, organization_id, contract_version, capabilities, reported_at) VALUES ('" + s.agent() + "', '"
+                + s.org().id() + "', '1.0', '" + capabilities + "'::text[], clock_timestamp()) ON CONFLICT (agent_id) DO UPDATE SET capabilities = EXCLUDED.capabilities");
+    }
+
     @Test
     void pedidoExigeStepUpAutorizacaoDePacoteEAgentDoWorkerEERepetivelPelaChave() throws Exception {
         Setup s = setup();
