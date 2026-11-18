@@ -252,10 +252,10 @@ public class RemoteExecutionService {
     public record LateReport(String state, Integer exitCode, OffsetDateTime reportedAt) {
     }
 
-    /** {@code state}: o da tentativa mais recente. */
+    /** {@code state}: o da tentativa mais recente. {@code workspaceName} e {@code automationName}: para as listas por organizacao. */
     public record Execution(UUID remoteExecutionId, UUID workspaceId, UUID automationId, UUID automationVersionId, int versionNumber, String state,
                             int requirementsRevision, List<String> dependencies, OffsetDateTime requestedAt, OffsetDateTime cancelRequestedAt,
-                            List<Attempt> attempts) {
+                            List<Attempt> attempts, String workspaceName, String automationName) {
     }
 
     public record Created(Execution execution, boolean created) {
@@ -626,6 +626,53 @@ public class RemoteExecutionService {
                     + "ORDER BY requested_at DESC, remote_execution_id DESC LIMIT ?").param(org).param(workspaceId).param(limit).query(UUID.class).list();
             List<Execution> out = new ArrayList<>(ids.size());
             for (UUID id : ids) {
+                out.add(execution(j, org, id));
+            }
+            return out;
+        });
+    }
+
+    /**
+     * As solicitacoes mais recentes dos ambientes VISIVEIS para a pessoa (automation.read, pela regra unica de
+     * {@link WorkspaceAccess}), da mais recente para a mais antiga, ate {@code limit}. Filtros opcionais: um ambiente (sem
+     * acesso a ele: lista vazia, nunca a existencia), uma automacao e o periodo da solicitacao ({@code from} inclusivo,
+     * {@code to} exclusivo). E a MESMA solicitacao das outras leituras, com as suas tentativas: nada e copiado.
+     */
+    public List<Execution> listVisible(UUID org, ValidSession actor, String token, UUID workspaceId, UUID automationId, OffsetDateTime from,
+                                       OffsetDateTime to, int limit) {
+        String sql = "SELECT x.remote_execution_id FROM public.remote_executions x JOIN public.workspaces w ON w.organization_id = x.organization_id "
+                + "AND w.workspace_id = x.workspace_id WHERE " + WorkspaceAccess.VISIBLE_WORKSPACE_CONDITION
+                + (workspaceId == null ? "" : " AND x.workspace_id = :workspace") + (automationId == null ? "" : " AND x.automation_id = :automation")
+                + (from == null ? "" : " AND x.requested_at >= :from") + (to == null ? "" : " AND x.requested_at < :to")
+                + " ORDER BY x.requested_at DESC, x.remote_execution_id DESC LIMIT :max";
+        java.util.function.Function<JdbcClient, List<UUID>> visible = j -> {
+            JdbcClient.StatementSpec q = access.visibleWorkspacesQuery(j, sql, org, actor.membershipId(), "automation.read").param("max", limit);
+            if (workspaceId != null) {
+                q = q.param("workspace", workspaceId);
+            }
+            if (automationId != null) {
+                q = q.param("automation", automationId);
+            }
+            if (from != null) {
+                q = q.param("from", from);
+            }
+            if (to != null) {
+                q = q.param("to", to);
+            }
+            return q.query(UUID.class).list();
+        };
+        UUID[] stale = actions.read(org, j -> {
+            actions.requireActor(j, org, actor, token);
+            UUID[] ids = visible.apply(j).toArray(UUID[]::new);
+            return ids.length > 0 && AttemptClosure.pending(j, org, ids, lostMinutes) ? ids : null;
+        });
+        if (stale != null) {
+            settle(org, stale);
+        }
+        return actions.read(org, j -> {
+            actions.requireActor(j, org, actor, token);
+            List<Execution> out = new ArrayList<>();
+            for (UUID id : visible.apply(j)) {
                 out.add(execution(j, org, id));
             }
             return out;
@@ -1031,16 +1078,18 @@ public class RemoteExecutionService {
         List<Attempt> resolved = List.copyOf(known);
         return j.sql("""
                 SELECT x.remote_execution_id, x.workspace_id, x.automation_id, x.automation_version_id, v.version_number, x.requirements_revision,
-                       x.effective_dependencies::text, x.requested_at, x.cancel_requested_at
+                       x.effective_dependencies::text, x.requested_at, x.cancel_requested_at, ws.name, au.name
                   FROM public.remote_executions x
                   JOIN public.automation_versions v ON v.organization_id = x.organization_id AND v.automation_version_id = x.automation_version_id
+                  JOIN public.workspaces ws ON ws.organization_id = x.organization_id AND ws.workspace_id = x.workspace_id
+                  JOIN public.automations au ON au.organization_id = x.organization_id AND au.automation_id = x.automation_id
                  WHERE x.organization_id = ? AND x.remote_execution_id = ?
                 """).param(org).param(id).query((rs, n) -> {
             List<String> deps = new ArrayList<>();
             JSON.readTree(rs.getString(7)).forEach(d -> deps.add(d.asString()));
             return new Execution(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getObject(3, UUID.class), rs.getObject(4, UUID.class),
                     rs.getInt(5), attempts.isEmpty() ? "QUEUED" : attempts.get(attempts.size() - 1).state(), rs.getInt(6), List.copyOf(deps),
-                    rs.getObject(8, OffsetDateTime.class), rs.getObject(9, OffsetDateTime.class), resolved);
+                    rs.getObject(8, OffsetDateTime.class), rs.getObject(9, OffsetDateTime.class), resolved, rs.getString(10), rs.getString(11));
         }).single();
     }
 }

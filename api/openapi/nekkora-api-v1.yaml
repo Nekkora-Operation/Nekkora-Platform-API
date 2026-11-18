@@ -2668,6 +2668,33 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /api/v1/o/{org}/remote-executions:
+    get:
+      tags: [Execucao remota]
+      operationId: listVisibleRemoteExecutions
+      summary: 'Solicitacoes de execucao remota dos ambientes visiveis (telas Execucoes e Supervisao)'
+      description: >
+        As solicitacoes mais recentes dos ambientes em que a pessoa tem automation.read, da mais recente para a mais antiga. E a
+        mesma solicitacao das outras leituras (nada e copiado para alimentar a lista): cada item traz as suas tentativas, com
+        maquina, Worker, horarios, estado e codigo de saida. Registros e arquivos continuam nas rotas da tentativa (logs.read).
+        Filtros opcionais: workspaceId (sem acesso a ele: lista vazia), automationId e o periodo da SOLICITACAO (from
+        inclusivo, to exclusivo, com fuso; invertido: 400). Sem cursor: limit de 1 a 100 (padrao 25).
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: workspaceId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: automationId, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: from, in: query, required: false, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: false, schema: { type: string, format: date-time } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        '200': { description: 'Solicitacoes', content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/RemoteExecution' } } } } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /api/v1/o/{org}/remote-executions/{execution}:
     get:
       tags: [Execucao remota]
@@ -3744,6 +3771,8 @@ components:
         dependencies: { type: array, items: { type: string }, description: 'O efetivo congelado na solicitacao' }
         requestedAt: { type: string, format: date-time }
         cancelRequestedAt: { type: [string, 'null'], format: date-time }
+        workspaceName: { type: string, description: 'Nome do ambiente da solicitacao (para as listas por organizacao)' }
+        automationName: { type: string, description: 'Nome da automacao da solicitacao' }
         attempts:
           type: array
           items:
