@@ -3517,7 +3517,7 @@ components:
     RemoteAttemptLogs:
       type: object
       additionalProperties: false
-      required: [attemptId, items, total, nextAfter, closure]
+      required: [attemptId, items, total, nextAfter, closure, retentionLoss]
       properties:
         attemptId: { type: string, format: uuid }
         items:
@@ -3544,10 +3544,20 @@ components:
             lines: { type: integer, minimum: 0 }
             droppedLines: { type: integer, minimum: 0, description: 'Linhas que a maquina descartou por limite' }
             closedAt: { type: string, format: date-time }
+        retentionLoss:
+          type: [object, 'null']
+          additionalProperties: false
+          required: [localCount, reportedAt]
+          description: >-
+            A maquina avisou que REMOVEU, pelo prazo de guarda local dela, o que ainda guardava desta tentativa sem a confirmacao de
+            recebimento. null = nenhum aviso. localCount e quanto havia NA MAQUINA quando ela removeu; nao e quanto se perdeu.
+          properties:
+            localCount: { type: integer, minimum: 0, description: 'Linhas que a maquina tinha capturado. Compare com total (o que a Platform tem)' }
+            reportedAt: { type: string, format: date-time, description: 'Quando o aviso chegou a Platform' }
     RemoteAttemptResults:
       type: object
       additionalProperties: false
-      required: [attemptId, items, closure]
+      required: [attemptId, items, closure, retentionLoss]
       properties:
         attemptId: { type: string, format: uuid }
         items:
@@ -3571,6 +3581,16 @@ components:
             sent: { type: integer, minimum: 0 }
             skippedByLimit: { type: integer, minimum: 0, description: 'Arquivos que a maquina deixou de enviar por limite' }
             closedAt: { type: string, format: date-time }
+        retentionLoss:
+          type: [object, 'null']
+          additionalProperties: false
+          required: [localCount, reportedAt]
+          description: >-
+            A maquina avisou que REMOVEU, pelo prazo de guarda local dela, o que ainda guardava desta tentativa sem a confirmacao de
+            recebimento. null = nenhum aviso. localCount e quanto havia NA MAQUINA quando ela removeu; nao e quanto se perdeu.
+          properties:
+            localCount: { type: integer, minimum: 0, description: 'Arquivos que havia na pasta de saida da maquina. Compare com items (o que a Platform tem)' }
+            reportedAt: { type: string, format: date-time, description: 'Quando o aviso chegou a Platform' }
     RemoteExecution:
       type: object
       required: [remoteExecutionId, workspaceId, automationId, automationVersionId, versionNumber, state, requirementsRevision, dependencies, requestedAt, cancelRequestedAt, attempts]
