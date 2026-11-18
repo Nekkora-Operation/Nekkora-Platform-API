@@ -717,6 +717,18 @@ class RemoteExecutionIT extends PlatformTestBase {
         // depois de "ausente" a maquina nao volta atras
         assertThat(as("nekkora_ingestion", s.org().id(), "INSERT INTO remote_attempt_process_reports (attempt_id, kind, organization_id, agent_id) VALUES ('"
                 + first + "', 4, '" + s.org().id() + "', '" + a.agent() + "')")).isIn("23514", "23505");
+        // a PRESENCA da maquina traz dois sinais genericos - ocupada e pouco espaco - e so eles: a lista passa a mostra-los, sem
+        // nenhuma tentativa envolvida (e o caso da execucao iniciada na propria maquina, de que a Platform nao recebe nada)
+        String signals = "UPDATE agent_presence SET remote_busy = %s, disk_pressure = %s WHERE agent_id = '" + a.agent() + "'";
+        String attemptsBefore = value("SELECT count(*) FROM remote_attempts WHERE agent_id = '" + a.agent() + "'");
+        assertThat(as("nekkora_ingestion", s.org().id(), signals.formatted("true", "false"))).isEqualTo("OK");
+        assertThat(missing(s, a)).containsExactly("MACHINE_OCCUPIED");
+        assertThat(as("nekkora_ingestion", s.org().id(), signals.formatted("true", "true"))).isEqualTo("OK");
+        assertThat(missing(s, a)).containsExactly("MACHINE_OCCUPIED", "MACHINE_DISK_PRESSURE");
+        assertThat(as("nekkora_ingestion", s.org().id(), signals.formatted("false", "false"))).isEqualTo("OK");
+        assertThat(missing(s, a)).isEmpty();
+        assertThat(value("SELECT count(*) FROM remote_attempts WHERE agent_id = '" + a.agent() + "'")).as("os sinais nao criam tentativa nenhuma")
+                .isEqualTo(attemptsBefore);
         // uma execucao normal de um aplicativo que nao diz nada dos processos (o antigo) continua liberando a maquina como antes
         JsonNode y = JSON.readTree(request(s, a).body());
         String legacy = y.get("attempts").get(0).get("attemptId").asString();
