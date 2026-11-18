@@ -282,8 +282,10 @@ public class PlatformConfig {
     /** Canal do Agent (025), lado das pessoas: codigos, revogacao, Worker no workspace, autorizacao de execucao local. */
     @Bean
     com.nekkora.platform.admin.AgentAdminService agentAdminService(com.nekkora.platform.admin.AccessActions actions,
-                                                                  com.nekkora.platform.access.WorkspaceAccess access) {
-        return new com.nekkora.platform.admin.AgentAdminService(actions, access);
+                                                                  com.nekkora.platform.access.WorkspaceAccess access,
+                                                                  @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.enabled:false}")
+                                                                  boolean remoteExecution) {
+        return new com.nekkora.platform.admin.AgentAdminService(actions, access, remoteExecution);
     }
 
     /** Pedido de execucao (030): a pessoa pede; a maquina puxa pelo gateway e decide. */

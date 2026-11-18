@@ -1988,6 +1988,13 @@ paths:
       security: [ { sessionCookie: [], csrfHeader: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AgentPairingRequest' } } } }
+      x-execucao-remota: >
+        PLATFORM-CLIENT-EXECUCAO-REMOTA-001 (T01a): com remoteExecution true, o codigo nasce MARCADO para habilitar a maquina a
+        receber execucoes solicitadas pela Platform. Mesmas permissoes e mesmo step-up do pareamento comum; quem cria o codigo
+        fica gravado como quem habilitou. O codigo sozinho nao habilita nada: a maquina so fica habilitada quando a pessoa
+        confirma NELA e o resgata (contrato da maquina, Nekkora-Agent-Intent pair-remote). O formato do codigo e o mesmo. Com o
+        recurso desligado no servidor (o padrao): 409 conflict + reason remote_execution_unavailable, nada gravado (nem o
+        Worker). Sem o campo ou com false: o pareamento de sempre, com a resposta de sempre (sem remoteExecution).
       responses:
         '201': { description: 'Codigo emitido', content: { application/json: { schema: { $ref: '#/components/schemas/AgentCode' } } } }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -2068,6 +2075,31 @@ paths:
       responses:
         '204': { description: 'Revogado' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/workspaces/{workspace}/remote-machines:
+    get:
+      tags: [Canal do Agent]
+      operationId: listRemoteMachines
+      summary: 'Lista as maquinas habilitadas para execucao remota de um ambiente (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01a)'
+      description: >
+        Exige automation.execute no ambiente (sem ela, ou ambiente de outro escopo: 404, como as demais leituras do ambiente).
+        Entram as maquinas HABILITADAS (codigo marcado resgatado com a confirmacao na maquina) cujo Agent esta ativo e
+        associado a um Worker autorizado NESTE ambiente. Maquina pareada por codigo comum nao entra; Agent revogado ou
+        desvinculado deixa de aparecer. state, o primeiro que valer: OFFLINE (sem contato autenticado nos ultimos 180 s),
+        INCOMPATIBLE (o aplicativo nao declara REMOTE_RUN_1_0), PAUSED (a maquina pausou o recebimento), NO_DISK_SPACE e BUSY
+        (o que a maquina informou no ultimo batimento), AVAILABLE. O estado e INDICATIVO: nao reserva a maquina. Nao traz
+        credencial, instalacao nem dado da maquina alem do nome logico e da versao do aplicativo. Esta lista nao autoriza
+        versao alguma: as autorizacoes vigentes de automacao e monitoramento continuam valendo como antes.
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: workspace, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      responses:
+        '200': { description: 'Maquinas habilitadas do ambiente', content: { application/json: { schema: { $ref: '#/components/schemas/RemoteMachineList' } } } }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -2562,7 +2594,7 @@ components:
     Error:
       type: object
       required: [error]
-      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
+      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, remote_execution_unavailable, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
     WorkspacePermissionCode:
       description: 'Permissoes de workspace (13): podem aparecer em allWorkspaces e em atribuicoes de workspace.'
       type: string
@@ -3070,6 +3102,7 @@ components:
         workerName: { type: string, minLength: 1, maxLength: 80 }
         agentName: { type: string, minLength: 1, maxLength: 80, description: 'Nome logico da maquina, informado pela pessoa (nada e coletado da maquina)' }
         expiresInMinutes: { type: integer, minimum: 5, maximum: 60, default: 15 }
+        remoteExecution: { type: boolean, default: false, description: 'T01a da execucao remota: true = codigo marcado para habilitar a maquina (ver x-execucao-remota)' }
     AgentRotationRequest:
       type: object
       additionalProperties: false
@@ -3090,6 +3123,26 @@ components:
         expiresAt: { type: string, format: date-time }
         workerId: { type: string, format: uuid }
         agentId: { type: [string, 'null'], format: uuid, description: 'So na rotacao' }
+        remoteExecution: { type: boolean, enum: [true], description: 'Presente (true) so no codigo de pareamento marcado para execucao remota; ausente nos demais' }
+    RemoteMachineList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [workerId, workerName, agentId, agentName, agentVersion, state, receiving, enabledAt]
+            properties:
+              workerId: { type: string, format: uuid }
+              workerName: { type: string }
+              agentId: { type: string, format: uuid }
+              agentName: { type: string, description: 'Nome logico da maquina, informado pela pessoa no pareamento' }
+              agentVersion: { type: string, description: 'Versao do aplicativo informada no ultimo contato' }
+              state: { type: string, enum: [OFFLINE, INCOMPATIBLE, PAUSED, NO_DISK_SPACE, BUSY, AVAILABLE], description: 'Indicativo; nao reserva a maquina' }
+              receiving: { type: string, enum: [ENABLED, PAUSED], description: 'Recebimento de novos trabalhos, decidido na maquina' }
+              lastHeartbeatAt: { type: [string, 'null'], format: date-time }
+              enabledAt: { type: string, format: date-time }
     AgentList:
       type: object
       required: [items]

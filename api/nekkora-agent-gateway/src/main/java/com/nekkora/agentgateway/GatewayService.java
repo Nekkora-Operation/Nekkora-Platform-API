@@ -36,7 +36,12 @@ public final class GatewayService {
     static final Pattern AGENT_VERSION = Pattern.compile("[0-9A-Za-z.+-]{1,40}");
     static final Pattern EXECUTION = Pattern.compile("ex-[0-9a-f]{32}");
     static final Pattern SHA = Pattern.compile("[0-9a-f]{64}");
-    static final List<String> CAPABILITIES = List.of("RUN_LOCAL", "OBS_1_0", "SUPERVISOR_REPORT_1_0", "EXTERNAL_PYTHON_1_0", "RUN_REQUEST_1_0");
+    static final List<String> CAPABILITIES = List.of("RUN_LOCAL", "OBS_1_0", "SUPERVISOR_REPORT_1_0", "EXTERNAL_PYTHON_1_0", "RUN_REQUEST_1_0",
+            "REMOTE_RUN_1_0", "REMOTE_LOGS_1_0", "REMOTE_RESULTS_1_0", "PY_INVENTORY_1_0");
+    static final int MAX_CAPABILITIES = 12;
+    static final int ACT_REMOTE_ENABLED = 15;
+    static final int ACT_RECEIVING_PAUSED = 16;
+    static final int ACT_RECEIVING_RESUMED = 17;
 
     /** Origem explicita (030): 1 = STUDIO_PACKAGE, 2 = EXTERNAL_PACKAGE, 3 = EXTERNAL_MONITORED (sem versao nem impressao). */
     static String sourceKind(short code) {
@@ -52,21 +57,33 @@ public final class GatewayService {
     private final OrgTransactions tx;
     private final MachineAuth auth;
     private final int credentialDays;
+    /** NEKKORA_EXECUCAO_REMOTA: desligado, nenhuma maquina e habilitada (o resto do canal nao muda). */
+    private final boolean remoteExecution;
 
     public GatewayService(OrgTransactions tx, MachineAuth auth, int credentialDays) {
+        this(tx, auth, credentialDays, false);
+    }
+
+    public GatewayService(OrgTransactions tx, MachineAuth auth, int credentialDays, boolean remoteExecution) {
         this.tx = tx;
         this.auth = auth;
         this.credentialDays = credentialDays;
+        this.remoteExecution = remoteExecution;
     }
 
     // ------------------------------------------------------------------ resgate
 
+    /**
+     * {@code remoteExecution}: {@code true} quando esta credencial e de uma maquina habilitada para execucao remota; AUSENTE
+     * nos demais casos (a resposta de um pareamento comum e a de sempre, campo por campo).
+     */
     public record Redeemed(UUID organizationId, UUID agentId, UUID installationId, UUID workerId, UUID credentialId, OffsetDateTime credentialExpiresAt,
-                           String contractVersion) {
+                           String contractVersion, @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                           Boolean remoteExecution) {
     }
 
     private record Enrollment(UUID id, short purpose, UUID workerId, UUID agentId, String agentName, String codeHash, UUID createdBy,
-                              boolean expired, boolean consumed, boolean cancelled, UUID consumedCredential) {
+                              boolean expired, boolean consumed, boolean cancelled, UUID consumedCredential, boolean remoteExecution) {
     }
 
     /**
@@ -78,7 +95,12 @@ public final class GatewayService {
      * Agent anterior, que nao declara; o proposito vem so do codigo, como antes.
      */
     public enum Intent {
-        LEGACY, PAIR, ROTATE;
+        LEGACY, PAIR, ROTATE,
+        /**
+         * PLATFORM-CLIENT-EXECUCAO-REMOTA-001: pareamento em que a pessoa, NA MAQUINA, confirmou a habilitacao para receber
+         * execucoes solicitadas pela Platform. So casa com um codigo de pareamento marcado para isso.
+         */
+        PAIR_REMOTE;
 
         public static Intent of(String header) {
             if (header == null) {
@@ -86,6 +108,7 @@ public final class GatewayService {
             }
             return switch (header) {
                 case "pair" -> PAIR;
+                case "pair-remote" -> PAIR_REMOTE;
                 case "rotate" -> ROTATE;
                 default -> throw ApiException.invalid("intencao");
             };
@@ -105,12 +128,13 @@ public final class GatewayService {
         return tx.inOrganization(code.organization(), Mode.READ_WRITE, j -> {
             Enrollment e = j.sql("""
                     SELECT enrollment_id, purpose, worker_id, agent_id, agent_name, code_hash, created_by_membership_id,
-                           expires_at <= clock_timestamp(), consumed_at IS NOT NULL, cancelled_at IS NOT NULL, consumed_credential_id
+                           expires_at <= clock_timestamp(), consumed_at IS NOT NULL, cancelled_at IS NOT NULL, consumed_credential_id,
+                           remote_execution
                       FROM public.agent_enrollments WHERE organization_id = ? AND enrollment_id = ? FOR UPDATE
                     """).param(code.organization()).param(code.id())
                     .query((rs, n) -> new Enrollment(rs.getObject(1, UUID.class), rs.getShort(2), rs.getObject(3, UUID.class), rs.getObject(4, UUID.class),
                             rs.getString(5), rs.getString(6), rs.getObject(7, UUID.class), rs.getBoolean(8), rs.getBoolean(9), rs.getBoolean(10),
-                            rs.getObject(11, UUID.class)))
+                            rs.getObject(11, UUID.class), rs.getBoolean(12)))
                     .optional().orElse(null);
             if (e == null || !Tokens.constantTimeEquals(e.codeHash(), Tokens.sha256Hex(code.raw()))) {
                 throw ApiException.unauthenticated("codigo");
@@ -139,6 +163,16 @@ public final class GatewayService {
                 if (intent == Intent.ROTATE) {
                     throw new ApiException(ApiError.PAIRING_CODE_FOR_ROTATION, "codigo_de_pareamento_na_rotacao");
                 }
+                // Execucao remota: o codigo MARCADO so vale com a confirmacao feita na maquina (intencao pair-remote), e a
+                // intencao so vale com um codigo marcado. Nada e consumido numa recusa: um Agent anterior que receba um codigo
+                // marcado nao fica habilitado por engano, e a maquina nao se habilita sozinha com um codigo comum.
+                if (e.remoteExecution() != (intent == Intent.PAIR_REMOTE)) {
+                    throw new ApiException(e.remoteExecution() ? ApiError.REMOTE_CODE_WITHOUT_ENABLEMENT : ApiError.CODE_NOT_FOR_REMOTE_EXECUTION,
+                            "codigo_e_intencao_remota_divergem");
+                }
+                if (e.remoteExecution() && !remoteExecution) {
+                    throw new ApiException(ApiError.REMOTE_EXECUTION_UNAVAILABLE, "execucao_remota_desligada");
+                }
                 if (intent == Intent.LEGACY && current.isPresent()) {
                     // Agent anterior em rotacao com codigo de pareamento: antes criava outro Agent (orfao) se o Worker do
                     // codigo estivesse livre; agora e recusado como Worker indisponivel (mesma mensagem que esse Agent ja mostra)
@@ -146,7 +180,7 @@ public final class GatewayService {
                 }
                 return pair(j, code.organization(), e, secretHash, agentVersion);
             }
-            if (intent == Intent.PAIR) {
+            if (intent == Intent.PAIR || intent == Intent.PAIR_REMOTE) {
                 throw new ApiException(ApiError.ROTATION_CODE_FOR_PAIRING, "codigo_de_rotacao_no_pareamento");
             }
             return rotate(j, code.organization(), e, secretHash, current);
@@ -173,6 +207,14 @@ public final class GatewayService {
         UUID credentialId = issueCredential(j, org, agentId, secretHash, e.createdBy());
         consume(j, org, e.id(), credentialId, agentId);
         audit(j, org, 3, agentId, e.workerId(), e.id(), credentialId);
+        if (e.remoteExecution()) {
+            // a habilitacao nasce aqui, na transacao do resgate: o gatilho da 042 confere o codigo marcado, o Agent, o Worker e
+            // QUEM habilitou (a pessoa que criou o codigo, com as permissoes e a confirmacao reforcada do pareamento)
+            j.sql("INSERT INTO public.agent_remote_enablements (agent_id, organization_id, worker_id, enrollment_id, enabled_by_membership_id) "
+                    + "VALUES (?, ?, ?, ?, ?)").param(agentId).param(org).param(e.workerId()).param(e.id()).param(e.createdBy()).update();
+            audit(j, org, ACT_REMOTE_ENABLED, agentId, e.workerId(), e.id(), credentialId);
+            LOG.info("evento=agente.execucao_remota_habilitada agente={} worker={} correlacao={}", agentId, e.workerId(), RequestContext.correlation());
+        }
         LOG.info("evento=agente.pareado agente={} worker={} correlacao={}", agentId, e.workerId(), RequestContext.correlation());
         return identity(j, org, credentialId);
     }
@@ -211,14 +253,15 @@ public final class GatewayService {
 
     private static Redeemed identity(JdbcClient j, UUID org, UUID credentialId) {
         return j.sql("""
-                SELECT a.agent_id, a.installation_id, wa.worker_id, c.credential_id, c.expires_at
+                SELECT a.agent_id, a.installation_id, wa.worker_id, c.credential_id, c.expires_at,
+                       EXISTS (SELECT 1 FROM public.agent_remote_enablements r WHERE r.organization_id = c.organization_id AND r.agent_id = c.agent_id)
                   FROM public.agent_credentials c
                   JOIN public.agents a ON a.organization_id = c.organization_id AND a.agent_id = c.agent_id
                   LEFT JOIN public.worker_agent_assignments wa ON wa.organization_id = c.organization_id AND wa.agent_id = c.agent_id AND wa.status = 1
                  WHERE c.organization_id = ? AND c.credential_id = ?
                 """).param(org).param(credentialId)
                 .query((rs, n) -> new Redeemed(org, rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getObject(3, UUID.class),
-                        rs.getObject(4, UUID.class), rs.getObject(5, OffsetDateTime.class), "1.0"))
+                        rs.getObject(4, UUID.class), rs.getObject(5, OffsetDateTime.class), "1.0", rs.getBoolean(6) ? Boolean.TRUE : null))
                 .single();
     }
 
@@ -315,13 +358,31 @@ public final class GatewayService {
 
     // ------------------------------------------------------------------ presenca e autorizacoes
 
-    public record Presence(OffsetDateTime serverTime, OffsetDateTime credentialExpiresAt, String contractVersion) {
+    /**
+     * {@code remote}: so para a maquina habilitada para execucao remota - se ela esta recebendo ou pausada, como o SERVIDOR
+     * registra. Ausente nos demais casos (a resposta de um Agent anterior e a de sempre).
+     */
+    public record Presence(OffsetDateTime serverTime, OffsetDateTime credentialExpiresAt, String contractVersion,
+                           @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) Receiving remote) {
+    }
+
+    /** O recebimento de novos trabalhos remotos, como registrado no servidor. {@code receiving}: ENABLED ou PAUSED. */
+    public record Receiving(String receiving, OffsetDateTime changedAt) {
+    }
+
+    /** O que a maquina diz de si no batimento (indicativo: a reserva de uma execucao e decidida pela solicitacao). */
+    public record RemoteSignals(boolean busy, boolean diskPressure) {
+        public static final RemoteSignals NONE = new RemoteSignals(false, false);
     }
 
     public Presence heartbeat(MachineToken t, String agentVersion, String contractVersion, List<String> capabilities) {
+        return heartbeat(t, agentVersion, contractVersion, capabilities, RemoteSignals.NONE);
+    }
+
+    public Presence heartbeat(MachineToken t, String agentVersion, String contractVersion, List<String> capabilities, RemoteSignals signals) {
         if (agentVersion == null || !AGENT_VERSION.matcher(agentVersion).matches() || contractVersion == null
-                || !contractVersion.matches("1\\.[0-9]{1,3}") || capabilities == null || capabilities.size() > 8
-                || !CAPABILITIES.containsAll(capabilities)) {
+                || !contractVersion.matches("1\\.[0-9]{1,3}") || capabilities == null || capabilities.size() > MAX_CAPABILITIES
+                || !CAPABILITIES.containsAll(capabilities) || signals == null) {
             throw ApiException.invalid("heartbeat");
         }
         return tx.inOrganization(t.organization(), Mode.READ_WRITE, j -> {
@@ -330,13 +391,49 @@ public final class GatewayService {
                             + "WHERE organization_id = ? AND agent_id = ? RETURNING last_heartbeat_at")
                     .param(agentVersion).param(m.organization()).param(m.agentId()).query(OffsetDateTime.class).single();
             j.sql("""
-                    INSERT INTO public.agent_presence (agent_id, organization_id, contract_version, capabilities, reported_at)
-                    VALUES (?, ?, ?, ?::text[], clock_timestamp())
+                    INSERT INTO public.agent_presence (agent_id, organization_id, contract_version, capabilities, reported_at, remote_busy, disk_pressure)
+                    VALUES (?, ?, ?, ?::text[], clock_timestamp(), ?, ?)
                     ON CONFLICT (agent_id) DO UPDATE SET contract_version = EXCLUDED.contract_version, capabilities = EXCLUDED.capabilities,
-                                                         reported_at = EXCLUDED.reported_at
+                                                         reported_at = EXCLUDED.reported_at, remote_busy = EXCLUDED.remote_busy,
+                                                         disk_pressure = EXCLUDED.disk_pressure
                     """).param(m.agentId()).param(m.organization()).param(contractVersion)
-                    .param("{" + String.join(",", capabilities.stream().distinct().sorted().toList()) + "}").update();
-            return new Presence(now, m.credentialExpiresAt(), "1.0");
+                    .param("{" + String.join(",", capabilities.stream().distinct().sorted().toList()) + "}")
+                    .param(signals.busy()).param(signals.diskPressure()).update();
+            return new Presence(now, m.credentialExpiresAt(), "1.0", receiving(j, m).orElse(null));
+        });
+    }
+
+    private static Optional<Receiving> receiving(JdbcClient j, Machine m) {
+        return j.sql("SELECT receiving, receiving_changed_at FROM public.agent_remote_enablements WHERE organization_id = ? AND agent_id = ?")
+                .param(m.organization()).param(m.agentId())
+                .query((rs, n) -> new Receiving(rs.getShort(1) == 1 ? "ENABLED" : "PAUSED", rs.getObject(2, OffsetDateTime.class))).optional();
+    }
+
+    /**
+     * A maquina pausa ou retoma o recebimento de NOVOS trabalhos remotos (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01a).
+     * Autoridade: so a credencial; o corpo nao escolhe alvo. Pausar nao cancela nem altera o que esta em andamento.
+     * Idempotente: repetir o mesmo estado nao muda nada nem gera auditoria. Vale mesmo com o recurso desligado no servidor
+     * (pausar e sempre permitido). Maquina nao habilitada: 409 remote_execution_not_enabled.
+     */
+    public Receiving setReceiving(MachineToken t, String wanted) {
+        if (!"ENABLED".equals(wanted) && !"PAUSED".equals(wanted)) {
+            throw ApiException.invalid("recebimento");
+        }
+        short code = (short) ("ENABLED".equals(wanted) ? 1 : 2);
+        return tx.inOrganization(t.organization(), Mode.READ_WRITE, j -> {
+            Machine m = auth.authenticate(j, t);
+            Short current = j.sql("SELECT receiving FROM public.agent_remote_enablements WHERE organization_id = ? AND agent_id = ? FOR UPDATE")
+                    .param(m.organization()).param(m.agentId()).query(Short.class).optional().orElse(null);
+            if (current == null) {
+                throw new ApiException(ApiError.REMOTE_EXECUTION_NOT_ENABLED, "maquina_nao_habilitada");
+            }
+            if (current != code) {
+                j.sql("UPDATE public.agent_remote_enablements SET receiving = ? WHERE organization_id = ? AND agent_id = ?")
+                        .param(code).param(m.organization()).param(m.agentId()).update();
+                audit(j, m.organization(), code == 1 ? ACT_RECEIVING_RESUMED : ACT_RECEIVING_PAUSED, m.agentId(), m.workerId(), null, m.credentialId());
+                LOG.info("evento=agente.recebimento_remoto estado={} agente={} correlacao={}", wanted, m.agentId(), RequestContext.correlation());
+            }
+            return receiving(j, m).orElseThrow();
         });
     }
 

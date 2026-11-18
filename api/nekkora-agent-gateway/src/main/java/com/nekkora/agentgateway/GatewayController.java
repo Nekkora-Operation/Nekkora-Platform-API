@@ -128,11 +128,36 @@ public class GatewayController {
         JsonNode n = parse(body);
         List<String> caps = new ArrayList<>();
         JsonNode c = n.get("capabilities");
-        if (c == null || !c.isArray() || c.size() > 8) {
+        if (c == null || !c.isArray() || c.size() > GatewayService.MAX_CAPABILITIES) {
             throw ApiException.invalid("capacidades");
         }
         c.forEach(x -> caps.add(x.isString() ? x.asString() : "?"));
-        return authenticated(req, () -> service.heartbeat(t, text(n, "agentVersion"), text(n, "contractVersion"), caps));
+        GatewayService.RemoteSignals signals = remoteSignals(n.get("remote"));
+        return authenticated(req, () -> service.heartbeat(t, text(n, "agentVersion"), text(n, "contractVersion"), caps, signals));
+    }
+
+    /** {@code remote} do batimento: ausente = sem sinais; presente = objeto com {@code busy} e {@code diskPressure} booleanos. */
+    private static GatewayService.RemoteSignals remoteSignals(JsonNode remote) {
+        if (remote == null || remote.isNull()) {
+            return GatewayService.RemoteSignals.NONE;
+        }
+        JsonNode busy = remote.get("busy");
+        JsonNode disk = remote.get("diskPressure");
+        if (!remote.isObject() || busy == null || !busy.isBoolean() || disk == null || !disk.isBoolean()) {
+            throw ApiException.invalid("sinais_remotos");
+        }
+        return new GatewayService.RemoteSignals(busy.asBoolean(), disk.asBoolean());
+    }
+
+    // ------------------------------------------------------------------ execucao remota (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01a)
+
+    /** A maquina pausa ou retoma o recebimento de novos trabalhos remotos. Corpo: {@code {"receiving": "ENABLED" | "PAUSED"}}. */
+    @PostMapping("/agent/api/v1/remote/receiving")
+    public ResponseEntity<GatewayService.Receiving> receiving(@RequestBody(required = false) String body, HttpServletRequest req) {
+        MachineToken t = machine(req);
+        JsonNode n = parse(body);
+        GatewayService.Receiving r = authenticated(req, () -> service.setReceiving(t, text(n, "receiving")));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
     }
 
     @GetMapping("/agent/api/v1/authorizations")
