@@ -38,6 +38,7 @@ public class ProductReadController {
     static final String ROUTE_AUTOMATIONS = "listAutomations";
     static final String ROUTE_VERSIONS = "listAutomationVersions";
     static final String ROUTE_EXECUTIONS = "listExecutions";
+    static final String ROUTE_ORG_AUTOMATIONS = "listOrganizationAutomations";
     static final String ROUTE_EVENTS = "listExecutionEvents";
     static final String SORT_NAME48 = "name48.asc+id.asc";
     static final String SORT_VERSION_DESC = "versionNumber.desc";
@@ -48,11 +49,13 @@ public class ProductReadController {
 
     private final OrgTransactions tx;
     private final ProductReads reads;
+    private final ExecutionSummaryReads summaries;
     private final CursorCodec cursors;
 
     public ProductReadController(OrgTransactions tx, WorkspaceAccess access, CursorCodec cursors) {
         this.tx = tx;
         this.reads = new ProductReads(access);
+        this.summaries = new ExecutionSummaryReads(access);
         this.cursors = cursors;
     }
 
@@ -165,6 +168,43 @@ public class ProductReadController {
         List<Map<String, Object>> rows = tx.inOrganization(org, Mode.READ_ONLY,
                 j -> reads.listEvents(j, org, s.membershipId(), executionId, after, pageSize + 1));
         return page(rows, pageSize, last -> cursors.encode(scope, List.of(((Number) last.get("sequence")).longValue())));
+    }
+
+    // ------------------------------------------------------------------ PLATFORM-INICIO-001: Inicio da organizacao
+
+    /**
+     * Contagem das execucoes pedidas no periodo [from, to), nos ambientes visiveis para a pessoa, somando as origens sem
+     * repetir (regras em {@link ExecutionSummaryReads}). from e to sao obrigatorios, com fuso; periodo de ate 366 dias.
+     */
+    @GetMapping("/api/v1/o/{org}/execution-summary")
+    public Map<String, Object> executionSummary(@PathVariable UUID org, @RequestParam(required = false) String from,
+                                                @RequestParam(required = false) String to, HttpServletRequest req) {
+        ValidSession s = SessionFilter.principal(req);
+        OffsetDateTime fromTime = instant(from);
+        OffsetDateTime toTime = instant(to);
+        if (fromTime == null || toTime == null || !toTime.isAfter(fromTime) || Duration.between(fromTime, toTime).compareTo(MAX_PERIOD) > 0) {
+            throw ApiException.invalid("periodo");
+        }
+        internal(s);
+        return tx.inOrganization(org, Mode.READ_ONLY, j -> summaries.summary(j, org, s.membershipId(), fromTime, toTime));
+    }
+
+    /** As automacoes dos ambientes visiveis da organizacao, por nome, com o ambiente e a ultima execucao de cada uma. */
+    @GetMapping("/api/v1/o/{org}/automations")
+    public Map<String, Object> organizationAutomations(@PathVariable UUID org, @RequestParam(required = false) List<String> status,
+                                                       @RequestParam(required = false) String cursor, @RequestParam(required = false) Integer limit,
+                                                       HttpServletRequest req) {
+        ValidSession s = SessionFilter.principal(req);
+        int pageSize = Paging.limit(limit);
+        List<Short> codes = Labels.statusFilter(Labels.Kind.RESOURCE, status, 3);
+        CursorCodec.Scope scope = new CursorCodec.Scope(ROUTE_ORG_AUTOMATIONS, org, s.membershipId(), null, CursorCodec.filters("status", status), SORT_NAME48);
+        CursorCodec.Position after = cursor == null ? null : cursors.decode(cursor, scope).expectSize(2);
+        String afterKey = after == null ? null : after.text(0);
+        UUID afterId = after == null ? null : after.uuid(1);
+        internal(s);
+        List<Map<String, Object>> rows = tx.inOrganization(org, Mode.READ_ONLY,
+                j -> summaries.automations(j, org, s.membershipId(), codes, afterKey, afterId, pageSize + 1));
+        return pageBySortKey(rows, pageSize, last -> cursors.encode(scope, List.of(last.get(ProductReads.SORT_KEY), last.get("automationId"))));
     }
 
     // ------------------------------------------------------------------ comum
