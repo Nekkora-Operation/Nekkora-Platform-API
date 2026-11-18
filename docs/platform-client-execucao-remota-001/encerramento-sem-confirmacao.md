@@ -31,7 +31,7 @@ recusada, venha do canal das máquinas ou do das pessoas.
 ## Espera da comunicação perdida
 
 - Configuração: `NEKKORA_EXECUCAO_REMOTA_SEM_COMUNICACAO_MINUTOS`, **padrão 120** (o dobro do tempo máximo de uma tentativa, 60
-  min). Aceita de 5 minutos a 30 dias. Tem de ter o mesmo valor na Platform e no agent-gateway.
+  min). Aceita de 1 minuto a 30 dias (o piso era de 5 minutos até a migration 055). Tem de ter o mesmo valor na Platform e no agent-gateway.
 - É um valor de partida de laboratório. **Muda o que o plano T00 dizia** ("`LOST` não muda o estado da tentativa nem a
   encerra"): agora encerra, depois da espera.
 - A regra é a mesma nos dois lados: quando a máquina volta depois da espera, a tentativa **já está** encerrada (o gateway aplica
