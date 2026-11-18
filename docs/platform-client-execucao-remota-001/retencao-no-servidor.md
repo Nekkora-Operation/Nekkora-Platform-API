@@ -19,9 +19,14 @@ O prazo é por **tentativa** e por **tipo** (registros; resultados) e conta do f
 | `CLOSED` | a máquina fechou o envio (050/051) | entrega concluída |
 | `LOSS_NOTICE` | a máquina avisou que perdeu, pelo prazo de guarda dela, o que ainda guardava (052) | encerramento explícito |
 | `LINK_ENDED` | a tentativa terminou e o vínculo sob o qual ela rodou foi encerrado — a máquina não tem mais como enviar (053) | encerramento explícito |
+| `NO_PROGRESS` | a entrega não se concluiu e passou o **teto sem progresso** (migration 059) | **entrega incompleta** |
 
-**Entrega aberta não vence.** Uma tentativa que terminou, cuja máquina continua vinculada e nunca fechou o envio nem avisou
-perda, fica com o conteúdo guardado sem prazo. É a leitura literal da decisão; o limite está declarado na seção 8.
+**Teto da entrega que não se conclui (decisão de 16/11, migration 059).** Uma tentativa que terminou, cuja máquina continua
+vinculada e nunca fechou o envio nem avisou perda, vence depois de **30 dias configuráveis sem progresso de entrega**
+(`NEKKORA_EXECUCAO_REMOTA_RETENCAO_SEM_PROGRESSO_DIAS`). O progresso é o término da tentativa ou o último item recebido; a
+**presença da máquina não renova** o prazo. Só vale quando **não há execução ativa nem incerta**: tentativa em andamento, ou com
+resultado não confirmado sem reconciliação (058), não vence. Ao vencer, o registro diz **entrega incompleta**
+(`NO_PROGRESS`), a retenção se aplica, e **nenhum recebimento é indicado**: não é criado fechamento do envio.
 
 A data é calculada **pelo banco** (`remote_attempt_delivery_ended_at`), não informada pela aplicação.
 
@@ -118,8 +123,8 @@ aplicado, o fim da entrega e como, e quantos itens havia. As linhas continuam vi
 
 ## 8. Limites declarados
 
-- **Entrega aberta não vence** (seção 1). Uma máquina que continua vinculada e nunca conclui o envio mantém o conteúdo sem prazo.
-  Se isso não for o desejado, falta decidir um teto.
+- **Execução incerta não vence.** Resultado não confirmado sem reconciliação mantém o conteúdo sem prazo, até a reconciliação
+  (pela máquina ou declarada). É o que a decisão pede.
 - O prazo é **um só para todas as organizações**. Não há política por organização.
 - O armazenamento de resultados é uma **pasta local**. Não há armazenamento externo nesta missão, e a remoção só foi exercitada
   nele.

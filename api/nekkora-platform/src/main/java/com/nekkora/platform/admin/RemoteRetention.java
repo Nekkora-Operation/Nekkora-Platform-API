@@ -39,12 +39,27 @@ public final class RemoteRetention {
     private final OrgTransactions tx;
     private final ResultPurge purge;
     private final int days;
+    private final int stalledDays;
 
-    /** {@code days}: de 1 a 3650 (o banco guarda o mesmo piso e o mesmo teto). */
+    /** {@code days}: de 1 a 3650 (o banco guarda o mesmo piso e o mesmo teto). O teto sem progresso fica igual ao prazo. */
     public RemoteRetention(OrgTransactions tx, ResultPurge purge, int days) {
+        this(tx, purge, days, days);
+    }
+
+    /**
+     * {@code stalledDays} (059): o TETO da entrega que nao se conclui - dias sem progresso de entrega (termino da tentativa ou
+     * ultimo item recebido), so para tentativa terminada e nao incerta. A presenca da maquina nao renova. Vencido, o conteudo sai
+     * como nos outros casos e o registro diz "entrega incompleta" (NO_PROGRESS): nenhum recebimento e indicado.
+     */
+    public RemoteRetention(OrgTransactions tx, ResultPurge purge, int days, int stalledDays) {
         this.tx = tx;
         this.purge = purge;
         this.days = Math.max(1, Math.min(days, 3650));
+        this.stalledDays = Math.max(1, Math.min(stalledDays, 3650));
+    }
+
+    public int stalledDays() {
+        return stalledDays;
     }
 
     public int days() {
@@ -89,16 +104,16 @@ public final class RemoteRetention {
             n[0] += tx.inOrganization(org, OrgTransactions.Mode.READ_WRITE, j -> j.sql("""
                     INSERT INTO public.remote_attempt_content_expirations (attempt_id, kind, organization_id, delivery_ended_at, delivery_end,
                         retention_days, items, bytes)
-                    SELECT d.attempt_id, ?, ?, d.ended_at, d.how, ?, 0, 0
+                    SELECT d.attempt_id, ?, ?, d.ended_at, d.how, CASE WHEN d.how = 4 THEN ? ELSE ? END, 0, 0
                       FROM (SELECT t.attempt_id, e.ended_at, e.how
                               FROM public.remote_attempts t, LATERAL public.remote_attempt_delivery_ended_at(t.organization_id, t.attempt_id, ?::smallint) e
                              WHERE t.organization_id = ? AND t.started_at IS NOT NULL
                                AND EXISTS (SELECT 1 FROM %s)
                                AND NOT EXISTS (SELECT 1 FROM public.remote_attempt_content_expirations x WHERE x.attempt_id = t.attempt_id AND x.kind = ?)) d
-                     WHERE d.ended_at IS NOT NULL AND d.ended_at + make_interval(days => ?) <= clock_timestamp()
+                     WHERE d.ended_at IS NOT NULL AND d.ended_at + make_interval(days => CASE WHEN d.how = 4 THEN ? ELSE ? END) <= clock_timestamp()
                      ORDER BY d.ended_at LIMIT ?
                     ON CONFLICT (attempt_id, kind) DO NOTHING
-                    """.formatted(content)).param(k).param(org).param(days).param(k).param(org).param(k).param(days).param(BATCH).update());
+                    """.formatted(content)).param(k).param(org).param(stalledDays).param(days).param(k).param(org).param(k).param(stalledDays).param(days).param(BATCH).update());
         }
         // 2 e 3. remove o conteudo do que esta registrado e ainda nao confirmado (inclusive o que ficou de um ciclo anterior)
         List<Open> open = tx.inOrganization(org, OrgTransactions.Mode.READ_ONLY, j -> j.sql("SELECT attempt_id, kind FROM "

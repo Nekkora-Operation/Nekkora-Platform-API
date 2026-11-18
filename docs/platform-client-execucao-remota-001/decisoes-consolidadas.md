@@ -60,12 +60,12 @@ a máquina antiga. Revogar o vínculo, esperar ou "aceitar o risco" não bastam.
 |---|---|
 | No computador: o não confirmado fica guardado até o prazo de guarda (7 dias, configurável), com aviso; a remoção deixa registro da perda e avisa a Platform quando possível | implementado |
 | No servidor: 30 dias configuráveis do fim da entrega; sai o conteúdo, fica o histórico | implementado |
-| **Teto para entrega que não se conclui:** 30 dias configuráveis **sem progresso de entrega**, só quando **não houver execução ativa nem incerta**. A presença da máquina **não** renova o prazo. Ao vencer: registrar **entrega incompleta** e aplicar a retenção, **sem indicar recebimento** | **a implementar** (hoje: entrega aberta não vence) |
+| **Teto para entrega que não se conclui:** 30 dias configuráveis **sem progresso de entrega**, só quando **não houver execução ativa nem incerta**. A presença da máquina **não** renova o prazo. Ao vencer: registrar **entrega incompleta** e aplicar a retenção, **sem indicar recebimento** | implementado (059) |
 | A retenção do servidor fica desligada por padrão; ligar é decisão de cada ambiente | implementado |
 
 ## 6. Migrations
 
-- 042 a 057, em sequência, nenhuma com elevação.
+- 042 a 059, em sequência, nenhuma com elevação.
 - A 054 e a 056 ficam **separadas** (decisão de 16/11).
 - A 048 só existe na forma final: a forma da primeira PR nunca é aplicada sozinha.
 - A sequência completa é validada pelo migrador normal, em banco limpo e na atualização a partir da referência.
