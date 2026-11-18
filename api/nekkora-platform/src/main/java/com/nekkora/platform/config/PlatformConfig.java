@@ -319,6 +319,40 @@ public class PlatformConfig {
                 com.nekkora.core.artifact.ResultStore.at(env.getProperty("NEKKORA_RESULTADOS_DIR", env.getProperty("nekkora.resultados.dir", ""))));
     }
 
+    /** Reconciliacao periodica das tentativas de execucao remota (055): as regras da 053, sem depender de leitura nem da maquina. */
+    @Bean
+    com.nekkora.platform.admin.RemoteReconciler remoteReconciler(OrgTransactions tx,
+            @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.lost-minutes:120}") int lostMinutes) {
+        return new com.nekkora.platform.admin.RemoteReconciler(tx, lostMinutes);
+    }
+
+    /**
+     * O ciclo da reconciliacao: so com a execucao remota ligada. Intervalo em segundos (padrao 60; 0 desliga o ciclo, e o
+     * encerramento volta a acontecer so na leitura e no contato da maquina).
+     */
+    @Bean(destroyMethod = "shutdownNow")
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "nekkora.remote-execution.enabled", havingValue = "true")
+    java.util.concurrent.ScheduledExecutorService remoteReconcilerScheduler(com.nekkora.platform.admin.RemoteReconciler reconciler,
+            @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.reconcile-seconds:60}") int seconds) {
+        java.util.concurrent.ScheduledExecutorService s = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "reconciliacao-execucao-remota");
+            t.setDaemon(true);
+            return t;
+        });
+        if (seconds > 0) {
+            int every = Math.max(5, Math.min(seconds, 3600));
+            s.scheduleWithFixedDelay(() -> {
+                try {
+                    reconciler.cycle();
+                } catch (RuntimeException e) {
+                    org.slf4j.LoggerFactory.getLogger(PlatformConfig.class).warn("evento=execucao_remota.reconciliacao_ciclo_falhou causa={}",
+                            e.getClass().getSimpleName());
+                }
+            }, every, every, java.util.concurrent.TimeUnit.SECONDS);
+        }
+        return s;
+    }
+
     /** Dependencias de execucao declaradas para uma automacao (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01c). */
     @Bean
     com.nekkora.platform.admin.RuntimeRequirementsService runtimeRequirementsService(com.nekkora.platform.admin.AccessActions actions,
