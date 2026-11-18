@@ -39,7 +39,17 @@ public final class MachineAuth {
         if (!r.active() || !r.notExpired() || r.agentStatus() != 2 || r.assignmentId() == null) {
             throw ApiException.unauthenticated("credencial");
         }
+        bind(j, r.agentId());
         return new Machine(t.organization(), r.agentId(), r.workerId(), r.credentialId(), r.assignmentId(), r.expiresAt());
+    }
+
+    /**
+     * Diz ao banco, so nesta transacao, QUAL maquina foi autenticada (048): a politica de {@code remote_attempt_packages} so
+     * mostra a linha da propria maquina. O valor e o {@code agent_id} da linha da credencial, lido do banco depois de o segredo
+     * conferir - nunca um identificador vindo da requisicao. Sem passar por aqui, a transacao nao ve pacote nenhum.
+     */
+    private static void bind(JdbcClient j, UUID agentId) {
+        j.sql("SELECT set_config('nekkora.agent_id', ?, true)").param(agentId.toString()).query(String.class).single();
     }
 
     /** Rotacao: a credencial atual do Agent, mesmo vencida, desde que nao revogada (contrato, sec. 4.3). */
