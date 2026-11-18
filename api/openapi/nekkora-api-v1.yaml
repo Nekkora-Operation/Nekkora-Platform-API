@@ -35,6 +35,8 @@ tags:
     description: 'Pareamento, credencial, Worker no workspace, autorizacao de execucao local e consultas das execucoes do Agent (contrato Platform-Agent 1.0; 025). O lado da maquina e o openapi/nekkora-agent-v1.yaml'
   - name: Ciclo de vida das automacoes
     description: 'Workspace, automacao, versao DRAFT, artefato (pacote do Studio ou pacote Python externo, 030) recebido e conferido pela API e publicacao com step-up (PLATFORM-AUTOMATION-LIFECYCLE-001; 028). Publicar nao autoriza nem dispara execucao'
+  - name: Dependencias de execucao
+    description: 'Dependencias declaradas na Platform para uma automacao (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01c; 045). Leitura estatica, com as mesmas regras do aplicativo; nada e instalado. Declarar nao muda o pacote publicado e nao autoriza execucao'
   - name: Pedido de execucao
     description: 'Pedido duravel de uma pessoa para uma versao autorizada rodar num Agent (AGENT-PYTHON-001; 030). A maquina puxa pelo gateway e decide; entregar ou aceitar nao prova inicio; inicio e desfecho vem do supervisor da execucao ligada'
   - name: Portal externo
@@ -2503,6 +2505,73 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/o/{org}/automations/{automation}/runtime-requirements:
+    get:
+      tags: [Dependencias de execucao]
+      operationId: getRuntimeRequirements
+      summary: 'Dependencias declaradas, as do pacote publicado e o efetivo'
+      description: >
+        Exige automation.read no ambiente da automacao. declared: a revisao vigente da declaracao (null = ninguem declarou).
+        published: as dependencias do manifesto da versao publicada mais recente (null = sem versao publicada). effective: o
+        manifesto mais os acrescimos declarados; a mesma biblioteca declarada com versao ou extras diferentes dos do manifesto
+        aparece em conflicts e deixa resolved em false - o manifesto prevalece e nunca e enfraquecido.
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: automation, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      responses:
+        '200': { description: 'Situacao das dependencias', content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeRequirements' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    put:
+      tags: [Dependencias de execucao]
+      operationId: declareRuntimeRequirements
+      summary: 'Declara as dependencias de execucao (cria a revisao seguinte)'
+      description: >
+        Exige automation.manage no ambiente da automacao. source PACKAGE (so as do pacote) ou NONE_CONFIRMED (sem dependencias
+        externas, confirmado): sem text. source FILE (conteudo de um requirements.txt) ou TEXT (digitado): text obrigatorio, lido
+        estaticamente com as regras do aplicativo; so nome==versao (com extras) entra. Qualquer linha que nao se representa
+        (faixa, sem versao, marcador, endereco, caminho, inclusao, opcao, hash, conflito) recusa a declaracao inteira: 409 conflict
+        + reason runtime_requirements_unresolved, nada gravado (use a rota analysis para ver o problema de cada linha). Nenhuma
+        versao e inventada e nada e instalado. expectedRevision: a revisao vista pela pessoa (ausente = nenhuma); se mudou, 409 +
+        runtime_requirements_changed. O pacote publicado nao muda; declarar nao verifica maquina nem autoriza execucao.
+        Auditoria (automation_admin_events 10).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: automation, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeRequirementsDeclaration' } } } }
+      responses:
+        '201': { description: 'Revisao criada', content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeRequirements' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/automations/{automation}/runtime-requirements/analysis:
+    post:
+      tags: [Dependencias de execucao]
+      operationId: analyzeRuntimeRequirements
+      summary: 'Le um texto de dependencias e diz, por linha, o que e (nada e gravado)'
+      description: >
+        Exige automation.manage no ambiente da automacao. Leitura estatica de um texto no formato do requirements.txt (ate 262144
+        caracteres): cada linha com conteudo recebe uma situacao; problem true impede declarar. resolved: nenhuma linha com
+        problema. Nada e gravado, instalado ou buscado na rede; inclusoes e enderecos nao sao seguidos.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: automation, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' } ]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: false, required: [text], properties: { text: { type: string, maxLength: 262144 } } } } } }
+      responses:
+        '200': { description: 'Situacao de cada linha', content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeRequirementsAnalysis' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /api/v1/o/{org}/automation-versions/{version}/publish:
     post:
       tags: [Ciclo de vida das automacoes]
@@ -2618,7 +2687,7 @@ components:
     Error:
       type: object
       required: [error]
-      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, remote_execution_unavailable, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
+      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
     WorkspacePermissionCode:
       description: 'Permissoes de workspace (13): podem aparecer em allWorkspaces e em atribuicoes de workspace.'
       type: string
@@ -3117,6 +3186,67 @@ components:
       required: [items]
       properties:
         items: { type: array, maxItems: 1000, items: { type: object, required: [type, receivedAt], properties: { type: { type: string, enum: [process_started, process_succeeded, process_failed, process_start_failed, process_cancelled] }, receivedAt: { type: string, format: date-time } } } }
+    RuntimeRequirementsDeclaration:
+      type: object
+      additionalProperties: false
+      required: [source]
+      properties:
+        source: { type: string, enum: [PACKAGE, FILE, TEXT, NONE_CONFIRMED] }
+        text: { type: string, maxLength: 262144, description: 'So com FILE ou TEXT' }
+        expectedRevision: { type: integer, minimum: 1, description: 'A revisao vista; ausente = nenhuma declaracao ainda' }
+    RuntimeRequirementsAnalysis:
+      type: object
+      required: [lines, dependencies, resolved]
+      properties:
+        lines:
+          type: array
+          items:
+            type: object
+            required: [number, text, kind, problem]
+            properties:
+              number: { type: integer, minimum: 1 }
+              text: { type: string, description: 'A linha sem o comentario, saneada e limitada' }
+              kind: { type: string, enum: [EXACT, DUPLICATE, CONFLICT, RANGE, NO_VERSION, MARKER, REMOTE, LOCAL_PATH, INCLUDE, OPTION, HASH, UNKNOWN] }
+              problem: { type: boolean }
+              dependency: { type: [string, 'null'], description: 'nome[extras]==versao, so em EXACT' }
+        dependencies: { type: array, items: { type: string } }
+        resolved: { type: boolean }
+    RuntimeRequirements:
+      type: object
+      required: [automationId, declared, published, effective]
+      properties:
+        automationId: { type: string, format: uuid }
+        declared:
+          type: [object, 'null']
+          required: [revision, source, dependencies, contentSha256, declaredAt]
+          properties:
+            revision: { type: integer, minimum: 1 }
+            source: { type: string, enum: [PACKAGE, FILE, TEXT, NONE_CONFIRMED] }
+            dependencies: { type: array, items: { type: string }, description: 'Os acrescimos declarados' }
+            contentSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+            declaredAt: { type: string, format: date-time }
+        published:
+          type: [object, 'null']
+          required: [automationVersionId, versionNumber, dependencies]
+          properties:
+            automationVersionId: { type: string, format: uuid }
+            versionNumber: { type: integer }
+            dependencies: { type: array, items: { type: string }, description: 'As do manifesto do pacote publicado' }
+        effective:
+          type: object
+          required: [dependencies, conflicts, resolved]
+          properties:
+            dependencies: { type: array, items: { type: string } }
+            conflicts:
+              type: array
+              items:
+                type: object
+                required: [name, published, declared]
+                properties:
+                  name: { type: string }
+                  published: { type: string }
+                  declared: { type: string }
+            resolved: { type: boolean }
     AgentPairingRequest:
       type: object
       additionalProperties: false
