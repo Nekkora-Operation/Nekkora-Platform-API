@@ -115,10 +115,62 @@ paths:
         motivo e nada e entregue. Maquina pausada: nada e entregue (a tentativa espera ate o prazo da oferta e entao expira).
         Perguntar de novo antes de confirmar o recebimento entrega a MESMA tentativa com token e epoca novos: os anteriores
         deixam de valer. Maquina nao habilitada: 409 + remote_execution_not_enabled. Entregar nao prova recebimento.
+        dependencyCheck (054): alem disso, e sem depender disso, um pedido de verificacao de dependencias a responder em
+        /remote/dependency-checks/{check}/answer.
       parameters: [ { $ref: '#/components/parameters/Contract' } ]
       responses:
         '200': { description: 'O que ha para a maquina', content: { application/json: { schema: { $ref: '#/components/schemas/RemoteNext' } } } }
         '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/dependency-checks/pending:
+    get:
+      tags: [Maquina]
+      operationId: pendingRemoteDependencyCheck
+      summary: 'O pedido de verificacao de dependencias pendente desta maquina (054)'
+      description: >
+        Para quando a maquina nao esta perguntando por trabalho (tem uma tentativa em andamento). Devolve o pedido mais antigo
+        ainda sem resposta e dentro do prazo, ou objeto vazio. Nao depende de a maquina estar recebendo, pausada ou ocupada:
+        conferir nao e executar. Nenhum efeito sobre tentativas.
+      parameters: [ { $ref: '#/components/parameters/Contract' } ]
+      responses:
+        '200': { description: 'O pedido pendente, se houver', content: { application/json: { schema: { type: object, properties: { dependencyCheck: { $ref: '#/components/schemas/RemoteDependencyCheckRequest' } } } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/dependency-checks/{check}/answer:
+    post:
+      tags: [Maquina]
+      operationId: answerRemoteDependencyCheck
+      summary: 'A maquina responde a verificacao de dependencias (054)'
+      description: >
+        Uma vez, dentro do prazo. SATISFIED: todas presentes na versao exata. MISSING: faltam (ou estao em outra versao) as de
+        missing, que so pode conter itens do que foi perguntado. ENVIRONMENT_GONE: o ambiente escolhido nao existe mais na
+        maquina. NOT_VERIFIED: a maquina nao conseguiu conferir. So o pedido desta maquina (de outra, ou inexistente: 404).
+        Repetir a mesma resposta devolve o que esta gravado; outra resposta, ou depois do prazo: 409 +
+        remote_dependency_check_closed. Nada do que esta instalado vai junto: so o que falta do que foi perguntado.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: check, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [outcome]
+              properties:
+                outcome: { type: string, enum: [SATISFIED, MISSING, ENVIRONMENT_GONE, NOT_VERIFIED] }
+                missing: { type: array, minItems: 1, maxItems: 400, items: { type: string, maxLength: 200 }, description: 'So com MISSING' }
+      responses:
+        '200': { description: 'Resposta gravada', content: { application/json: { schema: { type: object, required: [checkId, outcome], properties: { checkId: { type: string, format: uuid }, outcome: { type: string }, missing: { type: array, items: { type: string } } } } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
@@ -734,7 +786,7 @@ components:
       required: [error]
       properties:
         error: { type: string, enum: [invalid_request, unsupported_contract, unauthenticated, forbidden, not_found, conflict, rate_limited, internal_error, service_unavailable] }
-        reason: { type: string, enum: [pairing_code_for_rotation, rotation_code_for_pairing, link_ended_by_machine, link_ended_by_administration, remote_execution_unavailable, remote_code_without_enablement, code_not_for_remote_execution, remote_execution_not_enabled, credential_renewal_not_due, remote_attempt_stale, remote_attempt_transition, remote_package_unavailable, remote_result_conflict, remote_result_limit, remote_log_conflict, remote_log_limit], description: 'Motivo opcional de um codigo conhecido (conflict): T06 (codigos de pareamento/rotacao), T13 (vinculo ja encerrado) e EXECUCAO-REMOTA-001 T01a (habilitacao). Cliente que nao o conhece trata o codigo como sempre' }
+        reason: { type: string, enum: [pairing_code_for_rotation, rotation_code_for_pairing, link_ended_by_machine, link_ended_by_administration, remote_execution_unavailable, remote_code_without_enablement, code_not_for_remote_execution, remote_execution_not_enabled, credential_renewal_not_due, remote_attempt_stale, remote_attempt_transition, remote_package_unavailable, remote_result_conflict, remote_result_limit, remote_log_conflict, remote_log_limit, remote_dependency_check_closed], description: 'Motivo opcional de um codigo conhecido (conflict): T06 (codigos de pareamento/rotacao), T13 (vinculo ja encerrado) e EXECUCAO-REMOTA-001 T01a (habilitacao). Cliente que nao o conhece trata o codigo como sempre' }
     UnlinkRequest:
       type: object
       required: [operationId, agentId, launchedRunRequests]
@@ -798,6 +850,15 @@ components:
           required: [attemptId]
           properties:
             attemptId: { type: string, format: uuid }
+        dependencyCheck: { $ref: '#/components/schemas/RemoteDependencyCheckRequest' }
+    RemoteDependencyCheckRequest:
+      type: object
+      description: 'O que conferir: SO estas dependencias, SO no ambiente Python deste identificador opaco. Nada e instalado.'
+      required: [checkId, pythonEnvironmentId, dependencies]
+      properties:
+        checkId: { type: string, format: uuid }
+        pythonEnvironmentId: { type: string }
+        dependencies: { type: array, items: { type: string }, description: 'nome==versao' }
     RemoteAttemptWrite:
       type: object
       additionalProperties: false

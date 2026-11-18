@@ -110,6 +110,10 @@ public enum ApiError {
     REMOTE_PYTHON_NOT_SELECTED(HttpStatus.CONFLICT, "conflict", "remote_python_not_selected"),
     /** O ambiente Python indicado (ou o escolhido antes) nao esta no inventario atual da maquina. */
     REMOTE_PYTHON_NOT_IN_INVENTORY(HttpStatus.CONFLICT, "conflict", "remote_python_not_in_inventory"),
+    /** Verificacao sob demanda: ja houve um pedido para esta maquina e automacao ha menos de um minuto. Nada foi criado. */
+    REMOTE_DEPENDENCY_CHECK_TOO_SOON(HttpStatus.TOO_MANY_REQUESTS, "rate_limited", "remote_dependency_check_too_soon"),
+    /** Verificacao sob demanda: o pedido ja foi respondido com outro resultado, ou o prazo da resposta venceu. */
+    REMOTE_DEPENDENCY_CHECK_CLOSED(HttpStatus.CONFLICT, "conflict", "remote_dependency_check_closed"),
     /** Repetir em outra maquina: a tentativa anterior ainda nao terminou. */
     REMOTE_ATTEMPT_NOT_FINISHED(HttpStatus.CONFLICT, "conflict", "remote_attempt_not_finished"),
     /** Cancelar: a tentativa ja terminou. */

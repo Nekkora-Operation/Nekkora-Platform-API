@@ -905,4 +905,116 @@ class RemoteExecutionIT extends PlatformTestBase {
         // os registros e resultados que existirem continuam consultaveis: o encerramento nao apaga nada
         assertThat(s.admin().get(s.o() + "/remote-executions/" + o.get("remoteExecutionId").asString() + "/attempts/" + stuck + "/logs").status()).isEqualTo(200);
     }
+
+    // ------------------------------------------------------------------ 054: verificacao de dependencias sob demanda
+
+    private BrowserClient.Response checkDependencies(Setup s, Machine m) {
+        return s.admin().post(s.o() + "/automations/" + s.automation() + "/remote-machines/" + m.agent() + "/dependency-check", null);
+    }
+
+    private JsonNode checkOf(Setup s, Machine m) {
+        BrowserClient.Response r = s.admin().get(s.requests() + "/candidates?automationVersion=" + s.version());
+        assertThat(r.status()).as(r.body()).isEqualTo(200);
+        for (JsonNode n : JSON.readTree(r.body()).get("items")) {
+            if (n.get("agentId").asString().equals(m.agent().toString())) {
+                return n.get("dependencyCheck");
+            }
+        }
+        throw new AssertionError("maquina fora da lista");
+    }
+
+    /** Recua o pedido mais recente (fixture): o limite de um por minuto deixa de valer para o proximo. */
+    private static void olderCheck(Machine m, String what) throws Exception {
+        try (Connection c = DB.connectAsSuperuser(); Statement st = c.createStatement()) {
+            st.execute("SET session_replication_role = replica");
+            st.execute("UPDATE remote_dependency_checks SET " + what + " WHERE agent_id = '" + m.agent() + "'");
+        }
+    }
+
+    @Test
+    void verificacaoSobDemandaCongelaOQueSeraConferidoTemLimiteESemRespostaNuncaViraIncompativel() throws Exception {
+        Setup s = setup();
+        Machine m = machine(s, "Verifica", true);
+        heartbeat(s, m, true);
+        // sem dependencias declaradas, nao ha o que conferir
+        refused(checkDependencies(s, m), "remote_requirements_not_declared");
+        declare(s, "idna==3.7\nrequests==2.32.3");
+        assertThat(checkOf(s, m).isNull()).as("nunca houve verificacao").isTrue();
+        // o pedido congela o ambiente escolhido e a lista efetiva de agora; nasce aguardando a maquina
+        BrowserClient.Response asked = checkDependencies(s, m);
+        assertThat(asked.status()).as(asked.body()).isEqualTo(201);
+        JsonNode pending = JSON.readTree(asked.body());
+        assertThat(pending.get("state").asString()).isEqualTo("PENDING");
+        assertThat(pending.get("outcome").isNull()).isTrue();
+        assertThat(pending.get("environmentId").asString()).isEqualTo(ENV_A);
+        assertThat(pending.get("current").asBoolean()).isTrue();
+        String check = pending.get("checkId").asString();
+        assertThat(value("SELECT dependencies::text || '|' || requirements_revision || '|' || requested_by_membership_id FROM remote_dependency_checks "
+                + "WHERE check_id = '" + check + "'")).isEqualTo("[\"idna==3.7\", \"requests==2.32.3\"]|1|" + s.org().adminMembership());
+        assertThat(checkOf(s, m).get("state").asString()).isEqualTo("PENDING");
+        // limite: um pedido por minuto por maquina e automacao; o segundo nao cria nada
+        BrowserClient.Response again = checkDependencies(s, m);
+        assertThat(again.status()).as(again.body()).isEqualTo(429);
+        assertThat(again.body()).isEqualTo("{\"error\":\"rate_limited\",\"reason\":\"remote_dependency_check_too_soon\"}");
+        assertThat(value("SELECT count(*) FROM remote_dependency_checks WHERE agent_id = '" + m.agent() + "'")).isEqualTo("1");
+        // nada mudou alem do pedido: a escolha, as condicoes da solicitacao e a maquina continuam como estavam
+        assertThat(missing(s, m)).containsExactly("AUTHORIZATION_MISSING");
+        // a maquina responde (papel da ingestao, como o gateway): falta uma
+        assertThat(as("nekkora_ingestion", s.org().id(), "UPDATE remote_dependency_checks SET outcome = 2, missing = '[\"requests==2.32.3\"]'::jsonb "
+                + "WHERE check_id = '" + check + "'")).isEqualTo("OK");
+        JsonNode answered = checkOf(s, m);
+        assertThat(answered.get("state").asString()).isEqualTo("ANSWERED");
+        assertThat(answered.get("outcome").asString()).isEqualTo("MISSING");
+        assertThat(answered.get("missing").toString()).isEqualTo("[\"requests==2.32.3\"]");
+        assertThat(answered.get("answeredAt").isNull()).isFalse();
+        assertThat(answered.get("current").asBoolean()).isTrue();
+        // a escolha do Python mudou: a resposta continua la, mas e dita como de OUTRA configuracao
+        inventory(s, m, ENV_B, "3.13.1");
+        assertThat(selectPython(s, m, ENV_B).status()).isEqualTo(200);
+        assertThat(checkOf(s, m).get("current").asBoolean()).isFalse();
+        assertThat(checkOf(s, m).get("outcome").asString()).isEqualTo("MISSING");
+        // novo pedido (passado o minuto): confere a escolha NOVA. Sem resposta dentro do prazo: UNANSWERED - nao foi possivel
+        // verificar; nenhum resultado e inventado, e nunca "incompativel"
+        olderCheck(m, "requested_at = requested_at - interval '5 minutes', answer_valid_until = answer_valid_until - interval '5 minutes'");
+        BrowserClient.Response second = checkDependencies(s, m);
+        assertThat(second.status()).as(second.body()).isEqualTo(201);
+        assertThat(JSON.readTree(second.body()).get("environmentId").asString()).isEqualTo(ENV_B);
+        olderCheck(m, "requested_at = requested_at - interval '5 minutes', answer_valid_until = answer_valid_until - interval '5 minutes'");
+        JsonNode unanswered = checkOf(s, m);
+        assertThat(unanswered.get("state").asString()).isEqualTo("UNANSWERED");
+        assertThat(unanswered.get("outcome").isNull()).isTrue();
+        assertThat(unanswered.get("missing").size()).isZero();
+        assertThat(unanswered.get("current").asBoolean()).isTrue();
+        // a revisao das dependencias mudou: a verificacao anterior deixa de ser a de agora
+        declare(s, "idna==3.7");
+        assertThat(checkOf(s, m).get("current").asBoolean()).isFalse();
+        // sem Python escolhido; maquina de Worker fora do ambiente; maquina inexistente
+        Machine bare = machine(s, "Sem Python", true, false);
+        refused(checkDependencies(s, bare), "remote_python_not_selected");
+        Machine outside = machine(s, "Fora", false, false);
+        assertThat(checkDependencies(s, outside).status()).isEqualTo(404);
+        assertThat(s.admin().post(s.o() + "/automations/" + s.automation() + "/remote-machines/" + UUID.randomUUID() + "/dependency-check", null).status())
+                .isEqualTo(404);
+        assertThat(s.admin().post(s.o() + "/automations/" + s.automation() + "/remote-machines/nao-e-uuid/dependency-check", null).status()).isEqualTo(400);
+        // o ambiente escolhido saiu do inventario: nao ha o que pedir a maquina
+        assertThat(as("nekkora_ingestion", s.org().id(), "DELETE FROM agent_python_environments WHERE agent_id = '" + m.agent() + "' AND environment_id = '" + ENV_B
+                + "'")).isEqualTo("OK");
+        olderCheck(m, "requested_at = requested_at - interval '5 minutes', answer_valid_until = answer_valid_until - interval '5 minutes'");
+        refused(checkDependencies(s, m), "remote_python_not_in_inventory");
+        // quem so le nao pede (automation.execute); outra organizacao nao enxerga a automacao
+        TestUser viewer = internalUser(s.org(), true, 2);
+        grantWorkspaceRole(s.org(), viewer, s.workspace(), "VIEWER");
+        BrowserClient v = browser();
+        firstLogin(v, s.org().id(), viewer);
+        assertThat(v.post(s.o() + "/automations/" + s.automation() + "/remote-machines/" + m.agent() + "/dependency-check", null).status()).isIn(403, 404);
+        Setup foreign = setup();
+        assertThat(foreign.admin().post(foreign.o() + "/automations/" + s.automation() + "/remote-machines/" + m.agent() + "/dependency-check", null).status())
+                .isEqualTo(404);
+        // guardas do banco: as pessoas nao gravam resposta; ninguem cria pedido para outro ambiente que nao o escolhido
+        assertThat(as("nekkora_platform", s.org().id(), "UPDATE remote_dependency_checks SET outcome = 1 WHERE check_id = '" + check + "'")).isEqualTo("42501");
+        assertThat(as("nekkora_platform", s.org().id(), "INSERT INTO remote_dependency_checks (organization_id, workspace_id, automation_id, agent_id, "
+                + "environment_id, requirements_revision, dependencies, requested_by_membership_id, answer_valid_until) VALUES ('" + s.org().id() + "', '"
+                + s.workspace() + "', '" + s.automation() + "', '" + bare.agent() + "', '" + ENV_A + "', 2, '[]'::jsonb, '" + s.org().adminMembership()
+                + "', clock_timestamp() + interval '1 minute')")).isEqualTo("23514");
+    }
 }

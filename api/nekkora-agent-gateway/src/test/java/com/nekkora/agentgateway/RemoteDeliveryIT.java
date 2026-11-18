@@ -1090,4 +1090,114 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
             assertThat(e.getMessage()).contains("23514");
         }
     }
+
+    // ------------------------------------------------------------------ 054: verificacao de dependencias sob demanda
+
+    /** Um pedido de verificacao para a maquina (fixture; os gatilhos da 054 conferem quem pede, a escolha e a revisao). */
+    private String check(Machine m) {
+        return fx.value("INSERT INTO remote_dependency_checks (organization_id, workspace_id, automation_id, agent_id, environment_id, requirements_revision, "
+                + "dependencies, requested_by_membership_id, answer_valid_until) VALUES ('" + fx.org + "', '" + fx.workspace + "', '" + fx.automation + "', '"
+                + m.agent() + "', '" + ENVIRONMENT + "', 1, '[\"idna==3.7\",\"requests==2.32.3\"]'::jsonb, '" + fx.adminMembership
+                + "', clock_timestamp() + interval '2 minutes') RETURNING check_id");
+    }
+
+    private MachineClient.Response pendingCheck(Machine m) {
+        return m.client().send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/agent/api/v1/remote/dependency-checks/pending")).GET(),
+                m.credential());
+    }
+
+    private MachineClient.Response answer(Machine m, String check, String body) {
+        return m.client().post("/remote/dependency-checks/" + check + "/answer", body, m.credential());
+    }
+
+    private String checkRow(String check) {
+        return fx.value("SELECT coalesce(outcome::text, '-') || '|' || coalesce(missing::text, '-') || '|' || (delivered_at IS NOT NULL) || '|' || "
+                + "(answered_at IS NOT NULL) FROM remote_dependency_checks WHERE check_id = '" + check + "'");
+    }
+
+    @Test
+    void aMaquinaRecebeOPedidoDeVerificacaoDeDependenciasERespondeUmaVezDentroDoPrazoESoOQueEDela() {
+        Machine m = machine(true);
+        Machine other = machine(true);
+        String check = check(m);
+        assertThat(checkRow(check)).isEqualTo("-|-|false|false");
+        // o pedido vai junto com a consulta de trabalho: diz SO o ambiente (identificador opaco) e as dependencias a conferir
+        JsonNode asked = next(m).body().get("dependencyCheck");
+        assertThat(asked.get("checkId").asString()).isEqualTo(check);
+        assertThat(asked.get("pythonEnvironmentId").asString()).isEqualTo(ENVIRONMENT);
+        assertThat(asked.get("dependencies").toString()).isEqualTo("[\"idna==3.7\",\"requests==2.32.3\"]");
+        assertThat(asked.size()).as("nada alem disso").isEqualTo(3);
+        assertThat(checkRow(check)).isEqualTo("-|-|true|false");
+        // enquanto nao responde, o pedido continua sendo entregue, tambem pela rota propria; outra maquina nao o ve nem o responde
+        assertThat(pendingCheck(m).body().get("dependencyCheck").get("checkId").asString()).isEqualTo(check);
+        assertThat(next(other).body().has("dependencyCheck")).isFalse();
+        assertThat(pendingCheck(other).body().has("dependencyCheck")).isFalse();
+        assertThat(answer(other, check, "{\"outcome\":\"SATISFIED\"}").status()).isEqualTo(404);
+        // resposta malformada: nada e gravado. O que falta so pode ser do que foi perguntado - nao e canal para descrever o ambiente
+        for (String bad : new String[] {"{}", "{\"outcome\":\"INCOMPATIBLE\"}", "{\"outcome\":\"MISSING\"}", "{\"outcome\":\"MISSING\",\"missing\":[]}",
+                "{\"outcome\":\"SATISFIED\",\"missing\":[\"idna==3.7\"]}", "{\"outcome\":\"MISSING\",\"missing\":[\"numpy==2.1.0\"]}",
+                "{\"outcome\":\"MISSING\",\"missing\":[\"idna==3.7\",\"idna==3.7\"]}", "{\"outcome\":\"MISSING\",\"missing\":\"idna==3.7\"}",
+                "{\"outcome\":\"MISSING\",\"missing\":[7]}"}) {
+            assertThat(answer(m, check, bad).status()).as(bad).isEqualTo(400);
+        }
+        assertThat(checkRow(check)).isEqualTo("-|-|true|false");
+        // a resposta: falta uma das duas
+        MachineClient.Response missing = answer(m, check, "{\"outcome\":\"MISSING\",\"missing\":[\"requests==2.32.3\"]}");
+        assertThat(missing.status()).as(missing.raw()).isEqualTo(200);
+        assertThat(missing.body().get("outcome").asString()).isEqualTo("MISSING");
+        assertThat(checkRow(check)).isEqualTo("2|[\"requests==2.32.3\"]|true|true");
+        // repetir a MESMA resposta (resposta perdida) devolve o que esta gravado; outra resposta e recusada e nada muda
+        assertThat(answer(m, check, "{\"outcome\":\"MISSING\",\"missing\":[\"requests==2.32.3\"]}").status()).isEqualTo(200);
+        MachineClient.Response changed = answer(m, check, "{\"outcome\":\"SATISFIED\"}");
+        assertThat(changed.status()).isEqualTo(409);
+        assertThat(changed.body().get("reason").asString()).isEqualTo("remote_dependency_check_closed");
+        assertThat(checkRow(check)).isEqualTo("2|[\"requests==2.32.3\"]|true|true");
+        // respondido, nao e mais entregue
+        assertThat(next(m).body().has("dependencyCheck")).isFalse();
+        assertThat(pendingCheck(m).body().has("dependencyCheck")).isFalse();
+
+        // conferir nao e executar: o pedido chega com a maquina PAUSADA e com uma tentativa em andamento, e nao mexe em nenhuma das duas
+        untriggered("UPDATE remote_dependency_checks SET requested_at = requested_at - interval '5 minutes', answer_valid_until = answer_valid_until "
+                + "- interval '5 minutes' WHERE check_id = '" + check + "'");
+        String attempt = queued(m);
+        running(m, attempt);
+        assertThat(m.client().post("/remote/receiving", "{\"receiving\":\"PAUSED\"}", m.credential()).status()).isEqualTo(200);
+        String second = check(m);
+        assertThat(pendingCheck(m).body().get("dependencyCheck").get("checkId").asString()).isEqualTo(second);
+        assertThat(answer(m, second, "{\"outcome\":\"SATISFIED\"}").status()).isEqualTo(200);
+        assertThat(checkRow(second)).isEqualTo("1|-|true|true");
+        assertThat(cause(attempt)).isEqualTo("6|-|-|-|false");
+        // o prazo da resposta venceu: o pedido nao e mais entregue, e a resposta tardia e recusada - fica "sem resposta"
+        untriggered("UPDATE remote_dependency_checks SET requested_at = requested_at - interval '5 minutes', answer_valid_until = answer_valid_until "
+                + "- interval '5 minutes' WHERE check_id = '" + second + "'");
+        String third = check(m);
+        untriggered("UPDATE remote_dependency_checks SET requested_at = requested_at - interval '5 minutes', answer_valid_until = answer_valid_until "
+                + "- interval '5 minutes' WHERE check_id = '" + third + "'");
+        assertThat(pendingCheck(m).body().has("dependencyCheck")).isFalse();
+        MachineClient.Response late = answer(m, third, "{\"outcome\":\"NOT_VERIFIED\"}");
+        assertThat(late.status()).isEqualTo(409);
+        assertThat(late.body().get("reason").asString()).isEqualTo("remote_dependency_check_closed");
+        assertThat(checkRow(third)).isEqualTo("-|-|false|false");
+        // sem credencial: 401
+        assertThat(m.client().post("/remote/dependency-checks/" + third + "/answer", "{\"outcome\":\"SATISFIED\"}", null).status()).isEqualTo(401);
+
+        // guardas do banco: a maquina nao cria pedido nem muda o que foi perguntado; a resposta gravada nao muda; ninguem apaga;
+        // um segundo pedido para a mesma maquina e automacao em menos de um minuto e recusado
+        String fourth = check(m);
+        assertThat(asRole("nekkora_ingestion", "INSERT INTO remote_dependency_checks (organization_id, workspace_id, automation_id, agent_id, environment_id, "
+                + "requirements_revision, dependencies, requested_by_membership_id, answer_valid_until) SELECT organization_id, workspace_id, automation_id, "
+                + "agent_id, environment_id, requirements_revision, dependencies, requested_by_membership_id, clock_timestamp() + interval '1 minute' "
+                + "FROM remote_dependency_checks WHERE check_id = '" + fourth + "'")).isEqualTo("42501");
+        assertThat(asRole("nekkora_ingestion", "UPDATE remote_dependency_checks SET dependencies = '[]'::jsonb WHERE check_id = '" + fourth + "'")).isEqualTo("42501");
+        assertThat(asRole("nekkora_platform", "UPDATE remote_dependency_checks SET outcome = 1 WHERE check_id = '" + fourth + "'")).isEqualTo("42501");
+        assertThat(asRole("nekkora_ingestion", "UPDATE remote_dependency_checks SET outcome = 2 WHERE check_id = '" + fourth + "'")).as("MISSING sem a lista").isEqualTo("23514");
+        assertThat(asRole("nekkora_ingestion", "UPDATE remote_dependency_checks SET outcome = 1 WHERE check_id = '" + second + "'")).as("ja respondida").isEqualTo("23514");
+        assertThat(asRole("nekkora_ingestion", "DELETE FROM remote_dependency_checks WHERE check_id = '" + fourth + "'")).isEqualTo("42501");
+        try {
+            check(m);
+            throw new AssertionError("um pedido por minuto por maquina e automacao");
+        } catch (IllegalStateException e) {
+            assertThat(e.getMessage()).contains("23P01");
+        }
+    }
 }

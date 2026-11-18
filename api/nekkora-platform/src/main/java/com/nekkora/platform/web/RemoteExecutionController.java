@@ -68,6 +68,14 @@ public class RemoteExecutionController {
         return service.selectPython(org, SessionFilter.principal(req), SessionFilter.token(req), automation, agent, body.environmentId());
     }
 
+    /** 054: pede a maquina que confira agora as dependencias desta automacao no Python escolhido para ela. A resposta vem em candidates. */
+    @PostMapping("/api/v1/o/{org}/automations/{automation}/remote-machines/{agent}/dependency-check")
+    public ResponseEntity<RemoteExecutionService.DependencyCheck> checkDependencies(@PathVariable UUID org, @PathVariable UUID automation,
+                                                                                   @PathVariable UUID agent, HttpServletRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore())
+                .body(service.checkDependencies(org, SessionFilter.principal(req), SessionFilter.token(req), automation, agent));
+    }
+
     @PostMapping("/api/v1/o/{org}/workspaces/{workspace}/remote-executions")
     public ResponseEntity<RemoteExecutionService.Execution> request(@PathVariable UUID org, @PathVariable UUID workspace,
                                                                     @RequestBody(required = false) CreateRequest body, HttpServletRequest req) {
