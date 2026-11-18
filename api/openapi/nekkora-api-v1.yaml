@@ -1801,6 +1801,62 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/CatalogInconsistent' }
 
+  /api/v1/o/{org}/execution-summary:
+    get:
+      tags: [Inicio da organizacao]
+      operationId: getExecutionSummary
+      x-estado: implementado (PLATFORM-INICIO-001; ProductReadController/ExecutionSummaryReads; ExecutionSummaryIT)
+      summary: 'Contagem das execucoes pedidas no periodo, nos ambientes visiveis (automation.read)'
+      description: >
+        Agregacao feita no banco sobre TODAS as execucoes do periodo [from, to) - nunca a soma de uma pagina de lista. Uma
+        execucao e um pedido, nunca uma tentativa. Quatro origens, sem sobreposicao: execucoes da Platform (manuais ou
+        agendadas; a repeticao e outro pedido e conta de novo); execucoes relatadas pelo Agent; pedidos ao Agent anterior que
+        nao viraram execucao (o que virou e contado pela execucao); e solicitacoes de execucao remota do Agent Client, pelo
+        estado da ULTIMA tentativa (repetir em outra maquina nao aumenta o total). A data e o instante em que a Platform
+        registrou o pedido. Cada execucao cai em exatamente uma situacao e a soma das seis e o total: succeeded; failed (o
+        processo da automacao falhou ou estourou o tempo); inProgress; cancelled; notStarted (recusada, expirada, bloqueada ou
+        que falhou antes de o processo existir - nao e erro da automacao); unconfirmed (terminou sem resultado confirmado -
+        nunca sucesso nem erro). Execucoes locais privadas do Agent Client nao chegam a Platform e nao entram. Quem nao le
+        nenhum ambiente recebe zeros. from e to sao obrigatorios, com fuso; to depois de from; periodo de ate 366 dias.
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: from, in: query, required: true, schema: { type: string, format: date-time }, description: 'inclusivo, com fuso' }
+        - { name: to, in: query, required: true, schema: { type: string, format: date-time }, description: 'exclusivo, com fuso' }
+      responses:
+        '200': { description: 'Resumo do periodo', content: { application/json: { schema: { $ref: '#/components/schemas/ExecutionSummary' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/CatalogInconsistent' }
+
+  /api/v1/o/{org}/automations:
+    get:
+      tags: [Inicio da organizacao]
+      operationId: listOrganizationAutomations
+      x-estado: implementado (PLATFORM-INICIO-001; ProductReadController/ExecutionSummaryReads; ExecutionSummaryIT)
+      summary: 'Automacoes dos ambientes visiveis da organizacao, com o ambiente e a ultima execucao'
+      description: >
+        As automacoes de todos os ambientes em que a pessoa tem automation.read (sem ambiente visivel: lista vazia). Cada item
+        traz o nome do ambiente e a execucao mais recente da automacao entre as quatro origens do resumo, com a mesma
+        classificacao - ou nulo, se nunca houve. A ultima execucao nao depende de periodo. O identificador vem nulo quando a
+        mais recente e um pedido ao Agent anterior que nao virou execucao (nao ha detalhe para abrir).
+      x-ordenacao: left(name, 48) COLLATE "C" asc, automationId asc
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Org'
+        - { name: status, in: query, schema: { type: array, maxItems: 3, uniqueItems: true, items: { $ref: '#/components/schemas/ResourceStatus' } }, style: form, explode: true }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: 'Pagina de automacoes', content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationAutomationPage' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/CatalogInconsistent' }
+
   /api/v1/o/{org}/automations/{automationId}:
     get:
       tags: [GAP-06 leitura interna]
@@ -3216,6 +3272,66 @@ components:
             - type: 'null'
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    ExecutionCounts:
+      type: object
+      description: 'total = soma das seis situacoes'
+      required: [total, succeeded, failed, inProgress, cancelled, notStarted, unconfirmed]
+      properties:
+        total: { type: integer, format: int64, minimum: 0 }
+        succeeded: { type: integer, format: int64, minimum: 0 }
+        failed: { type: integer, format: int64, minimum: 0 }
+        inProgress: { type: integer, format: int64, minimum: 0 }
+        cancelled: { type: integer, format: int64, minimum: 0 }
+        notStarted: { type: integer, format: int64, minimum: 0 }
+        unconfirmed: { type: integer, format: int64, minimum: 0 }
+    ExecutionSummary:
+      type: object
+      required: [from, to, total, succeeded, failed, inProgress, cancelled, notStarted, unconfirmed, sources]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        total: { type: integer, format: int64, minimum: 0 }
+        succeeded: { type: integer, format: int64, minimum: 0 }
+        failed: { type: integer, format: int64, minimum: 0 }
+        inProgress: { type: integer, format: int64, minimum: 0 }
+        cancelled: { type: integer, format: int64, minimum: 0 }
+        notStarted: { type: integer, format: int64, minimum: 0 }
+        unconfirmed: { type: integer, format: int64, minimum: 0 }
+        sources:
+          type: object
+          description: 'A mesma conta, por origem: Platform, Agent (execucoes relatadas e pedidos que nao viraram execucao) e execucao remota do Agent Client'
+          required: [platform, localAgent, remote]
+          properties:
+            platform: { $ref: '#/components/schemas/ExecutionCounts' }
+            localAgent: { $ref: '#/components/schemas/ExecutionCounts' }
+            remote: { $ref: '#/components/schemas/ExecutionCounts' }
+    OrganizationAutomation:
+      type: object
+      required: [automationId, workspaceId, workspaceName, name, description, status, latestPublishedVersion, lastExecution]
+      properties:
+        automationId: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        workspaceName: { type: string }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/ResourceStatus' }
+        latestPublishedVersion:
+          oneOf:
+            - type: object
+              required: [automationVersionId, versionNumber, publishedAt]
+              properties: { automationVersionId: { type: string, format: uuid }, versionNumber: { type: integer }, publishedAt: { type: string, format: date-time } }
+            - type: 'null'
+        lastExecution:
+          oneOf:
+            - type: object
+              required: [source, id, outcome, requestedAt]
+              properties:
+                source: { type: string, enum: [platform, localAgent, remote] }
+                id: { type: [string, 'null'], format: uuid, description: 'execucao (platform), execucao do Agent (localAgent) ou solicitacao remota (remote); nulo: pedido ao Agent anterior que nao virou execucao' }
+                outcome: { type: string, enum: [succeeded, failed, inProgress, cancelled, notStarted, unconfirmed] }
+                requestedAt: { type: string, format: date-time }
+            - type: 'null'
+    OrganizationAutomationPage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/OrganizationAutomation' } }, nextCursor: { type: [string, 'null'] } } }
     AutomationPage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/Automation' } }, nextCursor: { type: [string, 'null'] } } }
     AutomationVersion:
       type: object
