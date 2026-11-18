@@ -120,7 +120,7 @@ public class GatewayConfig {
 
     @Bean
     GatewayService gatewayService(OrgTransactions tx, MachineAuth auth, GatewayProperties p) {
-        return new GatewayService(tx, auth, p.limits().credentialDays(), p.remoteExecutionEnabled());
+        return new GatewayService(tx, auth, p.limits().credentialDays(), p.remoteExecutionEnabled(), p.renewalWindowDays());
     }
 
     @Bean

@@ -42,6 +42,9 @@ public final class GatewayService {
     static final int ACT_REMOTE_ENABLED = 15;
     static final int ACT_RECEIVING_PAUSED = 16;
     static final int ACT_RECEIVING_RESUMED = 17;
+    static final int ACT_CREDENTIAL_RENEWED = 18;
+    /** Motivo de revogacao da credencial substituida numa renovacao pela propria maquina (043). */
+    static final short REASON_MACHINE_RENEWAL = 6;
 
     /** Origem explicita (030): 1 = STUDIO_PACKAGE, 2 = EXTERNAL_PACKAGE, 3 = EXTERNAL_MONITORED (sem versao nem impressao). */
     static String sourceKind(short code) {
@@ -59,12 +62,19 @@ public final class GatewayService {
     private final int credentialDays;
     /** NEKKORA_EXECUCAO_REMOTA: desligado, nenhuma maquina e habilitada (o resto do canal nao muda). */
     private final boolean remoteExecution;
+    /** T01b: a renovacao pela maquina so e aceita quando faltarem ate estes dias para o vencimento. */
+    private final int renewalWindowDays;
 
     public GatewayService(OrgTransactions tx, MachineAuth auth, int credentialDays) {
         this(tx, auth, credentialDays, false);
     }
 
     public GatewayService(OrgTransactions tx, MachineAuth auth, int credentialDays, boolean remoteExecution) {
+        this(tx, auth, credentialDays, remoteExecution, 30);
+    }
+
+    public GatewayService(OrgTransactions tx, MachineAuth auth, int credentialDays, boolean remoteExecution, int renewalWindowDays) {
+        this.renewalWindowDays = renewalWindowDays;
         this.tx = tx;
         this.auth = auth;
         this.credentialDays = credentialDays;
@@ -434,6 +444,85 @@ public final class GatewayService {
                 LOG.info("evento=agente.recebimento_remoto estado={} agente={} correlacao={}", wanted, m.agentId(), RequestContext.correlation());
             }
             return receiving(j, m).orElseThrow();
+        });
+    }
+
+    // ------------------------------------------------------------------ continuidade da credencial (T01b)
+
+    /** A credencial NOVA. O segredo e o que a maquina gerou e enviou; o servidor nunca o devolve. */
+    public record Renewed(UUID credentialId, OffsetDateTime credentialExpiresAt) {
+    }
+
+    /**
+     * A maquina habilitada para execucao remota troca a PROPRIA credencial, sem pessoa e sem codigo: prova a posse da atual
+     * e envia o segredo novo, gerado nela. Numa transacao so: registra a renovacao, revoga a anterior (motivo 6, autoria da
+     * maquina) e emite a nova, com o mesmo emissor da anterior - a renovacao herda a autoridade de quem autorizou o vinculo.
+     * <ul>
+     * <li>so dentro da janela ({@code renewalWindowDays} antes do vencimento); antes disso: 409 credential_renewal_not_due;</li>
+     * <li>credencial VENCIDA ou revogada por outro motivo: 401. Nunca volta a valer; a saida e habilitar de novo;</li>
+     * <li>resposta perdida: a repeticao com a credencial ANTERIOR (ja revogada por esta renovacao) e o MESMO segredo novo
+     * devolve a mesma credencial nova. E a unica situacao em que uma credencial revogada e aceita aqui, e so para repetir a
+     * troca que a revogou;</li>
+     * <li>Agent que nao foi habilitado para execucao remota: 409 remote_execution_not_enabled (o Agent anterior continua
+     * dependendo do codigo de rotacao, como sempre).</li>
+     * </ul>
+     */
+    public Renewed renewCredential(MachineToken t, String newSecret) {
+        if (!Tokens.isValidFormat(newSecret)) {
+            throw ApiException.invalid("segredo");
+        }
+        if (!remoteExecution) {
+            throw new ApiException(ApiError.REMOTE_EXECUTION_UNAVAILABLE, "execucao_remota_desligada");
+        }
+        String newHash = Tokens.sha256Hex(newSecret);
+        return tx.inOrganization(t.organization(), Mode.READ_WRITE, j -> {
+            MachineAuth.UnlinkView v = auth.authenticateForUnlink(j, t);
+            if (v.revoked()) {
+                if (v.revocationReason() != REASON_MACHINE_RENEWAL) {
+                    throw ApiException.unauthenticated("credencial_revogada");
+                }
+                // repeticao: so quem tem o segredo anterior E o novo chega aqui; devolve a credencial que substituiu esta
+                return j.sql("SELECT c.credential_id, c.expires_at FROM public.agent_credential_renewals n "
+                        + "JOIN public.agent_credentials c ON c.organization_id = n.organization_id AND c.agent_id = n.agent_id "
+                        + "AND c.credential_hash = n.to_credential_hash "
+                        + "WHERE n.organization_id = ? AND n.from_credential_id = ? AND n.to_credential_hash = ? "
+                        + "AND c.revoked_at IS NULL AND c.expires_at > clock_timestamp()").param(v.organization()).param(v.credentialId()).param(newHash)
+                        .query((rs, n) -> new Renewed(rs.getObject(1, UUID.class), rs.getObject(2, OffsetDateTime.class))).optional()
+                        .orElseThrow(() -> ApiException.unauthenticated("renovacao_de_outro_segredo"));
+            }
+            if (v.agentStatus() != 2 || v.assignmentId() == null) {
+                throw ApiException.unauthenticated("vinculo");
+            }
+            record Current(String hash, UUID issuer, boolean expired, boolean due) {
+            }
+            Current c = j.sql("SELECT credential_hash, issued_by_membership_id, expires_at <= clock_timestamp(), "
+                    + "expires_at <= clock_timestamp() + make_interval(days => ?) "
+                    + "FROM public.agent_credentials WHERE organization_id = ? AND credential_id = ?").param(renewalWindowDays).param(v.organization()).param(v.credentialId())
+                    .query((rs, n) -> new Current(rs.getString(1), rs.getObject(2, UUID.class), rs.getBoolean(3), rs.getBoolean(4))).single();
+            if (c.expired()) {
+                throw ApiException.unauthenticated("credencial_vencida");
+            }
+            boolean enabled = j.sql("SELECT count(*) FROM public.agent_remote_enablements WHERE organization_id = ? AND agent_id = ?")
+                    .param(v.organization()).param(v.agentId()).query(Long.class).single() > 0;
+            if (!enabled) {
+                throw new ApiException(ApiError.REMOTE_EXECUTION_NOT_ENABLED, "maquina_nao_habilitada");
+            }
+            if (c.hash().equals(newHash)) {
+                throw ApiException.invalid("segredo_repetido");
+            }
+            if (!c.due()) {
+                throw new ApiException(ApiError.CREDENTIAL_RENEWAL_NOT_DUE, "fora_da_janela");
+            }
+            j.sql("INSERT INTO public.agent_credential_renewals (organization_id, agent_id, from_credential_id, to_credential_hash) VALUES (?, ?, ?, ?)")
+                    .param(v.organization()).param(v.agentId()).param(v.credentialId()).param(newHash).update();
+            j.sql("UPDATE public.agent_credentials SET revoked_at = clock_timestamp(), revoked_by_agent_id = agent_id, revocation_reason = ? "
+                    + "WHERE organization_id = ? AND credential_id = ?").param(REASON_MACHINE_RENEWAL).param(v.organization()).param(v.credentialId()).update();
+            UUID created = issueCredential(j, v.organization(), v.agentId(), newHash, c.issuer());
+            audit(j, v.organization(), ACT_CREDENTIAL_RENEWED, v.agentId(), v.workerId(), null, created);
+            LOG.info("evento=agente.credencial_renovada agente={} correlacao={}", v.agentId(), RequestContext.correlation());
+            return j.sql("SELECT credential_id, expires_at FROM public.agent_credentials WHERE organization_id = ? AND credential_id = ?")
+                    .param(v.organization()).param(created)
+                    .query((rs, n) -> new Renewed(rs.getObject(1, UUID.class), rs.getObject(2, OffsetDateTime.class))).single();
         });
     }
 
