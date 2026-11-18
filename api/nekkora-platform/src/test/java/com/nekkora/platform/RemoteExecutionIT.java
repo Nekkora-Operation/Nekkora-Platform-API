@@ -509,6 +509,9 @@ class RemoteExecutionIT extends PlatformTestBase {
         JsonNode p1 = JSON.readTree(page.body());
         assertThat(p1.get("items").size()).isEqualTo(500);
         assertThat(p1.get("total").asInt()).isEqualTo(1200);
+        // o que a automacao escreveu e o que o aplicativo da maquina avisou sao contados separados (um terco das linhas e EXECUTOR)
+        assertThat(p1.get("automationLines").asInt()).isEqualTo(800);
+        assertThat(p1.get("systemLines").asInt()).isEqualTo(400);
         assertThat(p1.get("nextAfter").asInt()).isEqualTo(500);
         assertThat(p1.get("closure").isNull()).isTrue();
         JsonNode first = p1.get("items").get(0);

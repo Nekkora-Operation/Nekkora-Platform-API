@@ -613,8 +613,12 @@ public class RemoteExecutionService {
     }
 
     /** {@code nextAfter}: o valor de {@code after} para a pagina seguinte; nulo quando esta pagina chegou ao fim do que ha agora. */
-    public record Logs(UUID attemptId, List<LogLine> items, int total, Integer nextAfter, LogsClosure closure, RetentionLoss retentionLoss,
-                       ContentExpiration expiration) {
+    /**
+     * {@code total} = {@code automationLines} + {@code systemLines}: o que o processo da automacao escreveu (STDOUT e STDERR) e os
+     * avisos do proprio aplicativo da maquina (EXECUTOR), que ocupam lugar no limite mas nao sao saida da automacao.
+     */
+    public record Logs(UUID attemptId, List<LogLine> items, int total, int automationLines, int systemLines, Integer nextAfter, LogsClosure closure,
+                       RetentionLoss retentionLoss, ContentExpiration expiration) {
     }
 
     private static final List<String> LOG_CHANNELS = List.of("STDOUT", "STDERR", "EXECUTOR");
@@ -638,13 +642,15 @@ public class RemoteExecutionService {
                             + "WHERE organization_id = ? AND attempt_id = ? AND sequence > ? ORDER BY sequence LIMIT ?").param(org).param(attemptId).param(from)
                     .param(page).query((rs, n) -> new LogLine(rs.getInt(1), rs.getObject(2, OffsetDateTime.class), LOG_CHANNELS.get(rs.getShort(3) - 1),
                             "UNKNOWN", rs.getBoolean(4), rs.getString(5), rs.getBoolean(6))).list();
-            int total = j.sql("SELECT count(*) FROM public.remote_attempt_log_lines WHERE organization_id = ? AND attempt_id = ?").param(org).param(attemptId)
-                    .query(Integer.class).single();
+            int[] counts = j.sql("SELECT count(*), count(*) FILTER (WHERE channel = 3) FROM public.remote_attempt_log_lines WHERE organization_id = ? "
+                    + "AND attempt_id = ?").param(org).param(attemptId).query((rs, n) -> new int[] {rs.getInt(1), rs.getInt(2)}).single();
+            int total = counts[0];
             LogsClosure closure = j.sql("SELECT lines, dropped_lines, closed_at FROM public.remote_attempt_log_closures WHERE organization_id = ? "
                             + "AND attempt_id = ?").param(org).param(attemptId)
                     .query((rs, n) -> new LogsClosure(rs.getInt(1), rs.getLong(2), rs.getObject(3, OffsetDateTime.class))).optional().orElse(null);
             Integer next = items.size() == page && items.get(items.size() - 1).sequence() < total ? items.get(items.size() - 1).sequence() : null;
-            return new Logs(attemptId, items, total, next, closure, retentionLoss(j, org, attemptId, 1), expiration(j, org, attemptId, 1));
+            return new Logs(attemptId, items, total, total - counts[1], counts[1], next, closure, retentionLoss(j, org, attemptId, 1),
+                    expiration(j, org, attemptId, 1));
         });
     }
 
