@@ -520,7 +520,7 @@ components:
       properties:
         attempt:
           type: object
-          required: [attemptId, remoteExecutionId, attemptNumber, automationId, automationVersionId, packageFingerprint, packageFingerprintRule, dependencies, pythonEnvironmentId, token, epoch, leaseSeconds]
+          required: [attemptId, remoteExecutionId, attemptNumber, automationId, automationVersionId, packageFingerprint, workspaceId, packageFingerprintRule, dependencies, pythonEnvironmentId, token, epoch, leaseSeconds]
           properties:
             attemptId: { type: string, format: uuid }
             remoteExecutionId: { type: string, format: uuid }
@@ -530,6 +530,7 @@ components:
             packageFingerprint: { type: string, pattern: '^[0-9a-f]{64}$' }
             packageFingerprintRule: { type: string }
             dependencies: { type: array, items: { type: string }, description: 'O efetivo congelado na solicitacao (nome==versao)' }
+            workspaceId: { type: string, format: uuid, description: 'O ambiente da solicitacao' }
             pythonEnvironmentId: { type: [string, 'null'], pattern: '^[A-Za-z0-9_-]{43}$', description: 'O ambiente Python escolhido para a automacao NESTA maquina: o identificador opaco que ela mesma publicou no inventario. A Platform nunca envia um caminho. A maquina confere o ambiente antes de iniciar; se ele nao existir mais, recusa com ENVIRONMENT_GONE, sem escolher outro. Nulo so em tentativas anteriores a escolha do Python.' }
             token: { type: string, description: 'Token da atribuicao; aparece so aqui' }
             epoch: { type: integer, minimum: 1 }
@@ -554,7 +555,7 @@ components:
         token: { type: string }
         epoch: { type: integer, minimum: 1 }
         state: { type: string, enum: [PREPARING, STARTING, RUNNING, SUCCEEDED, FAILED, CANCELLED, TIMED_OUT, REFUSED, ENDED_UNKNOWN] }
-        refusalReason: { type: string, enum: [BUSY, PAUSED, PACKAGE_INVALID, ENVIRONMENT_GONE, ENVIRONMENT_INCOMPATIBLE, DEPENDENCIES_MISSING, DISK_PRESSURE, CLIENT_INCOMPATIBLE], description: 'So com REFUSED' }
+        refusalReason: { type: string, enum: [BUSY, PAUSED, PACKAGE_INVALID, ENVIRONMENT_GONE, ENVIRONMENT_INCOMPATIBLE, DEPENDENCIES_MISSING, DISK_PRESSURE, CLIENT_INCOMPATIBLE, SESSION_UNAVAILABLE], description: 'So com REFUSED' }
         exitCode: { type: integer, description: 'So com SUCCEEDED, FAILED ou TIMED_OUT' }
     RemoteAttemptStatus:
       type: object

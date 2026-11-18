@@ -147,6 +147,21 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
     }
 
     @Test
+    void aMaquinaRecusaQuandoNaoHaSessaoUtilizavelEOMotivoFicaGravado() {
+        // 049: tela bloqueada ou sem sessao interativa - o aplicativo nao inicia, e diz por que
+        Machine m = machine(true);
+        String attempt = queued(m);
+        String grant = received(m, attempt);
+        assertThat(state(m, attempt, grant, "PREPARING", null).status()).isEqualTo(200);
+        assertThat(state(m, attempt, grant, "STARTING", null).status()).isEqualTo(200);
+        MachineClient.Response r = state(m, attempt, grant, "REFUSED", "\"refusalReason\":\"SESSION_UNAVAILABLE\"");
+        assertThat(r.status()).as(r.raw()).isEqualTo(200);
+        assertThat(r.body().get("proceed").asBoolean()).isFalse();
+        assertThat(stateOf(attempt)).isEqualTo("11|SESSION_UNAVAILABLE");
+        assertThat(fx.value("SELECT started_at IS NULL FROM remote_attempts WHERE attempt_id = '" + attempt + "'")).isEqualTo("t");
+    }
+
+    @Test
     void aMaquinaBaixaSoOPacoteDaTentativaQueRecebeuEAntesDeIniciar() throws Exception {
         byte[] zip = ("PK pacote sintetico " + UUID.randomUUID()).getBytes(java.nio.charset.StandardCharsets.US_ASCII);
         String sha = publishPackage(zip);
@@ -251,6 +266,8 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
         assertThat(offer.get("dependencies").toString()).isEqualTo("[\"idna==3.7\"]");
         // 047: o ambiente Python escolhido para a automacao NESTA maquina - o identificador que ela publicou, nunca um caminho
         assertThat(offer.get("pythonEnvironmentId").asString()).isEqualTo(ENVIRONMENT);
+        // o ambiente da solicitacao: o aplicativo o grava no registro da execucao dele
+        assertThat(offer.get("workspaceId").asString()).isEqualTo(fx.workspace.toString());
         assertThat(offer.get("epoch").asInt()).isEqualTo(1);
         assertThat(offer.get("leaseSeconds").asInt()).isEqualTo(90);
         String token = offer.get("token").asString();

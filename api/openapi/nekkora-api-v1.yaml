@@ -3448,7 +3448,7 @@ components:
               workerId: { type: string, format: uuid }
               workerName: { type: string }
               state: { $ref: '#/components/schemas/RemoteAttemptState' }
-              refusalReason: { type: [string, 'null'], enum: [BUSY, PAUSED, PACKAGE_INVALID, ENVIRONMENT_GONE, ENVIRONMENT_INCOMPATIBLE, DEPENDENCIES_MISSING, DISK_PRESSURE, CLIENT_INCOMPATIBLE, AUTHORIZATION_MISSING, AUTHORIZATION_REVOKED, AUTHORIZATION_EXPIRED, WORKER_NOT_AUTHORIZED, MACHINE_NOT_LINKED, MACHINE_NOT_ENABLED, MACHINE_INCOMPATIBLE, null] }
+              refusalReason: { type: [string, 'null'], enum: [BUSY, PAUSED, PACKAGE_INVALID, ENVIRONMENT_GONE, ENVIRONMENT_INCOMPATIBLE, DEPENDENCIES_MISSING, DISK_PRESSURE, CLIENT_INCOMPATIBLE, SESSION_UNAVAILABLE, AUTHORIZATION_MISSING, AUTHORIZATION_REVOKED, AUTHORIZATION_EXPIRED, WORKER_NOT_AUTHORIZED, MACHINE_NOT_LINKED, MACHINE_NOT_ENABLED, MACHINE_INCOMPATIBLE, null] }
               communication: { type: string, enum: [OK, LOST, NONE], description: 'LOST: o prazo da maquina venceu; nao muda o estado' }
               exitCode: { type: [integer, 'null'] }
               createdAt: { type: string, format: date-time }
