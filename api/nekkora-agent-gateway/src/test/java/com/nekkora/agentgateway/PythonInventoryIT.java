@@ -25,27 +25,9 @@ import com.nekkora.core.token.Tokens;
  * REAL (HTTP, papel nekkora_ingestion, PostgreSQL com as migrations ate a 044, recurso LIGADO). O inventario e um retrato:
  * so identificador opaco, versao, tipo e instante da observacao - nenhum caminho entra, nem por campo a mais.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = AgentGatewayApplication.class)
-class PythonInventoryIT {
+class PythonInventoryIT extends RemoteEnabledGatewayIT {
 
-    static final RealDatabase DB = RealDatabase.shared();
     static AgentFixture fx;
-
-    @LocalServerPort
-    int port;
-
-    @DynamicPropertySource
-    static void configureProperties(DynamicPropertyRegistry r) {
-        RealRedis redis = RealRedis.shared();
-        r.add("nekkora.database.url", DB::url);
-        r.add("nekkora.database.user", () -> "nekkora_ingestion");
-        r.add("nekkora.database.password", () -> DB.password("nekkora_ingestion"));
-        r.add("spring.data.redis.host", redis::host);
-        r.add("spring.data.redis.port", redis::port);
-        r.add("nekkora.trusted-proxies", () -> "127.0.0.1/32,::1/128");
-        r.add("nekkora.limits.redeem-failures-per-hour", () -> "1000");
-        r.add("nekkora.remote-execution.enabled", () -> "true");
-    }
 
     @BeforeAll
     static void fixture() {
