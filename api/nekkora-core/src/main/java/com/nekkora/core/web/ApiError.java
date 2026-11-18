@@ -106,6 +106,10 @@ public enum ApiError {
     /** 058: com resultado nao confirmado, a repeticao fica bloqueada ate a reconciliacao (pela maquina, ou declarada por um ORG_ADMIN). */
     REMOTE_PREVIOUS_RESULT_UNCONFIRMED(HttpStatus.CONFLICT, "conflict", "remote_previous_result_unconfirmed"),
     REMOTE_ATTEMPT_NOT_UNCONFIRMED(HttpStatus.CONFLICT, "conflict", "remote_attempt_not_unconfirmed"),
+    /** 060: o processo principal da ultima tentativa desta maquina terminou, mas ha processos da automacao ainda ativos nela. */
+    REMOTE_MACHINE_FINISHING(HttpStatus.CONFLICT, "conflict", "remote_machine_finishing"),
+    /** 060: a ultima tentativa terminou, mas os processos dela ainda nao foram confirmados ausentes: a repeticao fica bloqueada. */
+    REMOTE_PREVIOUS_PROCESSES_PENDING(HttpStatus.CONFLICT, "conflict", "remote_previous_processes_pending"),
     REMOTE_ATTEMPT_ALREADY_RECONCILED(HttpStatus.CONFLICT, "conflict", "remote_attempt_already_reconciled"),
     REMOTE_REQUIREMENTS_NOT_DECLARED(HttpStatus.CONFLICT, "conflict", "remote_requirements_not_declared"),
     REMOTE_REQUIREMENTS_CONFLICT(HttpStatus.CONFLICT, "conflict", "remote_requirements_conflict"),
