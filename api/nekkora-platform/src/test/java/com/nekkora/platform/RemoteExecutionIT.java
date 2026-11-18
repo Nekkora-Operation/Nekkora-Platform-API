@@ -787,6 +787,248 @@ class RemoteExecutionIT extends PlatformTestBase {
                 + "' WHERE remote_execution_id = '" + execution + "'")).as("cancelamento por quem nao executa").isEqualTo("42501");
     }
 
+    // ------------------------------------------------------------------ 057: retencao no servidor
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.nekkora.platform.admin.RemoteRetention retention;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.nekkora.core.db.OrgTransactions orgTransactions;
+
+    private static final String RESULTS_DIR = System.getProperty("java.io.tmpdir") + "/nekkora-platform-it-resultados";
+
+    /** Uma tentativa em execucao, com {@code lines} linhas (os tres canais). */
+    private String runningWithLines(Setup s, Machine m, int lines) throws Exception {
+        String attempt = JSON.readTree(request(s, m).body()).get("attempts").get(0).get("attemptId").asString();
+        machineMoves(s, attempt, 2, 3, 4, 5, 6);
+        assertThat(as("nekkora_ingestion", s.org().id(), "INSERT INTO remote_attempt_log_lines (attempt_id, sequence, organization_id, captured_at, channel, "
+                + "truncated, message) SELECT '" + attempt + "', g, '" + s.org().id() + "', clock_timestamp(), 1 + (g % 3), false, 'linha ' || g FROM "
+                + "generate_series(1, " + lines + ") g")).isEqualTo("OK");
+        return attempt;
+    }
+
+    private static String store(Setup s, String text) throws Exception {
+        byte[] bytes = text.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        String sha = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
+        com.nekkora.core.artifact.ResultStore.at(RESULTS_DIR).put(s.org().id(), sha, bytes);
+        return sha;
+    }
+
+    private static boolean stored(Setup s, String sha) throws Exception {
+        return com.nekkora.core.artifact.ResultStore.at(RESULTS_DIR).get(s.org().id(), sha).isPresent();
+    }
+
+    private static void result(Setup s, String attempt, int number, String name, String text, String sha) {
+        assertThat(as("nekkora_ingestion", s.org().id(), "INSERT INTO remote_attempt_results (attempt_id, result_number, organization_id, file_name, "
+                + "size_bytes, sha256) VALUES ('" + attempt + "', " + number + ", '" + s.org().id() + "', '" + name + "', "
+                + text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length + ", '" + sha + "')")).isEqualTo("OK");
+    }
+
+    /** A maquina fecha os dois envios (entrega concluida). */
+    private static void closeDelivery(Setup s, String attempt, int lines, int files) {
+        assertThat(as("nekkora_ingestion", s.org().id(),
+                "INSERT INTO remote_attempt_log_closures (attempt_id, organization_id, lines, dropped_lines) VALUES ('" + attempt + "', '" + s.org().id() + "', "
+                        + lines + ", 0)",
+                "INSERT INTO remote_attempt_result_closures (attempt_id, organization_id, sent, skipped_by_limit) VALUES ('" + attempt + "', '" + s.org().id()
+                        + "', " + files + ", 0)")).isEqualTo("OK");
+    }
+
+    /** O relogio do teste: a entrega terminou ha {@code days} dias. So o superusuario muda essas datas. */
+    private static void deliveryClosedDaysAgo(String attempt, int days) throws Exception {
+        try (Connection c = DB.connectAsSuperuser(); Statement st = c.createStatement()) {
+            st.execute("SET session_replication_role = replica");
+            st.execute("UPDATE remote_attempt_log_closures SET closed_at = closed_at - interval '" + days + " days' WHERE attempt_id = '" + attempt + "'");
+            st.execute("UPDATE remote_attempt_result_closures SET closed_at = closed_at - interval '" + days + " days' WHERE attempt_id = '" + attempt + "'");
+        }
+    }
+
+    private JsonNode read(Setup s, String attempt, String what) throws Exception {
+        String execution = value("SELECT remote_execution_id FROM remote_attempts WHERE attempt_id = '" + attempt + "'");
+        BrowserClient.Response r = s.admin().get(s.o() + "/remote-executions/" + execution + "/attempts/" + attempt + "/" + what);
+        assertThat(r.status()).as(r.body()).isEqualTo(200);
+        return JSON.readTree(r.body());
+    }
+
+    /**
+     * 30 dias contados do FIM DA ENTREGA. Vencido: o texto das linhas e apagado e os bytes dos arquivos saem; a linha, o nome, o
+     * tamanho, o SHA-256, a tentativa, os fechamentos e o registro do que venceu ficam. Entrega aberta nao vence. Repetir e seguro.
+     */
+    @Test
+    void retencaoNoServidorVenceDoFimDaEntregaApagaSoOConteudoEPodeSerRepetida() throws Exception {
+        Setup s = setup();
+        declare(s, null);
+        Machine a = machine(s, "Concluida", true);
+        Machine b = machine(s, "EntregaAberta", true);
+        Machine c = machine(s, "Revogada", true);
+        Machine d = machine(s, "MesmosBytes", true);
+        Machine e = machine(s, "AindaNoPrazo", true);
+        Machine f = machine(s, "FalhaNaRemocao", true);
+        for (Machine m : new Machine[] {a, b, c, d, e, f}) {
+            heartbeat(s, m, true);
+            authorize(s, m);
+        }
+        String shared = store(s, "bytes iguais em duas tentativas\n");
+        String only = store(s, "bytes so da tentativa vencida\n");
+        String later = store(s, "bytes da tentativa cuja remocao falha primeiro\n");
+
+        // A: entrega concluida ha 31 dias - vence
+        String expired = runningWithLines(s, a, 20);
+        result(s, expired, 1, "igual.txt", "bytes iguais em duas tentativas\n", shared);
+        result(s, expired, 2, "so-desta.txt", "bytes so da tentativa vencida\n", only);
+        machineMoves(s, expired, 7);
+        closeDelivery(s, expired, 20, 2);
+        deliveryClosedDaysAgo(expired, 31);
+        // D: os mesmos bytes, entrega concluida agora - nao vence, e os bytes compartilhados ficam
+        String keeps = runningWithLines(s, d, 3);
+        result(s, keeps, 1, "igual.txt", "bytes iguais em duas tentativas\n", shared);
+        machineMoves(s, keeps, 7);
+        closeDelivery(s, keeps, 3, 1);
+        // B: terminou, mas a maquina nunca fechou o envio - entrega aberta, nada vence, por mais antiga que seja
+        String open = runningWithLines(s, b, 5);
+        machineMoves(s, open, 7);
+        // E: concluida ha 29 dias - ainda no prazo
+        String inTime = runningWithLines(s, e, 4);
+        machineMoves(s, inTime, 7);
+        closeDelivery(s, inTime, 4, 0);
+        deliveryClosedDaysAgo(inTime, 29);
+        // C: em execucao quando a maquina foi revogada ha 31 dias - encerramento explicito da entrega
+        String revoked = runningWithLines(s, c, 6);
+        stepUp(s);
+        assertThat(s.admin().post(s.o() + "/agents/" + c.agent() + "/revoke", "{\"reason\":\"ADMINISTRATIVE\"}").status()).isEqualTo(204);
+        assertThat(row(revoked)).isEqualTo("13|-|MACHINE_REVOKED|-");
+        try (Connection cn = DB.connectAsSuperuser(); Statement st = cn.createStatement()) {
+            st.execute("SET session_replication_role = replica");
+            st.execute("UPDATE remote_attempts SET created_at = created_at - interval '31 days', offer_valid_until = offer_valid_until - interval '31 days', "
+                    + "offered_at = offered_at - interval '31 days', received_at = received_at - interval '31 days', started_at = started_at - interval '31 days', "
+                    + "ended_at = ended_at - interval '31 days', state_changed_at = state_changed_at - interval '31 days', "
+                    + "lease_expires_at = lease_expires_at - interval '31 days' WHERE attempt_id = '" + revoked + "'");
+            st.execute("UPDATE worker_agent_assignments SET created_at = created_at - interval '40 days', ended_at = ended_at - interval '31 days' "
+                    + "WHERE agent_id = '" + c.agent() + "'");
+            st.execute("UPDATE agents SET updated_at = updated_at - interval '31 days' WHERE agent_id = '" + c.agent() + "'");
+        }
+        String before = value("SELECT count(*) FROM remote_attempt_log_lines WHERE organization_id = '" + s.org().id() + "'");
+
+        // antes do ciclo o banco nao deixa a Platform apagar nada: sem vencimento registrado nao ha remocao; e nao aceita vencimento
+        // de entrega aberta nem de prazo que nao venceu
+        assertThat(as("nekkora_platform", s.org().id(), "UPDATE remote_attempt_log_lines SET message = '', redacted_at = clock_timestamp() WHERE attempt_id = '"
+                + expired + "'")).isEqualTo("42501");
+        assertThat(as("nekkora_platform", s.org().id(), "UPDATE remote_attempt_results SET removed_at = clock_timestamp() WHERE attempt_id = '" + expired + "'"))
+                .isEqualTo("42501");
+        String ins = "INSERT INTO remote_attempt_content_expirations (attempt_id, kind, organization_id, delivery_ended_at, delivery_end, retention_days, "
+                + "items, bytes) VALUES ('%s', 1, '" + s.org().id() + "', clock_timestamp() - interval '90 days', 1, %d, 0, 0)";
+        assertThat(as("nekkora_platform", s.org().id(), ins.formatted(open, 30))).as("entrega aberta nao vence").isEqualTo("23514");
+        assertThat(as("nekkora_platform", s.org().id(), ins.formatted(inTime, 30))).as("o banco usa a data dele, nao a de quem insere").isEqualTo("23514");
+        assertThat(as("nekkora_platform", s.org().id(), ins.formatted(expired, 0))).isEqualTo("23514");
+        assertThat(as("nekkora_ingestion", s.org().id(), ins.formatted(expired, 30))).as("o canal das maquinas nao registra vencimento").isEqualTo("42501");
+
+        // --- falha na remocao dos bytes: o vencimento fica registrado, nada e marcado como removido, e o ciclo seguinte retoma
+        String retried = runningWithLines(s, f, 2);
+        result(s, retried, 1, "depois.txt", "bytes da tentativa cuja remocao falha primeiro\n", later);
+        machineMoves(s, retried, 7);
+        closeDelivery(s, retried, 2, 1);
+        deliveryClosedDaysAgo(retried, 45);
+        com.nekkora.platform.admin.RemoteRetention broken = new com.nekkora.platform.admin.RemoteRetention(orgTransactions,
+                com.nekkora.core.artifact.ResultPurge.at(""), 44);
+        com.nekkora.platform.admin.RemoteRetention.Cycle failing = broken.cycle();
+        assertThat(failing.pending()).as("o arquivo ficou para o ciclo seguinte").isGreaterThanOrEqualTo(1);
+        JsonNode half = read(s, retried, "results");
+        assertThat(half.get("expiration").get("confirmedAt").isNull()).as("vencido, remocao ainda nao confirmada").isTrue();
+        assertThat(half.get("expiration").get("retentionDays").asInt()).isEqualTo(44);
+        assertThat(half.get("items").get(0).get("available").asBoolean()).as("nada e marcado como removido sem os bytes terem saido").isTrue();
+        assertThat(stored(s, later)).isTrue();
+        assertThat(as("nekkora_platform", s.org().id(), "UPDATE remote_attempt_content_expirations SET confirmed_at = clock_timestamp() WHERE attempt_id = '"
+                + retried + "' AND kind = 2")).as("o banco nao aceita a confirmacao com conteudo presente").isEqualTo("23514");
+        // com 44 dias, as tentativas de 31 dias NAO venceram
+        assertThat(read(s, expired, "logs").get("expiration").isNull()).isTrue();
+
+        // --- o ciclo de verdade (30 dias)
+        assertThat(retention.days()).isEqualTo(30);
+        com.nekkora.platform.admin.RemoteRetention.Cycle cycle = retention.cycle();
+        assertThat(cycle.failed()).isZero();
+        assertThat(cycle.pending()).isZero();
+        assertThat(cycle.expired()).as("registros e resultados de A, registros de C").isGreaterThanOrEqualTo(3);
+
+        // A: o texto saiu, as linhas ficaram; a leitura diz que venceu, quando, o prazo e como a entrega tinha terminado
+        JsonNode logs = read(s, expired, "logs");
+        assertThat(logs.get("total").asInt()).isEqualTo(20);
+        assertThat(logs.get("items").size()).isEqualTo(20);
+        for (JsonNode line : logs.get("items")) {
+            assertThat(line.get("textRemoved").asBoolean()).isTrue();
+            assertThat(line.get("message").asString()).isEmpty();
+            assertThat(line.get("channel").asString()).isIn("STDOUT", "STDERR", "EXECUTOR");
+        }
+        assertThat(logs.get("closure").get("lines").asInt()).as("o fechamento fica").isEqualTo(20);
+        JsonNode x = logs.get("expiration");
+        assertThat(x.get("deliveryEnd").asString()).isEqualTo("CLOSED");
+        assertThat(x.get("retentionDays").asInt()).isEqualTo(30);
+        assertThat(x.get("items").asInt()).isEqualTo(20);
+        assertThat(x.get("confirmedAt").isNull()).isFalse();
+        JsonNode files = read(s, expired, "results");
+        assertThat(files.get("items").size()).isEqualTo(2);
+        assertThat(files.get("items").get(0).get("available").asBoolean()).isFalse();
+        assertThat(files.get("items").get(1).get("available").asBoolean()).isFalse();
+        assertThat(files.get("items").get(1).get("fileName").asString()).as("nome, tamanho e SHA-256 ficam").isEqualTo("so-desta.txt");
+        assertThat(files.get("items").get(1).get("sha256").asString()).isEqualTo(only);
+        assertThat(files.get("expiration").get("items").asInt()).isEqualTo(2);
+        assertThat(files.get("expiration").get("confirmedAt").isNull()).isFalse();
+        assertThat(stored(s, only)).as("os bytes so desta tentativa sairam do armazenamento").isFalse();
+        assertThat(stored(s, shared)).as("os bytes que outra tentativa ainda usa ficam").isTrue();
+        String execution = value("SELECT remote_execution_id FROM remote_attempts WHERE attempt_id = '" + expired + "'");
+        refused(s.admin().get(s.o() + "/remote-executions/" + execution + "/attempts/" + expired + "/results/1/content"), "remote_result_unavailable");
+        // historico e auditoria ficam: a tentativa, o desfecho, os fechamentos
+        assertThat(row(expired)).isEqualTo("7|-|-|-");
+        assertThat(value("SELECT count(*) FROM remote_attempt_log_lines WHERE organization_id = '" + s.org().id() + "'")).as("nenhuma linha de tabela apagada")
+                .isEqualTo(String.valueOf(Integer.parseInt(before) + 2));
+        assertThat(value("SELECT count(*) FROM remote_attempt_result_closures WHERE attempt_id = '" + expired + "'")).isEqualTo("1");
+
+        // D: mesmos bytes, no prazo - intacta e baixavel
+        JsonNode kept = read(s, keeps, "results");
+        assertThat(kept.get("expiration").isNull()).isTrue();
+        assertThat(kept.get("items").get(0).get("available").asBoolean()).isTrue();
+        String keptExecution = value("SELECT remote_execution_id FROM remote_attempts WHERE attempt_id = '" + keeps + "'");
+        assertThat(s.admin().get(s.o() + "/remote-executions/" + keptExecution + "/attempts/" + keeps + "/results/1/content").body())
+                .isEqualTo("bytes iguais em duas tentativas\n");
+        // B: entrega aberta ha mais de 30 dias - nada vence
+        JsonNode stillOpen = read(s, open, "logs");
+        assertThat(stillOpen.get("expiration").isNull()).isTrue();
+        assertThat(stillOpen.get("items").get(0).get("message").asString()).isEqualTo("linha 1");
+        // E: 29 dias - no prazo
+        assertThat(read(s, inTime, "logs").get("expiration").isNull()).isTrue();
+        assertThat(read(s, inTime, "logs").get("items").get(0).get("textRemoved").asBoolean()).isFalse();
+        // C: vinculo encerrado ha 31 dias - encerramento explicito da entrega; o desfecho "sem confirmacao" continua la
+        JsonNode gone = read(s, revoked, "logs");
+        assertThat(gone.get("expiration").get("deliveryEnd").asString()).isEqualTo("LINK_ENDED");
+        assertThat(gone.get("items").get(0).get("textRemoved").asBoolean()).isTrue();
+        assertThat(row(revoked)).isEqualTo("13|-|MACHINE_REVOKED|-");
+        // F: o ciclo seguinte retomou a remocao que tinha falhado - o prazo registrado continua o de quando venceu
+        JsonNode done = read(s, retried, "results");
+        assertThat(done.get("expiration").get("confirmedAt").isNull()).isFalse();
+        assertThat(done.get("expiration").get("retentionDays").asInt()).isEqualTo(44);
+        assertThat(done.get("items").get(0).get("available").asBoolean()).isFalse();
+        assertThat(stored(s, later)).isFalse();
+
+        // repetir nao muda nada
+        com.nekkora.platform.admin.RemoteRetention.Cycle again = retention.cycle();
+        assertThat(again.failed()).isZero();
+        assertThat(again.linesRedacted()).isZero();
+        assertThat(again.filesRemoved()).isZero();
+        assertThat(read(s, open, "logs").get("items").get(0).get("message").asString()).isEqualTo("linha 1");
+
+        // depois do vencimento: nada novo entra; o registro do que venceu nao muda nem some; a confirmacao e uma vez so
+        assertThat(as("nekkora_ingestion", s.org().id(), "INSERT INTO remote_attempt_log_lines (attempt_id, sequence, organization_id, captured_at, channel, "
+                + "truncated, message) VALUES ('" + revoked + "', 7, '" + s.org().id() + "', clock_timestamp(), 1, false, 'tarde demais')")).isEqualTo("23514");
+        assertThat(as("nekkora_platform", s.org().id(), "DELETE FROM remote_attempt_content_expirations WHERE attempt_id = '" + expired + "'")).isEqualTo("42501");
+        assertThat(as("nekkora_platform", s.org().id(), "UPDATE remote_attempt_content_expirations SET retention_days = 1 WHERE attempt_id = '" + expired + "'"))
+                .isEqualTo("42501");
+        assertThat(as("nekkora_platform", s.org().id(), "UPDATE remote_attempt_content_expirations SET confirmed_at = clock_timestamp() WHERE attempt_id = '"
+                + expired + "' AND kind = 1")).isEqualTo("42501");
+        assertThat(as("nekkora_platform", s.org().id(), "DELETE FROM remote_attempt_log_lines WHERE attempt_id = '" + expired + "'")).isEqualTo("42501");
+        // outra organizacao nao ve o vencimento
+        Setup other = setup();
+        assertThat(as("nekkora_platform", other.org().id(), "DO $$ BEGIN IF (SELECT count(*) FROM remote_attempt_content_expirations) > 0 THEN "
+                + "RAISE EXCEPTION 'vazou' USING ERRCODE = 'P0001'; END IF; END $$")).isEqualTo("OK");
+    }
+
     // ------------------------------------------------------------------ 055: reconciliacao periodica
 
     @org.springframework.beans.factory.annotation.Autowired

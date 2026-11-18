@@ -576,7 +576,24 @@ public class RemoteExecutionService {
                 .optional().orElse(null);
     }
 
-    public record Results(UUID attemptId, List<ResultFile> items, ResultsClosure closure, RetentionLoss retentionLoss) {
+    /**
+     * 057: o conteudo desta tentativa venceu pela retencao do SERVIDOR. {@code deliveryEnd}: como a entrega tinha terminado
+     * (CLOSED, LOSS_NOTICE ou LINK_ENDED). {@code confirmedAt} nulo: a remocao ainda esta em andamento. {@code items}: quanto havia.
+     */
+    public record ContentExpiration(OffsetDateTime expiredAt, OffsetDateTime confirmedAt, int retentionDays, OffsetDateTime deliveryEndedAt,
+                                    String deliveryEnd, int items) {
+    }
+
+    private static final List<String> DELIVERY_ENDS = List.of("CLOSED", "LOSS_NOTICE", "LINK_ENDED");
+
+    private static ContentExpiration expiration(JdbcClient j, UUID org, UUID attemptId, int kind) {
+        return j.sql("SELECT expired_at, confirmed_at, retention_days, delivery_ended_at, delivery_end, items FROM public.remote_attempt_content_expirations "
+                        + "WHERE organization_id = ? AND attempt_id = ? AND kind = ?").param(org).param(attemptId).param((short) kind)
+                .query((rs, n) -> new ContentExpiration(rs.getObject(1, OffsetDateTime.class), rs.getObject(2, OffsetDateTime.class), rs.getInt(3),
+                        rs.getObject(4, OffsetDateTime.class), DELIVERY_ENDS.get(rs.getShort(5) - 1), rs.getInt(6))).optional().orElse(null);
+    }
+
+    public record Results(UUID attemptId, List<ResultFile> items, ResultsClosure closure, RetentionLoss retentionLoss, ContentExpiration expiration) {
     }
 
     public record ResultsClosure(int sent, int skippedByLimit, OffsetDateTime closedAt) {
@@ -596,7 +613,8 @@ public class RemoteExecutionService {
     }
 
     /** {@code nextAfter}: o valor de {@code after} para a pagina seguinte; nulo quando esta pagina chegou ao fim do que ha agora. */
-    public record Logs(UUID attemptId, List<LogLine> items, int total, Integer nextAfter, LogsClosure closure, RetentionLoss retentionLoss) {
+    public record Logs(UUID attemptId, List<LogLine> items, int total, Integer nextAfter, LogsClosure closure, RetentionLoss retentionLoss,
+                       ContentExpiration expiration) {
     }
 
     private static final List<String> LOG_CHANNELS = List.of("STDOUT", "STDERR", "EXECUTOR");
@@ -626,7 +644,7 @@ public class RemoteExecutionService {
                             + "AND attempt_id = ?").param(org).param(attemptId)
                     .query((rs, n) -> new LogsClosure(rs.getInt(1), rs.getLong(2), rs.getObject(3, OffsetDateTime.class))).optional().orElse(null);
             Integer next = items.size() == page && items.get(items.size() - 1).sequence() < total ? items.get(items.size() - 1).sequence() : null;
-            return new Logs(attemptId, items, total, next, closure, retentionLoss(j, org, attemptId, 1));
+            return new Logs(attemptId, items, total, next, closure, retentionLoss(j, org, attemptId, 1), expiration(j, org, attemptId, 1));
         });
     }
 
@@ -642,7 +660,7 @@ public class RemoteExecutionService {
             ResultsClosure closure = j.sql("SELECT sent, skipped_by_limit, closed_at FROM public.remote_attempt_result_closures WHERE organization_id = ? "
                             + "AND attempt_id = ?").param(org).param(attemptId)
                     .query((rs, n) -> new ResultsClosure(rs.getInt(1), rs.getInt(2), rs.getObject(3, OffsetDateTime.class))).optional().orElse(null);
-            return new Results(attemptId, items, closure, retentionLoss(j, org, attemptId, 2));
+            return new Results(attemptId, items, closure, retentionLoss(j, org, attemptId, 2), expiration(j, org, attemptId, 2));
         });
     }
 
