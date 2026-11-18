@@ -30,7 +30,7 @@ import tools.jackson.databind.json.JsonMapper;
  * de destino, nunca transferida. A maquina e simulada por SQL com o papel real nekkora_ingestion (o canal dela, por HTTP, e
  * conferido no modulo do gateway: RemoteDeliveryIT).
  */
-@TestPropertySource(properties = "nekkora.remote-execution.enabled=true")
+@TestPropertySource(properties = {"nekkora.remote-execution.enabled=true", "nekkora.resultados.dir=${java.io.tmpdir}/nekkora-platform-it-resultados"})
 class RemoteExecutionIT extends PlatformTestBase {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
@@ -367,6 +367,71 @@ class RemoteExecutionIT extends PlatformTestBase {
         assertThat(as("nekkora_ingestion", s.org().id(), "SELECT count(*) FROM automation_python_selections")).isEqualTo("42501");
         assertThat(as("nekkora_platform", s.org().id(), "UPDATE automation_python_selections SET environment_id = '" + ENV_A + "' WHERE agent_id = '" + m.agent()
                 + "'")).isEqualTo("42501");
+    }
+
+    @Test
+    void osResultadosSaoListadosEBaixadosSoPorQuemPodeVerRegistrosEODownloadFicaNaTrilha() throws Exception {
+        Setup s = setup();
+        declare(s, null);
+        Machine m = machine(s, "Resultados", true);
+        heartbeat(s, m, true);
+        authorize(s, m);
+        BrowserClient.Response ok = request(s, m);
+        assertThat(ok.status()).as(ok.body()).isEqualTo(201);
+        String execution = ok.field("remoteExecutionId");
+        String attempt = JSON.readTree(ok.body()).get("attempts").get(0).get("attemptId").asString();
+        String base = s.o() + "/remote-executions/" + execution + "/attempts/" + attempt + "/results";
+        // sem nada enviado: lista vazia, envio nao fechado
+        JsonNode empty = JSON.readTree(s.admin().get(base).body());
+        assertThat(empty.get("items").size()).isZero();
+        assertThat(empty.get("closure").isNull()).isTrue();
+        // a maquina executa e envia (como o gateway: bytes no armazenamento, metadado com o papel da ingestao)
+        machineMoves(s, attempt, 2, 3, 4, 5, 6);
+        byte[] bytes = "resultado;ok\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        String sha = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
+        com.nekkora.core.artifact.ResultStore store = com.nekkora.core.artifact.ResultStore.at(System.getProperty("java.io.tmpdir") + "/nekkora-platform-it-resultados");
+        store.put(s.org().id(), sha, bytes);
+        String insert = "INSERT INTO remote_attempt_results (attempt_id, result_number, organization_id, file_name, size_bytes, sha256) VALUES ('" + attempt
+                + "', %d, '" + s.org().id() + "', '%s', %d, '%s')";
+        assertThat(as("nekkora_ingestion", s.org().id(), insert.formatted(1, "dados/relatório final.csv", bytes.length, sha),
+                insert.formatted(2, "sumido.txt", 3, "b".repeat(64)))).isEqualTo("OK");
+        machineMoves(s, attempt, 7);
+        assertThat(as("nekkora_ingestion", s.org().id(), "INSERT INTO remote_attempt_result_closures (attempt_id, organization_id, sent, skipped_by_limit) VALUES ('"
+                + attempt + "', '" + s.org().id() + "', 2, 5)")).isEqualTo("OK");
+        BrowserClient.Response list = s.admin().get(base);
+        assertThat(list.status()).as(list.body()).isEqualTo(200);
+        assertThat(list.headers().firstValue("Cache-Control").orElse("")).contains("no-store");
+        JsonNode r = JSON.readTree(list.body());
+        assertThat(r.get("items").size()).isEqualTo(2);
+        assertThat(r.get("items").get(0).get("fileName").asString()).isEqualTo("dados/relatório final.csv");
+        assertThat(r.get("items").get(0).get("sizeBytes").asInt()).isEqualTo(bytes.length);
+        assertThat(r.get("items").get(0).get("available").asBoolean()).isTrue();
+        assertThat(r.get("closure").get("sent").asInt()).isEqualTo(2);
+        assertThat(r.get("closure").get("skippedByLimit").asInt()).as("o que ficou de fora por limite e dito").isEqualTo(5);
+        // o resultado nao mudou o estado da tentativa
+        assertThat(JSON.readTree(s.admin().get(s.o() + "/remote-executions/" + execution).body()).get("state").asString()).isEqualTo("SUCCEEDED");
+        // download: os bytes conferidos, sempre como anexo, sem cache; fica na trilha da automacao
+        BrowserClient.Response file = s.admin().get(base + "/1/content");
+        assertThat(file.status()).as(file.body()).isEqualTo(200);
+        assertThat(file.body()).isEqualTo("resultado;ok\n");
+        assertThat(file.headers().firstValue("Content-Disposition").orElse("")).startsWith("attachment").doesNotContain("dados/");
+        assertThat(file.headers().firstValue("Content-Type").orElse("")).startsWith("application/octet-stream");
+        assertThat(file.headers().firstValue("X-Content-Type-Options").orElse("")).isEqualTo("nosniff");
+        assertThat(file.headers().firstValue("Cache-Control").orElse("")).contains("no-store");
+        assertThat(file.headers().firstValue("Nekkora-Result-Sha256").orElse("")).isEqualTo(sha);
+        assertThat(value("SELECT count(*) FROM automation_admin_events WHERE automation_id = '" + s.automation() + "' AND act = 12")).isEqualTo("1");
+        // bytes que nao estao no armazenamento: 409 com o motivo; arquivo ou tentativa que nao existem: 404
+        refused(s.admin().get(base + "/2/content"), "remote_result_unavailable");
+        assertThat(s.admin().get(base + "/9/content").status()).isEqualTo(404);
+        assertThat(s.admin().get(s.o() + "/remote-executions/" + execution + "/attempts/" + UUID.randomUUID() + "/results").status()).isEqualTo(404);
+        // quem nao tem permissao no ambiente nao lista nem baixa; outra organizacao nao enxerga
+        TestUser outsider = internalUser(s.org(), true, 2);
+        BrowserClient ob = browser();
+        firstLogin(ob, s.org().id(), outsider);
+        assertThat(ob.get(base).status()).isIn(403, 404);
+        assertThat(ob.get(base + "/1/content").status()).isIn(403, 404);
+        assertThat(value("SELECT count(*) FROM automation_admin_events WHERE automation_id = '" + s.automation() + "' AND act = 12")).as("recusa nao vira download")
+                .isEqualTo("1");
     }
 
     @Test

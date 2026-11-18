@@ -146,6 +146,118 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
         return sha;
     }
 
+    private MachineClient.Response upload(Machine m, String attempt, String token, Integer epoch, int number, String name, byte[] data, String sha) {
+        java.net.http.HttpRequest.Builder b = java.net.http.HttpRequest.newBuilder(
+                java.net.URI.create("http://localhost:" + port + "/agent/api/v1/remote/attempts/" + attempt + "/results/" + number))
+                .header("Content-Type", "application/octet-stream").PUT(java.net.http.HttpRequest.BodyPublishers.ofByteArray(data));
+        if (token != null) {
+            b.header("Nekkora-Attempt-Token", token);
+        }
+        if (epoch != null) {
+            b.header("Nekkora-Attempt-Epoch", String.valueOf(epoch));
+        }
+        if (name != null) {
+            b.header("Nekkora-Result-Name", java.net.URLEncoder.encode(name, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20"));
+        }
+        if (sha != null) {
+            b.header("Nekkora-Result-Sha256", sha);
+        }
+        return m.client().send(b, m.credential());
+    }
+
+    private MachineClient.Response complete(Machine m, String attempt, String grant, int sent, int skipped) {
+        return m.client().post("/remote/attempts/" + attempt + "/results/complete", "{" + grant + ",\"sent\":" + sent + ",\"skippedByLimit\":" + skipped + "}",
+                m.credential());
+    }
+
+    @Test
+    void aMaquinaEnviaOsResultadosDaTentativaQueExecutouEFechaOEnvio() throws Exception {
+        Machine m = machine(true);
+        String attempt = queued(m);
+        JsonNode offer = next(m).body().get("attempt");
+        String token = offer.get("token").asString();
+        int epoch = offer.get("epoch").asInt();
+        String grant = grant(offer);
+        assertThat(ack(m, attempt, grant).status()).isEqualTo(200);
+        byte[] report = "linha 1\nlinha 2\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        String sha = sha256(report);
+        // tentativa que ainda nao iniciou: nenhum resultado e aceito
+        assertThat(state(m, attempt, grant, "PREPARING", null).status()).isEqualTo(200);
+        assertThat(state(m, attempt, grant, "STARTING", null).status()).isEqualTo(200);
+        assertThat(upload(m, attempt, token, epoch, 1, "relatorio.txt", report, sha).body().get("reason").asString()).isEqualTo("remote_attempt_transition");
+        assertThat(state(m, attempt, grant, "RUNNING", null).status()).isEqualTo(200);
+        // o que nao e aceito, sem gravar nada: sem token, numero fora da faixa, nome que sai da pasta, SHA-256 que nao e o dos bytes
+        assertThat(upload(m, attempt, null, null, 1, "relatorio.txt", report, sha).status()).isEqualTo(400);
+        assertThat(upload(m, attempt, token, epoch, 51, "relatorio.txt", report, sha).status()).isEqualTo(400);
+        assertThat(upload(m, attempt, token, epoch, 0, "relatorio.txt", report, sha).status()).isEqualTo(400);
+        for (String bad : new String[] {"../segredo.txt", "pasta/../../x", "/etc/passwd", "C:\\Users\\x.txt", "pasta\\x.txt", "pasta//x", "pasta/", ""}) {
+            assertThat(upload(m, attempt, token, epoch, 1, bad, report, sha).status()).as("nome: " + bad).isEqualTo(400);
+        }
+        assertThat(upload(m, attempt, token, epoch, 1, "relatorio.txt", report, "0".repeat(64)).status()).isEqualTo(400);
+        assertThat(fx.value("SELECT count(*) FROM remote_attempt_results WHERE attempt_id = '" + attempt + "'")).isEqualTo("0");
+        // aceito: bytes no armazenamento (pelo hash), metadado no banco; repetir o mesmo nao muda nada
+        MachineClient.Response ok = upload(m, attempt, token, epoch, 1, "relatorio.txt", report, sha);
+        assertThat(ok.status()).as(ok.raw()).isEqualTo(200);
+        assertThat(ok.body().get("created").asBoolean()).isTrue();
+        assertThat(ok.headers().firstValue("Cache-Control").orElse("")).contains("no-store");
+        assertThat(java.nio.file.Files.readAllBytes(RESULTS.resolve(fx.org.toString()).resolve(sha + ".zip"))).isEqualTo(report);
+        assertThat(upload(m, attempt, token, epoch, 1, "relatorio.txt", report, sha).body().get("created").asBoolean()).isFalse();
+        // o mesmo numero com outro arquivo, ou o mesmo nome em outro numero: conflito
+        byte[] other = "outro".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(upload(m, attempt, token, epoch, 1, "relatorio.txt", other, sha256(other)).body().get("reason").asString()).isEqualTo("remote_result_conflict");
+        assertThat(upload(m, attempt, token, epoch, 2, "relatorio.txt", other, sha256(other)).body().get("reason").asString()).isEqualTo("remote_result_conflict");
+        // token ou epoca que nao sao os vigentes; outra maquina
+        assertThat(upload(m, attempt, Tokens.newToken(), epoch, 2, "x.txt", other, sha256(other)).body().get("reason").asString()).isEqualTo("remote_attempt_stale");
+        Machine stranger = machine(true);
+        assertThat(upload(stranger, attempt, token, epoch, 2, "x.txt", other, sha256(other)).status()).isEqualTo(404);
+        // fechar antes do termino: nao
+        assertThat(complete(m, attempt, grant, 1, 0).body().get("reason").asString()).isEqualTo("remote_attempt_transition");
+        assertThat(state(m, attempt, grant, "SUCCEEDED", "\"exitCode\":0").status()).isEqualTo(200);
+        // depois do termino o token continua valendo para os resultados: subpasta e nome com acento, arquivo vazio
+        MachineClient.Response sub = upload(m, attempt, token, epoch, 2, "dados/relatório final.csv", other, sha256(other));
+        assertThat(sub.status()).as(sub.raw()).isEqualTo(200);
+        assertThat(upload(m, attempt, token, epoch, 3, "vazio.txt", new byte[0], sha256(new byte[0])).status()).isEqualTo(200);
+        assertThat(fx.value("SELECT string_agg(file_name || ':' || size_bytes, ',' ORDER BY result_number) FROM remote_attempt_results WHERE attempt_id = '"
+                + attempt + "'")).isEqualTo("relatorio.txt:" + report.length + ",dados/relatório final.csv:5,vazio.txt:0");
+        // o estado da tentativa nao mudou por causa dos resultados
+        assertThat(stateOf(attempt)).isEqualTo("7|-");
+        // fechamento: a contagem tem de ser a que o servidor recebeu; repetir o mesmo nao muda; outro, conflito
+        assertThat(complete(m, attempt, grant, 2, 0).body().get("reason").asString()).isEqualTo("remote_result_conflict");
+        MachineClient.Response closed = complete(m, attempt, grant, 3, 4);
+        assertThat(closed.status()).as(closed.raw()).isEqualTo(200);
+        assertThat(closed.body().get("skippedByLimit").asInt()).isEqualTo(4);
+        assertThat(complete(m, attempt, grant, 3, 4).status()).isEqualTo(200);
+        assertThat(complete(m, attempt, grant, 3, 5).body().get("reason").asString()).isEqualTo("remote_result_conflict");
+        assertThat(fx.value("SELECT sent || '|' || skipped_by_limit FROM remote_attempt_result_closures WHERE attempt_id = '" + attempt + "'")).isEqualTo("3|4");
+        // depois do fechamento, nada mais entra
+        assertThat(upload(m, attempt, token, epoch, 4, "tarde.txt", other, sha256(other)).body().get("reason").asString()).isEqualTo("remote_result_conflict");
+
+        // limite total de 50 MiB por tentativa: guardado tambem no banco (metadados de 20 MiB cada; o terceiro nao entra)
+        Machine big = machine(true);
+        String attempt2 = queued(big);
+        String grant2 = received(big, attempt2);
+        for (String st : new String[] {"PREPARING", "STARTING", "RUNNING"}) {
+            assertThat(state(big, attempt2, grant2, st, null).status()).isEqualTo(200);
+        }
+        String row = "INSERT INTO remote_attempt_results (attempt_id, result_number, organization_id, file_name, size_bytes, sha256) VALUES ('" + attempt2
+                + "', %d, '" + fx.org + "', 'grande-%d.bin', 20971520, '" + "a".repeat(64) + "')";
+        assertThat(asRole("nekkora_ingestion", row.formatted(1, 1), row.formatted(2, 2))).isEqualTo("OK");
+        assertThat(asRole("nekkora_ingestion", row.formatted(3, 3))).isEqualTo("23514");
+        byte[] small = new byte[11 * 1024 * 1024];
+        String[] g = grant2.replace("\"", "").split("[:,]");
+        MachineClient.Response over = upload(big, attempt2, g[1], Integer.valueOf(g[3]), 3, "passa-do-total.bin", small, sha256(small));
+        assertThat(over.status()).as(over.raw()).isEqualTo(409);
+        assertThat(over.body().get("reason").asString()).isEqualTo("remote_result_limit");
+        // guardas do banco: a maquina nao altera nem apaga; as pessoas nao escrevem; resultado so de tentativa que iniciou
+        assertThat(asRole("nekkora_ingestion", "UPDATE remote_attempt_results SET file_name = 'x' WHERE attempt_id = '" + attempt + "'")).isEqualTo("42501");
+        assertThat(asRole("nekkora_ingestion", "DELETE FROM remote_attempt_results WHERE attempt_id = '" + attempt + "'")).isEqualTo("42501");
+        assertThat(asRole("nekkora_platform", row.formatted(4, 4))).isEqualTo("42501");
+        Machine idle = machine(true);
+        String never = queued(idle);
+        assertThat(asRole("nekkora_ingestion", "INSERT INTO remote_attempt_results (attempt_id, result_number, organization_id, file_name, size_bytes, sha256) "
+                + "VALUES ('" + never + "', 1, '" + fx.org + "', 'x.txt', 1, '" + "a".repeat(64) + "')")).isEqualTo("23514");
+    }
+
     @Test
     void aMaquinaRecusaQuandoNaoHaSessaoUtilizavelEOMotivoFicaGravado() {
         // 049: tela bloqueada ou sem sessao interativa - o aplicativo nao inicia, e diz por que

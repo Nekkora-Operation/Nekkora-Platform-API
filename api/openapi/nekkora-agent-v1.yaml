@@ -173,6 +173,98 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /agent/api/v1/remote/attempts/{attempt}/results/{number}:
+    put:
+      tags: [Maquina]
+      operationId: uploadRemoteAttemptResult
+      summary: 'A maquina envia um arquivo de resultado da tentativa (T03)'
+      description: >
+        Um arquivo que a automacao gravou na pasta de saida, enviado depois que a execucao iniciou (em geral, depois do termino).
+        Corpo: os bytes do arquivo (Content-Length obrigatorio, ate 20 MiB). Cabecalhos: Nekkora-Attempt-Token e
+        Nekkora-Attempt-Epoch (continuam valendo depois do termino), Nekkora-Result-Name (o nome RELATIVO a pasta de saida, com /
+        como separador, em UTF-8 com escape de URL; sem .., sem barra invertida, sem caminho absoluto, ate 200 caracteres) e
+        Nekkora-Result-Sha256. number: 1 a 50. O servidor confere o SHA-256 contra os bytes que chegaram; divergencia, nome ou
+        numero fora do formato: 400 e nada e gravado. Tentativa que nao iniciou: 409 + remote_attempt_transition. Repetir o MESMO
+        arquivo no mesmo numero (resposta perdida) responde created false e nao muda nada; outro arquivo no mesmo numero, nome
+        repetido, ou envio depois do fechamento: 409 + remote_result_conflict. Passar de 50 MiB no total: 409 +
+        remote_result_limit, e nada e gravado. Armazenamento fora: 503. Enviar resultado NAO muda o estado da tentativa.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: number, in: path, required: true, schema: { type: integer, minimum: 1, maximum: 50 } }
+        - { name: Nekkora-Attempt-Token, in: header, required: true, schema: { type: string } }
+        - { name: Nekkora-Attempt-Epoch, in: header, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: Nekkora-Result-Name, in: header, required: true, schema: { type: string } }
+        - { name: Nekkora-Result-Sha256, in: header, required: true, schema: { type: string, pattern: '^[0-9a-f]{64}$' } }
+      requestBody: { required: true, content: { application/octet-stream: { schema: { type: string, format: binary } } } }
+      responses:
+        '200':
+          description: 'Arquivo guardado (ou ja guardado)'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [number, fileName, sizeBytes, sha256, created]
+                properties:
+                  number: { type: integer }
+                  fileName: { type: string }
+                  sizeBytes: { type: integer }
+                  sha256: { type: string }
+                  created: { type: boolean }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/attempts/{attempt}/results/complete:
+    post:
+      tags: [Maquina]
+      operationId: completeRemoteAttemptResults
+      summary: 'A maquina fecha o envio de resultados da tentativa (T03)'
+      description: >
+        Depois que a tentativa que iniciou TERMINOU (antes: 409 + remote_attempt_transition). sent: quantos arquivos a maquina
+        enviou - tem de ser o que o servidor recebeu (um envio perdido aparece aqui: 409 + remote_result_conflict).
+        skippedByLimit: quantos ela deixou de enviar por limite (de quantidade, de tamanho por arquivo ou do total). Repetir o
+        mesmo fechamento nao muda nada; outro: 409 + remote_result_conflict. Depois do fechamento nenhum arquivo e aceito.
+        Fechar NAO muda o estado da tentativa.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token, epoch, sent, skippedByLimit]
+              properties:
+                token: { type: string }
+                epoch: { type: integer, minimum: 1 }
+                sent: { type: integer, minimum: 0, maximum: 50 }
+                skippedByLimit: { type: integer, minimum: 0 }
+      responses:
+        '200':
+          description: 'Envio fechado'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [sent, skippedByLimit]
+                properties:
+                  sent: { type: integer }
+                  skippedByLimit: { type: integer }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /agent/api/v1/remote/attempts/{attempt}/package:
     get:
       tags: [Maquina]
@@ -476,7 +568,7 @@ components:
       required: [error]
       properties:
         error: { type: string, enum: [invalid_request, unsupported_contract, unauthenticated, forbidden, not_found, conflict, rate_limited, internal_error, service_unavailable] }
-        reason: { type: string, enum: [pairing_code_for_rotation, rotation_code_for_pairing, link_ended_by_machine, link_ended_by_administration, remote_execution_unavailable, remote_code_without_enablement, code_not_for_remote_execution, remote_execution_not_enabled, credential_renewal_not_due, remote_attempt_stale, remote_attempt_transition, remote_package_unavailable], description: 'Motivo opcional de um codigo conhecido (conflict): T06 (codigos de pareamento/rotacao), T13 (vinculo ja encerrado) e EXECUCAO-REMOTA-001 T01a (habilitacao). Cliente que nao o conhece trata o codigo como sempre' }
+        reason: { type: string, enum: [pairing_code_for_rotation, rotation_code_for_pairing, link_ended_by_machine, link_ended_by_administration, remote_execution_unavailable, remote_code_without_enablement, code_not_for_remote_execution, remote_execution_not_enabled, credential_renewal_not_due, remote_attempt_stale, remote_attempt_transition, remote_package_unavailable, remote_result_conflict, remote_result_limit], description: 'Motivo opcional de um codigo conhecido (conflict): T06 (codigos de pareamento/rotacao), T13 (vinculo ja encerrado) e EXECUCAO-REMOTA-001 T01a (habilitacao). Cliente que nao o conhece trata o codigo como sempre' }
     UnlinkRequest:
       type: object
       required: [operationId, agentId, launchedRunRequests]

@@ -83,9 +83,12 @@ public class RemoteExecutionService {
     private final WorkspaceAccess access;
     private final boolean enabled;
     private final int offerMinutes;
+    private final com.nekkora.core.artifact.ResultStore results;
 
     /** {@code offerMinutes}: quanto tempo a tentativa espera a maquina receber antes de expirar (padrao de laboratorio: 15). */
-    public RemoteExecutionService(AccessActions actions, WorkspaceAccess access, boolean enabled, int offerMinutes) {
+    public RemoteExecutionService(AccessActions actions, WorkspaceAccess access, boolean enabled, int offerMinutes,
+                                  com.nekkora.core.artifact.ResultStore results) {
+        this.results = results;
         this.actions = actions;
         this.access = access;
         this.enabled = enabled;
@@ -356,6 +359,91 @@ public class RemoteExecutionService {
             }
             return out;
         });
+    }
+
+    // ------------------------------------------------------------------ resultados (T03b)
+
+    /** Um arquivo de resultado. {@code available}: os bytes ainda estao guardados (a retencao pode te-los removido). */
+    public record ResultFile(int number, String fileName, long sizeBytes, String sha256, OffsetDateTime receivedAt, boolean available) {
+    }
+
+    /** {@code closure} nulo: a maquina ainda nao fechou o envio (pode haver arquivo a caminho, ou ela nao voltou). */
+    public record Results(UUID attemptId, List<ResultFile> items, ResultsClosure closure) {
+    }
+
+    public record ResultsClosure(int sent, int skippedByLimit, OffsetDateTime closedAt) {
+    }
+
+    public record ResultContent(String fileName, String sha256, byte[] bytes) {
+    }
+
+    static final int ACT_RESULT_DOWNLOADED = 12;
+
+    /** Os arquivos de resultado de uma tentativa e o fechamento do envio. Exige logs.read no ambiente da solicitacao. */
+    public Results results(UUID org, ValidSession actor, String token, UUID executionId, UUID attemptId) {
+        return actions.read(org, j -> {
+            actions.requireActor(j, org, actor, token);
+            scoped(j, org, actor, executionId, "logs.read");
+            requireAttempt(j, org, executionId, attemptId);
+            List<ResultFile> items = j.sql("SELECT result_number, file_name, size_bytes, sha256, received_at, removed_at IS NULL FROM public.remote_attempt_results "
+                            + "WHERE organization_id = ? AND attempt_id = ? ORDER BY result_number").param(org).param(attemptId)
+                    .query((rs, n) -> new ResultFile(rs.getInt(1), rs.getString(2), rs.getLong(3), rs.getString(4), rs.getObject(5, OffsetDateTime.class),
+                            rs.getBoolean(6))).list();
+            ResultsClosure closure = j.sql("SELECT sent, skipped_by_limit, closed_at FROM public.remote_attempt_result_closures WHERE organization_id = ? "
+                            + "AND attempt_id = ?").param(org).param(attemptId)
+                    .query((rs, n) -> new ResultsClosure(rs.getInt(1), rs.getInt(2), rs.getObject(3, OffsetDateTime.class))).optional().orElse(null);
+            return new Results(attemptId, items, closure);
+        });
+    }
+
+    /**
+     * Os bytes de um arquivo de resultado, relidos e conferidos pelo SHA-256. Exige logs.read. O download fica na trilha da
+     * automacao (ato 12). Bytes removidos pela retencao, ausentes ou que nao conferem: 409 remote_result_unavailable.
+     */
+    public ResultContent resultContent(UUID org, ValidSession actor, String token, UUID executionId, UUID attemptId, int number) {
+        record Found(String name, String sha, boolean removed, UUID workspace, UUID automation) {
+        }
+        Found f = actions.read(org, j -> {
+            actions.requireActor(j, org, actor, token);
+            Execution x = scoped(j, org, actor, executionId, "logs.read");
+            requireAttempt(j, org, executionId, attemptId);
+            Found found = j.sql("SELECT file_name, sha256, removed_at IS NOT NULL FROM public.remote_attempt_results WHERE organization_id = ? AND attempt_id = ? "
+                            + "AND result_number = ?").param(org).param(attemptId).param((short) number)
+                    .query((rs, n) -> new Found(rs.getString(1), rs.getString(2), rs.getBoolean(3), x.workspaceId(), x.automationId())).optional()
+                    .orElseThrow(() -> AccessActions.refuse(Failure.TARGET_NOT_FOUND, "resultado"));
+            return found;
+        });
+        if (f.removed()) {
+            throw new ApiException(ApiError.REMOTE_RESULT_UNAVAILABLE, "resultado_removido");
+        }
+        if (!results.available()) {
+            throw new ApiException(ApiError.SERVICE_UNAVAILABLE, "armazenamento_de_resultados");
+        }
+        try {
+            byte[] bytes = results.get(org, f.sha()).orElseThrow(() -> new ApiException(ApiError.REMOTE_RESULT_UNAVAILABLE, "resultado_ausente"));
+            // so o download que de fato entrega os bytes vai para a trilha (com a permissao reconferida)
+            actions.write(org, j -> {
+                actions.requireActor(j, org, actor, token);
+                scoped(j, org, actor, executionId, "logs.read");
+                j.sql("INSERT INTO public.automation_admin_events (organization_id, act, actor_membership_id, workspace_id, automation_id, correlation_id) "
+                        + "VALUES (?, ?, ?, ?, ?, ?)").param(org).param((short) ACT_RESULT_DOWNLOADED).param(actor.membershipId()).param(f.workspace())
+                        .param(f.automation()).param(AccessActions.correlation()).update();
+                return null;
+            });
+            LOG.info("evento=execucao_remota.resultado_baixado tentativa={} numero={} correlacao={}", attemptId, number, AccessActions.correlation());
+            return new ResultContent(f.name(), f.sha(), bytes);
+        } catch (com.nekkora.core.artifact.ArtifactStore.Corrupted e) {
+            throw new ApiException(ApiError.REMOTE_RESULT_UNAVAILABLE, "resultado_corrompido");
+        } catch (java.io.IOException e) {
+            throw new ApiException(ApiError.SERVICE_UNAVAILABLE, "armazenamento_de_resultados");
+        }
+    }
+
+    private static void requireAttempt(JdbcClient j, UUID org, UUID executionId, UUID attemptId) {
+        if (j.sql("SELECT count(*) FROM public.remote_attempts WHERE organization_id = ? AND remote_execution_id = ? AND attempt_id = ?")
+                .param(org).param(executionId).param(attemptId).query(Long.class).single() == 0) {
+            throw AccessActions.refuse(Failure.TARGET_NOT_FOUND, "tentativa");
+        }
     }
 
     // ------------------------------------------------------------------ apoio

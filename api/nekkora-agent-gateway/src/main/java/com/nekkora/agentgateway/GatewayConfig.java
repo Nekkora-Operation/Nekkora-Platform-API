@@ -98,7 +98,9 @@ public class GatewayConfig {
 
     @Bean
     FilterRegistrationBean<BodyLimitFilter> bodyLimitFilter() {
-        FilterRegistrationBean<BodyLimitFilter> r = new FilterRegistrationBean<>(new BodyLimitFilter(MAX_BODY_BYTES));
+        // T03b: so o envio de um arquivo de resultado tem teto proprio (20 MiB), tambem com Content-Length declarado
+        FilterRegistrationBean<BodyLimitFilter> r = new FilterRegistrationBean<>(new BodyLimitFilter(MAX_BODY_BYTES, "PUT",
+                java.util.regex.Pattern.compile("/agent/api/v1/remote/attempts/[0-9a-f-]{36}/results/[0-9]{1,2}"), RemoteDelivery.MAX_RESULT_BYTES));
         r.setOrder(Ordered.HIGHEST_PRECEDENCE + 1);
         return r;
     }
@@ -124,14 +126,24 @@ public class GatewayConfig {
     }
 
     @Bean
-    RemoteDelivery remoteDelivery(OrgTransactions tx, MachineAuth auth, GatewayProperties p, com.nekkora.core.artifact.ArtifactStore packages) {
-        return new RemoteDelivery(tx, auth, p.leaseSeconds(), packages);
+    RemoteDelivery remoteDelivery(OrgTransactions tx, MachineAuth auth, GatewayProperties p, com.nekkora.core.artifact.ArtifactStore packages,
+                                  com.nekkora.core.artifact.ResultStore results) {
+        return new RemoteDelivery(tx, auth, p.leaseSeconds(), packages, results);
     }
 
     /**
      * O armazenamento dos pacotes publicados, o MESMO da Platform (NEKKORA_ARTEFATOS_DIR), so para LEITURA: o gateway entrega a
      * maquina os bytes do pacote da tentativa que ela recebeu (T03). Sem a pasta configurada, o download responde 503.
      */
+    /**
+     * O armazenamento dos RESULTADOS das execucoes remotas (NEKKORA_RESULTADOS_DIR): o gateway GRAVA o que a maquina envia; a
+     * Platform le. Pasta propria, separada da dos pacotes. Sem ela, o envio de resultados responde 503.
+     */
+    @Bean
+    com.nekkora.core.artifact.ResultStore resultStore(org.springframework.core.env.Environment env) throws java.io.IOException {
+        return com.nekkora.core.artifact.ResultStore.at(env.getProperty("NEKKORA_RESULTADOS_DIR", env.getProperty("nekkora.resultados.dir", "")));
+    }
+
     @Bean
     com.nekkora.core.artifact.ArtifactStore packageStore(org.springframework.core.env.Environment env) throws java.io.IOException {
         String dir = env.getProperty("NEKKORA_ARTEFATOS_DIR", env.getProperty("nekkora.artefatos.dir", ""));

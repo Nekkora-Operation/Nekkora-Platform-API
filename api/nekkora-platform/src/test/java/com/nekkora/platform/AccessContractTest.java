@@ -123,7 +123,9 @@ class AccessContractTest {
                 // T02: o token ou a epoca da atribuicao e a transicao de estado sao do canal da maquina
                 com.nekkora.core.web.ApiError.REMOTE_ATTEMPT_STALE, com.nekkora.core.web.ApiError.REMOTE_ATTEMPT_TRANSITION,
                 // T03: o pacote da tentativa, baixado so pela maquina
-                com.nekkora.core.web.ApiError.REMOTE_PACKAGE_UNAVAILABLE);
+                com.nekkora.core.web.ApiError.REMOTE_PACKAGE_UNAVAILABLE,
+                // T03b: o envio de resultados e so da maquina (a leitura pelas pessoas usa remote_result_unavailable, publicado)
+                com.nekkora.core.web.ApiError.REMOTE_RESULT_CONFLICT, com.nekkora.core.web.ApiError.REMOTE_RESULT_LIMIT);
         for (com.nekkora.core.web.ApiError e : com.nekkora.core.web.ApiError.values()) {
             assertThat(codigos).as("codigo de erro publicado: " + e.code()).contains(e.code());
             if (e.reason() != null && !soDaMaquina.contains(e)) {
