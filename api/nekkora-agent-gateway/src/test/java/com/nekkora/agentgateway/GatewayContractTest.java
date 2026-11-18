@@ -37,6 +37,11 @@ class GatewayContractTest {
                     mapeadas.add("post " + p);
                 }
             }
+            if (m.getAnnotation(org.springframework.web.bind.annotation.PutMapping.class) != null) {
+                for (String p : m.getAnnotation(org.springframework.web.bind.annotation.PutMapping.class).value()) {
+                    mapeadas.add("put " + p);
+                }
+            }
             if (m.getAnnotation(GetMapping.class) != null) {
                 for (String p : m.getAnnotation(GetMapping.class).value()) {
                     mapeadas.add("get " + p);
@@ -46,7 +51,7 @@ class GatewayContractTest {
         Map<String, Object> paths = (Map<String, Object>) spec.get("paths");
         Set<String> publicadas = new TreeSet<>();
         paths.forEach((path, ops) -> ((Map<String, Object>) ops).keySet().forEach(method -> publicadas.add(method + " " + path)));
-        assertThat(mapeadas).isEqualTo(publicadas).hasSize(13); // 030: + run-requests e decision; T13: + link/unlink; CATALOGO-001: + catalog (2); EXECUCAO-REMOTA-001 T01a: + remote/receiving; T01b: + remote/credential/renew
+        assertThat(mapeadas).isEqualTo(publicadas).hasSize(14); // T01c: + remote/python-environments; 030: + run-requests e decision; T13: + link/unlink; CATALOGO-001: + catalog (2); EXECUCAO-REMOTA-001 T01a: + remote/receiving; T01b: + remote/credential/renew
 
         Map<String, Set<String>> exercitados = Map.of(
                 "post /agent/api/v1/enrollments/redeem", Set.of("200", "401", "409"),
@@ -77,6 +82,9 @@ class GatewayContractTest {
         assertThat(receiving.get("parameters").toString()).contains("#/components/parameters/Contract");
         assertThat(spec.toString()).contains("remote_execution_unavailable").contains("remote_code_without_enablement")
                 .contains("code_not_for_remote_execution").contains("remote_execution_not_enabled").contains("credential_renewal_not_due");
+        Map<String, Object> inventory = (Map<String, Object>) ((Map<String, Object>) paths.get("/agent/api/v1/remote/python-environments")).get("put");
+        assertThat(((Map<String, Object>) inventory.get("responses")).keySet()).contains("200", "400", "401", "409", "429");
+        assertThat(inventory.get("parameters").toString()).contains("#/components/parameters/Contract");
         Map<String, Object> renew = (Map<String, Object>) ((Map<String, Object>) paths.get("/agent/api/v1/remote/credential/renew")).get("post");
         assertThat(((Map<String, Object>) renew.get("responses")).keySet()).contains("200", "400", "401", "409", "429");
         assertThat(renew.get("parameters").toString()).contains("#/components/parameters/Contract");

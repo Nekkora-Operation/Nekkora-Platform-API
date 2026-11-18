@@ -140,6 +140,13 @@ public class AgentController {
         return Map.of("items", admin.listRemoteMachines(org, SessionFilter.principal(req), SessionFilter.token(req), workspace));
     }
 
+    /** T01c: o inventario de Python que uma maquina habilitada publicou. Exige automation.execute no ambiente. */
+    @GetMapping("/api/v1/o/{org}/workspaces/{workspace}/remote-machines/{agent}/python-environments")
+    public Map<String, List<AgentAdminService.PythonEnvironment>> pythonEnvironments(@PathVariable UUID org, @PathVariable UUID workspace,
+                                                                                      @PathVariable UUID agent, HttpServletRequest req) {
+        return Map.of("items", admin.listPythonEnvironments(org, SessionFilter.principal(req), SessionFilter.token(req), workspace, agent));
+    }
+
     // ------------------------------------------------------------------ Worker no workspace e autorizacao local
 
     @PutMapping("/api/v1/o/{org}/workers/{worker}/workspaces/{workspace}")

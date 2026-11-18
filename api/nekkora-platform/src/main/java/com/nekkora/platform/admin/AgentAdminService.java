@@ -198,6 +198,40 @@ public final class AgentAdminService {
         return new CodeIssued(enrollment, code, expires, worker, agent, remote ? Boolean.TRUE : null);
     }
 
+    // ------------------------------------------------------------------ inventario de Python da maquina (T01c, parte 1)
+
+    /** O que a maquina disse ter de Python. {@code environmentId} e opaco: nunca um caminho. */
+    public record PythonEnvironment(String environmentId, String pythonVersion, String kind, OffsetDateTime observedAt, OffsetDateTime reportedAt) {
+    }
+
+    /**
+     * O inventario de Python de UMA maquina habilitada, visto por quem pode executar no ambiente. Mesma regra da lista de
+     * maquinas: automation.execute no ambiente, Agent ativo, associado e com o Worker autorizado NESTE ambiente; qualquer
+     * outra situacao e 404 (a maquina nao existe para quem consulta). Lista vazia: a maquina ainda nao publicou, ou nao
+     * achou Python. E o que a maquina DISSE; nao escolhe ambiente nem prova que uma automacao roda nele.
+     */
+    public List<PythonEnvironment> listPythonEnvironments(UUID org, ValidSession actor, String token, UUID workspaceId, UUID agentId) {
+        return actions.read(org, j -> {
+            actions.requireActor(j, org, actor, token);
+            access.requireWorkspace(j, org, actor.membershipId(), workspaceId, "automation.execute");
+            boolean visible = j.sql("SELECT count(*) FROM public.agent_remote_enablements r "
+                    + "JOIN public.agents a ON a.organization_id = r.organization_id AND a.agent_id = r.agent_id AND a.status = 2 "
+                    + "JOIN public.worker_agent_assignments wa ON wa.organization_id = a.organization_id AND wa.agent_id = a.agent_id AND wa.status = 1 "
+                    + "JOIN public.workers w ON w.organization_id = wa.organization_id AND w.worker_id = wa.worker_id AND w.status = 1 "
+                    + "JOIN public.worker_workspace_assignments x ON x.organization_id = w.organization_id AND x.worker_id = w.worker_id "
+                    + "AND x.workspace_id = ? AND x.status = 1 WHERE r.organization_id = ? AND r.agent_id = ?")
+                    .param(workspaceId).param(org).param(agentId).query(Long.class).single() > 0;
+            if (!visible) {
+                throw new ApiException(ApiError.NOT_FOUND, "maquina");
+            }
+            return j.sql("SELECT environment_id, python_version, kind, observed_at, reported_at FROM public.agent_python_environments "
+                    + "WHERE organization_id = ? AND agent_id = ? ORDER BY python_version DESC, environment_id")
+                    .param(org).param(agentId)
+                    .query((rs, n) -> new PythonEnvironment(rs.getString(1), rs.getString(2), rs.getShort(3) == 1 ? "INSTALLATION" : "VIRTUAL_ENVIRONMENT",
+                            rs.getObject(4, OffsetDateTime.class), rs.getObject(5, OffsetDateTime.class))).list();
+        });
+    }
+
     // ------------------------------------------------------------------ maquinas para execucao remota (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01a)
 
     /**

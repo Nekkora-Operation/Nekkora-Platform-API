@@ -2107,6 +2107,30 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /api/v1/o/{org}/workspaces/{workspace}/remote-machines/{agent}/python-environments:
+    get:
+      tags: [Canal do Agent]
+      operationId: listRemoteMachinePythonEnvironments
+      summary: 'Inventario de Python de uma maquina habilitada (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01c)'
+      description: >
+        Exige automation.execute no ambiente. So para maquina habilitada, ativa, associada e com o Worker autorizado NESTE
+        ambiente; qualquer outra situacao: 404. Traz o que a maquina DISSE ter no ultimo inventario: identificador opaco (nunca
+        um caminho), versao do Python, tipo e instantes. Lista vazia: a maquina ainda nao publicou, ou nao achou Python. Nao
+        escolhe ambiente e nao prova que uma automacao roda nele.
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: workspace, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+        - { name: agent, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+      responses:
+        '200': { description: 'Ambientes de Python da maquina', content: { application/json: { schema: { $ref: '#/components/schemas/PythonEnvironmentList' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /api/v1/o/{org}/workers:
     get:
       tags: [Canal do Agent]
@@ -3124,6 +3148,21 @@ components:
         workerId: { type: string, format: uuid }
         agentId: { type: [string, 'null'], format: uuid, description: 'So na rotacao' }
         remoteExecution: { type: boolean, enum: [true], description: 'Presente (true) so no codigo de pareamento marcado para execucao remota; ausente nos demais' }
+    PythonEnvironmentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [environmentId, pythonVersion, kind, observedAt, reportedAt]
+            properties:
+              environmentId: { type: string, pattern: '^[A-Za-z0-9_-]{43}$', description: 'Opaco; nunca um caminho' }
+              pythonVersion: { type: string }
+              kind: { type: string, enum: [INSTALLATION, VIRTUAL_ENVIRONMENT] }
+              observedAt: { type: string, format: date-time, description: 'Relogio da maquina' }
+              reportedAt: { type: string, format: date-time, description: 'Relogio do servidor' }
     RemoteMachineList:
       type: object
       required: [items]
