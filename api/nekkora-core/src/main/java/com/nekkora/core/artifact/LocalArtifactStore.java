@@ -1,4 +1,4 @@
-package com.nekkora.platform.artifact;
+package com.nekkora.core.artifact;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -44,7 +44,7 @@ public final class LocalArtifactStore implements ArtifactStore {
 
     @Override
     public void put(UUID organization, String sha256, byte[] data) throws IOException {
-        if (!sha256.equals(PackageInspector.hex(PackageInspector.sha256(data)))) {
+        if (!Arrays.equals(sha256(data), java.util.HexFormat.of().parseHex(sha256))) {
             throw new IllegalArgumentException("chave diferente do conteudo");
         }
         Path target = file(organization, sha256);
@@ -94,7 +94,7 @@ public final class LocalArtifactStore implements ArtifactStore {
         } catch (NoSuchFileException e) {
             return Optional.empty();
         }
-        if (!Arrays.equals(PackageInspector.sha256(data), java.util.HexFormat.of().parseHex(sha256))) {
+        if (!Arrays.equals(sha256(data), java.util.HexFormat.of().parseHex(sha256))) {
             throw new Corrupted();
         }
         return Optional.of(data);
@@ -110,6 +110,14 @@ public final class LocalArtifactStore implements ArtifactStore {
             ch.force(true);
         } catch (IOException | UnsupportedOperationException e) {
             // Windows nao abre pasta como canal; o NTFS registra a troca no journal
+        }
+    }
+
+    private static byte[] sha256(byte[] data) {
+        try {
+            return java.security.MessageDigest.getInstance("SHA-256").digest(data);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
         }
     }
 }

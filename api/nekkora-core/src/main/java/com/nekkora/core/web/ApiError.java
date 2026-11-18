@@ -117,6 +117,8 @@ public enum ApiError {
     REMOTE_ATTEMPT_STALE(HttpStatus.CONFLICT, "conflict", "remote_attempt_stale"),
     /** Canal da maquina: a mudanca de estado pedida nao e permitida a partir do estado atual. */
     REMOTE_ATTEMPT_TRANSITION(HttpStatus.CONFLICT, "conflict", "remote_attempt_transition"),
+    /** Canal da maquina: os bytes do pacote da tentativa nao estao no armazenamento, ou nao conferem com o que foi publicado. */
+    REMOTE_PACKAGE_UNAVAILABLE(HttpStatus.CONFLICT, "conflict", "remote_package_unavailable"),
     /** Canal do Agent (contrato Platform-Agent 1.0, sec. 15): versao maior do contrato nao suportada. */
     UNSUPPORTED_CONTRACT(HttpStatus.BAD_REQUEST, "unsupported_contract"),
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "rate_limited"),

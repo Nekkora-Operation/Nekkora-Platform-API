@@ -124,8 +124,19 @@ public class GatewayConfig {
     }
 
     @Bean
-    RemoteDelivery remoteDelivery(OrgTransactions tx, MachineAuth auth, GatewayProperties p) {
-        return new RemoteDelivery(tx, auth, p.leaseSeconds());
+    RemoteDelivery remoteDelivery(OrgTransactions tx, MachineAuth auth, GatewayProperties p, com.nekkora.core.artifact.ArtifactStore packages) {
+        return new RemoteDelivery(tx, auth, p.leaseSeconds(), packages);
+    }
+
+    /**
+     * O armazenamento dos pacotes publicados, o MESMO da Platform (NEKKORA_ARTEFATOS_DIR), so para LEITURA: o gateway entrega a
+     * maquina os bytes do pacote da tentativa que ela recebeu (T03). Sem a pasta configurada, o download responde 503.
+     */
+    @Bean
+    com.nekkora.core.artifact.ArtifactStore packageStore(org.springframework.core.env.Environment env) throws java.io.IOException {
+        String dir = env.getProperty("NEKKORA_ARTEFATOS_DIR", env.getProperty("nekkora.artefatos.dir", ""));
+        return dir.isBlank() ? com.nekkora.core.artifact.ArtifactStore.NONE
+                : new com.nekkora.core.artifact.LocalArtifactStore(java.nio.file.Path.of(dir));
     }
 
     @Bean

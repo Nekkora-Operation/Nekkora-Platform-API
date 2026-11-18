@@ -77,9 +77,11 @@ public final class RemoteDelivery {
     private final OrgTransactions tx;
     private final MachineAuth auth;
     private final int leaseSeconds;
+    private final com.nekkora.core.artifact.ArtifactStore packages;
 
     /** {@code leaseSeconds}: prazo da comunicacao, renovado a cada escrita aceita (ponto de partida de laboratorio: 90 s). */
-    public RemoteDelivery(OrgTransactions tx, MachineAuth auth, int leaseSeconds) {
+    public RemoteDelivery(OrgTransactions tx, MachineAuth auth, int leaseSeconds, com.nekkora.core.artifact.ArtifactStore packages) {
+        this.packages = packages;
         this.tx = tx;
         this.auth = auth;
         this.leaseSeconds = Math.max(30, Math.min(leaseSeconds, 3600));
@@ -189,6 +191,54 @@ public final class RemoteDelivery {
             move(j, m, a, wanted, refusalReason, exitCode);
             return status(j, m, attemptId, wanted < 7);
         });
+    }
+
+    /** Os bytes do pacote da tentativa, ja conferidos pelo SHA-256 com que foram guardados. */
+    public record Pack(String sha256, long sizeBytes, byte[] bytes) {
+    }
+
+    /**
+     * O pacote da versao FIXADA na solicitacao, so para a maquina da tentativa, com o token e a epoca vigentes, e so entre o
+     * recebimento e o inicio (RECEIVED ou PREPARING). O pacote e o da impressao congelada na solicitacao: outro pacote da mesma
+     * versao nao serve. Os bytes sao relidos e conferidos pelo hash a cada download; ausentes ou corrompidos: 409
+     * remote_package_unavailable (a maquina recusa a tentativa com PACKAGE_INVALID). Baixar renova o prazo da comunicacao.
+     */
+    public Pack pack(MachineToken t, UUID attemptId, String token, Integer epoch) {
+        record Key(String sha256, long sizeBytes) {
+        }
+        Key k = tx.inOrganization(t.organization(), Mode.READ_WRITE, j -> {
+            Machine m = auth.authenticate(j, t);
+            Row a = owned(j, m, attemptId, token, epoch);
+            if (a.state() != 3 && a.state() != 4) {
+                throw new ApiException(ApiError.REMOTE_ATTEMPT_TRANSITION, "pacote_fora_da_preparacao");
+            }
+            renew(j, m, attemptId);
+            return j.sql("""
+                    SELECT f.sha256, f.size_bytes
+                      FROM public.remote_executions x
+                      JOIN public.automation_artifacts f ON f.organization_id = x.organization_id AND f.automation_version_id = x.automation_version_id
+                                                        AND f.fingerprint = x.package_fingerprint AND f.fingerprint_rule = x.package_fingerprint_rule
+                     WHERE x.organization_id = ? AND x.remote_execution_id = ?
+                     ORDER BY f.received_at DESC LIMIT 1
+                    """).param(m.organization()).param(a.execution()).query((rs, n) -> new Key(rs.getString(1), rs.getLong(2))).optional()
+                    .orElseThrow(() -> new ApiException(ApiError.REMOTE_PACKAGE_UNAVAILABLE, "pacote_sem_registro"));
+        });
+        if (!packages.available()) {
+            throw new ApiException(ApiError.SERVICE_UNAVAILABLE, "armazenamento_de_pacotes");
+        }
+        try {
+            byte[] bytes = packages.get(t.organization(), k.sha256())
+                    .orElseThrow(() -> new ApiException(ApiError.REMOTE_PACKAGE_UNAVAILABLE, "pacote_ausente_no_armazenamento"));
+            if (bytes.length != k.sizeBytes()) {
+                throw new ApiException(ApiError.REMOTE_PACKAGE_UNAVAILABLE, "pacote_com_outro_tamanho");
+            }
+            LOG.info("evento=execucao_remota.pacote_entregue tentativa={} bytes={} correlacao={}", attemptId, bytes.length, RequestContext.correlation());
+            return new Pack(k.sha256(), k.sizeBytes(), bytes);
+        } catch (com.nekkora.core.artifact.ArtifactStore.Corrupted e) {
+            throw new ApiException(ApiError.REMOTE_PACKAGE_UNAVAILABLE, "pacote_corrompido");
+        } catch (java.io.IOException e) {
+            throw new ApiException(ApiError.SERVICE_UNAVAILABLE, "armazenamento_de_pacotes");
+        }
     }
 
     // ------------------------------------------------------------------ apoio

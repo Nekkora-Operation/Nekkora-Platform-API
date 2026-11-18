@@ -208,6 +208,26 @@ public class GatewayController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(s);
     }
 
+    /** O token e a epoca da atribuicao num GET: em cabecalhos, nunca na URL. */
+    static final String ATTEMPT_TOKEN_HEADER = "Nekkora-Attempt-Token";
+    static final String ATTEMPT_EPOCH_HEADER = "Nekkora-Attempt-Epoch";
+
+    /** T03: o pacote da versao fixada na tentativa, so para a maquina que a recebeu e so antes do inicio. */
+    @GetMapping("/agent/api/v1/remote/attempts/{attempt}/package")
+    public ResponseEntity<byte[]> remotePackage(@PathVariable String attempt, HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(attempt);
+        Integer epoch;
+        try {
+            epoch = req.getHeader(ATTEMPT_EPOCH_HEADER) == null ? null : Integer.valueOf(req.getHeader(ATTEMPT_EPOCH_HEADER));
+        } catch (NumberFormatException e) {
+            throw ApiException.invalid("epoca");
+        }
+        RemoteDelivery.Pack p = authenticated(req, () -> delivery.pack(t, id, req.getHeader(ATTEMPT_TOKEN_HEADER), epoch));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).contentType(org.springframework.http.MediaType.parseMediaType("application/zip"))
+                .header("Nekkora-Package-Sha256", p.sha256()).body(p.bytes());
+    }
+
     private static Integer integer(JsonNode n, String field) {
         JsonNode v = n.get(field);
         if (v == null || v.isNull()) {
