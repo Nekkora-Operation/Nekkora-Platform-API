@@ -35,6 +35,9 @@ public class RemoteExecutionController {
     public record RetryRequest(String agentId) {
     }
 
+    public record PythonSelection(String environmentId) {
+    }
+
     private final RemoteExecutionService service;
 
     public RemoteExecutionController(RemoteExecutionService service) {
@@ -51,6 +54,16 @@ public class RemoteExecutionController {
             throw ApiException.invalid("versao");
         }
         return Map.of("items", service.candidates(org, SessionFilter.principal(req), SessionFilter.token(req), workspace, versionId));
+    }
+
+    /** Escolhe o ambiente Python de uma automacao numa maquina habilitada do ambiente dela (do inventario que a maquina publicou). */
+    @org.springframework.web.bind.annotation.PutMapping("/api/v1/o/{org}/automations/{automation}/remote-machines/{agent}/python-selection")
+    public RemoteExecutionService.PythonChoice selectPython(@PathVariable UUID org, @PathVariable UUID automation, @PathVariable UUID agent,
+                                                            @RequestBody(required = false) PythonSelection body, HttpServletRequest req) {
+        if (body == null) {
+            throw ApiException.invalid("corpo");
+        }
+        return service.selectPython(org, SessionFilter.principal(req), SessionFilter.token(req), automation, agent, body.environmentId());
     }
 
     @PostMapping("/api/v1/o/{org}/workspaces/{workspace}/remote-executions")

@@ -50,7 +50,7 @@ public final class RemoteDelivery {
 
     /** A tentativa entregue. {@code token} aparece SO aqui; o servidor guarda o hash. */
     public record Offer(UUID attemptId, UUID remoteExecutionId, int attemptNumber, UUID automationId, UUID automationVersionId, String packageFingerprint,
-                        String packageFingerprintRule, List<String> dependencies, String token, int epoch, int leaseSeconds) {
+                        String packageFingerprintRule, List<String> dependencies, String pythonEnvironmentId, String token, int epoch, int leaseSeconds) {
     }
 
     /** A tentativa cuja solicitacao teve o cancelamento pedido: a maquina para o que estiver fazendo e informa CANCELLED. */
@@ -270,7 +270,7 @@ public final class RemoteDelivery {
     private Offer offer(JdbcClient j, Machine m, UUID attemptId, String token, int epoch) {
         return j.sql("""
                 SELECT t.remote_execution_id, t.attempt_number, x.automation_id, x.automation_version_id, x.package_fingerprint, x.package_fingerprint_rule,
-                       x.effective_dependencies::text
+                       x.effective_dependencies::text, t.python_environment_id
                   FROM public.remote_attempts t
                   JOIN public.remote_executions x ON x.organization_id = t.organization_id AND x.remote_execution_id = t.remote_execution_id
                  WHERE t.organization_id = ? AND t.attempt_id = ?
@@ -278,7 +278,7 @@ public final class RemoteDelivery {
             List<String> deps = new ArrayList<>();
             JSON.readTree(rs.getString(7)).forEach(d -> deps.add(d.asString()));
             return new Offer(attemptId, rs.getObject(1, UUID.class), rs.getInt(2), rs.getObject(3, UUID.class), rs.getObject(4, UUID.class), rs.getString(5),
-                    rs.getString(6), List.copyOf(deps), token, epoch, leaseSeconds);
+                    rs.getString(6), List.copyOf(deps), rs.getString(8), token, epoch, leaseSeconds);
         }).single();
     }
 }
