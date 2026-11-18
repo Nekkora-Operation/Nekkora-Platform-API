@@ -11,7 +11,7 @@ public record GatewayProperties(List<String> trustedProxies, Database database, 
      * PLATFORM-CLIENT-EXECUCAO-REMOTA-001: chave do recurso (NEKKORA_EXECUCAO_REMOTA; ausente = desligado). Desligado, nenhuma
      * maquina e habilitada para execucao remota; o resto do canal nao muda.
      */
-    public record RemoteExecution(boolean enabled, Integer renewalWindowDays, Integer leaseSeconds) {
+    public record RemoteExecution(boolean enabled, Integer renewalWindowDays, Integer leaseSeconds, Integer lostMinutes) {
     }
 
     /** T02: prazo da comunicacao de uma tentativa, renovado a cada escrita aceita (NEKKORA_EXECUCAO_REMOTA_LEASE_SEGUNDOS; padrao 90). */
@@ -26,6 +26,15 @@ public record GatewayProperties(List<String> trustedProxies, Database database, 
     public int renewalWindowDays() {
         int days = remoteExecution == null || remoteExecution.renewalWindowDays() == null ? 30 : remoteExecution.renewalWindowDays();
         return Math.max(1, Math.min(days, limits.credentialDays()));
+    }
+
+    /**
+     * 053: quanto tempo, depois de o prazo da comunicacao vencer, a tentativa recebida e encerrada como sem confirmacao
+     * (NEKKORA_EXECUCAO_REMOTA_SEM_COMUNICACAO_MINUTOS; padrao 120). O mesmo valor tem de estar na Platform.
+     */
+    public int lostMinutes() {
+        return remoteExecution == null || remoteExecution.lostMinutes() == null ? com.nekkora.core.remote.AttemptClosure.DEFAULT_LOST_MINUTES
+                : remoteExecution.lostMinutes();
     }
 
     public boolean remoteExecutionEnabled() {

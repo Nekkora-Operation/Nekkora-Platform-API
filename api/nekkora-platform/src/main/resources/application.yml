@@ -80,6 +80,9 @@ nekkora:
     enabled: ${NEKKORA_EXECUCAO_REMOTA:false}
     # T02: quanto tempo a tentativa espera a maquina receber antes de expirar (ponto de partida de laboratorio)
     offer-minutes: ${NEKKORA_EXECUCAO_REMOTA_OFERTA_MINUTOS:15}
+    # 053: depois de o prazo da comunicacao vencer, quanto esperar antes de encerrar a tentativa recebida como sem
+    # confirmacao. Tem de ter o mesmo valor no agent-gateway
+    lost-minutes: ${NEKKORA_EXECUCAO_REMOTA_SEM_COMUNICACAO_MINUTOS:120}
   # login do aplicativo desktop pelo navegador (AGENT-CLIENT-LOGIN-001, contrato desktop-login/1): DESLIGADO por padrao; so
   # abre com a entrada geral tambem ligada. Prazos: pedido no navegador, codigo de autorizacao e sessao do aplicativo
   # (sem renovacao). Nenhum prazo das sessoes existentes muda.

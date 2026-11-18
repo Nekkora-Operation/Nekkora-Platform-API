@@ -325,6 +325,13 @@ public final class AgentAdminService {
                             + "WHERE organization_id = ? AND agent_id = ? AND consumed_at IS NULL AND cancelled_at IS NULL")
                     .param(actor.membershipId()).param(org).param(agentId).update();
             j.sql("UPDATE public.agents SET status = 4 WHERE organization_id = ? AND agent_id = ?").param(org).param(agentId).update();
+            // 053: a tentativa de execucao remota desta maquina nao fica aberta. O que o servidor nunca autorizou a iniciar fica
+            // "nao iniciou"; o que podia estar em execucao fica "sem confirmacao" - a maquina nao tem mais como informar
+            int attempts = com.nekkora.core.remote.AttemptClosure.linkEnded(j, org, agentId, com.nekkora.core.remote.AttemptClosure.MACHINE_REVOKED);
+            if (attempts > 0) {
+                LOG.info("evento=execucao_remota.encerrada_pelo_servidor causa=MACHINE_REVOKED agente={} tentativas={} correlacao={}", agentId, attempts,
+                        RequestContext.correlation());
+            }
             audit(j, org, 6, actor.membershipId(), agentId, worker, null, null, credentials.isEmpty() ? null : credentials.get(0),
                     code == 3 ? "COMPROMISED" : "ADMINISTRATIVE");
             LOG.info("evento=agente.revogado agente={} correlacao={}", agentId, RequestContext.correlation());

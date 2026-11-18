@@ -779,4 +779,130 @@ class RemoteExecutionIT extends PlatformTestBase {
         assertThat(as("nekkora_platform", s.org().id(), "UPDATE remote_executions SET cancel_requested_by_membership_id = '" + viewerMembership
                 + "' WHERE remote_execution_id = '" + execution + "'")).as("cancelamento por quem nao executa").isEqualTo("42501");
     }
+
+    // ------------------------------------------------------------------ 053: encerramento sem confirmacao
+
+    private JsonNode attemptOf(Setup s, String execution, int index) {
+        BrowserClient.Response r = s.admin().get(s.o() + "/remote-executions/" + execution);
+        assertThat(r.status()).as(r.body()).isEqualTo(200);
+        return JSON.readTree(r.body()).get("attempts").get(index);
+    }
+
+    private static String row(String attempt) throws Exception {
+        return value("SELECT state || '|' || coalesce(refusal_reason, '-') || '|' || coalesce(closure_cause, '-') || '|' || coalesce(exit_code::text, '-') "
+                + "FROM remote_attempts WHERE attempt_id = '" + attempt + "'");
+    }
+
+    private static void silentFor(Setup s, String attempt, int minutes) {
+        assertThat(as("nekkora_ingestion", s.org().id(), "UPDATE remote_attempts SET lease_expires_at = clock_timestamp() - interval '" + minutes
+                + " minutes' WHERE attempt_id = '" + attempt + "'")).isEqualTo("OK");
+    }
+
+    @Test
+    void revogacaoEPerdaDeComunicacaoEncerramATentativaSemInventarDesfechoEALeituraNuncaFicaEmExecucao() throws Exception {
+        Setup s = setup();
+        declare(s, null);
+        Machine revoked = machine(s, "Revogada", true);
+        Machine early = machine(s, "RevogadaAntes", true);
+        Machine silent = machine(s, "Silenciosa", true);
+        Machine waiting = machine(s, "SilenciosaAntes", true);
+        Machine orphan = machine(s, "Orfa", true);
+        Machine next = machine(s, "Destino", true);
+        for (Machine m : new Machine[] {revoked, early, silent, waiting, orphan, next}) {
+            heartbeat(s, m, true);
+            authorize(s, m);
+        }
+
+        // --- revogacao por quem administra, com a tentativa em execucao e com outra ainda em preparacao
+        JsonNode x = JSON.readTree(request(s, revoked).body());
+        String execution = x.get("remoteExecutionId").asString();
+        String running = x.get("attempts").get(0).get("attemptId").asString();
+        machineMoves(s, running, 2, 3, 4, 5, 6);
+        JsonNode y = JSON.readTree(request(s, early).body());
+        String preparing = y.get("attempts").get(0).get("attemptId").asString();
+        machineMoves(s, preparing, 2, 3, 4);
+        stepUp(s);
+        assertThat(s.admin().post(s.o() + "/agents/" + revoked.agent() + "/revoke", "{\"reason\":\"COMPROMISED\"}").status()).isEqualTo(204);
+        assertThat(s.admin().post(s.o() + "/agents/" + early.agent() + "/revoke", "{\"reason\":\"ADMINISTRATIVE\"}").status()).isEqualTo(204);
+        // em execucao: sem confirmacao (nunca sucesso, falha ou cancelamento; sem codigo de saida). Em preparacao: nao iniciou
+        assertThat(row(running)).isEqualTo("13|-|MACHINE_REVOKED|-");
+        assertThat(row(preparing)).isEqualTo("11|MACHINE_NOT_LINKED|MACHINE_REVOKED|-");
+        JsonNode a = attemptOf(s, execution, 0);
+        assertThat(a.get("state").asString()).isEqualTo("ENDED_UNKNOWN");
+        assertThat(a.get("closureCause").asString()).isEqualTo("MACHINE_REVOKED");
+        assertThat(a.get("exitCode").isNull()).isTrue();
+        assertThat(a.get("lateReport").isNull()).isTrue();
+        assertThat(a.get("endedAt").isNull()).isFalse();
+        assertThat(a.get("communication").asString()).isEqualTo("NONE");
+        JsonNode b = attemptOf(s, y.get("remoteExecutionId").asString(), 0);
+        assertThat(b.get("state").asString()).isEqualTo("REFUSED");
+        assertThat(b.get("refusalReason").asString()).isEqualTo("MACHINE_NOT_LINKED");
+        assertThat(b.get("closureCause").asString()).isEqualTo("MACHINE_REVOKED");
+        // a repeticao continua sendo um ato de uma pessoa, em outra maquina, com a autorizacao do Worker de destino
+        BrowserClient.Response again = s.admin().post(s.o() + "/remote-executions/" + execution + "/attempts", "{\"agentId\":\"" + next.agent() + "\"}");
+        assertThat(again.status()).as(again.body()).isEqualTo(201);
+        String second = JSON.readTree(again.body()).get("attempts").get(1).get("attemptId").asString();
+        machineMoves(s, second, 2, 3, 11);
+
+        // --- comunicacao perdida
+        JsonNode z = JSON.readTree(request(s, silent).body());
+        String lostExecution = z.get("remoteExecutionId").asString();
+        String lost = z.get("attempts").get(0).get("attemptId").asString();
+        machineMoves(s, lost, 2, 3, 4, 5, 6);
+        JsonNode w = JSON.readTree(request(s, waiting).body());
+        String neverStarted = w.get("attempts").get(0).get("attemptId").asString();
+        machineMoves(s, neverStarted, 2, 3);
+        // vencido ha menos que a espera (120 min): continua em execucao, com a comunicacao perdida a vista; nada e gravado
+        silentFor(s, lost, 100);
+        JsonNode still = attemptOf(s, lostExecution, 0);
+        assertThat(still.get("state").asString()).isEqualTo("RUNNING");
+        assertThat(still.get("communication").asString()).isEqualTo("LOST");
+        assertThat(still.get("closureCause").isNull()).isTrue();
+        assertThat(row(lost)).isEqualTo("6|-|-|-");
+        refused(request(s, silent), "remote_machine_busy");
+        // alem da espera: a LEITURA ja mostra o encerramento, e ele esta gravado (nao e so apresentacao)
+        silentFor(s, lost, 121);
+        silentFor(s, neverStarted, 121);
+        JsonNode list = JSON.readTree(s.admin().get(s.requests()).body()).get("items");
+        for (JsonNode e : list) {
+            for (JsonNode t : e.get("attempts")) {
+                assertThat(t.get("state").asString()).as("nenhuma tentativa fica em andamento sem ter quem a conclua")
+                        .isIn("ENDED_UNKNOWN", "REFUSED");
+            }
+        }
+        assertThat(row(lost)).isEqualTo("13|-|COMMUNICATION_LOST|-");
+        assertThat(row(neverStarted)).isEqualTo("11|COMMUNICATION_LOST|COMMUNICATION_LOST|-");
+        JsonNode unknown = attemptOf(s, lostExecution, 0);
+        assertThat(unknown.get("state").asString()).isEqualTo("ENDED_UNKNOWN");
+        assertThat(unknown.get("closureCause").asString()).isEqualTo("COMMUNICATION_LOST");
+        assertThat(unknown.get("lateReport").isNull()).isTrue();
+        // a maquina voltou e disse como terminou (papel da ingestao, como o gateway): aparece AO LADO; o estado nao muda
+        assertThat(as("nekkora_ingestion", s.org().id(), "UPDATE remote_attempts SET late_state = 7, late_exit_code = 0 WHERE attempt_id = '" + lost + "'"))
+                .isEqualTo("OK");
+        JsonNode told = attemptOf(s, lostExecution, 0);
+        assertThat(told.get("state").asString()).isEqualTo("ENDED_UNKNOWN");
+        assertThat(told.get("exitCode").isNull()).isTrue();
+        assertThat(told.get("lateReport").get("state").asString()).isEqualTo("SUCCEEDED");
+        assertThat(told.get("lateReport").get("exitCode").asInt()).isZero();
+        assertThat(told.get("lateReport").get("reportedAt").asString()).isNotBlank();
+        // a maquina deixou de estar ocupada: uma nova solicitacao para ela e aceita
+        BrowserClient.Response fresh = request(s, silent);
+        assertThat(fresh.status()).as(fresh.body()).isEqualTo(201);
+
+        // --- tentativa que ja estava parada quando a regra chegou (vinculo encerrado sem o encerramento da tentativa)
+        JsonNode o = JSON.readTree(request(s, orphan).body());
+        String stuck = o.get("attempts").get(0).get("attemptId").asString();
+        machineMoves(s, stuck, 2, 3, 4, 5, 6);
+        try (Connection c = DB.connectAsSuperuser(); Statement st = c.createStatement()) {
+            st.execute("SET session_replication_role = replica");
+            st.execute("UPDATE agents SET status = 4 WHERE agent_id = '" + orphan.agent() + "'");
+        }
+        assertThat(row(stuck)).isEqualTo("6|-|-|-");
+        JsonNode reconciled = attemptOf(s, o.get("remoteExecutionId").asString(), 0);
+        assertThat(reconciled.get("state").asString()).isEqualTo("ENDED_UNKNOWN");
+        assertThat(reconciled.get("closureCause").asString()).isEqualTo("MACHINE_REVOKED");
+        assertThat(row(stuck)).isEqualTo("13|-|MACHINE_REVOKED|-");
+        // os registros e resultados que existirem continuam consultaveis: o encerramento nao apaga nada
+        assertThat(s.admin().get(s.o() + "/remote-executions/" + o.get("remoteExecutionId").asString() + "/attempts/" + stuck + "/logs").status()).isEqualTo(200);
+    }
 }
