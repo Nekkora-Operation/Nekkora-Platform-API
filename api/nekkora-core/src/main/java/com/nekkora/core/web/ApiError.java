@@ -101,6 +101,10 @@ public enum ApiError {
     REMOTE_MACHINE_INCOMPATIBLE(HttpStatus.CONFLICT, "conflict", "remote_machine_incompatible"),
     /** A maquina ja tem uma tentativa nao terminada (a reserva e atomica). */
     REMOTE_MACHINE_BUSY(HttpStatus.CONFLICT, "conflict", "remote_machine_busy"),
+    /** A ultima tentativa desta maquina foi encerrada por falta de comunicacao e ela ainda nao voltou: nao se sabe se esta livre. */
+    REMOTE_MACHINE_UNCONFIRMED(HttpStatus.CONFLICT, "conflict", "remote_machine_unconfirmed"),
+    /** Repetir depois de um encerramento por falta de comunicacao exige que a pessoa reconheca que a anterior pode estar em andamento. */
+    REMOTE_PREVIOUS_RESULT_UNCONFIRMED(HttpStatus.CONFLICT, "conflict", "remote_previous_result_unconfirmed"),
     REMOTE_REQUIREMENTS_NOT_DECLARED(HttpStatus.CONFLICT, "conflict", "remote_requirements_not_declared"),
     REMOTE_REQUIREMENTS_CONFLICT(HttpStatus.CONFLICT, "conflict", "remote_requirements_conflict"),
     /** O pacote da versao nao e um pacote Python externo: a execucao remota nao o aceita (o formato Studio fica de fora). */

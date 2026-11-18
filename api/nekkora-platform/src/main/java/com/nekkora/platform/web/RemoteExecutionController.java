@@ -34,7 +34,7 @@ public class RemoteExecutionController {
     public record CreateRequest(String automationVersionId, String agentId, String requestKey) {
     }
 
-    public record RetryRequest(String agentId) {
+    public record RetryRequest(String agentId, Boolean acknowledgeUnconfirmed) {
     }
 
     public record PythonSelection(String environmentId) {
@@ -142,7 +142,8 @@ public class RemoteExecutionController {
             throw ApiException.invalid("corpo");
         }
         return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore())
-                .body(service.retry(org, SessionFilter.principal(req), SessionFilter.token(req), execution, uuid(body.agentId())));
+                .body(service.retry(org, SessionFilter.principal(req), SessionFilter.token(req), execution, uuid(body.agentId()),
+                        Boolean.TRUE.equals(body.acknowledgeUnconfirmed())));
     }
 
     private static UUID uuid(String v) {
