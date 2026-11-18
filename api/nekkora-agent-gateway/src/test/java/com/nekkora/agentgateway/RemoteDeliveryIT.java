@@ -1200,4 +1200,56 @@ class RemoteDeliveryIT extends RemoteEnabledGatewayIT {
             assertThat(e.getMessage()).contains("23P01");
         }
     }
+
+    // ------------------------------------------------------------------ registros: um comando por lote
+
+    @Test
+    void umLoteDeRegistrosEGravadoNumSoComandoEAConferenciaDoBancoRodaUmaVezPorLote() {
+        Machine m = machine(true);
+        String attempt = queued(m);
+        String grant = running(m, attempt);
+        // contador de COMANDOS de insercao nas linhas de registro (so neste teste): a conferencia do banco e por comando, e rele
+        // todas as linhas da tentativa - uma linha por comando faria o custo crescer com o quadrado do tamanho
+        DB.asSuperuser("CREATE TABLE IF NOT EXISTS public.zz_comandos_de_registro (n INTEGER NOT NULL)");
+        DB.asSuperuser("DELETE FROM public.zz_comandos_de_registro");
+        DB.asSuperuser("INSERT INTO public.zz_comandos_de_registro VALUES (0)");
+        DB.asSuperuser("CREATE OR REPLACE FUNCTION public.zz_conta_comando() RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS "
+                + "'BEGIN UPDATE public.zz_comandos_de_registro SET n = n + 1; RETURN NULL; END'");
+        DB.asSuperuser("CREATE TRIGGER zz_conta_comando AFTER INSERT ON public.remote_attempt_log_lines FOR EACH STATEMENT EXECUTE FUNCTION public.zz_conta_comando()");
+        try {
+            String[] lote = new String[200];
+            for (int i = 0; i < lote.length; i++) {
+                lote[i] = line(i + 1, i % 7 == 0 ? "STDERR" : "STDOUT", "linha " + (i + 1));
+            }
+            MachineClient.Response first = logs(m, attempt, grant, lote);
+            assertThat(first.status()).as(first.raw()).isEqualTo(200);
+            assertThat(first.body().get("stored").asInt()).isEqualTo(200);
+            assertThat(fx.value("SELECT n FROM zz_comandos_de_registro")).as("200 linhas, UM comando").isEqualTo("1");
+            // lote repetido por inteiro (resposta perdida): nada e gravado, nenhum comando de insercao
+            assertThat(logs(m, attempt, grant, lote).body().get("stored").asInt()).isZero();
+            assertThat(fx.value("SELECT n FROM zz_comandos_de_registro")).isEqualTo("1");
+            // lote que repete uma parte e traz linhas novas: so as novas, num comando
+            String[] misto = new String[150];
+            for (int i = 0; i < misto.length; i++) {
+                int sequence = 151 + i;
+                misto[i] = line(sequence, sequence % 7 == 1 ? "STDERR" : "STDOUT", "linha " + sequence);
+            }
+            MachineClient.Response second = logs(m, attempt, grant, misto);
+            assertThat(second.status()).as(second.raw()).isEqualTo(200);
+            assertThat(second.body().get("stored").asInt()).isEqualTo(100);
+            assertThat(second.body().get("lastSequence").asInt()).isEqualTo(300);
+            assertThat(fx.value("SELECT n FROM zz_comandos_de_registro")).isEqualTo("2");
+        } finally {
+            DB.asSuperuser("DROP TRIGGER IF EXISTS zz_conta_comando ON public.remote_attempt_log_lines");
+            DB.asSuperuser("DROP FUNCTION IF EXISTS public.zz_conta_comando()");
+            DB.asSuperuser("DROP TABLE IF EXISTS public.zz_comandos_de_registro");
+        }
+        // o que ficou gravado e o que foi enviado, na ordem, com o canal de cada linha
+        assertThat(fx.value("SELECT count(*) || '|' || min(sequence) || '|' || max(sequence) || '|' || count(*) FILTER (WHERE channel = 2) FROM remote_attempt_log_lines "
+                + "WHERE attempt_id = '" + attempt + "'")).isEqualTo("300|1|300|" + java.util.stream.IntStream.rangeClosed(1, 300).filter(q -> (q - 1) % 7 == 0).count());
+        assertThat(fx.value("SELECT message FROM remote_attempt_log_lines WHERE attempt_id = '" + attempt + "' AND sequence = 257")).isEqualTo("linha 257");
+        // um lote com uma linha que passa do limite de linhas continua sendo recusado por inteiro (nada parcial)
+        assertThat(state(m, attempt, grant, "SUCCEEDED", "\"exitCode\":0").status()).isEqualTo(200);
+        assertThat(logsComplete(m, attempt, grant, 300, 0).status()).isEqualTo(200);
+    }
 }
