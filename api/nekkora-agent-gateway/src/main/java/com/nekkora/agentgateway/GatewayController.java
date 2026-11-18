@@ -257,6 +257,50 @@ public class GatewayController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(c);
     }
 
+    /**
+     * T05: um lote de linhas da saida do processo. Corpo: {@code {"token", "epoch", "lines": [{"sequence", "capturedAt",
+     * "channel", "truncated", "message"}]}}.
+     */
+    @PostMapping("/agent/api/v1/remote/attempts/{attempt}/logs")
+    public ResponseEntity<RemoteDelivery.LogsAccepted> remoteLogs(@PathVariable String attempt, @RequestBody(required = false) String body,
+                                                                  HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(attempt);
+        JsonNode n = parse(body);
+        JsonNode array = n.get("lines");
+        if (array == null || !array.isArray() || array.size() > RemoteDelivery.MAX_LOG_BATCH_LINES) {
+            throw ApiException.invalid("lote");
+        }
+        java.util.List<RemoteDelivery.LogLine> lines = new java.util.ArrayList<>();
+        for (JsonNode l : array) {
+            Integer sequence = l.isObject() ? integer(l, "sequence") : null;
+            JsonNode truncated = l.isObject() ? l.get("truncated") : null;
+            if (sequence == null || (truncated != null && !truncated.isBoolean())) {
+                throw ApiException.invalid("linha");
+            }
+            lines.add(new RemoteDelivery.LogLine(sequence, text(l, "capturedAt"), text(l, "channel"), truncated != null && truncated.asBoolean(),
+                    text(l, "message")));
+        }
+        RemoteDelivery.LogsAccepted r = authenticated(req, () -> delivery.storeLogs(t, id, text(n, "token"), integer(n, "epoch"), lines));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
+    }
+
+    /** T05: fecha o envio dos registros. Corpo: {@code {"token", "epoch", "lines", "droppedLines"}}. */
+    @PostMapping("/agent/api/v1/remote/attempts/{attempt}/logs/complete")
+    public ResponseEntity<RemoteDelivery.LogsClosure> remoteLogsComplete(@PathVariable String attempt, @RequestBody(required = false) String body,
+                                                                         HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(attempt);
+        JsonNode n = parse(body);
+        JsonNode dropped = n.get("droppedLines");
+        if (dropped == null || !dropped.isIntegralNumber() || !dropped.canConvertToLong()) {
+            throw ApiException.invalid("droppedLines");
+        }
+        RemoteDelivery.LogsClosure c = authenticated(req, () -> delivery.closeLogs(t, id, text(n, "token"), integer(n, "epoch"), integer(n, "lines"),
+                dropped.asLong()));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(c);
+    }
+
     /** T03: o pacote da versao fixada na tentativa, so para a maquina que a recebeu e so antes do inicio. */
     @GetMapping("/agent/api/v1/remote/attempts/{attempt}/package")
     public ResponseEntity<byte[]> remotePackage(@PathVariable String attempt, HttpServletRequest req) {

@@ -125,6 +125,10 @@ public enum ApiError {
     REMOTE_RESULT_CONFLICT(HttpStatus.CONFLICT, "conflict", "remote_result_conflict"),
     /** Canal da maquina: o arquivo faria a tentativa passar do limite total de resultados. */
     REMOTE_RESULT_LIMIT(HttpStatus.CONFLICT, "conflict", "remote_result_limit"),
+    /** Canal da maquina: lote de registros com buraco na sequencia, linha repetida com outro conteudo, ou envio ja fechado. */
+    REMOTE_LOG_CONFLICT(HttpStatus.CONFLICT, "conflict", "remote_log_conflict"),
+    /** Canal da maquina: o lote faria a tentativa passar do limite total de registros. */
+    REMOTE_LOG_LIMIT(HttpStatus.CONFLICT, "conflict", "remote_log_limit"),
     /** Os bytes do resultado nao estao mais no armazenamento (removidos pela retencao, ausentes ou que nao conferem). */
     REMOTE_RESULT_UNAVAILABLE(HttpStatus.CONFLICT, "conflict", "remote_result_unavailable"),
     /** Canal do Agent (contrato Platform-Agent 1.0, sec. 15): versao maior do contrato nao suportada. */
