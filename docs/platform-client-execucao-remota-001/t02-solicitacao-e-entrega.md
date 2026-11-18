@@ -139,3 +139,22 @@ Os testes de tela do gateway com a execução remota ligada passaram a compartil
 - A autoria da solicitação e do cancelamento fica nas próprias linhas (imutáveis); não há ato novo na trilha de auditoria
   dos Agents.
 - Nenhum teste com máquina real: a máquina é simulada por HTTP no gateway e por SQL na Platform.
+
+## Complemento: pacote no formato Studio é recusado na solicitação
+
+Decisão da titular (15/11): a execução remota aceita **apenas pacote Python externo** nesta primeira versão, e a recusa
+tem de acontecer **na API, antes de criar a solicitação**.
+
+- A regra do pacote é a gravada na versão publicada (`agent_package.fingerprint_rule`). Só
+  `nekkora-agent/external-python-fingerprint/1` é aceita.
+- `POST …/remote-executions` com outra regra: `409 conflict`, `remote_package_not_supported`. A conferência vem antes de
+  todas as outras exigências e nada é gravado (nem solicitação, nem tentativa).
+- Repetir em outra máquina (`POST …/attempts`) aplica a mesma recusa a uma solicitação antiga cujo pacote não é externo.
+- A lista de máquinas traz `PACKAGE_NOT_SUPPORTED` em `missing` para todas as máquinas dessa versão. Não há ação que
+  resolva: é do pacote, não da máquina.
+- O aplicativo da máquina **mantém a própria conferência** (recusa com `CLIENT_INCOMPATIBLE`) como proteção adicional.
+- Sem migration: a tabela continua aceitando as duas regras; a recusa é do serviço. Uma trava no banco é possível e
+  **não foi feita** aqui.
+
+Teste: `RemoteExecutionIT.pacoteNoFormatoStudioERecusadoAntesDeCriarASolicitacaoMesmoComTodoORestoValendo`. A base dos
+demais testes de `RemoteExecutionIT` passou a usar a regra do pacote externo.

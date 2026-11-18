@@ -2551,7 +2551,8 @@ paths:
       description: >
         Exige automation.read no ambiente. automationVersion: uma versao PUBLICADA do ambiente (outra: 404). Para cada maquina
         habilitada cujo Worker esta autorizado no ambiente: requestable e missing, a lista do que impede solicitar nela agora -
-        REQUIREMENTS_NOT_DECLARED, REQUIREMENTS_CONFLICT (da automacao), AUTHORIZATION_MISSING, AUTHORIZATION_REVOKED,
+        PACKAGE_NOT_SUPPORTED (o pacote da versao nao e um pacote Python externo; a execucao remota so aceita esse tipo e o
+        formato Studio fica de fora - vale para todas as maquinas e nao ha acao que resolva), REQUIREMENTS_NOT_DECLARED, REQUIREMENTS_CONFLICT (da automacao), AUTHORIZATION_MISSING, AUTHORIZATION_REVOKED,
         AUTHORIZATION_EXPIRED (a autorizacao de execucao desta versao para o Worker da maquina), MACHINE_PAUSED,
         MACHINE_INCOMPATIBLE, MACHINE_BUSY, PYTHON_NOT_SELECTED (ninguem escolheu o ambiente Python desta automacao nesta maquina),
         PYTHON_NOT_IN_INVENTORY (o escolhido nao esta mais no inventario dela). authorization: a autorizacao vigente da versao para
@@ -2577,7 +2578,9 @@ paths:
       operationId: requestRemoteExecution
       summary: 'Solicita a execucao de uma versao publicada numa maquina habilitada (step-up)'
       description: >
-        Exige automation.execute no ambiente e step-up recente. Para ACEITAR, exige ainda: Worker da maquina autorizado no
+        Exige automation.execute no ambiente e step-up recente. Para ACEITAR, exige ainda: o pacote da versao e um pacote
+        Python externo (o formato Studio nao e executado remotamente: 409 + remote_package_not_supported, conferido antes de
+        todas as outras exigencias e antes de gravar; o mesmo vale ao repetir em outra maquina); Worker da maquina autorizado no
         ambiente; maquina habilitada, nao pausada, compativel e livre; autorizacao de execucao VIGENTE desta versao para o Worker
         da maquina; dependencias da automacao declaradas e sem conflito com o pacote. Cada exigencia que falta responde 409
         conflict com o seu reason (remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired,
@@ -2929,7 +2932,7 @@ components:
     Error:
       type: object
       required: [error]
-      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_requirements_not_declared, remote_requirements_conflict, remote_python_not_selected, remote_python_not_in_inventory, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
+      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_requirements_not_declared, remote_requirements_conflict, remote_package_not_supported, remote_python_not_selected, remote_python_not_in_inventory, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
     WorkspacePermissionCode:
       description: 'Permissoes de workspace (13): podem aparecer em allWorkspaces e em atribuicoes de workspace.'
       type: string
@@ -3453,7 +3456,7 @@ components:
               requestable: { type: boolean }
               missing:
                 type: array
-                items: { type: string, enum: [REQUIREMENTS_NOT_DECLARED, REQUIREMENTS_CONFLICT, AUTHORIZATION_MISSING, AUTHORIZATION_REVOKED, AUTHORIZATION_EXPIRED, MACHINE_PAUSED, MACHINE_INCOMPATIBLE, MACHINE_BUSY, PYTHON_NOT_SELECTED, PYTHON_NOT_IN_INVENTORY] }
+                items: { type: string, enum: [PACKAGE_NOT_SUPPORTED, REQUIREMENTS_NOT_DECLARED, REQUIREMENTS_CONFLICT, AUTHORIZATION_MISSING, AUTHORIZATION_REVOKED, AUTHORIZATION_EXPIRED, MACHINE_PAUSED, MACHINE_INCOMPATIBLE, MACHINE_BUSY, PYTHON_NOT_SELECTED, PYTHON_NOT_IN_INVENTORY] }
               authorization:
                 type: [object, 'null']
                 required: [authorizationId, validUntil, status]

@@ -103,6 +103,8 @@ public enum ApiError {
     REMOTE_MACHINE_BUSY(HttpStatus.CONFLICT, "conflict", "remote_machine_busy"),
     REMOTE_REQUIREMENTS_NOT_DECLARED(HttpStatus.CONFLICT, "conflict", "remote_requirements_not_declared"),
     REMOTE_REQUIREMENTS_CONFLICT(HttpStatus.CONFLICT, "conflict", "remote_requirements_conflict"),
+    /** O pacote da versao nao e um pacote Python externo: a execucao remota nao o aceita (o formato Studio fica de fora). */
+    REMOTE_PACKAGE_NOT_SUPPORTED(HttpStatus.CONFLICT, "conflict", "remote_package_not_supported"),
     /** Ninguem escolheu ainda o ambiente Python desta automacao nesta maquina. */
     REMOTE_PYTHON_NOT_SELECTED(HttpStatus.CONFLICT, "conflict", "remote_python_not_selected"),
     /** O ambiente Python indicado (ou o escolhido antes) nao esta no inventario atual da maquina. */
