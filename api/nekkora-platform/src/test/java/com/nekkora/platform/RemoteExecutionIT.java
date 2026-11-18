@@ -665,6 +665,11 @@ class RemoteExecutionIT extends PlatformTestBase {
         refused(s.admin().post(retry, "{\"agentId\":\"" + b.agent() + "\"}"), "remote_attempt_not_finished");
         // a maquina voltou e disse que terminou sem prova do resultado
         machineMoves(s, first, 13);
+        // 058: sem prova do resultado E sem confirmacao de que o processo acabou, a repeticao fica bloqueada
+        refused(s.admin().post(retry, "{\"agentId\":\"" + b.agent() + "\"}"), "remote_previous_result_unconfirmed");
+        // a propria maquina confirma que o processo nao esta mais em execucao (papel da ingestao, como o gateway): reconciliada por ela
+        assertThat(as("nekkora_ingestion", s.org().id(), "INSERT INTO remote_attempt_process_reports (attempt_id, kind, organization_id, agent_id) "
+                + "SELECT attempt_id, 1, organization_id, agent_id FROM remote_attempts WHERE attempt_id = '" + first + "'")).isEqualTo("OK");
         // o Worker de destino NAO tem autorizacao desta versao: a da origem nao e transferida
         refused(s.admin().post(retry, "{\"agentId\":\"" + b.agent() + "\"}"), "remote_authorization_missing");
         assertThat(value("SELECT count(*) FROM local_run_authorizations WHERE worker_id = '" + b.worker() + "'")).isEqualTo("0");
@@ -1176,11 +1181,67 @@ class RemoteExecutionIT extends PlatformTestBase {
         assertThat(b.get("state").asString()).isEqualTo("REFUSED");
         assertThat(b.get("refusalReason").asString()).isEqualTo("MACHINE_NOT_LINKED");
         assertThat(b.get("closureCause").asString()).isEqualTo("MACHINE_REVOKED");
-        // a repeticao continua sendo um ato de uma pessoa, em outra maquina, com a autorizacao do Worker de destino
-        BrowserClient.Response again = s.admin().post(s.o() + "/remote-executions/" + execution + "/attempts", "{\"agentId\":\"" + next.agent() + "\"}");
+        // 058: com resultado nao confirmado a repeticao fica BLOQUEADA. Revogar a maquina nao reconcilia nada
+        String revokedRetry = s.o() + "/remote-executions/" + execution + "/attempts";
+        refused(s.admin().post(revokedRetry, "{\"agentId\":\"" + next.agent() + "\"}"), "remote_previous_result_unconfirmed");
+        assertThat(a.get("reconciliations").size()).isZero();
+        // a maquina revogada nao tem como confirmar: so a declaracao de um ORG_ADMIN, com motivo, verificacao e a afirmacao dos
+        // efeitos parciais. Faltando qualquer um, 400 e nada gravado
+        String declare = s.o() + "/remote-executions/" + execution + "/attempts/" + running + "/reconciliation";
+        String verified = "Computador desligado pela equipe e mantido fora de operacao.";
+        assertThat(s.admin().post(declare, "{\"reason\":\"MACHINE_OFF_OUT_OF_OPERATION\",\"verification\":\"" + verified
+                + "\",\"acknowledgePartialEffects\":false}").status()).as("sem afirmar os efeitos parciais").isEqualTo(400);
+        assertThat(s.admin().post(declare, "{\"reason\":\"MACHINE_OFF_OUT_OF_OPERATION\",\"verification\":\"curto\",\"acknowledgePartialEffects\":true}")
+                .status()).as("sem descrever a verificacao").isEqualTo(400);
+        assertThat(s.admin().post(declare, "{\"reason\":\"ACEITO_O_RISCO\",\"verification\":\"" + verified + "\",\"acknowledgePartialEffects\":true}").status())
+                .as("motivo fora da lista").isEqualTo(400);
+        assertThat(value("SELECT count(*) FROM remote_attempt_process_reports WHERE attempt_id = '" + running + "'")).isEqualTo("0");
+        // quem executa mas nao e ORG_ADMIN nao declara
+        TestUser operatorUser = internalUser(s.org(), true, 2);
+        grantWorkspaceRole(s.org(), operatorUser, s.workspace(), "OPERATOR");
+        BrowserClient executor = browser();
+        firstLogin(executor, s.org().id(), operatorUser);
+        assertThat(executor.post(s.o() + "/auth/mfa/step-up", "{\"code\":\"" + code(operatorUser.id()) + "\"}").status()).isEqualTo(204);
+        BrowserClient.Response denied = executor.post(declare, "{\"reason\":\"MACHINE_OFF_OUT_OF_OPERATION\",\"verification\":\"" + verified
+                + "\",\"acknowledgePartialEffects\":true}");
+        assertThat(denied.status()).as(denied.body()).isEqualTo(403);
+        // a tentativa que nunca iniciou nao tem o que reconciliar
+        refused(s.admin().post(s.o() + "/remote-executions/" + y.get("remoteExecutionId").asString() + "/attempts/" + preparing + "/reconciliation",
+                "{\"reason\":\"MACHINE_OFF_OUT_OF_OPERATION\",\"verification\":\"" + verified + "\",\"acknowledgePartialEffects\":true}"),
+                "remote_attempt_not_unconfirmed");
+        stepUp(s);
+        BrowserClient.Response declared = s.admin().post(declare, "{\"reason\":\"MACHINE_OFF_OUT_OF_OPERATION\",\"verification\":\"" + verified
+                + "\",\"acknowledgePartialEffects\":true}");
+        assertThat(declared.status()).as(declared.body()).isEqualTo(201);
+        JsonNode manual = JSON.readTree(declared.body()).get("attempts").get(0);
+        // o resultado anterior continua "nao confirmado": nada de sucesso, falha ou codigo de saida; fica quem, quando, por que
+        assertThat(manual.get("state").asString()).isEqualTo("ENDED_UNKNOWN");
+        assertThat(manual.get("exitCode").isNull()).isTrue();
+        assertThat(manual.get("closureCause").asString()).isEqualTo("MACHINE_REVOKED");
+        assertThat(manual.get("reconciliations").size()).isEqualTo(1);
+        assertThat(manual.get("reconciliations").get(0).get("kind").asString()).isEqualTo("MANUAL");
+        assertThat(manual.get("reconciliations").get(0).get("reason").asString()).isEqualTo("MACHINE_OFF_OUT_OF_OPERATION");
+        assertThat(manual.get("reconciliations").get(0).get("verification").asString()).isEqualTo(verified);
+        assertThat(manual.get("reconciliations").get(0).get("byMembershipId").asString()).isEqualTo(s.org().adminMembership().toString());
+        assertThat(row(running)).isEqualTo("13|-|MACHINE_REVOKED|-");
+        assertThat(value("SELECT agent_id || '|' || kind FROM remote_attempt_process_reports WHERE attempt_id = '" + running + "'"))
+                .as("a maquina e a tentativa envolvidas ficam no registro").isEqualTo(revoked.agent() + "|2");
+        assertThat(value("SELECT count(*) FROM remote_attempts WHERE remote_execution_id = '" + execution + "'")).as("a reconciliacao nao executa nada")
+                .isEqualTo("1");
+        refused(s.admin().post(declare, "{\"reason\":\"OTHER_VERIFIED\",\"verification\":\"" + verified + "\",\"acknowledgePartialEffects\":true}"),
+                "remote_attempt_already_reconciled");
+        // liberada: a repeticao continua sendo um ato de uma pessoa, em outra maquina, com a autorizacao do Worker de destino
+        BrowserClient.Response again = s.admin().post(revokedRetry, "{\"agentId\":\"" + next.agent() + "\"}");
         assertThat(again.status()).as(again.body()).isEqualTo(201);
         String second = JSON.readTree(again.body()).get("attempts").get(1).get("attemptId").asString();
         machineMoves(s, second, 2, 3, 11);
+        // guardas do banco: so a Platform declara, e so por ORG_ADMIN; a maquina nao declara por uma pessoa; nada muda nem some
+        String raw = "INSERT INTO remote_attempt_process_reports (attempt_id, kind, organization_id, agent_id, reason, verification, by_membership_id) VALUES ('%s', 2, '"
+                + s.org().id() + "', '" + revoked.agent() + "', 'OTHER_VERIFIED', 'verificacao feita por fora da aplicacao', '%s')";
+        assertThat(as("nekkora_ingestion", s.org().id(), raw.formatted(running, s.org().adminMembership()))).isIn("42501", "23505");
+        assertThat(as("nekkora_platform", s.org().id(), "UPDATE remote_attempt_process_reports SET reason = 'OTHER_VERIFIED' WHERE attempt_id = '" + running + "'"))
+                .isEqualTo("42501");
+        assertThat(as("nekkora_platform", s.org().id(), "DELETE FROM remote_attempt_process_reports WHERE attempt_id = '" + running + "'")).isEqualTo("42501");
 
         // --- comunicacao perdida
         JsonNode z = JSON.readTree(request(s, silent).body());
@@ -1214,35 +1275,57 @@ class RemoteExecutionIT extends PlatformTestBase {
         assertThat(unknown.get("state").asString()).isEqualTo("ENDED_UNKNOWN");
         assertThat(unknown.get("closureCause").asString()).isEqualTo("COMMUNICATION_LOST");
         assertThat(unknown.get("lateReport").isNull()).isTrue();
-        // decisao de 16/11: a espera vencida consolida o resultado, mas NAO da a maquina por livre nem libera a repeticao sozinha
+        // 058: a espera vencida consolida o resultado, mas NAO da a maquina por livre nem libera a repeticao
         assertThat(missing(s, silent)).contains("MACHINE_UNCONFIRMED").doesNotContain("MACHINE_BUSY");
         refused(request(s, silent), "remote_machine_unconfirmed");
         stepUp(s);
         String retryPath = s.o() + "/remote-executions/" + lostExecution + "/attempts";
         refused(s.admin().post(retryPath, "{\"agentId\":\"" + next.agent() + "\"}"), "remote_previous_result_unconfirmed");
-        refused(s.admin().post(retryPath, "{\"agentId\":\"" + next.agent() + "\",\"acknowledgeUnconfirmed\":false}"), "remote_previous_result_unconfirmed");
+        // "aceito o risco" nao existe mais: o campo antigo nem e aceito
+        assertThat(s.admin().post(retryPath, "{\"agentId\":\"" + next.agent() + "\",\"acknowledgeUnconfirmed\":true}").status()).isIn(400, 409);
         assertThat(value("SELECT count(*) FROM remote_attempts WHERE remote_execution_id = '" + lostExecution + "'")).as("nada foi gravado").isEqualTo("1");
-        // nem reconhecendo se repete na PROPRIA maquina que sumiu
-        refused(s.admin().post(retryPath, "{\"agentId\":\"" + silent.agent() + "\",\"acknowledgeUnconfirmed\":true}"), "remote_machine_unconfirmed");
-        // a maquina que nunca iniciou (o servidor nao autorizou o inicio) nao tem processo: nao fica "sem confirmacao"
+        // a maquina que nunca iniciou (o servidor nao autorizou o inicio) nao tem processo: nao fica com ocupacao incerta
         assertThat(missing(s, waiting)).doesNotContain("MACHINE_UNCONFIRMED");
-        // reconhecendo, a repeticao em OUTRA maquina e aceita - e continua sendo um ato de uma pessoa
-        BrowserClient.Response acknowledged = s.admin().post(retryPath, "{\"agentId\":\"" + next.agent() + "\",\"acknowledgeUnconfirmed\":true}");
-        assertThat(acknowledged.status()).as(acknowledged.body()).isEqualTo(201);
-        machineMoves(s, JSON.readTree(acknowledged.body()).get("attempts").get(1).get("attemptId").asString(), 2, 3, 11);
-        // a maquina voltou a se comunicar (sem dizer ainda como terminou): ela mesma e a autoridade sobre estar ocupada
+        // um NOVO CONTATO nao torna a maquina livre nem libera a repeticao
         heartbeat(s, silent, true);
-        assertThat(missing(s, silent)).doesNotContain("MACHINE_UNCONFIRMED");
-        // a maquina voltou e disse como terminou (papel da ingestao, como o gateway): aparece AO LADO; o estado nao muda
-        assertThat(as("nekkora_ingestion", s.org().id(), "UPDATE remote_attempts SET late_state = 7, late_exit_code = 0 WHERE attempt_id = '" + lost + "'"))
-                .isEqualTo("OK");
+        assertThat(missing(s, silent)).contains("MACHINE_UNCONFIRMED");
+        refused(s.admin().post(retryPath, "{\"agentId\":\"" + next.agent() + "\"}"), "remote_previous_result_unconfirmed");
+        // a maquina voltou e disse que AINDA EXECUTA (papel da ingestao, como o gateway): passa a OCUPADA; a repeticao segue bloqueada
+        assertThat(as("nekkora_ingestion", s.org().id(), "INSERT INTO remote_attempt_process_reports (attempt_id, kind, organization_id, agent_id) VALUES ('"
+                + lost + "', 3, '" + s.org().id() + "', '" + silent.agent() + "')")).isEqualTo("OK");
+        assertThat(missing(s, silent)).contains("MACHINE_BUSY").doesNotContain("MACHINE_UNCONFIRMED");
+        refused(request(s, silent), "remote_machine_busy");
+        assertThat(attemptOf(s, lostExecution, 0).get("machineStillRunningAt").isNull()).isFalse();
+        refused(s.admin().post(retryPath, "{\"agentId\":\"" + next.agent() + "\"}"), "remote_previous_result_unconfirmed");
+        // declaracao manual: libera uma nova tentativa em OUTRA maquina; a maquina antiga continua indisponivel
+        String declareLost = s.o() + "/remote-executions/" + lostExecution + "/attempts/" + lost + "/reconciliation";
+        assertThat(s.admin().post(declareLost, "{\"reason\":\"PROCESS_ENDED_BY_ADMINISTRATOR\",\"verification\":\"Processo encerrado no computador por quem o administra.\","
+                + "\"acknowledgePartialEffects\":true}").status()).isEqualTo(201);
+        assertThat(missing(s, silent)).as("a declaracao manual nao libera a maquina antiga").contains("MACHINE_BUSY");
+        refused(s.admin().post(retryPath, "{\"agentId\":\"" + silent.agent() + "\"}"), "remote_machine_busy");
+        BrowserClient.Response released = s.admin().post(retryPath, "{\"agentId\":\"" + next.agent() + "\"}");
+        assertThat(released.status()).as(released.body()).isEqualTo(201);
+        machineMoves(s, JSON.readTree(released.body()).get("attempts").get(1).get("attemptId").asString(), 2, 3, 11);
+        // a maquina diz como terminou (evidencia tardia): fica AO LADO da decisao manual, que nao e alterada; o estado nao muda
+        assertThat(as("nekkora_ingestion", s.org().id(), "UPDATE remote_attempts SET late_state = 7, late_exit_code = 0 WHERE attempt_id = '" + lost + "'",
+                "INSERT INTO remote_attempt_process_reports (attempt_id, kind, organization_id, agent_id) VALUES ('" + lost + "', 1, '" + s.org().id() + "', '"
+                        + silent.agent() + "')")).isEqualTo("OK");
         JsonNode told = attemptOf(s, lostExecution, 0);
         assertThat(told.get("state").asString()).isEqualTo("ENDED_UNKNOWN");
         assertThat(told.get("exitCode").isNull()).isTrue();
         assertThat(told.get("lateReport").get("state").asString()).isEqualTo("SUCCEEDED");
         assertThat(told.get("lateReport").get("exitCode").asInt()).isZero();
         assertThat(told.get("lateReport").get("reportedAt").asString()).isNotBlank();
-        // a maquina deixou de estar ocupada: uma nova solicitacao para ela e aceita
+        assertThat(told.get("machineStillRunningAt").isNull()).as("ela confirmou o fim").isTrue();
+        List<String> kinds = new ArrayList<>();
+        told.get("reconciliations").forEach(r -> kinds.add(r.get("kind").asString()));
+        assertThat(kinds).as("a decisao manual e a confirmacao da maquina convivem").containsExactly("MANUAL", "MACHINE");
+        assertThat(told.get("reconciliations").get(0).get("reason").asString()).isEqualTo("PROCESS_ENDED_BY_ADMINISTRATOR");
+        // depois de "ausente", "ainda executa" nao e mais aceito
+        assertThat(as("nekkora_ingestion", s.org().id(), "INSERT INTO remote_attempt_process_reports (attempt_id, kind, organization_id, agent_id) VALUES ('"
+                + neverStarted + "', 1, '" + s.org().id() + "', '" + waiting.agent() + "')")).as("so tentativa nao confirmada").isEqualTo("23514");
+        // a maquina reconciliou a propria ocupacao: uma nova solicitacao para ela e aceita
+        assertThat(missing(s, silent)).doesNotContain("MACHINE_BUSY").doesNotContain("MACHINE_UNCONFIRMED");
         BrowserClient.Response fresh = request(s, silent);
         assertThat(fresh.status()).as(fresh.body()).isEqualTo(201);
 

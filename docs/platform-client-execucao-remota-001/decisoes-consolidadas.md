@@ -23,8 +23,8 @@ coluna "Estado".
 | Uma máquina executa uma tentativa por vez; a reserva é atômica | implementado |
 | A máquina é a última autoridade: recusa "ocupada" o que chegar com um processo rodando nela | implementado |
 | Pausar novos trabalhos não interrompe a execução atual; desabilitar com execução ativa é recusado | implementado |
-| **Um novo contato não torna a máquina livre.** Se ela ainda executa a tentativa anterior, aparece **ocupada**. Se não consegue confirmar que o processo terminou, a ocupação fica **incerta** | **a implementar** (hoje: livre no primeiro contato depois do encerramento) |
-| **Encerrar o vínculo impede novos trabalhos, mas não comprova que o processo terminou** | **a implementar** nos textos e na regra de repetição |
+| **Um novo contato não torna a máquina livre.** Se ela ainda executa a tentativa anterior, aparece **ocupada**. Se não consegue confirmar que o processo terminou, a ocupação fica **incerta** | implementado (058) |
+| **Encerrar o vínculo impede novos trabalhos, mas não comprova que o processo terminou** | implementado (058): a máquina revogada continua indisponível e a repetição continua bloqueada |
 | Tentativa que o servidor nunca autorizou a iniciar não ocupa a máquina | implementado |
 
 ## 3. Repetição da execução
@@ -33,12 +33,13 @@ coluna "Estado".
 |---|---|
 | Nunca há repetição automática nem troca automática de máquina | implementado |
 | Repetir exige permissão de executar, confirmação reforçada, a tentativa anterior terminada e a autorização vigente do Worker de destino | implementado |
-| **A repetição fica bloqueada enquanto não houver confirmação de que a execução anterior terminou e de que não há processo ativo** — qualquer que seja a causa: perda de comunicação, revogação ou reinício do aplicativo. Reconhecer o risco **não** basta: isso ainda permite duplicidade | **a implementar** (hoje: reconhecimento explícito, e só depois de comunicação perdida) |
-| Depois da reconciliação, repetir mantém a confirmação sobre os possíveis efeitos parciais da execução anterior | implementado para "resultado não confirmado"; a rever junto com a regra acima |
+| **A repetição fica bloqueada enquanto não houver confirmação de que a execução anterior terminou e de que não há processo ativo** — qualquer que seja a causa: perda de comunicação, revogação ou reinício do aplicativo. Reconhecer o risco **não** basta: isso ainda permite duplicidade | implementado (058) |
+| Depois da reconciliação, repetir mantém a confirmação sobre os possíveis efeitos parciais da execução anterior | implementado |
 
-**Ponto em aberto, para decisão:** quando a máquina **não pode mais falar** com a Platform (vínculo revogado ou encerrado,
-computador que não volta), não existe hoje quem confirme o término. Com a regra acima, a repetição daquela solicitação fica
-bloqueada sem prazo. Falta decidir se haverá um ato de reconciliação feito por uma pessoa, com registro, e quem pode fazê-lo.
+**Duas reconciliações** (decisão de 16/11; ver `reconciliacao-da-tentativa.md`): confirmada pela **máquina** (término e
+ausência de processo ativo), ou **declarada por um ORG_ADMIN** da organização, com confirmação reforçada, motivo, descrição da
+verificação e a afirmação dos possíveis efeitos parciais. A declaração libera uma nova tentativa; não executa nada e não libera
+a máquina antiga. Revogar o vínculo, esperar ou "aceitar o risco" não bastam. Se ninguém consegue verificar, o bloqueio fica.
 
 ## 4. Entrega de registros e resultados
 

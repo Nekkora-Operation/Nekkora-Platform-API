@@ -876,6 +876,7 @@ components:
         state: { type: string, enum: [PREPARING, STARTING, RUNNING, SUCCEEDED, FAILED, CANCELLED, TIMED_OUT, REFUSED, ENDED_UNKNOWN] }
         refusalReason: { type: string, enum: [BUSY, PAUSED, PACKAGE_INVALID, ENVIRONMENT_GONE, ENVIRONMENT_INCOMPATIBLE, DEPENDENCIES_MISSING, DISK_PRESSURE, CLIENT_INCOMPATIBLE, SESSION_UNAVAILABLE], description: 'So com REFUSED' }
         exitCode: { type: integer, description: 'So com SUCCEEDED, FAILED ou TIMED_OUT' }
+        processAbsent: { type: boolean, description: '058: junto de ENDED_UNKNOWN, a maquina afirma que CONFERIU que o processo desta tentativa nao esta mais em execucao nela (o desfecho continua desconhecido). Ausente ou false: ela nao sabe. Numa tentativa que o servidor ja encerrou como nao confirmada, repetir RUNNING fica registrado como "ainda executa"' }
     RemoteAttemptStatus:
       type: object
       required: [attemptId, state, proceed, cancelRequested, leaseSeconds]
