@@ -12,6 +12,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 import com.nekkora.core.remote.AttemptClosure;
+import com.nekkora.core.license.LicenseGate;
 import com.nekkora.core.web.ApiError;
 import com.nekkora.core.web.ApiException;
 import com.nekkora.platform.access.WorkspaceAccess;
@@ -315,7 +316,8 @@ public class RemoteExecutionService {
                     SELECT a.agent_id, a.name, w.worker_id, w.name, r.receiving, coalesce(p.capabilities @> ARRAY['REMOTE_RUN_1_0']::text[], false),
                            EXISTS (SELECT 1 FROM public.remote_attempts t WHERE t.agent_id = a.agent_id AND t.state BETWEEN 1 AND 6
                                       AND NOT (t.state IN (1, 2) AND t.offer_valid_until <= clock_timestamp())),
-                           la.authorization_id, la.valid_until, la.revoked_at IS NOT NULL, la.valid_until <= clock_timestamp(),
+                           la.authorization_id, la.valid_until, la.revoked_at IS NOT NULL,
+                           la.valid_until <= clock_timestamp() AND public.license_model(r.organization_id) <> 2,
                            s.environment_id, s.python_version, s.selected_at,
                            EXISTS (SELECT 1 FROM public.agent_python_environments e WHERE e.agent_id = a.agent_id AND e.environment_id = s.environment_id),
                            %s
@@ -329,7 +331,8 @@ public class RemoteExecutionService {
                       LEFT JOIN LATERAL (SELECT z.authorization_id, z.valid_until, z.revoked_at FROM public.local_run_authorizations z
                                           WHERE z.organization_id = r.organization_id AND z.workspace_id = ? AND z.worker_id = w.worker_id
                                             AND z.automation_version_id = ? AND z.source_kind IN (1, 2)
-                                          ORDER BY (z.revoked_at IS NULL AND z.valid_until > clock_timestamp()) DESC, z.granted_at DESC LIMIT 1) la ON true
+                                          ORDER BY (z.revoked_at IS NULL AND (z.valid_until > clock_timestamp()
+                                                    OR public.license_model(z.organization_id) = 2)) DESC, z.granted_at DESC LIMIT 1) la ON true
                       LEFT JOIN public.automation_python_selections s ON s.organization_id = r.organization_id AND s.automation_id = ?
                                                                       AND s.agent_id = a.agent_id
                      WHERE r.organization_id = ? ORDER BY w.name, w.worker_id
@@ -440,6 +443,21 @@ public class RemoteExecutionService {
 
     /** Solicita a execucao da versao publicada na maquina indicada. {@code requestKey}: repeticao idempotente (resposta perdida). */
     public Created request(UUID org, ValidSession actor, String token, UUID workspaceId, UUID versionId, UUID agentId, UUID requestKey) {
+        return request(org, actor, token, workspaceId, versionId, agentId, requestKey, null);
+    }
+
+    /**
+     * S2: o aceite EXPLICITO da versao nesta maquina, dado no mesmo passo da solicitacao por quem tem as duas permissoes (as
+     * duas sao automation.execute no ambiente, com a mesma confirmacao reforcada). So cria a autorizacao da versao para o
+     * Worker da maquina se nao houver uma que sirva; o ato fica na trilha como qualquer autorizacao (ato 10, com quem aceitou).
+     * Nunca vale para versoes futuras. {@code validUntil}: obrigatorio no modelo anterior; no modelo por licenca, limitado ao
+     * fim da cobertura.
+     */
+    public record VersionAcceptance(OffsetDateTime validUntil) {
+    }
+
+    public Created request(UUID org, ValidSession actor, String token, UUID workspaceId, UUID versionId, UUID agentId, UUID requestKey,
+                           VersionAcceptance acceptance) {
         if (versionId == null || agentId == null || requestKey == null) {
             throw ApiException.invalid("solicitacao");
         }
@@ -447,14 +465,15 @@ public class RemoteExecutionService {
             throw new ApiException(ApiError.REMOTE_EXECUTION_UNAVAILABLE, "execucao_remota_desligada");
         }
         try {
-            return requestOnce(org, actor, token, workspaceId, versionId, agentId, requestKey);
+            return requestOnce(org, actor, token, workspaceId, versionId, agentId, requestKey, acceptance);
         } catch (DuplicateKeyException race) {
             // dois envios concorrentes com a mesma chave: o segundo le o primeiro
-            return requestOnce(org, actor, token, workspaceId, versionId, agentId, requestKey);
+            return requestOnce(org, actor, token, workspaceId, versionId, agentId, requestKey, acceptance);
         }
     }
 
-    private Created requestOnce(UUID org, ValidSession actor, String token, UUID workspaceId, UUID versionId, UUID agentId, UUID requestKey) {
+    private Created requestOnce(UUID org, ValidSession actor, String token, UUID workspaceId, UUID versionId, UUID agentId, UUID requestKey,
+                                VersionAcceptance acceptance) {
         return actions.write(org, j -> {
             actions.requireActor(j, org, actor, token);
             access.requireWorkspace(j, org, actor.membershipId(), workspaceId, "automation.execute");
@@ -471,6 +490,8 @@ public class RemoteExecutionService {
                 return new Created(same, false);
             }
             Version v = version(j, org, workspaceId, versionId);
+            // 064: o direito ao servico. No modelo por licenca, a automacao precisa de licenca vigente para trabalho novo
+            LicenseGate.requireForNewWork(j, org, v.automationId());
             // antes de qualquer outra exigencia, e antes de gravar: so pacote Python externo e executado remotamente
             requireSupported(v.rule());
             requireRegistered(j, org, versionId, v.fingerprint(), v.rule());
@@ -483,7 +504,7 @@ public class RemoteExecutionService {
             }
             ArrayNode frozen = JSON.createArrayNode();
             requirements.effective().dependencies().forEach(frozen::add);
-            Target target = target(j, org, workspaceId, versionId, agentId);
+            Target target = target(j, org, workspaceId, versionId, agentId, actor.membershipId(), acceptance);
             UUID id = j.sql("""
                     INSERT INTO public.remote_executions (organization_id, workspace_id, automation_id, automation_version_id, package_fingerprint,
                         package_fingerprint_rule, requirements_revision, effective_dependencies, request_key, requested_by_membership_id)
@@ -503,6 +524,10 @@ public class RemoteExecutionService {
      * versao para o Worker de DESTINO; a da maquina anterior nao e transferida.
      */
     public Execution retry(UUID org, ValidSession actor, String token, UUID executionId, UUID agentId) {
+        return retry(org, actor, token, executionId, agentId, null);
+    }
+
+    public Execution retry(UUID org, ValidSession actor, String token, UUID executionId, UUID agentId, VersionAcceptance acceptance) {
         if (agentId == null) {
             throw ApiException.invalid("maquina");
         }
@@ -525,6 +550,8 @@ public class RemoteExecutionService {
             if (STATES.indexOf(last.state()) < 6) {
                 throw new ApiException(ApiError.REMOTE_ATTEMPT_NOT_FINISHED, "tentativa_anterior_nao_terminou");
             }
+            // 064: uma tentativa nova e trabalho novo - a licenca e conferida de novo, agora
+            LicenseGate.requireForNewWork(j, org, x.automationId());
             // 058: com resultado nao confirmado, a repeticao fica BLOQUEADA ate haver confirmacao de que o processo acabou - pela
             // maquina, ou declarada por um ORG_ADMIN. Reconhecer o risco, revogar a maquina ou esperar nao liberam nada
             if ("ENDED_UNKNOWN".equals(last.state()) && last.reconciliations().isEmpty()) {
@@ -539,7 +566,7 @@ public class RemoteExecutionService {
                     .param(org).param(executionId).query(String.class).single());
             requireRegistered(j, org, x.automationVersionId(), j.sql("SELECT package_fingerprint FROM public.remote_executions "
                     + "WHERE organization_id = ? AND remote_execution_id = ?").param(org).param(executionId).query(String.class).single(), SUPPORTED_RULE);
-            Target target = target(j, org, x.workspaceId(), x.automationVersionId(), agentId);
+            Target target = target(j, org, x.workspaceId(), x.automationVersionId(), agentId, actor.membershipId(), acceptance);
             attempt(j, org, executionId, last.attemptNumber() + 1, target, actor.membershipId());
             LOG.info("evento=execucao_remota.nova_tentativa solicitacao={} tentativa={} correlacao={}", executionId, last.attemptNumber() + 1,
                     AccessActions.correlation());
@@ -889,6 +916,11 @@ public class RemoteExecutionService {
     /** O que falta e nao depende da maquina: o tipo do pacote da versao, o registro dele e a declaracao das dependencias. */
     private static List<String> commonMissing(JdbcClient j, UUID org, UUID versionId, Version v) {
         List<String> out = new ArrayList<>();
+        // 064: o direito ao servico vem antes do resto - sem licenca vigente, nada mais adianta resolver
+        String license = LicenseGate.state(j, org, v.automationId());
+        if (license.startsWith("LICENSE_")) {
+            out.add(license);
+        }
         if (!SUPPORTED_RULE.equals(v.rule())) {
             out.add("PACKAGE_NOT_SUPPORTED");
         } else if (!registered(j, org, versionId, v.fingerprint(), v.rule())) {
@@ -907,7 +939,7 @@ public class RemoteExecutionService {
      * A maquina de destino e a autorizacao da versao para o Worker DELA. Cada exigencia que falta tem o seu motivo; a ordem
      * e a da decisao: Worker no ambiente, maquina (habilitada, nao pausada, compativel, livre), autorizacao da versao.
      */
-    private Target target(JdbcClient j, UUID org, UUID workspaceId, UUID versionId, UUID agentId) {
+    private Target target(JdbcClient j, UUID org, UUID workspaceId, UUID versionId, UUID agentId, UUID membership, VersionAcceptance acceptance) {
         record Row(UUID worker, boolean workerInWorkspace, boolean enabledMachine, short receiving, boolean compatible) {
         }
         Row m = j.sql("""
@@ -958,12 +990,26 @@ public class RemoteExecutionService {
         }
         record Grant(UUID id, boolean revoked, boolean expired) {
         }
+        // 064, S1: no modelo por licenca o prazo da autorizacao nao recusa a execucao remota (o prazo e o da licenca); a
+        // autorizacao da versao para o Worker continua exigida e a revogacao continua valendo
         Grant g = j.sql("""
-                SELECT z.authorization_id, z.revoked_at IS NOT NULL, z.valid_until <= clock_timestamp() FROM public.local_run_authorizations z
+                SELECT z.authorization_id, z.revoked_at IS NOT NULL,
+                       z.valid_until <= clock_timestamp() AND public.license_model(z.organization_id) <> 2
+                  FROM public.local_run_authorizations z
                  WHERE z.organization_id = ? AND z.workspace_id = ? AND z.worker_id = ? AND z.automation_version_id = ? AND z.source_kind IN (1, 2)
-                 ORDER BY (z.revoked_at IS NULL AND z.valid_until > clock_timestamp()) DESC, z.granted_at DESC LIMIT 1
+                 ORDER BY (z.revoked_at IS NULL AND (z.valid_until > clock_timestamp() OR public.license_model(z.organization_id) = 2)) DESC,
+                          z.granted_at DESC LIMIT 1
                 """).param(org).param(workspaceId).param(m.worker()).param(versionId)
                 .query((rs, n) -> new Grant(rs.getObject(1, UUID.class), rs.getBoolean(2), rs.getBoolean(3))).optional().orElse(null);
+        if (acceptance != null && (g == null || g.revoked() || g.expired())) {
+            // S2: aceite explicito da versao nesta maquina, no mesmo passo. E o MESMO ato da rota de autorizacao (mesmas
+            // recusas, mesma trilha), feito por quem ja provou a permissao e a confirmacao reforcada nesta transacao
+            AgentAdminService.LocalAuthorization accepted = AgentAdminService.grantVersion(j, org, membership, workspaceId, m.worker(), versionId,
+                    acceptance.validUntil());
+            LOG.info("evento=execucao_remota.versao_aceita_na_solicitacao autorizacao={} correlacao={}", accepted.authorizationId(),
+                    AccessActions.correlation());
+            g = new Grant(accepted.authorizationId(), false, false);
+        }
         if (g == null) {
             throw new ApiException(ApiError.REMOTE_AUTHORIZATION_MISSING, "sem_autorizacao_da_versao");
         }

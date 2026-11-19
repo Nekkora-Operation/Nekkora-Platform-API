@@ -701,6 +701,11 @@ public final class GatewayService {
                 }
             }
             short authState = z.revoked() ? (short) 2 : z.expired() ? (short) 3 : (short) 1;
+            // 064, D8: no modelo por licenca o registro so e aceito quando a autorizacao DO SERVIDOR valia no inicio informado e
+            // havia licenca naquele inicio (ou a autorizacao e anterior ao modelo: transicao). A automacao, a versao e o Worker
+            // sao os da autorizacao lida acima; da maquina so vem o instante. O banco reconfere e grava a base (license_basis)
+            com.nekkora.core.license.LicenseGate.requireRunCovered(j, m.organization(), z.automationId(), authorizationId,
+                    ts(report.started() != null ? report.started() : report.created()));
             UUID runId = j.sql("""
                     INSERT INTO public.agent_runs (organization_id, workspace_id, automation_id, automation_version_id, authorization_id, agent_id, worker_id,
                         worker_agent_assignment_id, agent_execution_id, package_fingerprint, authorization_state_at_registration, supervisor_state,

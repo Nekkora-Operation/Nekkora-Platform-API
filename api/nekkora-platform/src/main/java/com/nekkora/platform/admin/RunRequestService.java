@@ -102,6 +102,8 @@ public final class RunRequestService {
             if (!g.active()) {
                 throw AccessActions.refuse(Failure.CONFLICT, "autorizacao_inativa");
             }
+            // 064: pedido novo e trabalho novo - no modelo por licenca exige licenca vigente da automacao
+            com.nekkora.core.license.LicenseGate.requireForNewWork(j, org, g.automationId());
             Boolean agentOk = j.sql("""
                     SELECT g.status = 2 FROM public.worker_agent_assignments a JOIN public.agents g ON g.organization_id = a.organization_id AND g.agent_id = a.agent_id
                      WHERE a.organization_id = ? AND a.worker_id = ? AND a.agent_id = ? AND a.status = 1

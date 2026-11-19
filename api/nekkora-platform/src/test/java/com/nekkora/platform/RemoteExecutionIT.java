@@ -1674,4 +1674,153 @@ class RemoteExecutionIT extends PlatformTestBase {
                 + s.workspace() + "', '" + s.automation() + "', '" + bare.agent() + "', '" + ENV_A + "', 2, '[]'::jsonb, '" + s.org().adminMembership()
                 + "', clock_timestamp() + interval '1 minute')")).isEqualTo("23514");
     }
+
+    // ------------------------------------------------------------------ PLATFORM-LICENCIAMENTO-001 (064): a licenca nos fluxos
+
+    private BrowserClient.Response authorizeUntil(Setup s, Machine m, int days) {
+        return s.admin().post(s.o() + "/workspaces/" + s.workspace() + "/local-run-authorizations", "{\"workerId\":\"" + m.worker()
+                + "\",\"automationVersionId\":\"" + s.version() + "\",\"validUntil\":\"" + OffsetDateTime.now(ZoneOffset.UTC).plusDays(days).withNano(0) + "\"}");
+    }
+
+    private static String periodEnd(UUID license, int number) {
+        return "(SELECT ends_at FROM organization_license_periods WHERE license_id = '" + license + "' AND period_number = " + number + ")";
+    }
+
+    /**
+     * No modelo por licenca, o SERVIDOR confere a licenca em cada inicio de trabalho: solicitacao, tentativa, autorizacao. A
+     * validade da autorizacao nunca atravessa uma lacuna entre periodos (D3); o prazo da autorizacao deixa de recusar a execucao
+     * remota e a revogacao continua valendo (S1); o aceite da versao no mesmo passo e explicito e fica na trilha (S2); vencida a
+     * licenca, trabalho novo e recusado e o que ja comecou termina e entrega.
+     */
+    @Test
+    void noModeloPorLicencaOServidorConfereALicencaEmCadaInicioDeTrabalho() throws Exception {
+        Setup s = setup();
+        UUID org = s.org().id();
+        Machine m = machine(s, "Fiscal", true);
+        declare(s, null);
+        heartbeat(s, m, true);
+        String first = authorize(s, m);
+        assertThat(missing(s, m)).as("modelo anterior: nada muda").isEmpty();
+        // a autorizacao de m vence (o tempo passou): no modelo anterior, o prazo recusa
+        DB.asSuperuser("SET session_replication_role = replica", "UPDATE local_run_authorizations SET granted_at = clock_timestamp() - interval '40 days', "
+                + "valid_until = clock_timestamp() - interval '1 day' WHERE authorization_id = '" + first + "'");
+        assertThat(missing(s, m)).as("modelo anterior: a autorizacao vencida recusa").containsExactly("AUTHORIZATION_EXPIRED");
+        refused(request(s, m), "remote_authorization_expired");
+
+        // ---- a organizacao passa ao modelo por licenca; a automacao nao tem licenca
+        LicenseFixtures.enforce(org, s.org().adminId());
+        assertThat(missing(s, m)).as("o direito ao servico vem antes do resto").containsExactly("LICENSE_REQUIRED");
+        refused(request(s, m), "license_required");
+        Machine m2 = machine(s, "Contabil", true);
+        heartbeat(s, m2, true);
+        refused(authorizeUntil(s, m2, 30), "license_required");
+        refused(s.admin().post(s.requests(), body(s, m2, UUID.randomUUID()).replace("}", ",\"authorizeVersion\":true}")), "license_required");
+        assertThat(value("SELECT count(*) FROM remote_executions WHERE organization_id = '" + org + "'")).as("nada foi admitido").isEqualTo("0");
+        assertThat(value("SELECT count(*) FROM local_run_authorizations WHERE organization_id = '" + org + "'")).as("nenhuma autorizacao nova").isEqualTo("1");
+        // o banco reconfere: o papel real do servico nao grava trabalho novo por fora da regra
+        assertThat(as("nekkora_platform", org, "INSERT INTO remote_executions (organization_id, workspace_id, automation_id, automation_version_id, "
+                + "package_fingerprint, package_fingerprint_rule, requirements_revision, effective_dependencies, request_key, requested_by_membership_id) VALUES ('"
+                + org + "', '" + s.workspace() + "', '" + s.automation() + "', '" + s.version() + "', '" + FINGERPRINT + "', '" + EXTERNAL + "', 1, '[]'::jsonb, '"
+                + UUID.randomUUID() + "', '" + s.org().adminMembership() + "')")).as("gatilho da 064").isEqualTo("23514");
+
+        // ---- licenca vigente por 10 dias, vinculada pelo administrador (rota real)
+        UUID license = LicenseFixtures.license(org, 1, "clock_timestamp() - interval '1 day'", "clock_timestamp() + interval '10 days'");
+        BrowserClient.Response linked = s.admin().post(s.o() + "/licenses/" + license + "/assignment", "{\"automationId\":\"" + s.automation() + "\"}");
+        assertThat(linked.status()).as(linked.body()).isEqualTo(200);
+        // S1: a autorizacao de m continua vencida, e no modelo por licenca isso nao recusa a execucao remota
+        assertThat(missing(s, m)).as("S1: o prazo e o da licenca").isEmpty();
+        BrowserClient.Response ok = request(s, m);
+        assertThat(ok.status()).as(ok.body()).isEqualTo(201);
+        String execution = JSON.readTree(ok.body()).get("remoteExecutionId").asString();
+        String attempt = JSON.readTree(ok.body()).get("attempts").get(0).get("attemptId").asString();
+
+        // ---- D3: a validade pedida (30 dias) e limitada ao fim da cobertura (10 dias)
+        BrowserClient.Response capped = authorizeUntil(s, m2, 30);
+        assertThat(capped.status()).as(capped.body()).isEqualTo(201);
+        assertThat(value("SELECT valid_until = " + periodEnd(license, 1) + " FROM local_run_authorizations WHERE authorization_id = '"
+                + capped.field("authorizationId") + "'")).as("a autorizacao nao passa do fim da licenca").isEqualTo("t");
+        // renovacao CONTIGUA (comeca onde o periodo 1 termina, vai ate 40 dias): a cobertura segue ate o fim dela
+        LicenseFixtures.renew(org, license, 2, periodEnd(license, 1), "clock_timestamp() + interval '40 days'");
+        // e uma renovacao DEPOIS DE UMA LACUNA (comeca em 60 dias): nao estende a autorizacao
+        LicenseFixtures.renew(org, license, 3, "clock_timestamp() + interval '60 days'", "clock_timestamp() + interval '120 days'");
+        Machine m3 = machine(s, "Folha", true);
+        heartbeat(s, m3, true);
+        BrowserClient.Response chained = authorizeUntil(s, m3, 100);
+        assertThat(chained.status()).as(chained.body()).isEqualTo(201);
+        assertThat(value("SELECT valid_until = " + periodEnd(license, 2) + " FROM local_run_authorizations WHERE authorization_id = '"
+                + chained.field("authorizationId") + "'")).as("D3: para no fim do periodo contiguo; nunca atravessa a lacuna").isEqualTo("t");
+        // o banco reconfere a validade: alem da cobertura, recusa
+        Machine m4 = machine(s, "Estoque", true);
+        heartbeat(s, m4, true);
+        assertThat(as("nekkora_platform", org, "INSERT INTO local_run_authorizations (organization_id, workspace_id, worker_id, worker_workspace_assignment_id, "
+                + "automation_id, automation_version_id, package_fingerprint, package_fingerprint_rule, source_kind, granted_by_membership_id, valid_until) SELECT '"
+                + org + "', '" + s.workspace() + "', '" + m4.worker() + "', assignment_id, '" + s.automation() + "', '" + s.version() + "', '" + FINGERPRINT + "', '"
+                + EXTERNAL + "', 2, '" + s.org().adminMembership() + "', clock_timestamp() + interval '50 days' FROM worker_workspace_assignments WHERE worker_id = '"
+                + m4.worker() + "' AND workspace_id = '" + s.workspace() + "'")).as("validade dentro da lacuna").isEqualTo("23514");
+
+        // ---- S2: sem autorizacao da versao em m4. Sem o aceite, recusa; com o aceite explicito, autoriza e solicita no mesmo passo
+        assertThat(missing(s, m4)).containsExactly("AUTHORIZATION_MISSING");
+        refused(request(s, m4), "remote_authorization_missing");
+        refused(s.admin().post(s.requests(), body(s, m4, UUID.randomUUID()).replace("}", ",\"authorizeVersion\":false}")), "remote_authorization_missing");
+        String before = value("SELECT count(*) FROM agent_admin_events WHERE organization_id = '" + org + "' AND act = 10");
+        BrowserClient.Response accepted = s.admin().post(s.requests(), body(s, m4, UUID.randomUUID()).replace("}", ",\"authorizeVersion\":true}"));
+        assertThat(accepted.status()).as(accepted.body()).isEqualTo(201);
+        assertThat(value("SELECT automation_version_id || '|' || granted_by_membership_id || '|' || (valid_until = " + periodEnd(license, 2)
+                + ") FROM local_run_authorizations WHERE organization_id = '" + org + "' AND worker_id = '" + m4.worker() + "'"))
+                .as("S2: a autorizacao e DESTA versao, de quem aceitou, e respeita a cobertura").isEqualTo(s.version() + "|" + s.org().adminMembership() + "|true");
+        assertThat(value("SELECT count(*) FROM agent_admin_events WHERE organization_id = '" + org + "' AND act = 10"))
+                .as("S2: o aceite fica na trilha como ato proprio").isEqualTo(String.valueOf(Integer.parseInt(before) + 1));
+        assertThat(value("SELECT actor_membership_id || '|' || worker_id FROM agent_admin_events WHERE organization_id = '" + org
+                + "' AND act = 10 ORDER BY created_at DESC LIMIT 1")).isEqualTo(s.org().adminMembership() + "|" + m4.worker());
+        // S2 nao da o que a pessoa nao tem: quem so le o ambiente nao autoriza nem solicita
+        TestUser viewer = internalUser(s.org(), true, 2);
+        grantWorkspaceRole(s.org(), viewer, s.workspace(), "VIEWER");
+        BrowserClient reader = browser();
+        firstLogin(reader, org, viewer);
+        assertThat(reader.post(s.requests(), body(s, m3, UUID.randomUUID()).replace("}", ",\"authorizeVersion\":true}")).status()).isIn(403, 404);
+        assertThat(value("SELECT count(*) FROM local_run_authorizations WHERE worker_id = '" + m3.worker() + "'")).as("nenhuma autorizacao a mais em m3").isEqualTo("1");
+
+        // ---- a revogacao continua valendo
+        DB.asSuperuser("SET session_replication_role = replica", "UPDATE local_run_authorizations SET revoked_at = clock_timestamp(), revoked_by_membership_id = '"
+                + s.org().adminMembership() + "' WHERE authorization_id = '" + capped.field("authorizationId") + "'");
+        assertThat(missing(s, m2)).as("S1 nao mexe na revogacao").containsExactly("AUTHORIZATION_REVOKED");
+        refused(request(s, m2), "remote_authorization_revoked");
+
+        // ---- a licenca vence. A tentativa de m ja esta em execucao; a de m4 ainda nao comecou
+        machineMoves(s, attempt, 2, 3, 4, 5, 6);
+        String waiting = JSON.readTree(accepted.body()).get("attempts").get(0).get("attemptId").asString();
+        LicenseFixtures.endPeriodNow(license, 1);
+        DB.asSuperuser("SET session_replication_role = replica", "DELETE FROM organization_license_periods WHERE license_id = '" + license + "' AND period_number > 1");
+        assertThat(missing(s, m3)).containsExactly("LICENSE_EXPIRED");
+        refused(request(s, m3), "license_expired");
+        refused(authorizeUntil(s, m2, 5), "license_expired");
+        // antes de INICIAR, a revalidacao do servidor diz que a licenca venceu (a tentativa que ainda nao comecou nao comeca)
+        assertThat(valueIn("nekkora_ingestion", org, "SELECT public.remote_attempt_blocker('" + org + "', '" + accepted.field("remoteExecutionId") + "', '"
+                + m4.agent() + "', '" + m4.worker() + "', authorization_id) FROM remote_attempts WHERE attempt_id = '" + waiting + "'"))
+                .as("validacao da licenca antes de autorizar o inicio").isEqualTo("LICENSE_EXPIRED");
+        // o que ja estava em execucao termina e entrega; o historico continua legivel
+        machineMoves(s, attempt, 7);
+        JsonNode done = JSON.readTree(s.admin().get(s.o() + "/remote-executions/" + execution).body());
+        assertThat(done.get("attempts").get(0).get("state").asString()).as("a execucao admitida na validade conclui depois do vencimento").isEqualTo("SUCCEEDED");
+        assertThat(s.admin().get(s.requests()).status()).as("historico preservado").isEqualTo(200);
+        // e uma nova tentativa da mesma solicitacao e trabalho novo: recusada
+        refused(s.admin().post(s.o() + "/remote-executions/" + execution + "/attempts", "{\"agentId\":\"" + m3.agent() + "\"}"), "license_expired");
+
+        // ---- outra organizacao, no modelo anterior, nao e afetada pela licenca desta
+        assertThat(value("SELECT public.license_state('" + newOrganization().id() + "', '" + s.automation() + "')")).isEqualTo("LEGACY");
+    }
+
+    private static String valueIn(String role, UUID org, String sql) throws Exception {
+        try (Connection c = DB.connectAs(role)) {
+            c.setAutoCommit(false);
+            try (Statement st = c.createStatement()) {
+                st.execute("SELECT set_config('nekkora.organization_id', '" + org + "', true)");
+                try (ResultSet rs = st.executeQuery(sql)) {
+                    return rs.next() ? rs.getString(1) : null;
+                }
+            } finally {
+                c.rollback();
+            }
+        }
+    }
 }

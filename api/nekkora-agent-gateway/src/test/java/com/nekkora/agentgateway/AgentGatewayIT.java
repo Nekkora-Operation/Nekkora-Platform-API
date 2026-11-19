@@ -588,4 +588,101 @@ class AgentGatewayIT {
         // nenhum segredo, codigo ou credencial no log do servidor de banco
         assertThat(DB.serverLog()).doesNotContain(p.m().secret);
     }
+
+    // =========================================================================== PLATFORM-LICENCIAMENTO-001 (064, D8)
+
+    static String runningAt(java.time.Instant started) {
+        return "{\"state\":\"RUNNING\",\"started\":\"" + started + "\"}";
+    }
+
+    static String newExecution() {
+        return "ex-" + UUID.randomUUID().toString().replace("-", "");
+    }
+
+    /**
+     * Registro do Agent anterior no modelo por licenca. A organizacao, a automacao, a versao, o Worker e a autorizacao sao os do
+     * SERVIDOR; da maquina so vem o instante do inicio. Aceito: licenca vigente no inicio (base 1; base 2 quando os dados chegam
+     * depois do vencimento) ou autorizacao emitida antes do modelo por licenca, dentro da validade ja emitida (base 3,
+     * transicao). Recusado: inicio sem licenca, ou autorizacao que nao valia no inicio. O que ja foi registrado continua
+     * entregando eventos depois do vencimento.
+     */
+    @Test
+    void noModeloPorLicencaORegistroExigeCoberturaNoInicioEATransicaoFicaRegistrada() throws Exception {
+        AgentFixture f = new AgentFixture(DB);
+        String o = "'" + f.org + "'";
+        // ---- modelo anterior: registro sem base de licenca
+        Paired old = paired(f);
+        MachineClient.Response legacy = old.m().register(newExecution(), old.authorization().toString(), AgentFixture.REAL_FINGERPRINT, running());
+        assertThat(legacy.status()).isEqualTo(201);
+        assertThat(f.value("SELECT license_basis FROM agent_runs WHERE agent_run_id = '" + legacy.body().get("runId").asString() + "'")).isNull();
+
+        // ---- a organizacao passa ao modelo por licenca (a autorizacao de "old" e ANTERIOR: transicao)
+        UUID act = UUID.randomUUID();
+        DB.asSuperuser("INSERT INTO organization_license_acts (act_id, organization_id, act, operator_user_id, justification) VALUES ('" + act + "', " + o
+                        + ", 6, '" + f.admin + "', 'modelo por licenca ligado na massa do teste')",
+                "INSERT INTO organization_license_enforcement (organization_id, model, act_id) VALUES (" + o + ", 2, '" + act + "')");
+        MachineClient.Response transition = old.m().register(newExecution(), old.authorization().toString(), AgentFixture.REAL_FINGERPRINT,
+                runningAt(java.time.Instant.now()));
+        assertThat(transition.status()).as("autorizacao anterior ao modelo: aceita ate a validade ja emitida").isEqualTo(201);
+        assertThat(f.value("SELECT license_basis FROM agent_runs WHERE agent_run_id = '" + transition.body().get("runId").asString() + "'"))
+                .as("o tratamento de transicao fica gravado no registro").isEqualTo("3");
+        // a autorizacao anterior, REVOGADA, nao cobre um inicio posterior a revogacao
+        DB.asSuperuser("UPDATE local_run_authorizations SET revoked_at = clock_timestamp(), revoked_by_membership_id = '" + f.adminMembership
+                + "' WHERE authorization_id = '" + old.authorization() + "'");
+        MachineClient.Response revoked = old.m().register(newExecution(), old.authorization().toString(), AgentFixture.REAL_FINGERPRINT,
+                runningAt(java.time.Instant.now().plusSeconds(1)));
+        assertThat(revoked.status()).isEqualTo(403);
+        assertThat(revoked.body().get("reason").asString()).isEqualTo("run_not_covered");
+
+        // ---- sem licenca, nenhuma autorizacao NOVA nasce (o banco recusa ate a massa do superusuario)
+        UUID worker = f.worker("W-" + UUID.randomUUID().toString().substring(0, 6));
+        UUID wwa = f.authorizeWorker(worker);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> f.localRun(worker, wwa)).rootCause().hasMessageContaining("LICENSE_REQUIRED");
+
+        // ---- licenca vigente por 40 dias, vinculada: a autorizacao nova nasce, e o registro tem base 1
+        UUID license = UUID.randomUUID();
+        DB.asSuperuser("INSERT INTO organization_licenses (license_id, organization_id, license_number) VALUES ('" + license + "', " + o + ", 1)",
+                "INSERT INTO organization_license_periods (organization_id, license_id, period_number, kind, starts_at, ends_at) VALUES (" + o + ", '" + license
+                        + "', 1, 1, clock_timestamp() - interval '1 day', clock_timestamp() + interval '40 days')",
+                "INSERT INTO organization_license_assignments (organization_id, license_id, workspace_id, automation_id, assigned_by_membership_id) VALUES ("
+                        + o + ", '" + license + "', '" + f.workspace + "', '" + f.automation + "', '" + f.adminMembership + "')");
+        UUID authorization = f.localRun(worker, wwa);
+        MachineClient m = client();
+        m.pair(f.pairingCode(worker, "Estacao licenciada", "15 minutes"));
+        String ex = executionOf("a1-sucesso");
+        MachineClient.Response covered = m.register(ex, authorization.toString(), AgentFixture.REAL_FINGERPRINT, runningAt(java.time.Instant.now()));
+        assertThat(covered.status()).isEqualTo(201);
+        String runId = covered.body().get("runId").asString();
+        assertThat(f.value("SELECT license_basis FROM agent_runs WHERE agent_run_id = '" + runId + "'")).isEqualTo("1");
+        java.time.Instant duringValidity = java.time.Instant.now();
+        Thread.sleep(50);
+
+        // ---- a licenca vence
+        DB.asSuperuser("SET session_replication_role = replica",
+                "UPDATE organization_license_periods SET ends_at = clock_timestamp() WHERE license_id = '" + license + "'");
+        // os eventos da execucao registrada na validade continuam entrando
+        List<String> all = envelopes("a1-sucesso");
+        MachineClient.Response events = m.events(ex, all.subList(0, 100), null);
+        assertThat(events.status()).as("entrega depois do vencimento").isEqualTo(200);
+        assertThat(events.body().get("storedThrough").asLong()).isEqualTo(100);
+        assertThat(m.supervisor(ex, supervisorFromEstado("a1-sucesso")).status()).isEqualTo(200);
+        // execucao que comecou NA VALIDADE (sem conexao) e so chega agora: aceita, base 2
+        MachineClient.Response late = m.register(newExecution(), authorization.toString(), AgentFixture.REAL_FINGERPRINT, runningAt(duringValidity));
+        assertThat(late.status()).as("coberta por autorizacao e licenca validas para aquele inicio").isEqualTo(201);
+        assertThat(f.value("SELECT license_basis FROM agent_runs WHERE agent_run_id = '" + late.body().get("runId").asString() + "'")).isEqualTo("2");
+        // execucao que comeca DEPOIS do vencimento: recusada, nada gravado
+        long before = f.count("SELECT count(*) FROM agent_runs WHERE organization_id = " + o);
+        MachineClient.Response after = m.register(newExecution(), authorization.toString(), AgentFixture.REAL_FINGERPRINT, runningAt(java.time.Instant.now()));
+        assertThat(after.status()).isEqualTo(403);
+        assertThat(after.body().get("reason").asString()).isEqualTo("license_expired");
+        // sem instante informado, vale o do servidor (agora): recusada tambem
+        assertThat(m.register(newExecution(), authorization.toString(), AgentFixture.REAL_FINGERPRINT, "{\"state\":\"RUNNING\"}").status()).isEqualTo(403);
+        assertThat(f.count("SELECT count(*) FROM agent_runs WHERE organization_id = " + o)).isEqualTo(before);
+        // o banco e quem decide: o papel do canal nao grava o registro por fora, nem escolhe a base
+        assertThat(f.value("SELECT public.license_run_basis(" + o + ", '" + f.automation + "', '" + authorization + "', clock_timestamp())")).isEqualTo("-3");
+
+        // ---- a organizacao do lado, no modelo anterior, segue como sempre
+        Paired neighbour = paired(other);
+        assertThat(neighbour.m().register(newExecution(), neighbour.authorization().toString(), AgentFixture.REAL_FINGERPRINT, running()).status()).isEqualTo(201);
+    }
 }

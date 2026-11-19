@@ -113,6 +113,9 @@ public class LicenseOperatorService {
             // trava EXCLUSIVA do modelo da organizacao antes de refazer a previa: vinculo, concessao, renovacao, encerramento e
             // (na etapa da conferencia) cada inicio de trabalho pegam a mesma trava em modo compartilhado. O que ja confirmou
             // aparece na previa refeita; o que ainda nao confirmou espera este ato terminar.
+            // a linha da organizacao primeiro, como todo ato que admite trabalho (lockOrganizationAndActor): mesma ordem de
+            // travas dos dois lados, sem espera cruzada
+            j.sql("SELECT 1 FROM public.organizations WHERE organization_id = ? FOR UPDATE").param(target).query(Integer.class).optional();
             j.sql("SELECT pg_advisory_xact_lock(hashtextextended('organization_license_model:' || ?, 0))").param(target.toString())
                     .query((rs, n) -> 0).list();
             Map<String, Object> preview = previewIn(j, target);
