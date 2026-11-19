@@ -52,7 +52,7 @@
 -- registrado na 034. Organizacoes acima do limite de vazias continuam como estao: so criacoes novas sao recusadas.
 --
 -- REVERSAO (manual, em janela de elevacao; so sem pedidos, desativacoes e organizacoes nascidas pelo ato 8):
---   recriar identity_create_organization_impl e identity_org_creation_allowed com o corpo da 017 (o teto de 10 volta); DROP das funcoes novas; DROP das seis tabelas novas;
+--   recriar identity_create_organization_impl com o corpo da 017 e identity_org_creation_allowed com o da 029 (o teto de 10 volta); DROP das funcoes novas; DROP das seis tabelas novas;
 --   retirar as politicas identity_client_probe / identity_responsibility_context e os privilegios desta migration; devolver as
 --   CHECKs de organization_license_acts e o gatilho de organization_license_enforcement ao texto da 061.
 
@@ -429,9 +429,9 @@ $$;
 
 -- === 7. Funcoes publicas (SECURITY DEFINER, dono nekkora_identity_owner, EXECUTE so da Platform) ===
 
--- canCreateOrganization (017, R5), SEM o teto fixo de 10: verdadeiro se a sessao esta ativa, no prazo, com MFA e nao restrita, e
--- a identidade esta ACTIVE e verificada. So indicacao para a interface; o perfil e o limite de vazias sao conferidos pela
--- aplicacao (identity_org_creation_state) e, de novo, pela criacao. Mesma assinatura, mesmo dono e mesmos privilegios da 017.
+-- canCreateOrganization, SEM o teto fixo de 10. E o corpo VIGENTE (029, MFA opcional: vale a sessao com MFA ou a identidade que
+-- nunca teve fator) sem a contagem de organizacoes criadas. So indicacao para a interface; o perfil e o limite de vazias sao
+-- conferidos pela aplicacao (identity_org_creation_state) e, de novo, pela criacao. Mesma assinatura, dono e privilegios.
 CREATE OR REPLACE FUNCTION public.identity_org_creation_allowed(p_session_token TEXT)
 RETURNS BOOLEAN
 LANGUAGE sql
@@ -443,7 +443,8 @@ AS $$
         SELECT 1
           FROM public.identity_sessions s JOIN public.identities i ON i.identity_id = s.identity_id
          WHERE s.session_token_hash = public.identity_token_hash(p_session_token)
-           AND s.revoked_at IS NULL AND s.expires_at > pg_catalog.clock_timestamp() AND s.mfa_verified_at IS NOT NULL
+           AND s.revoked_at IS NULL AND s.expires_at > pg_catalog.clock_timestamp()
+           AND (s.mfa_verified_at IS NOT NULL OR public.identity_never_had_factor(s.identity_id))
            AND (s.recovery_used_at IS NULL OR s.recovery_cleared_at IS NOT NULL)
            AND i.status = 2 AND i.email_verified_at IS NOT NULL)
 $$;
