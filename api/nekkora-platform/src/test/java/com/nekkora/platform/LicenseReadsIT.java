@@ -92,8 +92,9 @@ class LicenseReadsIT extends ReadRoutesSupport {
         assertSummary(empty.body(), "sem licencas", "legacy", 0, 0, 0, 0);
         assertThat(empty.body().get("modelSince").isNull()).isTrue();
         assertThat(get(admin, list).body().get("items")).isEmpty();
-        assertThat(one("SELECT count(*) FROM organization_licenses")).as("nenhuma licenca criada pela migration nem pela criacao da organizacao").isEqualTo("0");
-        assertThat(one("SELECT count(*) FROM organization_license_enforcement")).isEqualTo("0");
+        assertThat(one("SELECT count(*) FROM organization_licenses WHERE organization_id = '" + o.id() + "'"))
+                .as("nenhuma licenca criada pela migration nem pela criacao da organizacao").isEqualTo("0");
+        assertThat(one("SELECT count(*) FROM organization_license_enforcement WHERE organization_id = '" + o.id() + "'")).isEqualTo("0");
 
         // ---- seis licencas: 1 e 2 vigentes e vinculadas; 3 vigente e disponivel; 4 venceu vinculada; 5 encerrada; 6 so no futuro
         UUID l1 = license(o.id(), "clock_timestamp() - interval '10 days'", "clock_timestamp() + interval '20 days'");
@@ -196,7 +197,8 @@ class LicenseReadsIT extends ReadRoutesSupport {
         assertThat(browser().get(summary).status()).isEqualTo(401);
         assertThat(browser().get(list).status()).isEqualTo(401);
 
-        // ---- o papel da Platform so le, e so a organizacao do contexto
+        // ---- o papel da Platform so le a organizacao do contexto; nao concede, nao encerra e nao liga a exigencia (o vinculo pelo
+        //      administrador, unica escrita dela, esta em LicenseAssignmentIT)
         try (Connection c = DB.connectAs("nekkora_platform"); Statement st = c.createStatement()) {
             c.setAutoCommit(false);
             try (ResultSet rs = st.executeQuery("SELECT count(*) FROM public.organization_licenses")) {
@@ -211,7 +213,6 @@ class LicenseReadsIT extends ReadRoutesSupport {
             st.execute("SELECT set_config('nekkora.organization_id', '" + o.id() + "', true)");
             for (String write : List.of(
                     "INSERT INTO public.organization_licenses (organization_id, license_number) VALUES ('" + o.id() + "', 99)",
-                    assign(o.id(), l3, w2, a3, m),
                     "UPDATE public.organization_licenses SET ended_at = clock_timestamp() WHERE license_id = '" + l3 + "'",
                     "INSERT INTO public.organization_license_enforcement (organization_id, model, act_id) VALUES ('" + o.id() + "', 2, gen_random_uuid())")) {
                 assertThatThrownBy(() -> {

@@ -306,6 +306,13 @@ public class PlatformConfig {
                 : new com.nekkora.core.artifact.LocalArtifactStore(java.nio.file.Path.of(dir));
     }
 
+    /** Vinculo explicito da licenca a uma automacao pelo administrador (PLATFORM-LICENCIAMENTO-001, D1). Nao confere execucao. */
+    @Bean
+    com.nekkora.platform.admin.LicenseService licenseService(com.nekkora.platform.admin.AccessActions actions,
+                                                             com.nekkora.platform.access.WorkspaceAccess access) {
+        return new com.nekkora.platform.admin.LicenseService(actions, access);
+    }
+
     /** Solicitacao de execucao remota (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T02). Desligada, nenhuma solicitacao e aceita. */
     @Bean
     com.nekkora.platform.admin.RemoteExecutionService remoteExecutionService(

@@ -111,6 +111,14 @@ public enum ApiError {
     /** 060: a ultima tentativa terminou, mas os processos dela ainda nao foram confirmados ausentes: a repeticao fica bloqueada. */
     REMOTE_PREVIOUS_PROCESSES_PENDING(HttpStatus.CONFLICT, "conflict", "remote_previous_processes_pending"),
     REMOTE_ATTEMPT_ALREADY_RECONCILED(HttpStatus.CONFLICT, "conflict", "remote_attempt_already_reconciled"),
+    /** PLATFORM-LICENCIAMENTO-001 (062): a licenca ja esta vinculada a uma automacao (uma licenca atende uma automacao por vez). */
+    LICENSE_ALREADY_ASSIGNED(HttpStatus.CONFLICT, "conflict", "license_already_assigned"),
+    /** 062: a automacao ja consome uma licenca. */
+    AUTOMATION_ALREADY_LICENSED(HttpStatus.CONFLICT, "conflict", "automation_already_licensed"),
+    /** 062: a licenca nao esta vigente (vencida, ainda nao iniciada ou encerrada). */
+    LICENSE_NOT_VALID(HttpStatus.CONFLICT, "conflict", "license_not_valid"),
+    /** 062: a automacao esta arquivada; uma licenca nao e vinculada a uma automacao que nao executa. */
+    LICENSE_AUTOMATION_ARCHIVED(HttpStatus.CONFLICT, "conflict", "license_automation_archived"),
     REMOTE_REQUIREMENTS_NOT_DECLARED(HttpStatus.CONFLICT, "conflict", "remote_requirements_not_declared"),
     REMOTE_REQUIREMENTS_CONFLICT(HttpStatus.CONFLICT, "conflict", "remote_requirements_conflict"),
     /** O pacote da versao nao e um pacote Python externo: a execucao remota nao o aceita (o formato Studio fica de fora). */
