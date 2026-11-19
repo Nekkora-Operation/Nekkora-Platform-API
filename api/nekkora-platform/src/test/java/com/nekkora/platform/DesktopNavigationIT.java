@@ -585,7 +585,12 @@ class DesktopNavigationIT extends IdentityTestBase {
         assertErro(get(autos(c.orgA(), c.aVazio()) + "?limit=1&cursor=" + autosAlfa, ana), 400, INVALID, "cursor de outro workspace");
         assertErro(get(versoes(c.orgA(), c.semPacote()) + "?limit=1&cursor=" + versoesA, ana), 400, INVALID, "cursor de outra automacao");
         assertErro(get(ws(c.orgA()) + "?limit=1&cursor=" + versoesA, ana), 400, INVALID, "cursor de versoes na rota de workspaces");
-        assertErro(get(ws(c.orgA()) + "?limit=1&cursor=" + wsA.substring(0, wsA.length() - 2) + "AA", ana), 400, INVALID, "assinatura adulterada");
+        // adultera o PRIMEIRO caractere da assinatura, para um valor garantidamente diferente. Trocar os dois ultimos por "AA"
+        // deixava a assinatura igual quando ela ja terminava assim (1 em 1024): o servidor, certo, respondia 200 e o teste falhava
+        int sig = wsA.lastIndexOf('.') + 1;
+        assertThat(sig).as("o cursor tem assinatura").isGreaterThan(0).isLessThan(wsA.length());
+        String adulterado = wsA.substring(0, sig) + (wsA.charAt(sig) == 'A' ? 'B' : 'A') + wsA.substring(sig + 1);
+        assertErro(get(ws(c.orgA()) + "?limit=1&cursor=" + adulterado, ana), 400, INVALID, "assinatura adulterada");
 
         // cursor da rota da WEB (mesma organizacao, mesmo vinculo, mesma consulta) nao serve na rota do aplicativo, nem o contrario
         sessaoDeOrganizacao(c.ana(), c.orgA());
