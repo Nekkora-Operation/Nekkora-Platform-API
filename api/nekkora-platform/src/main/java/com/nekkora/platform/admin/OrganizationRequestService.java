@@ -135,7 +135,6 @@ public class OrganizationRequestService {
                 case "OWN_REQUEST" -> ApiError.ORGANIZATION_REQUEST_OWN;
                 case "APPROVER_WITHOUT_IDENTITY" -> ApiError.ORGANIZATION_REQUEST_APPROVER_WITHOUT_IDENTITY;
                 case "EMPTY_LIMIT" -> ApiError.EMPTY_ORGANIZATION_LIMIT_REACHED;
-                case "ORGANIZATION_LIMIT" -> ApiError.ORGANIZATION_LIMIT_REACHED;
                 case "REQUESTER_NOT_ELIGIBLE", "RESPONSIBLE_NOT_ELIGIBLE" -> ApiError.ORGANIZATION_REQUEST_RESPONSIBLE_NOT_ELIGIBLE;
                 default -> throw ApiException.invalid("decisao");
             };

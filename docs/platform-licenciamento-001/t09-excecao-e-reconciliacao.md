@@ -24,7 +24,7 @@ O que a exceção dispensa, e o que não dispensa:
 | Perfil: membro não cria, solicita | dispensada: um membro pode ser indicado |
 | **Limite de três organizações vazias** | **vale por padrão**: 409 `empty_organization_limit_reached`, nada criado |
 | Ultrapassar o limite de vazias | só por **exceção explícita**: `exceedEmptyLimit: true` com `limitJustification` própria (10 a 1000 caracteres). Fica gravado em `empty_limit_exceeded` e `limit_justification` |
-| Teto de organizações criadas (017) | vale, e não é ultrapassável por aqui: 409 `organization_limit_reached` |
+| Teto de organizações criadas (017) | **não existe mais**: foi retirado na 067; só o limite configurável de vazias segura |
 | **Cliente não cria nem solicita (D9)** | **mantida**: 409 `organization_responsible_is_client`, com ou sem a exceção do limite. A criação pela Nekkora não promove um Cliente |
 | Nome repetido para a mesma pessoa | mantida: `organization_name_taken` |
 | Modelo de nascimento (chave D7) | o mesmo de qualquer organização nova |
@@ -106,6 +106,25 @@ iniciando ou em execução, e ocupa uma vaga de execução da organização no m
 Limite declarado: a Platform não tem como saber, sozinha, se a máquina ainda executa. A reconciliação é um atestado do
 suporte, gravado com quem atestou e o que verificou.
 
+## 4b. Renovar depois não cobre retroativamente
+
+A cobertura de uma execução é conferida no **instante em que ela começou**. Para o vínculo isso já valia (uma licença
+vinculada depois não cobre o que começou antes). A 068 aplica a mesma regra ao período: o período precisa **já existir**
+naquele instante (`created_at`, gravado pelo banco, não informado por ninguém).
+
+| Caso | Registro pelo Agent anterior |
+|---|---|
+| A execução começou com a licença vigente; os dados chegam depois do vencimento | aceito (base 2): é entrega tardia do que já estava autorizado |
+| A execução começou com a licença vencida; a renovação vem depois, com o início escrito no fim do período anterior | **recusado**: pelas datas não há intervalo, mas a renovação não existia quando a execução começou |
+| A execução começou no intervalo entre dois períodos | recusado |
+| Trabalho novo depois da renovação | aceito (base 1) |
+
+Consequência para o Agent anterior: "Tentar registrar de novo" **não** passa a funcionar por causa de uma renovação. A
+resposta da Platform para aquele início só muda se a organização deixar de exigir licença.
+
+O início do período continua sendo o contratual (a renovação pode continuar do fim do anterior); o que não acontece mais é
+esse início retroativo autorizar o registro de uma execução que rodou sem licença.
+
 ## 5. Recusas
 
 | Motivo | Quando |
@@ -113,7 +132,6 @@ suporte, gravado com quem atestou e o que verificou.
 | `organization_responsible_not_found` | não há identidade ativa com esse e-mail verificado |
 | `organization_responsible_is_client` | a pessoa indicada só tem conta do tipo Cliente |
 | `empty_organization_limit_reached` | o responsável está no limite de vazias e a exceção explícita não foi pedida |
-| `organization_limit_reached` | o responsável atingiu o teto de organizações criadas |
 | `previous_agent_session_has_outcome` | a sessão já tem desfecho informado pela máquina |
 | `previous_agent_session_already_reconciled` | já há declaração válida para a sessão |
 

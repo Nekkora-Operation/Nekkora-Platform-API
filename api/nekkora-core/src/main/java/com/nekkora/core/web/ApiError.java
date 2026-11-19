@@ -56,8 +56,6 @@ public enum ApiError {
     ORGANIZATION_CREATION_REQUIRES_REQUEST(HttpStatus.CONFLICT, "conflict", "organization_creation_requires_request"),
     /** 067 (D13): o responsavel ja tem o limite de organizacoes vazias (ativas, sem automacao). */
     EMPTY_ORGANIZATION_LIMIT_REACHED(HttpStatus.CONFLICT, "conflict", "empty_organization_limit_reached"),
-    /** 017/067: o teto de organizacoes criadas pela mesma pessoa. */
-    ORGANIZATION_LIMIT_REACHED(HttpStatus.CONFLICT, "conflict", "organization_limit_reached"),
     /** 067: o pedido nao pode ser feito por esta pessoa nesta organizacao (nao e membro dela, ja administra alguma, ou tem pedidos demais em aberto). */
     ORGANIZATION_REQUEST_NOT_AVAILABLE(HttpStatus.CONFLICT, "conflict", "organization_request_not_available"),
     /** 067: o pedido ja foi decidido. */

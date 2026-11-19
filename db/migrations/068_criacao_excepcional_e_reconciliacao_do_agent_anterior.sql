@@ -16,8 +16,8 @@
 --      organizacao do operador e justificativa.
 --      A excecao dispensa o PERFIL (um membro pode ser indicado). Ela NAO dispensa os limites: o limite de organizacoes vazias do
 --      responsavel vale por padrao. A Nekkora pode ULTRAPASSA-LO por excecao EXPLICITA, com confirmacao e JUSTIFICATIVA PROPRIA,
---      que ficam gravadas (empty_limit_exceeded, limit_justification). O teto de organizacoes criadas pelo cadastro (017) nao e
---      ultrapassavel por aqui. O Cliente continua sem poder ser indicado (D9).
+--      que ficam gravadas (empty_limit_exceeded, limit_justification). Nao ha teto fixo de organizacoes criadas (retirado na
+--      067). O Cliente continua sem poder ser indicado (D9).
 --   2. RESULTADO DESCONHECIDO SEGURA A TRANSFERENCIA E A VAGA. Sessao do Agent anterior em OUTCOME_UNKNOWN (9) nao comprova que a
 --      execucao terminou nem que deixou de ocupar a maquina: license_work_in_progress passa a conta-la como trabalho possivel na
 --      origem, e capacity_state passa a reservar uma vaga de execucao para ela, ate a reconciliacao. A ocupacao vem SEPARADA:
@@ -33,6 +33,11 @@
 --      iniciando ou em execucao) depois da declaracao faz a sessao voltar a segurar transferencia e vaga, e pede nova
 --      reconciliacao; um relato que nao diz que ha execucao ativa NAO desfaz a declaracao.
 --   5. A vaga NAO e liberada pelo tempo decorrido: quem libera e o ato, ou o desfecho informado pela maquina.
+--   6. COBERTURA NO INICIO SEM RETROATIVIDADE. license_covered_at (064) passa a exigir que o PERIODO ja existisse no instante
+--      conferido (created_at <= instante), como o vinculo ja exigia (assigned_at <= instante). Uma renovacao feita HOJE, mesmo
+--      com o inicio escrito no fim do periodo anterior, nao cobre uma execucao que comecou ANTES de ela ser concedida: o registro
+--      tardio dessa execucao continua recusado. A entrega tardia de uma execucao que comecou com a licenca vigente continua
+--      aceita (base 2). Para o instante de agora nada muda (o periodo que existe agora cobre agora).
 --
 -- O QUE NAO FAZ
 --   - nao encerra, nao altera e nao apaga sessao nenhuma; nao muda o que a tela mostra como estado da sessao;
@@ -52,7 +57,7 @@
 -- da automacao delas e uma vaga de execucao da organizacao (so tem efeito no modelo por licenca) ate serem reconciliadas.
 --
 -- REVERSAO (manual, em janela de elevacao; so sem criacoes excepcionais e sem reconciliacoes):
---   recriar license_work_in_progress com o corpo da 065; DROP de capacity_state e recriar com a assinatura e o corpo da 066
+--   recriar license_work_in_progress com o corpo da 065 e license_covered_at com o corpo da 064; DROP de capacity_state e recriar com a assinatura e o corpo da 066
 --   (e os privilegios dela); DROP das funcoes novas; DROP das
 --   duas tabelas; devolver a CHECK de organization_responsibility.source a (1, 2, 3); retirar os privilegios desta migration.
 
@@ -236,6 +241,22 @@ COMMENT ON FUNCTION public.capacity_state(uuid) IS
 REVOKE ALL ON FUNCTION public.capacity_state(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.capacity_state(uuid) TO nekkora_platform, nekkora_ingestion;
 
+-- === 4b. Cobertura no instante: o periodo precisa ja existir naquele instante ===
+-- Mesmo corpo da 064, com UMA condicao a mais (p.created_at <= p_at). Sem ela, renovar depois do vencimento com o inicio no fim
+-- do periodo anterior "cobria" retroativamente o intervalo sem licenca, e uma execucao iniciada nele passava a ser registrada.
+CREATE OR REPLACE FUNCTION public.license_covered_at(p_org UUID, p_automation UUID, p_at TIMESTAMPTZ) RETURNS BOOLEAN
+LANGUAGE sql STABLE SET search_path = pg_catalog, pg_temp AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM public.organization_license_assignments g
+          JOIN public.organization_licenses l ON l.organization_id = g.organization_id AND l.license_id = g.license_id
+         WHERE g.organization_id = p_org AND g.automation_id = p_automation
+           AND g.assigned_at <= p_at AND (g.released_at IS NULL OR g.released_at > p_at)
+           AND (l.ended_at IS NULL OR l.ended_at > p_at)
+           AND EXISTS (SELECT 1 FROM public.organization_license_periods p
+                        WHERE p.organization_id = l.organization_id AND p.license_id = l.license_id AND p.starts_at <= p_at AND p.ends_at > p_at
+                          AND p.created_at <= p_at));
+$$;
+
 -- === 5. Funcoes do operador (dono de licencas) ===
 
 -- A organizacao do operador ativo (nulo: nao e operador). Para o dono da identidade conferir quem cria por excecao.
@@ -323,7 +344,7 @@ GRANT EXECUTE ON FUNCTION public.capacity_lock(uuid) TO nekkora_licensing_owner;
 -- recusa. Nao recebe sessao: quem chama (a Platform) ja conferiu a sessao, o segundo fator e a confirmacao reforcada do operador;
 -- aqui o banco reconfere que ele esta no cadastro de operadores.
 -- O limite de organizacoes vazias do responsavel VALE por padrao. p_exceed_empty_limit + p_limit_justification: a excecao
--- explicita da Nekkora para ultrapassa-lo, gravada. O teto de organizacoes criadas (017) nao e ultrapassavel por aqui.
+-- explicita da Nekkora para ultrapassa-lo, gravada. Nao ha teto fixo de organizacoes criadas (retirado na 067).
 CREATE FUNCTION public.identity_create_organization_by_operator(p_operator UUID, p_responsible_email TEXT, p_name TEXT, p_legal_name TEXT,
                                                                 p_justification TEXT, p_exceed_empty_limit BOOLEAN, p_limit_justification TEXT)
 RETURNS TEXT LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$

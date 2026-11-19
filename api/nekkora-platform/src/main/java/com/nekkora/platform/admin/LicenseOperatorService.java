@@ -271,8 +271,7 @@ public class LicenseOperatorService {
             ApiError error = "RESPONSIBLE_NOT_FOUND".equals(out) ? ApiError.ORGANIZATION_RESPONSIBLE_NOT_FOUND
                     : "RESPONSIBLE_IS_CLIENT".equals(out) ? ApiError.ORGANIZATION_RESPONSIBLE_IS_CLIENT
                     // o limite de vazias vale: a excecao para ultrapassa-lo e explicita (exceedEmptyLimit + justificativa propria)
-                    : "EMPTY_LIMIT".equals(out) ? ApiError.EMPTY_ORGANIZATION_LIMIT_REACHED
-                    : "ORGANIZATION_LIMIT".equals(out) ? ApiError.ORGANIZATION_LIMIT_REACHED : null;
+                    : "EMPTY_LIMIT".equals(out) ? ApiError.EMPTY_ORGANIZATION_LIMIT_REACHED : null;
             if (error == null) {
                 // OPERATOR_NOT_AUTHORIZED: a aplicacao ja conferiu; o banco discordar e mudanca concorrente do cadastro
                 throw AccessActions.refuse(Failure.PERMISSION, "nao_e_operador_de_licencas");
