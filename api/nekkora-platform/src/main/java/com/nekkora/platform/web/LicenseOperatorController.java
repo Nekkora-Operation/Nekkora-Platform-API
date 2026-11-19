@@ -47,7 +47,9 @@ public class LicenseOperatorController {
         this.service = service;
     }
 
-    public record CreateOrganizationRequest(String responsibleEmail, String name, String legalName, String justification) {
+    /** {@code exceedEmptyLimit}: excecao explicita para ultrapassar o limite de vazias do responsavel; exige {@code limitJustification}. */
+    public record CreateOrganizationRequest(String responsibleEmail, String name, String legalName, String justification, Boolean exceedEmptyLimit,
+                                            String limitJustification) {
     }
 
     public record ReconcileRequest(String justification, String verification) {
@@ -67,7 +69,8 @@ public class LicenseOperatorController {
             throw ApiException.invalid("corpo");
         }
         return ResponseEntity.status(201).body(service.createOrganization(org, SessionFilter.principal(req), SessionFilter.token(req),
-                new LicenseOperatorService.ExceptionalCreation(body.responsibleEmail(), body.name(), body.legalName(), body.justification())));
+                new LicenseOperatorService.ExceptionalCreation(body.responsibleEmail(), body.name(), body.legalName(), body.justification(),
+                        Boolean.TRUE.equals(body.exceedEmptyLimit()), body.limitJustification())));
     }
 
     /** A organizacao alvo vista pelo operador: modelo, licencas e automacoes. */

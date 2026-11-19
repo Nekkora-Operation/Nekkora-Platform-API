@@ -207,7 +207,12 @@ public class LicenseOperatorService {
 
     // ------------------------------------------------------------------ 068: excecao e reconciliacao
 
-    public record ExceptionalCreation(String responsibleEmail, String name, String legalName, String justification) {
+    /**
+     * {@code exceedEmptyLimit} + {@code limitJustification}: a excecao EXPLICITA da Nekkora para ultrapassar o limite de
+     * organizacoes vazias do responsavel, com justificativa propria. Sem ela, o limite vale.
+     */
+    public record ExceptionalCreation(String responsibleEmail, String name, String legalName, String justification, boolean exceedEmptyLimit,
+                                      String limitJustification) {
     }
 
     /** A sessao e de um operador de licencas? Para a tela saber se mostra a area do operador. Nao altera nada. */
@@ -221,7 +226,8 @@ public class LicenseOperatorService {
     /**
      * Criacao excepcional (068): o operador indica EXPLICITAMENTE a pessoa responsavel, pelo e-mail verificado dela. Ela recebe a
      * administracao da nova organizacao; o operador nao recebe conta nem acesso. Responsavel, operador e justificativa ficam
-     * gravados. O banco reconfere o cadastro do operador.
+     * gravados. O banco reconfere o cadastro do operador. O limite de organizacoes vazias do responsavel vale por padrao; a
+     * Nekkora o ultrapassa so por excecao explicita, com justificativa propria, que fica gravada. O Cliente nao e indicado.
      */
     public Map<String, Object> createOrganization(UUID org, ValidSession actor, String token, ExceptionalCreation c) {
         if (c == null || c.responsibleEmail() == null || c.responsibleEmail().isBlank() || c.responsibleEmail().length() > 254
@@ -232,13 +238,18 @@ public class LicenseOperatorService {
         if (c.justification() == null || c.justification().strip().length() < 10 || c.justification().strip().length() > 1000) {
             throw ApiException.invalid("justificativa");
         }
+        if (c.exceedEmptyLimit() && (c.limitJustification() == null || c.limitJustification().strip().length() < 10
+                || c.limitJustification().strip().length() > 1000)) {
+            throw ApiException.invalid("justificativa_do_limite");
+        }
         return actions.write(org, j -> {
             requireOperatorActor(j, org, actor, token);
             actions.requireStepUp(j, actor);
             String out;
             try {
-                out = j.sql("SELECT public.identity_create_organization_by_operator(?, ?, ?, ?, ?)").param(actor.userId())
+                out = j.sql("SELECT public.identity_create_organization_by_operator(?, ?, ?, ?, ?, ?, ?::text)").param(actor.userId())
                         .param(c.responsibleEmail().strip()).param(c.name().strip()).param(c.legalName().strip()).param(c.justification().strip())
+                        .param(c.exceedEmptyLimit()).param(c.exceedEmptyLimit() ? c.limitJustification().strip() : null)
                         .query(String.class).single();
             } catch (RuntimeException e) {
                 if (DbErrors.uniqueViolation(e, OrganizationRequestService.ORGANIZATION_NAME_KEY)) {
@@ -248,12 +259,20 @@ public class LicenseOperatorService {
                 throw e;
             }
             if (out != null && out.startsWith("CREATED:")) {
-                UUID created = UUID.fromString(out.substring("CREATED:".length()));
-                LOG.info("evento=organizacao.criada_por_excecao organizacao={} correlacao={}", created, AccessActions.correlation());
-                return Map.<String, Object>of("organizationId", created);
+                boolean exceeded = out.endsWith(":EXCEEDED");
+                UUID created = UUID.fromString(out.substring("CREATED:".length(), "CREATED:".length() + 36));
+                LOG.info("evento=organizacao.criada_por_excecao organizacao={} limite_de_vazias_ultrapassado={} correlacao={}", created, exceeded,
+                        AccessActions.correlation());
+                Map<String, Object> r = new LinkedHashMap<>();
+                r.put("organizationId", created);
+                r.put("emptyLimitExceeded", exceeded);
+                return r;
             }
             ApiError error = "RESPONSIBLE_NOT_FOUND".equals(out) ? ApiError.ORGANIZATION_RESPONSIBLE_NOT_FOUND
-                    : "RESPONSIBLE_IS_CLIENT".equals(out) ? ApiError.ORGANIZATION_RESPONSIBLE_IS_CLIENT : null;
+                    : "RESPONSIBLE_IS_CLIENT".equals(out) ? ApiError.ORGANIZATION_RESPONSIBLE_IS_CLIENT
+                    // o limite de vazias vale: a excecao para ultrapassa-lo e explicita (exceedEmptyLimit + justificativa propria)
+                    : "EMPTY_LIMIT".equals(out) ? ApiError.EMPTY_ORGANIZATION_LIMIT_REACHED
+                    : "ORGANIZATION_LIMIT".equals(out) ? ApiError.ORGANIZATION_LIMIT_REACHED : null;
             if (error == null) {
                 // OPERATOR_NOT_AUTHORIZED: a aplicacao ja conferiu; o banco discordar e mudanca concorrente do cadastro
                 throw AccessActions.refuse(Failure.PERMISSION, "nao_e_operador_de_licencas");
@@ -312,8 +331,8 @@ public class LicenseOperatorService {
     static final String[] SESSION_STATES = {null, "READY", "STARTING", "RUNNING", null, null, null, null, null, "OUTCOME_UNKNOWN"};
 
     /**
-     * Sessoes do Agent anterior da organizacao alvo sem desfecho confiavel, que ainda seguram a transferencia (e, as sem
-     * encerramento, uma vaga de execucao). So identificador, automacao, estado e instantes: nada do conteudo da execucao.
+     * Sessoes do Agent anterior da organizacao alvo sem desfecho confiavel, que ainda seguram a transferencia e uma vaga de
+     * execucao (resultado desconhecido tambem reserva vaga). So identificador, automacao, estado e instantes.
      */
     public Map<String, Object> unresolvedSessions(UUID org, ValidSession actor, String token, UUID target) {
         return actions.read(org, j -> {
@@ -327,8 +346,8 @@ public class LicenseOperatorService {
                         m.put("state", SESSION_STATES[rs.getInt("state")]);
                         m.put("registeredAt", rs.getObject("registered_at", OffsetDateTime.class));
                         m.put("lastReportAt", rs.getObject("last_report_at", OffsetDateTime.class));
-                        m.put("reconcilable", rs.getBoolean("reconcilable"));
-                        m.put("holdsSlot", rs.getBoolean("holds_slot"));
+                        // ja houve declaracao do suporte, e a maquina informou execucao ativa depois dela: por isso a sessao voltou
+                        m.put("previouslyReconciledAt", rs.getObject("previously_reconciled_at", OffsetDateTime.class));
                         return m;
                     }).list();
             return Map.<String, Object>of("items", items);
@@ -338,7 +357,8 @@ public class LicenseOperatorService {
     /**
      * Reconciliacao pelo suporte (068). Registra operador, justificativa e a verificacao realizada. NAO altera a sessao: o
      * resultado desconhecido continua desconhecido, nenhum desfecho e gravado e nada declara a maquina livre. A sessao so deixa de
-     * segurar a transferencia e a vaga - e volta a segurar se a maquina informar algo depois.
+     * segurar a transferencia e a vaga. Sem espera obrigatoria: o que autoriza e a verificacao registrada. A declaracao fica no
+     * historico; so um relato posterior de execucao AINDA ATIVA faz a sessao voltar a segurar.
      */
     public Map<String, Object> reconcile(UUID org, ValidSession actor, String token, UUID target, UUID session, String justification,
                                          String verification) {
@@ -576,8 +596,7 @@ public class LicenseOperatorService {
                 : mentions(e, "MODEL_UNCHANGED") ? ApiError.LICENSE_MODEL_UNCHANGED
                 : mentions(e, "RUN_NOT_FOUND") ? ApiError.NOT_FOUND
                 : mentions(e, "RUN_HAS_OUTCOME") ? ApiError.PREVIOUS_AGENT_SESSION_HAS_OUTCOME
-                : mentions(e, "RUN_ALREADY_RECONCILED") ? ApiError.PREVIOUS_AGENT_SESSION_ALREADY_RECONCILED
-                : mentions(e, "RUN_RECENTLY_REPORTED") ? ApiError.PREVIOUS_AGENT_SESSION_RECENTLY_REPORTED : null;
+                : mentions(e, "RUN_ALREADY_RECONCILED") ? ApiError.PREVIOUS_AGENT_SESSION_ALREADY_RECONCILED : null;
         if (error == null) {
             return e;
         }

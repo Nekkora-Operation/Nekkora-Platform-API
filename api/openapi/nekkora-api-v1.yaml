@@ -2059,7 +2059,10 @@ paths:
         diz de que a ocupacao e feita (a soma e used): remote (tentativa remota entregue ate em execucao), unconfirmed
         (tentativa remota com ocupacao incerta: terminou sem confirmacao ou com processo possivelmente vivo, ate a maquina
         confirmar ou um administrador declarar a reconciliacao), platform (execucao da Platform) e previousAgent (pedido
-        entregue ou aceito e sessao em andamento do Agent anterior). A sessao que o Agent anterior inicia na propria maquina
+        entregue ou aceito e sessao em andamento do Agent anterior) e previousAgentUnconfirmed (068: sessao do Agent
+        anterior em RESULTADO DESCONHECIDO, que nao comprova que a execucao deixou de ocupar a maquina; reserva uma vaga ate a
+        reconciliacao pelo suporte). active soma as execucoes ativas (remote, platform, previousAgent); reservedUncertain, as
+        reservas por situacao incerta (unconfirmed, previousAgentUnconfirmed). A sessao que o Agent anterior inicia na propria maquina
         nao pode ser segurada: ocupa vaga ao ser registrada, e used pode passar de limit. pendingExecutions: na fila, ainda nao
         entregues, no prazo; fila cheia responde 409 capacity_pending_limit_reached a solicitacao nova. O cadastro de Worker
         no limite responde 409 worker_limit_reached. Nenhum limite daqui consome nem libera licenca. Na organizacao do modelo
@@ -2082,16 +2085,19 @@ paths:
                     allOf:
                       - { $ref: '#/components/schemas/CapacityUsage' }
                       - type: object
-                        required: [breakdown]
+                        required: [breakdown, active, reservedUncertain]
                         properties:
+                          active: { type: integer, format: int64, minimum: 0, description: 'execucoes ativas: remote + platform + previousAgent' }
+                          reservedUncertain: { type: integer, format: int64, minimum: 0, description: 'reservas por situacao incerta: unconfirmed + previousAgentUnconfirmed' }
                           breakdown:
                             type: object
-                            required: [remote, unconfirmed, platform, previousAgent]
+                            required: [remote, unconfirmed, platform, previousAgent, previousAgentUnconfirmed]
                             properties:
                               remote: { type: integer, format: int64, minimum: 0 }
                               unconfirmed: { type: integer, format: int64, minimum: 0 }
                               platform: { type: integer, format: int64, minimum: 0 }
                               previousAgent: { type: integer, format: int64, minimum: 0 }
+                              previousAgentUnconfirmed: { type: integer, format: int64, minimum: 0 }
                   pendingExecutions: { $ref: '#/components/schemas/CapacityUsage' }
                   asOf: { type: string, format: date-time }
         '401': { $ref: '#/components/responses/Unauthenticated' }
@@ -2208,18 +2214,20 @@ paths:
         O operador indica EXPLICITAMENTE a pessoa responsavel pelo e-mail verificado dela (responsibleEmail). Ela recebe a
         administracao da nova organizacao e passa a ser a responsavel (limite de vazias, desativar e reativar). O operador NAO
         recebe conta, papel nem acesso. Responsavel, operador, organizacao do operador e justificativa ficam gravados. A
-        excecao dispensa o perfil (um membro pode ser indicado) e os limites de criacao e de vazias; a organizacao criada conta
-        nos limites do responsavel dali em diante. Recusas 409: organization_responsible_not_found (nao ha identidade ativa
-        com esse e-mail verificado), organization_responsible_is_client (so tem conta do tipo Cliente),
-        organization_name_taken. Exige confirmacao reforcada.
+        excecao dispensa o perfil (um membro pode ser indicado). Ela NAO dispensa os limites: o limite de organizacoes vazias
+        do responsavel vale por padrao (409 empty_organization_limit_reached). A Nekkora o ultrapassa so por excecao EXPLICITA:
+        exceedEmptyLimit true com limitJustification propria, que ficam gravadas. O teto de organizacoes criadas nao e
+        ultrapassavel (409 organization_limit_reached). Outras recusas 409: organization_responsible_not_found (nao ha
+        identidade ativa com esse e-mail verificado), organization_responsible_is_client (so tem conta do tipo Cliente: nao e
+        indicado nem por excecao), organization_name_taken. Exige confirmacao reforcada.
       security: [ { sessionCookie: [], csrfHeader: [] } ]
       parameters:
         - { $ref: '#/components/parameters/Org' }
       requestBody:
         required: true
-        content: { application/json: { schema: { type: object, additionalProperties: false, required: [responsibleEmail, name, legalName, justification], properties: { responsibleEmail: { type: string, maxLength: 254 }, name: { type: string, minLength: 1, maxLength: 120 }, legalName: { type: string, minLength: 1, maxLength: 120 }, justification: { type: string, minLength: 10, maxLength: 1000 } } } } }
+        content: { application/json: { schema: { type: object, additionalProperties: false, required: [responsibleEmail, name, legalName, justification], properties: { responsibleEmail: { type: string, maxLength: 254 }, name: { type: string, minLength: 1, maxLength: 120 }, legalName: { type: string, minLength: 1, maxLength: 120 }, justification: { type: string, minLength: 10, maxLength: 1000 }, exceedEmptyLimit: { type: boolean, description: 'excecao explicita: ultrapassar o limite de organizacoes vazias do responsavel' }, limitJustification: { type: string, minLength: 10, maxLength: 1000, description: 'obrigatoria com exceedEmptyLimit' } } } } }
       responses:
-        '201': { description: 'Criada', content: { application/json: { schema: { type: object, additionalProperties: false, required: [organizationId], properties: { organizationId: { type: string, format: uuid } } } } } }
+        '201': { description: 'Criada', content: { application/json: { schema: { type: object, additionalProperties: false, required: [organizationId, emptyLimitExceeded], properties: { organizationId: { type: string, format: uuid }, emptyLimitExceeded: { type: boolean, description: 'a criacao ultrapassou o limite de vazias do responsavel, pela excecao explicita' } } } } } }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -2279,10 +2287,10 @@ paths:
       x-estado: implementado (PLATFORM-LICENCIAMENTO-001, quinta rodada; LicenseOperatorController/LicenseOperatorService; LicenseOperatorIT; migration 068, COM elevacao, so laboratorio)
       summary: 'Sessoes do Agent anterior sem desfecho confiavel, que ainda seguram a transferencia ou uma vaga'
       description: >
-        Sessoes da organizacao alvo em RESULTADO DESCONHECIDO (OUTCOME_UNKNOWN) ou sem encerramento (READY, STARTING, RUNNING),
-        ainda nao reconciliadas depois da ultima noticia da maquina. So identificador, automacao, estado e instantes: nada do
-        conteudo da execucao. holdsSlot: a sessao ocupa uma vaga de execucao (as sem encerramento). reconcilable: o ato e aceito
-        agora (resultado desconhecido; ou sem encerramento e sem noticia ha pelo menos uma hora). Ate 200, da mais antiga.
+        Sessoes da organizacao alvo em RESULTADO DESCONHECIDO (OUTCOME_UNKNOWN) ou sem encerramento (READY, STARTING, RUNNING)
+        que ainda seguram a transferencia e uma vaga de execucao. So identificador, automacao, estado e instantes: nada do
+        conteudo da execucao. previouslyReconciledAt: ja houve declaracao do suporte e a maquina informou execucao ATIVA depois
+        dela (por isso a sessao voltou a contar). Ate 200, da mais antiga.
       security: [ { sessionCookie: [] } ]
       parameters:
         - { $ref: '#/components/parameters/Org' }
@@ -2302,7 +2310,7 @@ paths:
                     items:
                       type: object
                       additionalProperties: false
-                      required: [sessionId, automationId, automationName, state, registeredAt, lastReportAt, reconcilable, holdsSlot]
+                      required: [sessionId, automationId, automationName, state, registeredAt, lastReportAt, previouslyReconciledAt]
                       properties:
                         sessionId: { type: string, format: uuid }
                         automationId: { type: string, format: uuid }
@@ -2310,8 +2318,7 @@ paths:
                         state: { type: string, enum: [READY, STARTING, RUNNING, OUTCOME_UNKNOWN] }
                         registeredAt: { type: string, format: date-time }
                         lastReportAt: { type: string, format: date-time }
-                        reconcilable: { type: boolean }
-                        holdsSlot: { type: boolean }
+                        previouslyReconciledAt: { type: [string, 'null'], format: date-time }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -2325,10 +2332,12 @@ paths:
       description: >
         Registra o operador, a justificativa e a VERIFICACAO REALIZADA. NAO altera a sessao: o resultado desconhecido continua
         desconhecido, nenhum desfecho e gravado e nada declara a maquina livre. O efeito e a sessao deixar de segurar a
-        transferencia de licenca e a vaga de execucao. Se a maquina informar algo sobre a sessao DEPOIS, a reconciliacao deixa
-        de valer para ela. O tempo decorrido, sozinho, nunca libera a vaga. Recusas 409: previous_agent_session_has_outcome,
-        previous_agent_session_already_reconciled, previous_agent_session_recently_reported (sem encerramento e com noticia ha
-        menos de uma hora). Sessao de outra organizacao: 404. Exige confirmacao reforcada.
+        transferencia de licenca e a vaga de execucao. Nao ha espera obrigatoria: o que autoriza o ato e a verificacao
+        registrada (o processo terminou, ou a maquina esta fora de operacao); tempo sem contato, sozinho, nao basta e nunca
+        libera a vaga. A declaracao fica no historico. Um relato posterior da maquina e tratado pelo conteudo: um desfecho
+        resolve a duvida; um relato de execucao AINDA ATIVA faz a sessao voltar a segurar; outro relato nao desfaz a
+        declaracao. Recusas 409: previous_agent_session_has_outcome, previous_agent_session_already_reconciled. Sessao de
+        outra organizacao: 404. Exige confirmacao reforcada.
       security: [ { sessionCookie: [], csrfHeader: [] } ]
       parameters:
         - { $ref: '#/components/parameters/Org' }
@@ -3827,7 +3836,7 @@ components:
     Error:
       type: object
       required: [error]
-      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, license_already_assigned, automation_already_licensed, license_not_valid, license_automation_archived, license_ended, license_period_overlaps, license_period_already_ended, license_model_unchanged, license_preview_changed, license_required, license_expired, run_not_covered, capacity_pending_limit_reached, license_not_assigned, license_transfer_same_automation, license_transfer_work_in_progress, organization_responsible_not_found, organization_responsible_is_client, previous_agent_session_has_outcome, previous_agent_session_already_reconciled, previous_agent_session_recently_reported, license_transfer_requester_not_admin, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_machine_unconfirmed, remote_machine_finishing, remote_previous_processes_pending, remote_previous_result_unconfirmed, remote_attempt_not_unconfirmed, remote_attempt_already_reconciled, remote_requirements_not_declared, remote_requirements_conflict, remote_package_not_supported, remote_package_not_registered, remote_python_not_selected, remote_python_not_in_inventory, remote_dependency_check_too_soon, remote_dependency_check_closed, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken, organization_creation_client_profile, organization_creation_requires_request, empty_organization_limit_reached, organization_limit_reached, organization_request_not_available, organization_request_not_pending, organization_request_own, organization_request_approver_without_identity, organization_request_responsible_not_eligible, organization_not_responsible, organization_work_in_progress, organization_blocked_by_nekkora, organization_state_conflict], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
+      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, license_already_assigned, automation_already_licensed, license_not_valid, license_automation_archived, license_ended, license_period_overlaps, license_period_already_ended, license_model_unchanged, license_preview_changed, license_required, license_expired, run_not_covered, capacity_pending_limit_reached, license_not_assigned, license_transfer_same_automation, license_transfer_work_in_progress, organization_responsible_not_found, organization_responsible_is_client, previous_agent_session_has_outcome, previous_agent_session_already_reconciled, license_transfer_requester_not_admin, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_machine_unconfirmed, remote_machine_finishing, remote_previous_processes_pending, remote_previous_result_unconfirmed, remote_attempt_not_unconfirmed, remote_attempt_already_reconciled, remote_requirements_not_declared, remote_requirements_conflict, remote_package_not_supported, remote_package_not_registered, remote_python_not_selected, remote_python_not_in_inventory, remote_dependency_check_too_soon, remote_dependency_check_closed, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken, organization_creation_client_profile, organization_creation_requires_request, empty_organization_limit_reached, organization_limit_reached, organization_request_not_available, organization_request_not_pending, organization_request_own, organization_request_approver_without_identity, organization_request_responsible_not_eligible, organization_not_responsible, organization_work_in_progress, organization_blocked_by_nekkora, organization_state_conflict], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
     WorkspacePermissionCode:
       description: 'Permissoes de workspace (13): podem aparecer em allWorkspaces e em atribuicoes de workspace.'
       type: string

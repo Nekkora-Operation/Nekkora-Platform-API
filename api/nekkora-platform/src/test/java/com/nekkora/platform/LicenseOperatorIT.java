@@ -546,7 +546,7 @@ class LicenseOperatorIT extends ReadRoutesSupport {
         String body = "{\"toAutomationId\":\"" + a2 + "\",\"requesterEmail\":\"" + client.adminEmail() + "\",\"ticketReference\":\"CH-2026-0077\","
                 + "\"identityVerification\":\"retorno por telefone ao numero do cadastro\",\"justification\":\"" + justification + "\"}";
         String busy = "SELECT public.license_work_in_progress('" + o + "', '" + a1 + "')";
-        String slots = "SELECT concurrent_previous_agent FROM public.capacity_state('" + o + "')";
+        String slots = "SELECT concurrent_previous_agent || '+' || concurrent_previous_agent_uncertain FROM public.capacity_state('" + o + "')";
 
         // ---- duas sessoes: uma com RESULTADO DESCONHECIDO (9), outra EM EXECUCAO (3) sem noticia ha tres horas
         UUID unknown = UUID.randomUUID();
@@ -554,7 +554,14 @@ class LicenseOperatorIT extends ReadRoutesSupport {
         mass(agentRun(unknown, o, w, a1, v1, 9, "clock_timestamp() - interval '2 days'", 1),
                 agentRun(stale, o, w, a1, v1, 3, "clock_timestamp() - interval '3 hours'", 2));
         assertThat(one(busy)).isEqualTo("t");
-        assertThat(one(slots)).as("so a sessao em execucao ocupa vaga; a de resultado desconhecido, nao").isEqualTo("1");
+        assertThat(one(slots)).as("uma execucao informada ativa + uma RESERVA por resultado desconhecido (que nao comprova o termino)")
+                .isEqualTo("1+1");
+        assertThat(one("SELECT concurrent_used FROM public.capacity_state('" + o + "')")).as("as duas ocupam vaga").isEqualTo("2");
+        // a leitura da organizacao mostra as duas coisas SEPARADAS: execucoes ativas e reservas por situacao incerta
+        LicenseFixtures.enforce(client.id(), client.adminId());
+        JsonNode cap = JSON.readTree(clientAdmin.get(path(client.id(), "capacity", null)).body()).get("concurrentExecutions");
+        assertThat(cap.get("active").asLong() + "|" + cap.get("reservedUncertain").asLong() + "|" + cap.get("used").asLong()).isEqualTo("1|1|2");
+        assertThat(cap.get("breakdown").get("previousAgentUnconfirmed").asLong()).isEqualTo(1);
         conflict(staff.post(transfer, body), "license_transfer_work_in_progress");
 
         // ---- a lista do operador: so identificador, automacao, estado e instantes
@@ -563,11 +570,9 @@ class LicenseOperatorIT extends ReadRoutesSupport {
         assertThat(list.size()).isEqualTo(2);
         assertThat(list.get(0).get("sessionId").asString()).isEqualTo(unknown.toString());
         assertThat(list.get(0).get("state").asString()).isEqualTo("OUTCOME_UNKNOWN");
-        assertThat(list.get(0).get("holdsSlot").asBoolean()).isFalse();
         assertThat(list.get(0).get("automationName").asString()).isEqualTo("Notas de entrada");
         assertThat(list.get(1).get("state").asString()).isEqualTo("RUNNING");
-        assertThat(list.get(1).get("holdsSlot").asBoolean()).isTrue();
-        assertThat(list.get(1).get("reconcilable").asBoolean()).isTrue();
+        assertThat(list.get(1).get("previouslyReconciledAt").isNull()).isTrue();
         assertThat(clientAdmin.get(sessions).status()).as("o administrador do cliente nao usa as rotas do operador").isIn(401, 403, 404);
 
         // ---- reconciliar: exige justificativa E a verificacao realizada; sessao de outra organizacao nao existe aqui
@@ -589,32 +594,46 @@ class LicenseOperatorIT extends ReadRoutesSupport {
                 + "WHERE agent_run_id = '" + unknown + "'")).isEqualTo("9|" + operator.id() + "|" + justification
                         + "|cliente confirmou por escrito que o computador foi formatado");
         conflict(staff.post(reconcile, ok), "previous_agent_session_already_reconciled");
+        assertThat(one(slots)).as("reconciliada: a reserva por resultado desconhecido sai; a sessao ativa continua").isEqualTo("1+0");
         // a outra sessao (em execucao, sem encerramento) continua segurando a transferencia e a vaga
         assertThat(one(busy)).isEqualTo("t");
         conflict(staff.post(transfer, body), "license_transfer_work_in_progress");
 
-        // ---- sessao sem encerramento: o TEMPO nao libera a vaga; noticia recente impede o ato; o ato libera
+        // ---- sessao sem encerramento: o TEMPO nao libera a vaga; o ATO libera, e nao ha espera obrigatoria (o que autoriza e a
+        //      verificacao registrada: o processo terminou, ou a maquina esta fora de operacao)
         String reconcileStale = sessions + "/" + stale + "/reconciliation";
         mass("UPDATE agent_runs SET last_report_at = clock_timestamp() - interval '10 days' WHERE agent_run_id = '" + stale + "'");
-        assertThat(one(slots)).as("dez dias sem noticia: a vaga continua ocupada").isEqualTo("1");
+        assertThat(one(slots)).as("dez dias sem noticia: a vaga continua ocupada").isEqualTo("1+0");
         mass("UPDATE agent_runs SET last_report_at = clock_timestamp() - interval '5 minutes' WHERE agent_run_id = '" + stale + "'");
-        conflict(staff.post(reconcileStale, ok), "previous_agent_session_recently_reported");
-        mass("UPDATE agent_runs SET last_report_at = clock_timestamp() - interval '3 hours' WHERE agent_run_id = '" + stale + "'");
-        assertThat(staff.post(reconcileStale, ok).status()).isEqualTo(200);
+        assertThat(staff.post(reconcileStale, "{\"justification\":\"" + justification + "\"}").status()).as("sem verificacao, nem com noticia antiga nem recente")
+                .isEqualTo(400);
+        BrowserClient.Response early = staff.post(reconcileStale, ok);
+        assertThat(early.status()).as("noticia ha cinco minutos nao impede: " + early.body()).isEqualTo(200);
         assertThat(one("SELECT supervisor_state FROM agent_runs WHERE agent_run_id = '" + stale + "'")).as("continua em execucao para a Platform").isEqualTo("3");
-        assertThat(one(slots)).as("reconciliada: deixa de ocupar a vaga").isEqualTo("0");
+        assertThat(one(slots)).as("reconciliada: deixa de ocupar a vaga").isEqualTo("0+0");
         assertThat(one(busy)).isEqualTo("f");
         assertThat(JSON.readTree(staff.get(sessions).body()).get("items").size()).isZero();
 
-        // ---- a maquina VOLTA a informar depois da reconciliacao: a reconciliacao deixa de valer para a sessao
-        mass("UPDATE agent_runs SET last_report_at = clock_timestamp() + interval '1 second' WHERE agent_run_id = '" + stale + "'");
-        assertThat(one(slots)).as("a sessao esta viva: volta a ocupar a vaga").isEqualTo("1");
+        // ---- RELATO POSTERIOR, tratado pelo conteudo. (a) a maquina informa RESULTADO DESCONHECIDO depois da declaracao: nao diz
+        //      que ha execucao ativa, e NAO desfaz a declaracao
+        mass("UPDATE agent_runs SET supervisor_state = 9, last_report_at = clock_timestamp() + interval '1 second' WHERE agent_run_id = '" + stale + "'");
+        assertThat(one(slots)).as("relato tardio sem execucao ativa: a declaracao continua valendo").isEqualTo("0+0");
+        assertThat(one(busy)).isEqualTo("f");
+        conflict(staff.post(reconcileStale, ok), "previous_agent_session_already_reconciled");
+        // (b) a maquina informa execucao AINDA ATIVA depois da declaracao: a ocupacao volta, e a declaracao anterior fica no historico
+        mass("UPDATE agent_runs SET supervisor_state = 3, last_report_at = clock_timestamp() + interval '2 seconds' WHERE agent_run_id = '" + stale + "'");
+        assertThat(one(slots)).as("a sessao esta viva: volta a ocupar a vaga").isEqualTo("1+0");
         assertThat(one(busy)).isEqualTo("t");
         conflict(staff.post(transfer, body), "license_transfer_work_in_progress");
-        // ...e termina: desfecho informado pela maquina e confirmacao confiavel; nao ha o que reconciliar
+        JsonNode back = JSON.readTree(staff.get(sessions).body()).get("items");
+        assertThat(back.size()).isEqualTo(1);
+        assertThat(back.get(0).get("previouslyReconciledAt").isNull()).as("a lista diz que ja houve declaracao antes do relato de execucao ativa").isFalse();
+        assertThat(one("SELECT count(*) FROM agent_run_reconciliations WHERE agent_run_id = '" + stale + "'")).as("a declaracao anterior permanece").isEqualTo("1");
+        // (c) a maquina informa o DESFECHO: resolve a duvida por si; nao ha o que reconciliar
         mass("UPDATE agent_runs SET supervisor_state = 4 WHERE agent_run_id = '" + stale + "'");
         conflict(staff.post(reconcileStale, ok), "previous_agent_session_has_outcome");
         assertThat(one(busy)).isEqualTo("f");
+        assertThat(one(slots)).isEqualTo("0+0");
 
         // ---- agora a transferencia passa
         BrowserClient.Response moved = staff.post(transfer, body);
@@ -689,13 +708,32 @@ class LicenseOperatorIT extends ReadRoutesSupport {
                 .as("o operador nao ganha conta").isEqualTo("0");
         assertThat(staff.get("/api/v1/o/" + org + "/licenses/summary").status()).as("nem acesso com a sessao dele").isIn(401, 403, 404);
 
-        // ---- a excecao nao e segurada pelo limite de vazias (3): quatro organizacoes vazias da mesma responsavel
-        for (int i = 2; i <= 4; i++) {
+        // ---- o LIMITE DE VAZIAS (3) vale por padrao tambem na criacao pela Nekkora: a quarta e recusada, e nada e criado
+        for (int i = 2; i <= 3; i++) {
             assertThat(staff.post(route, body.formatted(email, "Excecao " + tag + " " + i, "Excecao " + i + " Ltda")).status()).isEqualTo(201);
         }
+        conflict(staff.post(route, body.formatted(email, "Excecao " + tag + " 4", "Excecao 4 Ltda")), "empty_organization_limit_reached");
+        assertThat(one("SELECT count(*) FROM organizations WHERE name = 'Excecao " + tag + " 4'")).as("nada criado").isEqualTo("0");
+        // ultrapassar e uma excecao EXPLICITA, com justificativa PROPRIA: sem ela, ou com ela curta, o pedido nao e aceito
+        String over = "{\"responsibleEmail\":\"" + email + "\",\"name\":\"Excecao " + tag + " 4\",\"legalName\":\"Excecao 4 Ltda\",\"justification\":\""
+                + justification + "\",\"exceedEmptyLimit\":true%s}";
+        assertThat(staff.post(route, over.formatted("")).status()).as("sem a justificativa do limite").isEqualTo(400);
+        assertThat(staff.post(route, over.formatted(",\"limitJustification\":\"curta\"")).status()).isEqualTo(400);
+        BrowserClient.Response exceeded = staff.post(route, over.formatted(",\"limitJustification\":\"diretoria autorizou a quarta organizacao vazia\""));
+        assertThat(exceeded.status()).as(exceeded.body()).isEqualTo(201);
+        assertThat(JSON.readTree(exceeded.body()).get("emptyLimitExceeded").asBoolean()).isTrue();
+        assertThat(JSON.readTree(created.body()).get("emptyLimitExceeded").asBoolean()).as("a primeira nao ultrapassou nada").isFalse();
+        assertThat(one("SELECT string_agg(empty_limit_exceeded || ':' || coalesce(limit_justification, '-'), ',' ORDER BY created_at) "
+                + "FROM organization_exceptional_creations WHERE responsible_identity_id = '" + identity + "'"))
+                .as("so a que ultrapassou tem a excecao e a justificativa gravadas")
+                .isEqualTo("false:-,false:-,false:-,true:diretoria autorizou a quarta organizacao vazia");
+        // pedir a excecao sem precisar dela nao a grava: a pessoa do Cliente continua de fora mesmo com a excecao pedida
+        conflict(staff.post(route, over.formatted(",\"limitJustification\":\"diretoria autorizou a quarta organizacao vazia\"")
+                .replace(email, clientAccount.email()).replace("Excecao " + tag + " 4", "Do cliente " + tag)), "organization_responsible_is_client");
         assertThat(one("SELECT count(*) FROM organization_exceptional_creations WHERE responsible_identity_id = '" + identity + "'")).isEqualTo("4");
         // mesmo nome para a mesma pessoa: recusado como nas outras criacoes
-        conflict(staff.post(route, body.formatted(email, "Excecao " + tag, "Outra razao Ltda")), "organization_name_taken");
+        conflict(staff.post(route, over.formatted(",\"limitJustification\":\"diretoria autorizou mais uma organizacao vazia\"")
+                .replace("Excecao " + tag + " 4", "Excecao " + tag)), "organization_name_taken");
         // operador retirado do cadastro: o banco recusa, mesmo chamado direto com o papel da Platform
         DB.asSuperuser("SET session_replication_role = replica", "UPDATE license_operators SET revoked_at = clock_timestamp() "
                 + "WHERE operator_user_id = '" + operator.id() + "'");

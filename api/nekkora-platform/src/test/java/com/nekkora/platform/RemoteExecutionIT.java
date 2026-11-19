@@ -1923,7 +1923,7 @@ class RemoteExecutionIT extends PlatformTestBase {
             assertThat(usage(full, "concurrentExecutions")).containsExactly("1", "1");
             assertThat(usage(full, "pendingExecutions")).containsExactly("1", "1");
             assertThat(full.get("concurrentExecutions").get("breakdown").toString()).as("de que e feita a ocupacao")
-                    .isEqualTo("{\"remote\":1,\"unconfirmed\":0,\"platform\":0,\"previousAgent\":0}");
+                    .isEqualTo("{\"remote\":1,\"unconfirmed\":0,\"platform\":0,\"previousAgent\":0,\"previousAgentUnconfirmed\":0}");
             // sem vaga, o banco nao deixa ENTREGAR a segunda (a aplicacao do canal pergunta antes: CapacityReservationIT)
             assertThat(as("nekkora_ingestion", org, "UPDATE remote_attempts SET state = 2, token_hash = repeat('a', 64), epoch = epoch + 1 WHERE attempt_id = '"
                     + secondAttempt + "'")).as("entrega sem vaga").isEqualTo("23514");
@@ -1945,7 +1945,7 @@ class RemoteExecutionIT extends PlatformTestBase {
             machineMoves(s, firstAttempt, 7);
             ProductFixtures.start(org, s.workspace(), platformExecution, s.org().adminMembership());
             assertThat(JSON.readTree(s.admin().get(s.o() + "/capacity").body()).get("concurrentExecutions").get("breakdown").toString())
-                    .isEqualTo("{\"remote\":0,\"unconfirmed\":0,\"platform\":1,\"previousAgent\":0}");
+                    .isEqualTo("{\"remote\":0,\"unconfirmed\":0,\"platform\":1,\"previousAgent\":0,\"previousAgentUnconfirmed\":0}");
             assertThat(as("nekkora_ingestion", org, "UPDATE remote_attempts SET state = 2, token_hash = repeat('a', 64), epoch = epoch + 1 WHERE attempt_id = '"
                     + secondAttempt + "'")).as("a vaga e da execucao da Platform").isEqualTo("23514");
             ProductFixtures.succeed(platformExecution, "1 second");
