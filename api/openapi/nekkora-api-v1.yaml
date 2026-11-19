@@ -1992,6 +1992,39 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
+  /api/v1/o/{org}/license-operations/organizations/{target}/licenses/{licenseId}/transfer:
+    post:
+      tags: [Operador de licencas]
+      operationId: transferLicense
+      x-estado: implementado (PLATFORM-LICENCIAMENTO-001 E4, D6; LicenseOperatorController/LicenseOperatorService; LicenseOperatorIT; migration 065, COM elevacao, so laboratorio)
+      summary: 'Transfere a licenca para outra automacao da mesma organizacao, a pedido de um administrador (operador da Nekkora)'
+      description: >
+        O pedido chega pelo atendimento externo; nao ha rota de pedido nem de transferencia para o administrador. O operador
+        informa o administrador solicitante (requesterEmail: tem de administrar a organizacao NESTE instante, senao 409
+        license_transfer_requester_not_admin), a referencia do chamado, como a identidade dele foi verificada e a
+        justificativa; tudo fica no ato 5 da trilha, com origem, destino, responsavel e instante. Informar o solicitante nao
+        prova o pedido: quem o atesta e o operador. Na mesma transacao o vinculo de origem e encerrado (TRANSFERIDA) e o de
+        destino e aberto: nao ha instante com as duas automacoes atendidas. Os periodos nao mudam (o fim do ciclo e
+        preservado). Recusas 409: license_not_assigned, license_transfer_same_automation, license_automation_archived,
+        automation_already_licensed, license_not_valid (licenca vencida: renovar antes), license_ended e
+        license_transfer_work_in_progress (a automacao de origem tem execucao, monitoramento, pedido pendente ou tentativa
+        remota nao terminada: precisa terminar ou ter o cancelamento confirmado). Automacao de destino de outra organizacao: 404.
+        Roda sob trava exclusiva do modelo da organizacao: nenhum inicio de trabalho corre contra a transferencia.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: target, in: path, required: true, schema: { type: string, format: uuid }, description: 'a organizacao do cliente (nunca a do operador)' }
+        - { name: licenseId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: false, required: [toAutomationId, requesterEmail, ticketReference, identityVerification, justification], properties: { toAutomationId: { type: string, format: uuid }, requesterEmail: { type: string, description: 'o administrador da organizacao que pediu' }, ticketReference: { type: string, minLength: 3, maxLength: 200, description: 'referencia do chamado no atendimento' }, identityVerification: { type: string, minLength: 10, maxLength: 500, description: 'como o operador confirmou que o pedido veio do solicitante' }, justification: { type: string, minLength: 10, maxLength: 1000 } } } } }
+      responses:
+        '200': { description: 'Transferida', content: { application/json: { schema: { type: object, required: [licenseId, fromAutomationId, toAutomationId, actId], properties: { licenseId: { type: string, format: uuid }, fromAutomationId: { type: string, format: uuid }, toAutomationId: { type: string, format: uuid }, actId: { type: string, format: uuid } } } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /api/v1/o/{org}/license-operations/organizations/{target}/licenses/{licenseId}/end:
     post:
       tags: [Operador de licencas]
@@ -3362,7 +3395,7 @@ components:
     Error:
       type: object
       required: [error]
-      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, license_already_assigned, automation_already_licensed, license_not_valid, license_automation_archived, license_ended, license_period_overlaps, license_period_already_ended, license_model_unchanged, license_preview_changed, license_required, license_expired, run_not_covered, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_machine_unconfirmed, remote_machine_finishing, remote_previous_processes_pending, remote_previous_result_unconfirmed, remote_attempt_not_unconfirmed, remote_attempt_already_reconciled, remote_requirements_not_declared, remote_requirements_conflict, remote_package_not_supported, remote_package_not_registered, remote_python_not_selected, remote_python_not_in_inventory, remote_dependency_check_too_soon, remote_dependency_check_closed, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
+      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, license_already_assigned, automation_already_licensed, license_not_valid, license_automation_archived, license_ended, license_period_overlaps, license_period_already_ended, license_model_unchanged, license_preview_changed, license_required, license_expired, run_not_covered, license_not_assigned, license_transfer_same_automation, license_transfer_work_in_progress, license_transfer_requester_not_admin, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_machine_unconfirmed, remote_machine_finishing, remote_previous_processes_pending, remote_previous_result_unconfirmed, remote_attempt_not_unconfirmed, remote_attempt_already_reconciled, remote_requirements_not_declared, remote_requirements_conflict, remote_package_not_supported, remote_package_not_registered, remote_python_not_selected, remote_python_not_in_inventory, remote_dependency_check_too_soon, remote_dependency_check_closed, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
     WorkspacePermissionCode:
       description: 'Permissoes de workspace (13): podem aparecer em allWorkspaces e em atribuicoes de workspace.'
       type: string
