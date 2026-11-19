@@ -360,3 +360,27 @@ Ambiente, data e hora, revisão da API e migration aplicada, quem executou, auto
 ```
 
 A seção 9 é a única que decide alguma coisa, e não é preenchida por mim.
+
+---
+
+## 8. Decisões de 19/11/2026, segunda rodada
+
+| Tema | Decisão | Efeito nas pendentes |
+|---|---|---|
+| Agent anterior | A validade das autorizações usadas sem conexão é **mantida**. Com licença, uma autorização nova não pode valer além do fim da licença. As já emitidas aparecem na prévia como limitação; não se promete bloqueio imediato de máquina desconectada. | resolve a D3 para o Agent anterior e a parte central da D8 |
+| Agent Client remoto | A renovação periódica da autorização **sai**. Ficam a revogação e a conferência da licença antes de autorizar o início. Execuções já autorizadas continuam entregando registros e resultados. | resolve a D3 para a execução remota |
+| Autorização por Worker | Aprovado reunir a autorização da versão e a solicitação de execução no mesmo fluxo, para quem tem as duas permissões, com aceite explícito e auditado (S2). **Não** aprovada a autorização automática de versões futuras (S3). | S1 e S2 aprovadas; S3 recusada |
+| Convite pendente | Quem não tem vínculo aceito cria a primeira organização. O convite pendente não concede acesso nem impõe papel. A organização nova é independente, sem licença automática, sujeita ao limite de vazias. | fecha o caso em aberto da seção 6 |
+
+O que continua pendente: D2, D6, D7, D10, D11, D12, e da D8 só o ponto do registro (ver abaixo).
+
+Consequências para a implementação (etapa da conferência nos fluxos, ainda não iniciada):
+
+- **Teto da autorização nova pelo fim da licença.** Em organização que exige licença, criar uma autorização de execução
+  local para uma automação licenciada limita `valid_until` ao fim do último período da licença; sem licença vigente, a
+  autorização nova é recusada. Autorizações antigas não são alteradas.
+- **Execução remota sem vencimento.** Em organização que exige licença, a autorização da versão para o Worker deixa de
+  vencer para efeito da execução remota; continua revogável, e cada solicitação confere a licença.
+- **D8, o que resta decidir:** com a licença vencida, a Platform recusa também o **registro** de execuções novas do
+  Agent anterior, ou aceita o registro e apenas deixa de entregar autorizações novas? A orientação recebida fecha a
+  entrega de autorizações; o registro ficou sem resposta explícita.
