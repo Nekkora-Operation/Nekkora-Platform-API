@@ -129,6 +129,10 @@ public enum ApiError {
     LICENSE_MODEL_UNCHANGED(HttpStatus.CONFLICT, "conflict", "license_model_unchanged"),
     /** 063: o conjunto de automacoes impedidas ou cobertas mudou desde a previa confirmada; refazer a previa. */
     LICENSE_PREVIEW_CHANGED(HttpStatus.CONFLICT, "conflict", "license_preview_changed"),
+    /** 066 (capacidade tecnica): a organizacao ja tem o limite de execucoes em andamento; nao e recusa de licenca. */
+    CAPACITY_CONCURRENT_LIMIT_REACHED(HttpStatus.CONFLICT, "conflict", "capacity_concurrent_limit_reached"),
+    /** 066: a organizacao ja tem o limite de execucoes pendentes; nao e recusa de licenca. */
+    CAPACITY_PENDING_LIMIT_REACHED(HttpStatus.CONFLICT, "conflict", "capacity_pending_limit_reached"),
     /** 065 (transferencia): a licenca nao esta vinculada a nenhuma automacao; nao ha de onde transferir. */
     LICENSE_NOT_ASSIGNED(HttpStatus.CONFLICT, "conflict", "license_not_assigned"),
     /** 065: a automacao de destino e a mesma de origem. */

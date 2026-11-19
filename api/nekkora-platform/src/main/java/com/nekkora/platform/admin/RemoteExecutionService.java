@@ -505,6 +505,7 @@ public class RemoteExecutionService {
             ArrayNode frozen = JSON.createArrayNode();
             requirements.effective().dependencies().forEach(frozen::add);
             Target target = target(j, org, workspaceId, versionId, agentId, actor.membershipId(), acceptance);
+            requireCapacity(j, org);
             UUID id = j.sql("""
                     INSERT INTO public.remote_executions (organization_id, workspace_id, automation_id, automation_version_id, package_fingerprint,
                         package_fingerprint_rule, requirements_revision, effective_dependencies, request_key, requested_by_membership_id)
@@ -567,6 +568,7 @@ public class RemoteExecutionService {
             requireRegistered(j, org, x.automationVersionId(), j.sql("SELECT package_fingerprint FROM public.remote_executions "
                     + "WHERE organization_id = ? AND remote_execution_id = ?").param(org).param(executionId).query(String.class).single(), SUPPORTED_RULE);
             Target target = target(j, org, x.workspaceId(), x.automationVersionId(), agentId, actor.membershipId(), acceptance);
+            requireCapacity(j, org);
             attempt(j, org, executionId, last.attemptNumber() + 1, target, actor.membershipId());
             LOG.info("evento=execucao_remota.nova_tentativa solicitacao={} tentativa={} correlacao={}", executionId, last.attemptNumber() + 1,
                     AccessActions.correlation());
@@ -1033,6 +1035,25 @@ public class RemoteExecutionService {
             throw new ApiException(ApiError.REMOTE_PYTHON_NOT_IN_INVENTORY, "python_fora_do_inventario");
         }
         return new Target(agentId, m.worker(), g.id());
+    }
+
+    /**
+     * 066, D2: no modelo por licenca, a tentativa nova respeita os limites TECNICOS de execucoes em andamento e pendentes da
+     * organizacao. E recusa de capacidade, com motivo proprio - nunca de licenca, e nao consome nem libera licenca. O gatilho
+     * da 066 reconfere na gravacao. Modelo anterior: limites nulos, nada conferido aqui.
+     */
+    private static void requireCapacity(JdbcClient j, UUID org) {
+        String full = j.sql("SELECT concurrent_used, concurrent_limit, pending_used, pending_limit FROM public.capacity_state(?)").param(org)
+                .query((rs, n) -> {
+                    Long concurrent = rs.getObject(2, Long.class);
+                    Long pending = rs.getObject(4, Long.class);
+                    return concurrent != null && rs.getLong(1) >= concurrent ? "CONCURRENT" : pending != null && rs.getLong(3) >= pending ? "PENDING" : "";
+                }).single();
+        if (!full.isEmpty()) {
+            ApiError refused = full.equals("CONCURRENT") ? ApiError.CAPACITY_CONCURRENT_LIMIT_REACHED : ApiError.CAPACITY_PENDING_LIMIT_REACHED;
+            LOG.info("evento=acesso.negado regra=CAPACIDADE motivo={} correlacao={}", refused.reason(), AccessActions.correlation());
+            throw new ApiException(refused, String.valueOf(refused.reason()));
+        }
     }
 
     private void attempt(JdbcClient j, UUID org, UUID executionId, int number, Target t, UUID membership) {
