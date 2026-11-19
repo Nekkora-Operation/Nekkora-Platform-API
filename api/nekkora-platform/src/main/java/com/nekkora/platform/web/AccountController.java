@@ -52,6 +52,8 @@ public class AccountController {
             Map<String, Object> r = new LinkedHashMap<>(conta);
             r.put("organizationActivationState", IdentityOrgRepository.activationStates(j, List.of(org))
                     .getOrDefault(org, IdentityOrgRepository.AGUARDANDO_ATIVACAO));
+            // PLATFORM-LICENCIAMENTO-001: no modelo por licenca a capacidade nao depende da ativacao; a tela escolhe o texto por ele
+            r.put("organizationLicenseModel", IdentityOrgRepository.licenseModel(j, org));
             // 029: como esta sessao prova a pessoa nas acoes sensiveis (totp | password)
             r.put("stepUpMethod", s.stepUpMethod());
             return r;

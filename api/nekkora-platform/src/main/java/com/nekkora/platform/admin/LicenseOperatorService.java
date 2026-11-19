@@ -205,6 +205,157 @@ public class LicenseOperatorService {
         });
     }
 
+    // ------------------------------------------------------------------ 068: excecao e reconciliacao
+
+    public record ExceptionalCreation(String responsibleEmail, String name, String legalName, String justification) {
+    }
+
+    /** A sessao e de um operador de licencas? Para a tela saber se mostra a area do operador. Nao altera nada. */
+    public Map<String, Object> status(UUID org, ValidSession actor, String token) {
+        return actions.read(org, j -> {
+            requireOperatorActor(j, org, actor, token);
+            return Map.<String, Object>of("operator", true);
+        });
+    }
+
+    /**
+     * Criacao excepcional (068): o operador indica EXPLICITAMENTE a pessoa responsavel, pelo e-mail verificado dela. Ela recebe a
+     * administracao da nova organizacao; o operador nao recebe conta nem acesso. Responsavel, operador e justificativa ficam
+     * gravados. O banco reconfere o cadastro do operador.
+     */
+    public Map<String, Object> createOrganization(UUID org, ValidSession actor, String token, ExceptionalCreation c) {
+        if (c == null || c.responsibleEmail() == null || c.responsibleEmail().isBlank() || c.responsibleEmail().length() > 254
+                || c.name() == null || c.name().isBlank() || c.name().strip().length() > 120
+                || c.legalName() == null || c.legalName().isBlank() || c.legalName().strip().length() > 120) {
+            throw ApiException.invalid("criacao_excepcional");
+        }
+        if (c.justification() == null || c.justification().strip().length() < 10 || c.justification().strip().length() > 1000) {
+            throw ApiException.invalid("justificativa");
+        }
+        return actions.write(org, j -> {
+            requireOperatorActor(j, org, actor, token);
+            actions.requireStepUp(j, actor);
+            String out;
+            try {
+                out = j.sql("SELECT public.identity_create_organization_by_operator(?, ?, ?, ?, ?)").param(actor.userId())
+                        .param(c.responsibleEmail().strip()).param(c.name().strip()).param(c.legalName().strip()).param(c.justification().strip())
+                        .query(String.class).single();
+            } catch (RuntimeException e) {
+                if (DbErrors.uniqueViolation(e, OrganizationRequestService.ORGANIZATION_NAME_KEY)) {
+                    LOG.info("evento=acesso.negado regra=CONFLICT motivo={} correlacao={}", ApiError.ORGANIZATION_NAME_TAKEN.reason(), AccessActions.correlation());
+                    throw new ApiException(ApiError.ORGANIZATION_NAME_TAKEN, "nome_organizacao");
+                }
+                throw e;
+            }
+            if (out != null && out.startsWith("CREATED:")) {
+                UUID created = UUID.fromString(out.substring("CREATED:".length()));
+                LOG.info("evento=organizacao.criada_por_excecao organizacao={} correlacao={}", created, AccessActions.correlation());
+                return Map.<String, Object>of("organizationId", created);
+            }
+            ApiError error = "RESPONSIBLE_NOT_FOUND".equals(out) ? ApiError.ORGANIZATION_RESPONSIBLE_NOT_FOUND
+                    : "RESPONSIBLE_IS_CLIENT".equals(out) ? ApiError.ORGANIZATION_RESPONSIBLE_IS_CLIENT : null;
+            if (error == null) {
+                // OPERATOR_NOT_AUTHORIZED: a aplicacao ja conferiu; o banco discordar e mudanca concorrente do cadastro
+                throw AccessActions.refuse(Failure.PERMISSION, "nao_e_operador_de_licencas");
+            }
+            LOG.info("evento=acesso.negado regra=CONFLICT motivo={} correlacao={}", error.reason(), AccessActions.correlation());
+            throw new ApiException(error, String.valueOf(error.reason()));
+        });
+    }
+
+    /** A organizacao alvo vista pelo operador: nome, modelo, licencas (com validade e automacao) e automacoes. So leitura. */
+    public Map<String, Object> overview(UUID org, ValidSession actor, String token, UUID target) {
+        return actions.read(org, j -> {
+            requireOperator(j, org, actor, token, target, false);
+            OffsetDateTime now = j.sql("SELECT clock_timestamp()").query(OffsetDateTime.class).single();
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("organizationId", target);
+            r.put("name", j.sql("SELECT name FROM public.organizations WHERE organization_id = ?").param(target).query(String.class).single());
+            r.put("model", Integer.valueOf(2).equals(j.sql("SELECT public.license_model(?)::int").param(target).query(Integer.class).single())
+                    ? "licensed" : "legacy");
+            r.put("licenses", j.sql("""
+                    SELECT l.license_id, l.license_number, l.ended_at,
+                           (SELECT max(p.ends_at) FROM public.organization_license_periods p
+                             WHERE p.organization_id = l.organization_id AND p.license_id = l.license_id) AS valid_until,
+                           EXISTS (SELECT 1 FROM public.organization_license_periods p
+                                    WHERE p.organization_id = l.organization_id AND p.license_id = l.license_id
+                                      AND p.starts_at <= :now AND p.ends_at > :now) AS in_period,
+                           g.automation_id, a.name AS automation_name
+                      FROM public.organization_licenses l
+                      LEFT JOIN public.organization_license_assignments g
+                             ON g.organization_id = l.organization_id AND g.license_id = l.license_id AND g.released_at IS NULL
+                      LEFT JOIN public.automations a ON a.organization_id = g.organization_id AND a.automation_id = g.automation_id
+                     WHERE l.organization_id = :org
+                     ORDER BY l.license_number
+                     LIMIT 500
+                    """).param("org", target).param("now", now).query((rs, n) -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("licenseId", rs.getObject("license_id", UUID.class));
+                m.put("number", rs.getInt("license_number"));
+                m.put("status", rs.getObject("ended_at") != null ? "ENDED" : rs.getBoolean("in_period") ? "VALID" : "NOT_VALID");
+                m.put("validUntil", rs.getObject("valid_until", OffsetDateTime.class));
+                m.put("automationId", rs.getObject("automation_id", UUID.class));
+                m.put("automationName", rs.getString("automation_name"));
+                return m;
+            }).list());
+            r.put("automations", j.sql("SELECT automation_id, name FROM public.automations WHERE organization_id = ? AND status <> 3 ORDER BY name, automation_id LIMIT 500")
+                    .param(target).query((rs, n) -> {
+                        Map<String, Object> m = new LinkedHashMap<>();
+                        m.put("automationId", rs.getObject(1, UUID.class));
+                        m.put("name", rs.getString(2));
+                        return m;
+                    }).list());
+            return r;
+        });
+    }
+
+    static final String[] SESSION_STATES = {null, "READY", "STARTING", "RUNNING", null, null, null, null, null, "OUTCOME_UNKNOWN"};
+
+    /**
+     * Sessoes do Agent anterior da organizacao alvo sem desfecho confiavel, que ainda seguram a transferencia (e, as sem
+     * encerramento, uma vaga de execucao). So identificador, automacao, estado e instantes: nada do conteudo da execucao.
+     */
+    public Map<String, Object> unresolvedSessions(UUID org, ValidSession actor, String token, UUID target) {
+        return actions.read(org, j -> {
+            requireOperator(j, org, actor, token, target, false);
+            List<Map<String, Object>> items = j.sql("SELECT * FROM public.license_op_unresolved_agent_runs(?, ?)").param(actor.userId()).param(target)
+                    .query((rs, n) -> {
+                        Map<String, Object> m = new LinkedHashMap<>();
+                        m.put("sessionId", rs.getObject("agent_run_id", UUID.class));
+                        m.put("automationId", rs.getObject("automation_id", UUID.class));
+                        m.put("automationName", rs.getString("automation_name"));
+                        m.put("state", SESSION_STATES[rs.getInt("state")]);
+                        m.put("registeredAt", rs.getObject("registered_at", OffsetDateTime.class));
+                        m.put("lastReportAt", rs.getObject("last_report_at", OffsetDateTime.class));
+                        m.put("reconcilable", rs.getBoolean("reconcilable"));
+                        m.put("holdsSlot", rs.getBoolean("holds_slot"));
+                        return m;
+                    }).list();
+            return Map.<String, Object>of("items", items);
+        });
+    }
+
+    /**
+     * Reconciliacao pelo suporte (068). Registra operador, justificativa e a verificacao realizada. NAO altera a sessao: o
+     * resultado desconhecido continua desconhecido, nenhum desfecho e gravado e nada declara a maquina livre. A sessao so deixa de
+     * segurar a transferencia e a vaga - e volta a segurar se a maquina informar algo depois.
+     */
+    public Map<String, Object> reconcile(UUID org, ValidSession actor, String token, UUID target, UUID session, String justification,
+                                         String verification) {
+        if (verification == null || verification.strip().length() < 10 || verification.strip().length() > 1000) {
+            throw ApiException.invalid("verificacao");
+        }
+        return act(org, actor, token, target, justification, j -> {
+            UUID id = j.sql("SELECT public.license_op_reconcile_agent_run(?, ?, ?, ?, ?)").param(actor.userId()).param(target).param(session)
+                    .param(justification).param(verification).query(UUID.class).single();
+            LOG.info("evento=agent_anterior.sessao_reconciliada organizacao={} sessao={} correlacao={}", target, session, AccessActions.correlation());
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("reconciliationId", id);
+            r.put("sessionId", session);
+            return r;
+        });
+    }
+
     // ------------------------------------------------------------------ comum
 
     private interface Act<T> {
@@ -233,14 +384,7 @@ public class LicenseOperatorService {
      * sem dizer qual condicao faltou.
      */
     private void requireOperator(JdbcClient j, UUID org, ValidSession actor, String token, UUID target, boolean stepUp) {
-        if (operatorOrganization == null || !operatorOrganization.equals(org)) {
-            throw AccessActions.refuse(Failure.TARGET_NOT_FOUND, "operacao_de_licencas_fora_da_organizacao_interna");
-        }
-        actions.requireActor(j, org, actor, token);
-        if (actor.withoutSecondFactor()
-                || !Boolean.TRUE.equals(j.sql("SELECT public.license_op_is_operator(?)").param(actor.userId()).query(Boolean.class).single())) {
-            throw AccessActions.refuse(Failure.PERMISSION, "nao_e_operador_de_licencas");
-        }
+        requireOperatorActor(j, org, actor, token);
         if (target == null || target.equals(org)) {
             throw AccessActions.refuse(Failure.TARGET_NOT_FOUND, "organizacao_alvo");
         }
@@ -252,6 +396,18 @@ public class LicenseOperatorService {
         j.sql("SELECT set_config('nekkora.organization_id', ?, true)").param(target.toString()).query(String.class).single();
         if (j.sql("SELECT count(*) FROM public.organizations WHERE organization_id = ?").param(target).query(Long.class).single() == 0) {
             throw AccessActions.refuse(Failure.TARGET_NOT_FOUND, "organizacao_alvo");
+        }
+    }
+
+    /** So o "quem": organizacao interna configurada, sessao valida, segundo fator e cadastro de operadores. Sem organizacao alvo. */
+    private void requireOperatorActor(JdbcClient j, UUID org, ValidSession actor, String token) {
+        if (operatorOrganization == null || !operatorOrganization.equals(org)) {
+            throw AccessActions.refuse(Failure.TARGET_NOT_FOUND, "operacao_de_licencas_fora_da_organizacao_interna");
+        }
+        actions.requireActor(j, org, actor, token);
+        if (actor.withoutSecondFactor()
+                || !Boolean.TRUE.equals(j.sql("SELECT public.license_op_is_operator(?)").param(actor.userId()).query(Boolean.class).single())) {
+            throw AccessActions.refuse(Failure.PERMISSION, "nao_e_operador_de_licencas");
         }
     }
 
@@ -417,7 +573,11 @@ public class LicenseOperatorService {
                 : mentions(e, "LICENSE_ENDED") ? ApiError.LICENSE_ENDED
                 : mentions(e, "PERIOD_OVERLAPS") ? ApiError.LICENSE_PERIOD_OVERLAPS
                 : mentions(e, "PERIOD_ALREADY_ENDED") ? ApiError.LICENSE_PERIOD_ALREADY_ENDED
-                : mentions(e, "MODEL_UNCHANGED") ? ApiError.LICENSE_MODEL_UNCHANGED : null;
+                : mentions(e, "MODEL_UNCHANGED") ? ApiError.LICENSE_MODEL_UNCHANGED
+                : mentions(e, "RUN_NOT_FOUND") ? ApiError.NOT_FOUND
+                : mentions(e, "RUN_HAS_OUTCOME") ? ApiError.PREVIOUS_AGENT_SESSION_HAS_OUTCOME
+                : mentions(e, "RUN_ALREADY_RECONCILED") ? ApiError.PREVIOUS_AGENT_SESSION_ALREADY_RECONCILED
+                : mentions(e, "RUN_RECENTLY_REPORTED") ? ApiError.PREVIOUS_AGENT_SESSION_RECENTLY_REPORTED : null;
         if (error == null) {
             return e;
         }

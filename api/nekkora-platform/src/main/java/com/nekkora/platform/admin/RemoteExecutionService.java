@@ -253,10 +253,14 @@ public class RemoteExecutionService {
     public record LateReport(String state, Integer exitCode, OffsetDateTime reportedAt) {
     }
 
-    /** {@code state}: o da tentativa mais recente. {@code workspaceName} e {@code automationName}: para as listas por organizacao. */
+    /**
+     * {@code state}: o da tentativa mais recente. {@code workspaceName} e {@code automationName}: para as listas por organizacao.
+     * {@code waitingForSlot}: a tentativa esta na fila E, neste instante, a organizacao (modelo por licenca) esta no limite tecnico
+     * de execucoes simultaneas - ela espera uma vaga. E capacidade, nao licenca: sem licenca a solicitacao nem e aceita.
+     */
     public record Execution(UUID remoteExecutionId, UUID workspaceId, UUID automationId, UUID automationVersionId, int versionNumber, String state,
                             int requirementsRevision, List<String> dependencies, OffsetDateTime requestedAt, OffsetDateTime cancelRequestedAt,
-                            List<Attempt> attempts, String workspaceName, String automationName) {
+                            List<Attempt> attempts, String workspaceName, String automationName, boolean waitingForSlot) {
     }
 
     public record Created(Execution execution, boolean created) {
@@ -1134,6 +1138,10 @@ public class RemoteExecutionService {
                     a.closureCause(), a.lateReport(), List.copyOf(recs), byMachine || processes != null ? null : said[3], processes, processesAt));
         }
         List<Attempt> resolved = List.copyOf(known);
+        String latest = attempts.isEmpty() ? "QUEUED" : attempts.get(attempts.size() - 1).state();
+        boolean waitingForSlot = "QUEUED".equals(latest) && Boolean.TRUE.equals(j.sql(
+                "SELECT s.concurrent_limit IS NOT NULL AND s.concurrent_used >= s.concurrent_limit FROM public.capacity_state(?) s").param(org)
+                .query(Boolean.class).single());
         return j.sql("""
                 SELECT x.remote_execution_id, x.workspace_id, x.automation_id, x.automation_version_id, v.version_number, x.requirements_revision,
                        x.effective_dependencies::text, x.requested_at, x.cancel_requested_at, ws.name, au.name
@@ -1147,7 +1155,8 @@ public class RemoteExecutionService {
             JSON.readTree(rs.getString(7)).forEach(d -> deps.add(d.asString()));
             return new Execution(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getObject(3, UUID.class), rs.getObject(4, UUID.class),
                     rs.getInt(5), attempts.isEmpty() ? "QUEUED" : attempts.get(attempts.size() - 1).state(), rs.getInt(6), List.copyOf(deps),
-                    rs.getObject(8, OffsetDateTime.class), rs.getObject(9, OffsetDateTime.class), resolved, rs.getString(10), rs.getString(11));
+                    rs.getObject(8, OffsetDateTime.class), rs.getObject(9, OffsetDateTime.class), resolved, rs.getString(10), rs.getString(11),
+                    waitingForSlot);
         }).single();
     }
 }

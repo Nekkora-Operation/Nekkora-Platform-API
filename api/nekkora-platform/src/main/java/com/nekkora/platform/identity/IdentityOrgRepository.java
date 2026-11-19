@@ -29,7 +29,7 @@ public final class IdentityOrgRepository {
      * situacao administrativa. So indicacao para a interface; a capacidade continua decidida no banco pelos limites.
      */
     /** T10 (034): {@code handle} = identificador legivel e estavel da organizacao (nao e credencial; nulo so antes da 034). */
-    public record Organization(UUID organizationId, String name, List<String> roles, String activationState, String handle) {
+    public record Organization(UUID organizationId, String name, List<String> roles, String activationState, String handle, String licenseModel) {
     }
 
     public static final String AGUARDANDO_ATIVACAO = "AGUARDANDO_ATIVACAO";
@@ -54,7 +54,7 @@ public final class IdentityOrgRepository {
                 .query((rs, n) -> new Linha(rs.getObject(1, UUID.class), rs.getString(2), roles(rs.getArray(3))))
                 .list();
         Map<UUID, String> estados = activationStates(j, linhas.stream().map(Linha::id).toList());
-        return linhas.stream().map(l -> new Organization(l.id(), l.name(), l.roles(), estados.getOrDefault(l.id(), AGUARDANDO_ATIVACAO), null)).toList();
+        return linhas.stream().map(l -> new Organization(l.id(), l.name(), l.roles(), estados.getOrDefault(l.id(), AGUARDANDO_ATIVACAO), null, null)).toList();
     }
 
     /**
@@ -72,6 +72,15 @@ public final class IdentityOrgRepository {
                 .query((rs, n) -> m.put(rs.getObject(1, UUID.class), rs.getShort(2) == 2 ? ATIVADA : AGUARDANDO_ATIVACAO))
                 .list();
         return m;
+    }
+
+    /**
+     * PLATFORM-LICENCIAMENTO-001: o modelo de habilitacao da organizacao, lido NO CONTEXTO DELA: {@code licensed} (por licenca: a
+     * capacidade e tecnica e nao depende da ativacao) ou {@code legacy} (anterior: a ativacao pela operacao libera a capacidade).
+     */
+    public static String licenseModel(JdbcClient j, UUID organization) {
+        return Integer.valueOf(2).equals(j.sql("SELECT public.license_model(?)::int").param(organization).query(Integer.class).single())
+                ? "licensed" : "legacy";
     }
 
     /**

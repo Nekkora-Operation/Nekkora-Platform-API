@@ -47,6 +47,52 @@ public class LicenseOperatorController {
         this.service = service;
     }
 
+    public record CreateOrganizationRequest(String responsibleEmail, String name, String legalName, String justification) {
+    }
+
+    public record ReconcileRequest(String justification, String verification) {
+    }
+
+    /** A sessao e de um operador? (a tela usa para mostrar a area do operador). 404 fora da organizacao interna; 403 sem cadastro. */
+    @GetMapping("/api/v1/o/{org}/license-operations")
+    public Map<String, Object> status(@PathVariable UUID org, HttpServletRequest req) {
+        return service.status(org, SessionFilter.principal(req), SessionFilter.token(req));
+    }
+
+    /** 068: criacao excepcional de organizacao, com a pessoa responsavel indicada pelo operador. */
+    @PostMapping("/api/v1/o/{org}/license-operations/organizations")
+    public ResponseEntity<Map<String, Object>> createOrganization(@PathVariable UUID org, @RequestBody(required = false) CreateOrganizationRequest body,
+                                                                  HttpServletRequest req) {
+        if (body == null) {
+            throw ApiException.invalid("corpo");
+        }
+        return ResponseEntity.status(201).body(service.createOrganization(org, SessionFilter.principal(req), SessionFilter.token(req),
+                new LicenseOperatorService.ExceptionalCreation(body.responsibleEmail(), body.name(), body.legalName(), body.justification())));
+    }
+
+    /** A organizacao alvo vista pelo operador: modelo, licencas e automacoes. */
+    @GetMapping(BASE)
+    public Map<String, Object> overview(@PathVariable UUID org, @PathVariable UUID target, HttpServletRequest req) {
+        return service.overview(org, SessionFilter.principal(req), SessionFilter.token(req), target);
+    }
+
+    /** 068: sessoes do Agent anterior sem desfecho confiavel, que ainda seguram transferencia ou vaga. */
+    @GetMapping(BASE + "/previous-agent-sessions")
+    public Map<String, Object> unresolvedSessions(@PathVariable UUID org, @PathVariable UUID target, HttpServletRequest req) {
+        return service.unresolvedSessions(org, SessionFilter.principal(req), SessionFilter.token(req), target);
+    }
+
+    /** 068: reconciliacao de uma sessao pelo suporte. Nao altera a sessao. */
+    @PostMapping(BASE + "/previous-agent-sessions/{sessionId}/reconciliation")
+    public Map<String, Object> reconcile(@PathVariable UUID org, @PathVariable UUID target, @PathVariable UUID sessionId,
+                                         @RequestBody(required = false) ReconcileRequest body, HttpServletRequest req) {
+        if (body == null) {
+            throw ApiException.invalid("corpo");
+        }
+        return service.reconcile(org, SessionFilter.principal(req), SessionFilter.token(req), target, sessionId, body.justification(),
+                body.verification());
+    }
+
     /** Previa: o que ligar a exigencia faria agora nesta organizacao. Nao altera nada. */
     @GetMapping(BASE + "/enforcement-preview")
     public Map<String, Object> preview(@PathVariable UUID org, @PathVariable UUID target, HttpServletRequest req) {

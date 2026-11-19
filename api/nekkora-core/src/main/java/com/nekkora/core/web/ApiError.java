@@ -163,6 +163,16 @@ public enum ApiError {
     LICENSE_TRANSFER_SAME_AUTOMATION(HttpStatus.CONFLICT, "conflict", "license_transfer_same_automation"),
     /** 065: a automacao de origem tem trabalho em andamento; precisa terminar ou ter o cancelamento confirmado antes. */
     LICENSE_TRANSFER_WORK_IN_PROGRESS(HttpStatus.CONFLICT, "conflict", "license_transfer_work_in_progress"),
+    /** 068: a pessoa indicada como responsavel nao existe com esse e-mail verificado, ou a conta nao esta ativa. */
+    ORGANIZATION_RESPONSIBLE_NOT_FOUND(HttpStatus.CONFLICT, "conflict", "organization_responsible_not_found"),
+    /** 068 (D9): a pessoa indicada so tem conta do tipo Cliente; nao recebe organizacao nem por excecao. */
+    ORGANIZATION_RESPONSIBLE_IS_CLIENT(HttpStatus.CONFLICT, "conflict", "organization_responsible_is_client"),
+    /** 068: a sessao do Agent anterior ja tem desfecho informado pela maquina; nao ha o que reconciliar. */
+    PREVIOUS_AGENT_SESSION_HAS_OUTCOME(HttpStatus.CONFLICT, "conflict", "previous_agent_session_has_outcome"),
+    /** 068: a sessao ja foi reconciliada depois da ultima noticia da maquina. */
+    PREVIOUS_AGENT_SESSION_ALREADY_RECONCILED(HttpStatus.CONFLICT, "conflict", "previous_agent_session_already_reconciled"),
+    /** 068: a maquina informou sobre a sessao ha menos de uma hora; ela pode estar em execucao. */
+    PREVIOUS_AGENT_SESSION_RECENTLY_REPORTED(HttpStatus.CONFLICT, "conflict", "previous_agent_session_recently_reported"),
     /** 065: o solicitante informado nao administra a organizacao neste instante. */
     LICENSE_TRANSFER_REQUESTER_NOT_ADMIN(HttpStatus.CONFLICT, "conflict", "license_transfer_requester_not_admin"),
     /** 064 (conferencia nos fluxos): a organizacao exige licenca e a automacao nao tem licenca vinculada; nada foi iniciado. */
