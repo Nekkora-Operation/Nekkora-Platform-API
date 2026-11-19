@@ -14,6 +14,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import com.nekkora.core.testsupport.BrowserClient;
+import com.nekkora.platform.admin.LicenseOperatorService;
 
 import tools.jackson.databind.JsonNode;
 
@@ -73,7 +74,7 @@ class LicenseOperatorIT extends ReadRoutesSupport {
         UUID a1 = ProductFixtures.automation(client.id(), w, null, "Conciliacao", m);
         ProductFixtures.version(client.id(), w, a1, true, m);
         UUID a2 = ProductFixtures.automation(client.id(), w, null, "Apuracao", m);
-        ProductFixtures.automation(client.id(), w, null, "Sem uso", m);
+        UUID a3 = ProductFixtures.automation(client.id(), w, null, "Sem uso", m);
         String justification = "contrato de ensaio numero 123 assinado";
         String from = OffsetDateTime.now().minusDays(1).toString();
         String until = OffsetDateTime.now().plusDays(29).toString();
@@ -128,7 +129,8 @@ class LicenseOperatorIT extends ReadRoutesSupport {
         assertThat(pv.status()).as(pv.body()).isEqualTo(200);
         JsonNode preview = JSON.readTree(pv.body());
         assertThat(keys(preview)).containsExactly("organizationId", "model", "modelSince", "contracted", "used", "available", "blockedAutomations",
-                "licensedAutomations", "offlineAuthorizations", "offlineAuthorizationsValidUntil", "workInProgress", "asOf");
+                "licensedAutomations", "offlineAuthorizations", "offlineAuthorizationsValidUntil", "workInProgress", "previewToken", "asOf");
+        assertThat(preview.get("licensedAutomations").get(0).get("licenseId").asString()).as("a cobertura diz QUAL licenca").isEqualTo(l1.toString());
         assertThat(field(preview.get("blockedAutomations"), "name")).as("em uso e sem licenca: ficaria impedida de iniciar").containsExactly("Apuracao");
         assertThat(preview.get("blockedAutomations").get(0).get("inUseBecause").get(0).asString()).isEqualTo("validAuthorization");
         assertThat(field(preview.get("licensedAutomations"), "name")).containsExactly("Conciliacao");
@@ -136,20 +138,39 @@ class LicenseOperatorIT extends ReadRoutesSupport {
         assertThat(preview.get("offlineAuthorizationsValidUntil").isNull()).isFalse();
         assertThat(one("SELECT count(*) FROM organization_license_enforcement WHERE organization_id = '" + client.id() + "'")).as("a previa nao altera").isEqualTo("0");
 
-        // ---- ligar: exige a confirmacao do numero da previa; numero errado (a previa mudou) e recusado e nada e gravado
-        String on = "{\"model\":\"licensed\",\"confirmBlockedAutomations\":%s,\"justification\":\"" + justification + "\"}";
+        // ---- ligar: exige o resumo do CONJUNTO apresentado; conjunto diferente (a previa mudou) e recusado e nada e gravado
+        String on = "{\"model\":\"licensed\",\"confirmPreview\":\"%s\",\"justification\":\"" + justification + "\"}";
         assertThat(staff.post(ops(client.id(), "/enforcement"), "{\"model\":\"licensed\",\"justification\":\"" + justification + "\"}").status())
                 .as("ligar sem confirmar a previa").isEqualTo(400);
-        conflict(staff.post(ops(client.id(), "/enforcement"), on.formatted("0")), "license_preview_changed");
+        String shown = preview.get("previewToken").asString();
+        conflict(staff.post(ops(client.id(), "/enforcement"), on.formatted("0".repeat(64))), "license_preview_changed");
+        // MESMA QUANTIDADE, OUTRO CONJUNTO: a autorizacao de a2 e revogada e "Sem uso" passa a estar em uso. Continua 1 impedida,
+        // mas nao e a automacao que o operador viu: exige nova previa
+        DB.asSuperuser("SET session_replication_role = replica",
+                "UPDATE local_run_authorizations SET revoked_at = clock_timestamp(), revoked_by_membership_id = '" + m + "' WHERE automation_id = '" + a2 + "'",
+                "INSERT INTO local_run_authorizations (organization_id, workspace_id, worker_id, worker_workspace_assignment_id, automation_id, source_kind, "
+                        + "package_fingerprint_rule, granted_by_membership_id, granted_at, valid_until) VALUES ('" + client.id() + "', '" + w + "', gen_random_uuid(), gen_random_uuid(), '"
+                        + a3 + "', 3, NULL, '" + m + "', clock_timestamp(), clock_timestamp() + interval '90 days')");
+        JsonNode again = JSON.readTree(staff.get(ops(client.id(), "/enforcement-preview")).body());
+        assertThat(field(again.get("blockedAutomations"), "name")).as("a mesma quantidade, outra automacao").containsExactly("Sem uso");
+        assertThat(again.get("previewToken").asString()).as("o resumo depende das identidades, nao da quantidade").isNotEqualTo(shown);
+        conflict(staff.post(ops(client.id(), "/enforcement"), on.formatted(shown)), "license_preview_changed");
         assertThat(one("SELECT count(*) FROM organization_license_enforcement WHERE organization_id = '" + client.id() + "'")).isEqualTo("0");
-        BrowserClient.Response turned = staff.post(ops(client.id(), "/enforcement"), on.formatted("1"));
+        // MESMAS AUTOMACOES, OUTRA COBERTURA: o resumo muda quando a licenca que cobre e outra
+        assertThat(LicenseOperatorService.token("legacy", java.util.List.of(), java.util.List.of(java.util.Map.of("automationId", a1, "licenseId", l1))))
+                .isNotEqualTo(LicenseOperatorService.token("legacy", java.util.List.of(), java.util.List.of(java.util.Map.of("automationId", a1, "licenseId", l2))));
+        shown = again.get("previewToken").asString();
+        BrowserClient.Response turned = staff.post(ops(client.id(), "/enforcement"), on.formatted(shown));
         assertThat(turned.status()).as(turned.body()).isEqualTo(200);
-        assertThat(one("SELECT act || '|' || (detail->>'blockedAutomations') || '|' || (detail->>'offlineAuthorizations') FROM organization_license_acts "
-                + "WHERE organization_id = '" + client.id() + "' AND act = 6")).as("o retrato da previa fica na trilha").isEqualTo("6|1|1");
+        assertThat(one("SELECT act || '|' || (detail->>'blockedAutomations') || '|' || (detail->>'offlineAuthorizations') || '|' || (detail->'blockedAutomationIds'->>0) "
+                + "|| '|' || (detail->'licensedAutomationIds'->>0) || '|' || (detail->>'previewToken') FROM organization_license_acts "
+                + "WHERE organization_id = '" + client.id() + "' AND act = 6")).as("o retrato da previa, com as identidades, fica na trilha")
+                .isEqualTo("6|1|1|" + a3 + "|" + a1 + "|" + shown);
         s = get(clientAdmin, path(client.id(), "licenses/summary", null)).body();
         assertThat(s.get("model").asString()).as("quem esta em qual modelo e um dado visivel").isEqualTo("licensed");
         assertThat(s.get("modelSince").isNull()).isFalse();
-        conflict(staff.post(ops(client.id(), "/enforcement"), on.formatted("1")), "license_model_unchanged");
+        conflict(staff.post(ops(client.id(), "/enforcement"),
+                on.formatted(JSON.readTree(staff.get(ops(client.id(), "/enforcement-preview")).body()).get("previewToken").asString())), "license_model_unchanged");
 
         // ---- NESTA ETAPA o modelo e so um dado: nenhum servico de execucao ou de monitoracao le as tabelas de licenca (conferido
         //      no codigo: so LicenseReadController, LicenseService e LicenseOperatorService as citam). As leituras seguem iguais
@@ -201,6 +222,28 @@ class LicenseOperatorIT extends ReadRoutesSupport {
         DB.asSuperuser("UPDATE license_operators SET revoked_at = clock_timestamp() WHERE operator_user_id = '" + n.adminId() + "'");
         assertThat(staff.post(ops(client.id(), "/licenses"), grant).status()).as("operador revogado").isEqualTo(403);
         assertThat(one("SELECT count(*) FROM organization_licenses WHERE organization_id = '" + client.id() + "'")).as("2 da primeira concessao + 1 do segundo operador; nada depois da revogacao").isEqualTo("3");
+
+        // ---- CONCORRENCIA entre a previa e o ato de ligar: um vinculo EM CURSO (ainda sem confirmar) segura a trava compartilhada
+        //      do modelo; ligar espera, refaz a previa DEPOIS de o vinculo confirmar e recusa, porque a cobertura mudou
+        String seen = JSON.readTree(fresh.get(ops(client.id(), "/enforcement-preview")).body()).get("previewToken").asString();
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try (Connection held = DB.connectAsSuperuser(); Statement st = held.createStatement()) {
+            held.setAutoCommit(false);
+            st.execute("INSERT INTO organization_license_assignments (organization_id, license_id, workspace_id, automation_id, assigned_by_membership_id) VALUES ('"
+                    + client.id() + "', '" + l2 + "', '" + w + "', '" + a3 + "', '" + m + "')");
+            java.util.concurrent.Future<BrowserClient.Response> turning = pool.submit(() -> fresh.post(ops(client.id(), "/enforcement"), on.formatted(seen)));
+            Thread.sleep(1500);
+            assertThat(turning.isDone()).as("ligar espera o vinculo em curso terminar").isFalse();
+            assertThat(one("SELECT count(*) FROM organization_license_enforcement WHERE organization_id = '" + client.id() + "' AND model = 2")).isEqualTo("0");
+            held.commit();
+            conflict(turning.get(30, java.util.concurrent.TimeUnit.SECONDS), "license_preview_changed");
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(one("SELECT model FROM organization_license_enforcement WHERE organization_id = '" + client.id() + "'")).as("nada foi ligado").isEqualTo("1");
+        JsonNode after = JSON.readTree(fresh.get(ops(client.id(), "/enforcement-preview")).body());
+        assertThat(field(after.get("licensedAutomations"), "name")).as("a previa nova mostra a cobertura que entrou").containsExactly("Sem uso");
+        assertThat(after.get("blockedAutomations").size()).isZero();
 
         // ---- o banco reconfere o operador: o papel da Platform nao concede em nome de quem nao esta no cadastro, nem escreve direto
         try (Connection c = DB.connectAs("nekkora_platform"); Statement st = c.createStatement()) {

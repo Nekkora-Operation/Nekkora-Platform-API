@@ -2024,9 +2024,11 @@ paths:
       x-estado: implementado (PLATFORM-LICENCIAMENTO-001 D5; LicenseOperatorController/LicenseOperatorService; LicenseOperatorIT; migration 063, COM elevacao, so laboratorio)
       summary: 'Liga ou desliga a exigencia de licenca da organizacao alvo, com a previa confirmada (operador da Nekkora)'
       description: >
-        model licensed liga; legacy desliga. Para ligar, confirmBlockedAutomations e obrigatorio e tem de ser o numero de
-        automacoes em blockedAutomations da previa: a previa e refeita na mesma transacao e, se o numero mudou, 409
-        license_preview_changed e nada e gravado. O retrato da previa fica na trilha. Ja no modelo pedido: 409
+        model licensed liga; legacy desliga. Para ligar, confirmPreview e obrigatorio e tem de ser o previewToken da previa
+        conferida: ele resume o CONJUNTO (a identidade de cada automacao que ficaria impedida e, de cada coberta, a licenca
+        que a cobre). A previa e refeita na mesma transacao, sob trava exclusiva do modelo da organizacao (vinculo, concessao,
+        renovacao e encerramento esperam); se o conjunto mudou, mesmo com a mesma quantidade, 409 license_preview_changed e
+        nada e gravado. O retrato da previa, com as identidades, fica na trilha. Ja no modelo pedido: 409
         license_model_unchanged. NESTA ETAPA o modelo e um dado visivel (resumo de licencas da organizacao): nenhum fluxo de
         execucao ou de monitoracao o consulta ainda.
       security: [ { sessionCookie: [], csrfHeader: [] } ]
@@ -2035,7 +2037,7 @@ paths:
         - { name: target, in: path, required: true, schema: { type: string, format: uuid }, description: 'a organizacao do cliente (nunca a do operador)' }
       requestBody:
         required: true
-        content: { application/json: { schema: { type: object, additionalProperties: false, required: [model, justification], properties: { model: { type: string, enum: [licensed, legacy] }, confirmBlockedAutomations: { type: integer, minimum: 0 }, justification: { type: string, minLength: 10, maxLength: 1000 } } } } }
+        content: { application/json: { schema: { type: object, additionalProperties: false, required: [model, justification], properties: { model: { type: string, enum: [licensed, legacy] }, confirmPreview: { type: string, minLength: 64, maxLength: 64 }, justification: { type: string, minLength: 10, maxLength: 1000 } } } } }
       responses:
         '200': { description: 'Modelo alterado', content: { application/json: { schema: { type: object, required: [organizationId, model, blockedAutomations], properties: { organizationId: { type: string, format: uuid }, model: { type: string, enum: [licensed, legacy] }, blockedAutomations: { type: integer } } } } } }
         '400': { $ref: '#/components/responses/InvalidRequest' }
@@ -3581,7 +3583,7 @@ components:
             executionInProgress: { type: boolean, description: 'ha trabalho em andamento agora; nao tem relacao com a licenca estar ativa' }
     LicenseEnforcementPreview:
       type: object
-      required: [organizationId, model, modelSince, contracted, used, available, blockedAutomations, licensedAutomations, offlineAuthorizations, offlineAuthorizationsValidUntil, workInProgress, asOf]
+      required: [organizationId, model, modelSince, contracted, used, available, blockedAutomations, licensedAutomations, offlineAuthorizations, offlineAuthorizationsValidUntil, workInProgress, previewToken, asOf]
       properties:
         organizationId: { type: string, format: uuid }
         model: { type: string, enum: [legacy, licensed] }
@@ -3593,6 +3595,7 @@ components:
         licensedAutomations: { type: array, items: { $ref: '#/components/schemas/LicensePreviewAutomation' } }
         offlineAuthorizations: { type: integer, format: int64, description: 'autorizacoes vigentes das automacoes que ficariam impedidas; valem sem conexao ate a validade' }
         offlineAuthorizationsValidUntil: { type: [string, 'null'], format: date-time }
+        previewToken: { type: string, description: 'resumo do conjunto apresentado; devolvido em confirmPreview para ligar a exigencia' }
         workInProgress: { type: integer, format: int64 }
         asOf: { type: string, format: date-time }
     LicensePreviewAutomation:
@@ -3604,6 +3607,7 @@ components:
         workspaceName: { type: string }
         inUseBecause: { type: array, items: { type: string, enum: [validAuthorization, recentUse, workInProgress] } }
         authorizationsValidUntil: { type: [string, 'null'], format: date-time }
+        licenseId: { type: string, format: uuid, description: 'so nas cobertas: a licenca que cobre a automacao' }
     LicenseAssignment:
       type: object
       required: [licenseId, number, automationId, workspaceId, assignedAt]

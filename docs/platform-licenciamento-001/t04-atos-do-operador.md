@@ -71,8 +71,17 @@ A prévia de uma organização mostra:
   prévia diz quantas autorizações existem e até quando a mais longa vale.
 - `workInProgress`: trabalho em andamento, que não é interrompido.
 
-Ligar exige `confirmBlockedAutomations` igual ao número da prévia. A prévia é refeita na mesma transação do ato; se o
-número mudou, o ato é recusado (`license_preview_changed`) e nada é gravado. O retrato vai para a trilha.
+Ligar exige `confirmPreview` igual ao `previewToken` da prévia conferida. O resumo é calculado sobre o **conjunto**: o
+modelo atual, a identidade de cada automação que ficaria impedida e, de cada automação coberta, a licença que a cobre.
+Mesma quantidade com outra automação, ou a mesma automação coberta por outra licença, dá outro resumo.
+
+A prévia é refeita na mesma transação do ato, sob **trava exclusiva do modelo da organização**. Vínculo, concessão,
+renovação e encerramento pegam a mesma trava em modo compartilhado: o que já confirmou aparece na prévia refeita; o que
+ainda não confirmou espera o ato terminar. Se o conjunto mudou, o ato é recusado (`license_preview_changed`), nada é
+gravado e é preciso nova prévia. O retrato, com as identidades e o resumo, vai para a trilha.
+
+Limite: o uso que **começa** entre a prévia e o ato (uma autorização nova, uma execução nova) só passa a esperar a trava
+na etapa da conferência nos fluxos, que é quem consulta o modelo. Até lá, ele aparece na prévia refeita se já confirmou.
 
 Quem está em qual modelo aparece em `licenses/summary` (`model` e `modelSince`), para o administrador, e na própria
 prévia, para o operador. Toda organização começa em `legacy`.

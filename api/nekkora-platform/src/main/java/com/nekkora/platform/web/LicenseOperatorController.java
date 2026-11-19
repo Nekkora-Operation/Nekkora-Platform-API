@@ -35,8 +35,8 @@ public class LicenseOperatorController {
     public record EndRequest(String justification) {
     }
 
-    /** {@code confirmBlockedAutomations}: obrigatorio para ligar; o numero mostrado pela previa que o operador conferiu. */
-    public record ModelRequest(String model, Integer confirmBlockedAutomations, String justification) {
+    /** {@code confirmPreview}: obrigatorio para ligar; o {@code previewToken} da previa conferida (o conjunto, nao a quantidade). */
+    public record ModelRequest(String model, String confirmPreview, String justification) {
     }
 
     private static final String BASE = "/api/v1/o/{org}/license-operations/organizations/{target}";
@@ -90,7 +90,7 @@ public class LicenseOperatorController {
         if (body == null) {
             throw ApiException.invalid("corpo");
         }
-        return service.setModel(org, SessionFilter.principal(req), SessionFilter.token(req), target, body.model(), body.confirmBlockedAutomations(),
+        return service.setModel(org, SessionFilter.principal(req), SessionFilter.token(req), target, body.model(), body.confirmPreview(),
                 body.justification());
     }
 

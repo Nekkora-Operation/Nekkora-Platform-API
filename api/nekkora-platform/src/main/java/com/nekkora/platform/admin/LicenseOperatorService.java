@@ -96,26 +96,33 @@ public class LicenseOperatorService {
 
     /**
      * Liga ({@code licensed}) ou desliga ({@code legacy}) a exigencia. Para LIGAR, quem opera confirma quantas automacoes em uso
-     * ficariam sem licenca ({@code confirmBlocked}); a previa e refeita NA MESMA TRANSACAO do ato e, se o numero mudou, o ato e
+     * ficariam sem licenca pelo resumo do conjunto ({@code confirmPreview}); a previa e refeita NA MESMA TRANSACAO do ato, sob
+     * a trava exclusiva do modelo da organizacao, e se o CONJUNTO mudou - mesmo com a mesma quantidade - o ato e
      * recusado ({@code license_preview_changed}) e nada e gravado. O retrato da previa vai para a trilha.
      */
-    public Map<String, Object> setModel(UUID org, ValidSession actor, String token, UUID target, String model, Integer confirmBlocked,
+    public Map<String, Object> setModel(UUID org, ValidSession actor, String token, UUID target, String model, String confirmPreview,
                                         String justification) {
         if (!"licensed".equals(model) && !"legacy".equals(model)) {
             throw ApiException.invalid("modelo");
         }
         boolean on = "licensed".equals(model);
-        if (on && confirmBlocked == null) {
+        if (on && (confirmPreview == null || confirmPreview.isBlank())) {
             throw ApiException.invalid("confirmacao_da_previa");
         }
         return act(org, actor, token, target, justification, j -> {
+            // trava EXCLUSIVA do modelo da organizacao antes de refazer a previa: vinculo, concessao, renovacao, encerramento e
+            // (na etapa da conferencia) cada inicio de trabalho pegam a mesma trava em modo compartilhado. O que ja confirmou
+            // aparece na previa refeita; o que ainda nao confirmou espera este ato terminar.
+            j.sql("SELECT pg_advisory_xact_lock(hashtextextended('organization_license_model:' || ?, 0))").param(target.toString())
+                    .query((rs, n) -> 0).list();
             Map<String, Object> preview = previewIn(j, target);
             int blocked = ((List<?>) preview.get("blockedAutomations")).size();
-            if (on && blocked != confirmBlocked) {
+            if (on && !confirmPreview.equals(preview.get("previewToken"))) {
                 LOG.info("evento=acesso.negado regra=CONFLICT motivo=license_preview_changed correlacao={}", AccessActions.correlation());
                 throw new ApiException(ApiError.LICENSE_PREVIEW_CHANGED, "previa_mudou");
             }
-            String detail = "{\"blockedAutomations\":" + blocked + ",\"offlineAuthorizations\":" + preview.get("offlineAuthorizations")
+            String detail = "{\"previewToken\":\"" + preview.get("previewToken") + "\",\"blockedAutomationIds\":" + ids(preview, "blockedAutomations")
+                    + ",\"licensedAutomationIds\":" + ids(preview, "licensedAutomations") + ",\"blockedAutomations\":" + blocked + ",\"offlineAuthorizations\":" + preview.get("offlineAuthorizations")
                     + ",\"workInProgress\":" + preview.get("workInProgress") + ",\"contracted\":" + preview.get("contracted") + ",\"used\":"
                     + preview.get("used") + "}";
             j.sql("SELECT public.license_op_set_model(?, ?, ?::smallint, ?, ?::jsonb)").param(actor.userId()).param(target).param(on ? 2 : 1)
@@ -127,6 +134,14 @@ public class LicenseOperatorService {
             r.put("blockedAutomations", blocked);
             return r;
         });
+    }
+
+    private static String ids(Map<String, Object> preview, String key) {
+        StringBuilder b = new StringBuilder("[");
+        for (Object o : (List<?>) preview.get(key)) {
+            b.append(b.length() > 1 ? "," : "").append('"').append(((Map<?, ?>) o).get("automationId")).append('"');
+        }
+        return b.append(']').toString();
     }
 
     // ------------------------------------------------------------------ leituras do operador
@@ -199,13 +214,13 @@ public class LicenseOperatorService {
         long[] inProgress = {0};
         j.sql("""
                 SELECT a.automation_id, a.name, a.status, w.name AS workspace_name,
-                       EXISTS (SELECT 1 FROM public.organization_license_assignments g
+                       (SELECT g.license_id FROM public.organization_license_assignments g
                                  JOIN public.organization_licenses l ON l.organization_id = g.organization_id AND l.license_id = g.license_id
                                 WHERE g.organization_id = a.organization_id AND g.automation_id = a.automation_id AND g.released_at IS NULL
                                   AND l.ended_at IS NULL
                                   AND EXISTS (SELECT 1 FROM public.organization_license_periods p
                                                WHERE p.organization_id = l.organization_id AND p.license_id = l.license_id
-                                                 AND p.starts_at <= :now AND p.ends_at > :now)) AS licensed,
+                                                 AND p.starts_at <= :now AND p.ends_at > :now)) AS covering_license,
                        (SELECT count(*) FROM public.local_run_authorizations z
                          WHERE z.organization_id = a.organization_id AND z.automation_id = a.automation_id AND z.revoked_at IS NULL
                            AND z.valid_until > :now) AS valid_authorizations,
@@ -236,7 +251,8 @@ public class LicenseOperatorService {
             long authorizations = rs.getLong("valid_authorizations");
             boolean recent = rs.getBoolean("recent_use");
             boolean running = rs.getBoolean("in_progress");
-            boolean hasLicense = rs.getBoolean("licensed");
+            UUID coveringLicense = rs.getObject("covering_license", UUID.class);
+            boolean hasLicense = coveringLicense != null;
             if (running) {
                 inProgress[0]++;
             }
@@ -261,6 +277,7 @@ public class LicenseOperatorService {
             OffsetDateTime until = rs.getObject("authorized_until", OffsetDateTime.class);
             m.put("authorizationsValidUntil", until);
             if (hasLicense) {
+                m.put("licenseId", coveringLicense);
                 licensed.add(m);
             } else {
                 blocked.add(m);
@@ -304,8 +321,34 @@ public class LicenseOperatorService {
         r.put("offlineAuthorizationsValidUntil", offlineUntil[0]);
         // trabalho em andamento NAO e interrompido ao ligar
         r.put("workInProgress", inProgress[0]);
+        r.put("previewToken", token(String.valueOf(r.get("model")), blocked, licensed));
         r.put("asOf", now);
         return r;
+    }
+
+    /**
+     * Resumo do CONJUNTO apresentado na previa: o modelo atual, a identidade de cada automacao que ficaria impedida e a de cada
+     * automacao coberta com a licenca que a cobre. Mesma quantidade com automacoes ou coberturas diferentes da outro resumo.
+     */
+    public static String token(String model, List<Map<String, Object>> blocked, List<Map<String, Object>> licensed) {
+        List<String> lines = new ArrayList<>();
+        for (Map<String, Object> m : blocked) {
+            lines.add("B:" + m.get("automationId"));
+        }
+        for (Map<String, Object> m : licensed) {
+            lines.add("L:" + m.get("automationId") + ":" + m.get("licenseId"));
+        }
+        java.util.Collections.sort(lines);
+        try {
+            java.security.MessageDigest d = java.security.MessageDigest.getInstance("SHA-256");
+            d.update(("modelo:" + model + ";").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            for (String l : lines) {
+                d.update((l + ";").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            return java.util.HexFormat.of().formatHex(d.digest());
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /** As recusas das funcoes da 063 (23514 sem restricao) viram 409 com o motivo do contrato; o resto propaga. */

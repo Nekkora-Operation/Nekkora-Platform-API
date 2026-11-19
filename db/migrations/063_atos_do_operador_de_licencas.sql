@@ -169,6 +169,7 @@ DECLARE
     v_act UUID;
 BEGIN
     PERFORM public.license_op_require(p_operator, p_org, p_justification);
+    PERFORM pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended('organization_license_model:' || p_org::text, 0));
     IF p_count IS NULL OR p_count < 1 OR p_count > 100 OR p_starts IS NULL OR p_ends IS NULL OR p_ends <= p_starts THEN
         RAISE EXCEPTION 'ato recusado: INVALID' USING ERRCODE = '22023';
     END IF;
@@ -205,6 +206,7 @@ BEGIN
     IF p_license IS NULL OR p_ends IS NULL THEN
         RAISE EXCEPTION 'ato recusado: INVALID' USING ERRCODE = '22023';
     END IF;
+    PERFORM pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended('organization_license_model:' || p_org::text, 0));
     PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('organization_license:' || p_license::text, 0));
     SELECT l.ended_at INTO v_ended FROM public.organization_licenses l WHERE l.organization_id = p_org AND l.license_id = p_license;
     IF NOT FOUND THEN
@@ -241,6 +243,7 @@ DECLARE
     v_from UUID;
 BEGIN
     PERFORM public.license_op_require(p_operator, p_org, p_justification);
+    PERFORM pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended('organization_license_model:' || p_org::text, 0));
     PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('organization_license:' || p_license::text, 0));
     SELECT l.ended_at INTO v_ended FROM public.organization_licenses l WHERE l.organization_id = p_org AND l.license_id = p_license;
     IF NOT FOUND THEN
