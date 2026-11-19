@@ -1,5 +1,5 @@
 -- Nekkora Platform - vinculo explicito da licenca a uma automacao, pelo administrador da organizacao
--- (PLATFORM-LICENCIAMENTO-001, D1). Contrato: docs/platform-licenciamento-001/t03-vinculo-e-atos-do-operador.md e
+-- (PLATFORM-LICENCIAMENTO-001, D1). Contrato: docs/platform-licenciamento-001/t03-vinculo-pelo-administrador.md e
 -- api/openapi/nekkora-api-v1.yaml (POST /api/v1/o/{org}/licenses/{licenseId}/assignment).
 --
 -- CANDIDATA ate a aprovacao do PR. Depende da 061. Numero 062 conferido em 19/11 contra a dev (86591bb; a maior era 060) e os

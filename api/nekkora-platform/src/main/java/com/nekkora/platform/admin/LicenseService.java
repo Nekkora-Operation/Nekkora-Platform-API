@@ -17,7 +17,7 @@ import com.nekkora.platform.session.ValidSession;
 
 /**
  * PLATFORM-LICENCIAMENTO-001 (D1) - o vinculo EXPLICITO de uma licenca a uma automacao, pelo administrador da organizacao.
- * Modelo nas migrations 061 e 062; contrato em docs/platform-licenciamento-001/t03-vinculo-e-atos-do-operador.md.
+ * Modelo nas migrations 061 e 062; contrato em docs/platform-licenciamento-001/t03-vinculo-pelo-administrador.md.
  *
  * <p>Quem vincula: {@code org.manage}, com confirmacao reforcada. O ato roda sob a trava da organizacao, entao duas
  * tentativas simultaneas se enfileiram; alem disso o banco garante por indice unico que uma licenca atende uma automacao e
