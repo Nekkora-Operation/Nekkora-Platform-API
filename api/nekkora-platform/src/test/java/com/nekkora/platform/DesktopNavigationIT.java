@@ -749,12 +749,14 @@ class DesktopNavigationIT extends IdentityTestBase {
         assertErro(get(ws(c.orgB()), token), 404, NOT_FOUND, "organizacao de que ainda nao participa");
         long prazoAntes = json(get("/api/v1/desktop/session", token)).get("expiresIn").asLong();
 
+        // organizacao criada pela propria pessoa depois do login: aparece, aguardando ativacao (nada e ativado).
+        // PLATFORM-LICENCIAMENTO-001 (067): a criacao vem ANTES do convite - depois de aceitar um convite sem papel de
+        // administrador a pessoa passa a ser membro e nao cria direto (solicita); isso e conferido em OrganizationProfilesIT
+        UUID propria = criarOrganizacao(fabio, "Mesma Organizacao");
+        assertThat(field(json(get(ORGS, token)).get("items"), "organizationId")).as("organizacao criada depois do login").containsExactly(propria.toString());
+
         // convite aceito DEPOIS do login do aplicativo: aparece na requisicao seguinte, com o mesmo token
         convidarEAceitar(c.bia(), c.bCsrf(), c.orgB(), fabio, "VIEWER", c.bCompartilhado());
-        assertThat(field(json(get(ORGS, token)).get("items"), "organizationId")).as("convite aceito depois do login").containsExactly(c.orgB().toString());
-
-        // organizacao criada pela propria pessoa depois do login: aparece, aguardando ativacao (nada e ativado)
-        UUID propria = criarOrganizacao(fabio, "Mesma Organizacao");
         JsonNode lista = json(get(ORGS, token));
         assertThat(field(lista.get("items"), "organizationId")).containsExactlyInAnyOrder(c.orgB().toString(), propria.toString());
         lista.get("items").forEach(i -> assertThat(i.get("activationState").asString()).isEqualTo("AGUARDANDO_ATIVACAO"));

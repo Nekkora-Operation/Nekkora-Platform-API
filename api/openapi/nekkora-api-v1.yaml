@@ -660,8 +660,9 @@ paths:
         execucao zero) ou ja foi ativada pela operacao; e independente da situacao administrativa. canCreateOrganization (P2) e SO indicacao para a interface: chave da criacao de organizacao
         ligada, sessao nao restrita e identity_org_creation_allowed (R5 da 017) verdadeira (identidade ACTIVE e verificada,
         menos de 10 organizacoes criadas pelo cadastro). O step-up nao entra no calculo (e pedido na hora); a criacao
-        reconfere tudo na funcao de escrita. Sessao restrita a recuperacao (DC-17.13): 403. R12. Mesma chave da entrada
-        geral (nekkora.entrada-geral.enabled): desligada, 404.
+        reconfere tudo na funcao de escrita. 067: a indicacao passa a considerar tambem o perfil (membro solicita; Cliente
+        nao cria) e o limite de organizacoes vazias - o detalhe esta em GET /api/v1/me/organization-creation. Sessao restrita a
+        recuperacao (DC-17.13): 403. R12. Mesma chave da entrada geral (nekkora.entrada-geral.enabled): desligada, 404.
       security: [ { identitySessionCookie: [] } ]
       responses:
         '200': { description: 'Organizacoes da identidade', content: { application/json: { schema: { $ref: '#/components/schemas/IdentityOrganizationList' } } } }
@@ -1010,16 +1011,153 @@ paths:
         maiusculas/minusculas nao distinguem; acentos e pontuacao distinguem). Repetido: 409 conflict + reason
         organization_name_taken, nada criado (a reserva de R11 e devolvida). Outras identidades, e organizacoes em que a pessoa
         so participa por convite, nao contam. Concorrentes da mesma identidade: uma criada, a outra 409. A organizacao nova
-        recebe um identificador legivel unico e estavel (handle).
+        recebe um identificador legivel unico e estavel (handle). PLATFORM-LICENCIAMENTO-001 (067): o PERFIL de quem cria e
+        decidido no servidor a cada tentativa. Cria direto a recem-cadastrada (sem conta ativa) e quem administra alguma
+        organizacao. O membro interno que nao administra nenhuma NAO cria: 409 organization_creation_requires_request (ele
+        solicita: POST /api/v1/organization-requests). Quem so tem conta do tipo Cliente (mesmo e-mail verificado) nao cria nem
+        solicita: 403 forbidden + reason organization_creation_client_profile. Limite de organizacoes VAZIAS (ativas, sem
+        nenhuma automacao) por responsavel, tres: 409 empty_organization_limit_reached. Teto de 10 criadas: 409
+        organization_limit_reached. Quem cria fica registrado como RESPONSAVEL pela organizacao. A funcao do banco reconfere
+        tudo sob a trava da identidade (se ela recusar depois da conferencia da aplicacao, 403 generico). Em nenhuma recusa
+        algo e criado, e a reserva de R11 e devolvida. Criar organizacao nao concede licenca.
       security: [ { identitySessionCookie: [], csrfHeader: [] } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationCreateRequest' } } } }
       responses:
         '201': { description: 'Organizacao criada', content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationCreated' } } } }
-        '409': { description: 'T10 (034): esta identidade ja criou, pelo cadastro, uma organizacao com esse nome; nada foi criado. Codigo conflict com reason organization_name_taken', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: conflict, reason: organization_name_taken } } } }
+        '409': { description: 'T10 (034): esta identidade ja criou, pelo cadastro, uma organizacao com esse nome (organization_name_taken); ou, 067: organization_creation_requires_request, empty_organization_limit_reached, organization_limit_reached. Nada foi criado', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: conflict, reason: organization_name_taken } } } }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { description: 'Origin/CSRF da sessao de identidade invalido; sem step-up recente, teto atingido, identidade inelegivel ou sessao restrita (recusa generica)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
         '404': { $ref: '#/components/responses/SignupDisabled' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/me/organization-creation:
+    get:
+      tags: [Entrada geral (identidade)]
+      operationId: identityOrganizationCreation
+      x-estado: implementado (PLATFORM-LICENCIAMENTO-001 067; IdentityOrganizationsController; OrganizationProfilesIT)
+      summary: 'Perfil de quem cria organizacao, limites e as organizacoes de que a pessoa e responsavel'
+      description: >
+        SO indicacao para a interface; o servidor decide em cada ato. profile: FIRST (sem conta ativa: cria a primeira),
+        ADMIN (administra alguma organizacao: cria direto), MEMBER (conta interna ativa, nao administra nenhuma: solicita) ou
+        CLIENT (so conta do tipo Cliente, reconhecida pelo mesmo e-mail verificado: nao cria nem solicita). O perfil e
+        reavaliado a cada chamada; ser Cliente numa organizacao nao tira a administracao de outra. canCreate e
+        cannotCreateReason (o reason que a criacao responderia). canRequest: MEMBER com menos de tres pedidos pendentes.
+        emptyOrganizations: as organizacoes ATIVAS e sem nenhuma automacao de que a pessoa e responsavel, contra o limite
+        (tres, configuravel); desativadas nao contam. responsibleFor: as organizacoes de que a pessoa e responsavel, inclusive
+        as desativadas, que nao aparecem em /api/v1/me/organizations - state ACTIVE, DEACTIVATED (desativada por esta acao;
+        canReactivate) ou BLOCKED (parada por decisao da Nekkora, ou com bloqueio registrado: a reativacao nao a remove).
+        Mesmas chaves da criacao: qualquer uma desligada, 404.
+      security: [ { identitySessionCookie: [] } ]
+      responses:
+        '200': { description: 'Estado da criacao', content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationCreationState' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/RestrictedIdentitySession' }
+        '404': { $ref: '#/components/responses/SignupDisabled' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/organization-requests:
+    post:
+      tags: [Entrada geral (identidade)]
+      operationId: identityRequestOrganization
+      x-estado: implementado (PLATFORM-LICENCIAMENTO-001 067; OrganizationProfilesIT)
+      summary: 'O membro pede a criacao de uma organizacao ao administrador de uma organizacao em que e membro'
+      description: >
+        Sessao de identidade nao restrita e CSRF dela, com a confirmacao reforcada de ate 5 min (sem ela: 403 forbidden +
+        reason step_up_required). organizationId: a organizacao EM QUE a pessoa pede - ela tem de ser membro interno ativo
+        dela, e e um administrador dessa organizacao quem decide. So o perfil MEMBER pede: quem administra alguma organizacao
+        cria direto, e quem so tem conta do tipo Cliente recebe 403 organization_creation_client_profile. Pedido em
+        organizacao de que nao e membro, por quem ja administra alguma, ou com tres pedidos pendentes: 409
+        organization_request_not_available. Pedir nao cria nada: a organizacao so nasce na aprovacao. Nome: mesma regra da
+        criacao (legalName ausente = name).
+      security: [ { identitySessionCookie: [], csrfHeader: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [organizationId, name]
+              properties:
+                organizationId: { type: string, format: uuid }
+                name: { type: string, minLength: 1 }
+                legalName: { type: string, minLength: 1 }
+      responses:
+        '201': { description: 'Pedido registrado', content: { application/json: { schema: { type: object, required: [requestId], properties: { requestId: { type: string, format: uuid } } } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { description: 'Origin/CSRF invalido, sessao restrita; step_up_required; organization_creation_client_profile', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '404': { $ref: '#/components/responses/SignupDisabled' }
+        '409': { description: 'organization_request_not_available', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/me/organization-requests:
+    get:
+      tags: [Entrada geral (identidade)]
+      operationId: identityOrganizationRequests
+      x-estado: implementado (PLATFORM-LICENCIAMENTO-001 067; OrganizationProfilesIT)
+      summary: 'Os pedidos de criacao de organizacao feitos pela pessoa'
+      description: >
+        Ate 50, do mais recente. state: PENDING, APPROVED ou REFUSED. responsible (so em APPROVED): APPROVER (o administrador
+        que aprovou ficou responsavel; a pessoa NAO recebeu acesso a nova organizacao) ou REQUESTER (ela e a responsavel e
+        administradora). createdOrganizationId so vem quando a pessoa ficou responsavel.
+      security: [ { identitySessionCookie: [] } ]
+      responses:
+        '200': { description: 'Pedidos', content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/MyOrganizationRequest' } } } } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/RestrictedIdentitySession' }
+        '404': { $ref: '#/components/responses/SignupDisabled' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/organization-deactivations:
+    post:
+      tags: [Entrada geral (identidade)]
+      operationId: identityDeactivateOrganization
+      x-estado: implementado (PLATFORM-LICENCIAMENTO-001 067; OrganizationProfilesIT)
+      summary: 'O responsavel desativa a organizacao (nada e apagado nem liberado)'
+      description: >
+        Sessao de identidade nao restrita, CSRF e confirmacao reforcada (sem ela: 403 step_up_required). So o RESPONSAVEL pela
+        organizacao que ainda a administra: outro, 409 organization_not_responsible. Com trabalho em andamento em qualquer
+        automacao (inclusive ocupacao incerta): 409 organization_work_in_progress. Ja parada: 409 organization_state_conflict.
+        Desativada, ninguem entra nela e as sessoes abertas caem na requisicao seguinte. Historico, licencas, periodos,
+        vinculos e entregas ficam como estao: desativar NAO libera licenca para outra automacao e nao muda o ciclo. A
+        desativada deixa de contar no limite de organizacoes vazias.
+      security: [ { identitySessionCookie: [], csrfHeader: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationRef' } } } }
+      responses:
+        '204': { description: 'Desativada' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { description: 'Origin/CSRF invalido, sessao restrita, ou step_up_required', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '404': { $ref: '#/components/responses/SignupDisabled' }
+        '409': { description: 'organization_not_responsible, organization_work_in_progress, organization_state_conflict', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/organization-reactivations:
+    post:
+      tags: [Entrada geral (identidade)]
+      operationId: identityReactivateOrganization
+      x-estado: implementado (PLATFORM-LICENCIAMENTO-001 067; OrganizationProfilesIT)
+      summary: 'O responsavel reativa a organizacao que ele desativou'
+      description: >
+        Mesmas exigencias da desativacao. So desfaz a desativacao feita por aquela acao: organizacao parada por decisao da
+        Nekkora, ou com bloqueio da Nekkora registrado, responde 409 organization_blocked_by_nekkora e nada muda. O limite de
+        organizacoes vazias e RECONFERIDO: reativar uma vazia com o limite cheio responde 409
+        empty_organization_limit_reached. Organizacao ativa: 409 organization_state_conflict.
+      security: [ { identitySessionCookie: [], csrfHeader: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationRef' } } } }
+      responses:
+        '204': { description: 'Reativada' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { description: 'Origin/CSRF invalido, sessao restrita, ou step_up_required', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '404': { $ref: '#/components/responses/SignupDisabled' }
+        '409': { description: 'organization_not_responsible, organization_blocked_by_nekkora, empty_organization_limit_reached, organization_state_conflict', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
@@ -1831,6 +1969,80 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/CatalogInconsistent' }
 
+  /api/v1/o/{org}/organization-requests:
+    get:
+      tags: [Licencas da organizacao]
+      operationId: listOrganizationRequests
+      x-estado: implementado (PLATFORM-LICENCIAMENTO-001 067; OrganizationRequestController; OrganizationProfilesIT)
+      summary: 'Pedidos de criacao de organizacao feitos a esta organizacao (org.manage)'
+      description: >
+        Para quem administra a organizacao. Ate 200, os pendentes primeiro. requester: quem pediu (membro desta organizacao).
+        ownRequest: o pedido e de quem esta lendo (ninguem decide o proprio pedido).
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+      responses:
+        '200': { description: 'Pedidos', content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/OrganizationRequest' } } } } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/o/{org}/organization-requests/{requestId}/approve:
+    post:
+      tags: [Licencas da organizacao]
+      operationId: approveOrganizationRequest
+      x-estado: implementado (PLATFORM-LICENCIAMENTO-001 067; OrganizationProfilesIT)
+      summary: 'Aprova o pedido escolhendo o responsavel pela nova organizacao (org.manage, confirmacao reforcada)'
+      description: >
+        responsible e obrigatorio e explicito: APPROVER (quem aprova; a escolha padrao da tela) ou REQUESTER (quem pediu). A
+        escolha CONCEDE a administracao da nova organizacao ao escolhido e decide de quem e contado o limite de organizacoes
+        vazias. O limite do escolhido e reconferido aqui, sob a trava dele (409 empty_organization_limit_reached ou
+        organization_limit_reached; o pedido continua pendente). A organizacao nasce na MESMA transacao. So o responsavel
+        recebe acesso: o outro nao entra na nova organizacao. createdOrganizationId so vem quando quem aprovou ficou
+        responsavel. Quem aprova com conta sem identidade geral nao pode ser o responsavel (409
+        organization_request_approver_without_identity; pode escolher REQUESTER). Pedido ja decidido: 409
+        organization_request_not_pending. Proprio pedido: 409 organization_request_own. Responsavel que deixou de poder
+        receber: 409 organization_request_responsible_not_eligible. Nome repetido para o responsavel: 409
+        organization_name_taken. O banco reconfere que quem decide administra esta organizacao agora.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: requestId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [responsible], properties: { responsible: { type: string, enum: [APPROVER, REQUESTER] } } }
+      responses:
+        '200': { description: 'Pedido aprovado', content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationRequestDecision' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/o/{org}/organization-requests/{requestId}/refuse:
+    post:
+      tags: [Licencas da organizacao]
+      operationId: refuseOrganizationRequest
+      x-estado: implementado (PLATFORM-LICENCIAMENTO-001 067; OrganizationProfilesIT)
+      summary: 'Recusa o pedido, com motivo (org.manage, confirmacao reforcada)'
+      description: >
+        reason: 10 a 500 caracteres; fica gravado com quem decidiu e quando, e o solicitante o le. Nada e criado.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: requestId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [reason], properties: { reason: { type: string, minLength: 10, maxLength: 500 } } }
+      responses:
+        '200': { description: 'Pedido recusado', content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationRequestDecision' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /api/v1/o/{org}/capacity:
     get:
       tags: [Licencas da organizacao]
@@ -3449,7 +3661,7 @@ components:
     Error:
       type: object
       required: [error]
-      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, license_already_assigned, automation_already_licensed, license_not_valid, license_automation_archived, license_ended, license_period_overlaps, license_period_already_ended, license_model_unchanged, license_preview_changed, license_required, license_expired, run_not_covered, capacity_pending_limit_reached, license_not_assigned, license_transfer_same_automation, license_transfer_work_in_progress, license_transfer_requester_not_admin, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_machine_unconfirmed, remote_machine_finishing, remote_previous_processes_pending, remote_previous_result_unconfirmed, remote_attempt_not_unconfirmed, remote_attempt_already_reconciled, remote_requirements_not_declared, remote_requirements_conflict, remote_package_not_supported, remote_package_not_registered, remote_python_not_selected, remote_python_not_in_inventory, remote_dependency_check_too_soon, remote_dependency_check_closed, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
+      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, license_already_assigned, automation_already_licensed, license_not_valid, license_automation_archived, license_ended, license_period_overlaps, license_period_already_ended, license_model_unchanged, license_preview_changed, license_required, license_expired, run_not_covered, capacity_pending_limit_reached, license_not_assigned, license_transfer_same_automation, license_transfer_work_in_progress, license_transfer_requester_not_admin, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_machine_unconfirmed, remote_machine_finishing, remote_previous_processes_pending, remote_previous_result_unconfirmed, remote_attempt_not_unconfirmed, remote_attempt_already_reconciled, remote_requirements_not_declared, remote_requirements_conflict, remote_package_not_supported, remote_package_not_registered, remote_python_not_selected, remote_python_not_in_inventory, remote_dependency_check_too_soon, remote_dependency_check_closed, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken, organization_creation_client_profile, organization_creation_requires_request, empty_organization_limit_reached, organization_limit_reached, organization_request_not_available, organization_request_not_pending, organization_request_own, organization_request_approver_without_identity, organization_request_responsible_not_eligible, organization_not_responsible, organization_work_in_progress, organization_blocked_by_nekkora, organization_state_conflict], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
     WorkspacePermissionCode:
       description: 'Permissoes de workspace (13): podem aparecer em allWorkspaces e em atribuicoes de workspace.'
       type: string
@@ -3878,6 +4090,81 @@ components:
               roles: { type: array, items: { type: string }, description: 'codigos dos papeis ativos do vinculo interno, em ordem' }
               activationState: { $ref: '#/components/schemas/OrganizationActivationState' }
         canCreateOrganization: { type: boolean, description: 'so indicacao para a interface (P2): chave da criacao ligada e identity_org_creation_allowed verdadeira; a criacao reconfere tudo' }
+    OrganizationRef: { type: object, required: [organizationId], properties: { organizationId: { type: string, format: uuid } } }
+    UsedOfLimit: { type: object, required: [used, limit], properties: { used: { type: integer, format: int64, minimum: 0 }, limit: { type: integer, format: int64, minimum: 0 } } }
+    OrganizationCreationState:
+      type: object
+      required: [profile, canCreate, cannotCreateReason, canRequest, organizationsCreated, emptyOrganizations, pendingRequests, responsibleFor]
+      properties:
+        profile: { type: string, enum: [FIRST, ADMIN, MEMBER, CLIENT] }
+        canCreate: { type: boolean }
+        cannotCreateReason: { type: [string, 'null'] }
+        canRequest: { type: boolean }
+        organizationsCreated: { $ref: '#/components/schemas/UsedOfLimit' }
+        emptyOrganizations:
+          type: object
+          required: [used, limit, organizationIds]
+          properties:
+            used: { type: integer, format: int64, minimum: 0 }
+            limit: { type: integer, format: int64, minimum: 0 }
+            organizationIds: { type: array, items: { type: string, format: uuid } }
+        pendingRequests: { $ref: '#/components/schemas/UsedOfLimit' }
+        responsibleFor:
+          type: array
+          items:
+            type: object
+            required: [organizationId, name, state, empty, deactivatedAt, canReactivate]
+            properties:
+              organizationId: { type: string, format: uuid }
+              name: { type: string }
+              state: { type: string, enum: [ACTIVE, DEACTIVATED, BLOCKED] }
+              empty: { type: boolean }
+              deactivatedAt: { type: [string, 'null'], format: date-time }
+              canReactivate: { type: boolean }
+    MyOrganizationRequest:
+      type: object
+      required: [requestId, organizationId, organizationName, name, legalName, state, requestedAt, decidedAt, responsible, refusalReason, createdOrganizationId]
+      properties:
+        requestId: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        organizationName: { type: [string, 'null'] }
+        name: { type: string }
+        legalName: { type: string }
+        state: { type: string, enum: [PENDING, APPROVED, REFUSED] }
+        requestedAt: { type: string, format: date-time }
+        decidedAt: { type: [string, 'null'], format: date-time }
+        responsible: { type: [string, 'null'], enum: [APPROVER, REQUESTER, null] }
+        refusalReason: { type: [string, 'null'] }
+        createdOrganizationId: { type: [string, 'null'], format: uuid }
+    OrganizationRequest:
+      type: object
+      required: [requestId, name, legalName, state, requestedAt, decidedAt, responsible, refusalReason, requester, decidedByDisplayName, ownRequest]
+      properties:
+        requestId: { type: string, format: uuid }
+        name: { type: string }
+        legalName: { type: string }
+        state: { type: string, enum: [PENDING, APPROVED, REFUSED] }
+        requestedAt: { type: string, format: date-time }
+        decidedAt: { type: [string, 'null'], format: date-time }
+        responsible: { type: [string, 'null'], enum: [APPROVER, REQUESTER, null] }
+        refusalReason: { type: [string, 'null'] }
+        requester:
+          type: object
+          required: [membershipId, displayName, email]
+          properties:
+            membershipId: { type: string, format: uuid }
+            displayName: { type: [string, 'null'] }
+            email: { type: string }
+        decidedByDisplayName: { type: [string, 'null'] }
+        ownRequest: { type: boolean }
+    OrganizationRequestDecision:
+      type: object
+      required: [requestId, state, responsible, createdOrganizationId]
+      properties:
+        requestId: { type: string, format: uuid }
+        state: { type: string, enum: [APPROVED, REFUSED] }
+        responsible: { type: [string, 'null'], enum: [APPROVER, REQUESTER, null] }
+        createdOrganizationId: { type: [string, 'null'], format: uuid }
     OrganizationCreateRequest:
       type: object
       required: [name]

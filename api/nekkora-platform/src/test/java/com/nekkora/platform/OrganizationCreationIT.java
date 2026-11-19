@@ -113,8 +113,12 @@ class OrganizationCreationIT extends IdentityTestBase {
 
     /**
      * Teto total de 10 DENTRO da funcao, sob o lock da identidade: com 9 organizacoes do cadastro, dois pedidos simultaneos
-     * com step-up passam pelo R11 (3 por dia) e chegam a funcao; exatamente um cria (201) e o outro e recusado (403).
+     * com step-up passam pelo R11 (3 por dia) e chegam a funcao; exatamente um cria (201) e o outro e recusado.
      * canCreateOrganization, verdadeiro com 9, fica falso com 10. A reserva do recusado e devolvida.
+     *
+     * <p>PLATFORM-LICENCIAMENTO-001 (067): o limite de tres organizacoes VAZIAS vem antes do teto de 10, entao cada organizacao
+     * de preparacao ganha uma automacao (deixa de ser vazia). O recusado responde 403 (a funcao recusou depois de a aplicacao
+     * conferir) ou 409 com o motivo (a aplicacao ja viu as dez); a decima primeira responde 409 organization_limit_reached.
      */
     @Test
     void tetoDeDezDentroDaFuncaoSobConcorrencia() throws Exception {
@@ -122,12 +126,16 @@ class OrganizationCreationIT extends IdentityTestBase {
         String token = f.browser().cookies().get("__Host-nekkora_id");
         stepUpDireto(f.browser());
         for (int i = 1; i <= 9; i++) {
-            assertThat(value("SELECT identity_create_organization('" + token + "', 'Previa " + i + "', NULL)")).as("preparacao " + i).isNotNull();
+            String org = value("SELECT identity_create_organization('" + token + "', 'Previa " + i + "', NULL)");
+            assertThat(org).as("preparacao " + i).isNotNull();
+            ProductFixtures.automation(UUID.fromString(org), AccessFixtures.namedWorkspace(UUID.fromString(org), "Fiscal", 1), null, "Notas",
+                    UUID.fromString(value("SELECT membership_id FROM organization_memberships WHERE organization_id = '" + org + "'")));
         }
         assertThat(f.browser().get(LISTA).body()).as("9: ainda pode").endsWith("\"canCreateOrganization\":true}");
 
         List<BrowserClient.Response> rs = simultaneos(f.browser(), 2, "Disputa");
-        assertThat(rs.stream().map(BrowserClient.Response::status).sorted().toList()).as("um cria, o outro bate no teto").containsExactly(201, 403);
+        assertThat(rs.stream().map(BrowserClient.Response::status).sorted().toList()).as("um cria, o outro bate no teto")
+                .isIn(List.of(201, 403), List.of(201, 409));
         assertThat(count("SELECT count(*) FROM identity_users WHERE identity_id = '" + f.identity() + "' AND link_channel = 'cadastro_web'")).isEqualTo(10);
         assertThat(count("SELECT count(*) FROM organizations WHERE name = 'Disputa' AND organization_id IN (SELECT target_organization_id FROM identity_events WHERE identity_id = '"
                 + f.identity() + "' AND event_type = 6)")).isEqualTo(1);
@@ -135,7 +143,8 @@ class OrganizationCreationIT extends IdentityTestBase {
         assertThat(reservasR11(f.identity())).as("so a criacao conta; a recusa devolveu a reserva").isEqualTo(1);
         assertThat(f.browser().get(LISTA).body()).as("10: indicacao falsa").endsWith("\"canCreateOrganization\":false}");
         BrowserClient.Response mais = criar(f.browser(), "Onze", null);
-        assertThat(mais.status()).as("a indicacao nao autoriza nem recusa: a funcao recusa").isEqualTo(403);
+        assertThat(mais.status()).as("a indicacao nao autoriza nem recusa: o servidor recusa, agora com o motivo").isEqualTo(409);
+        assertThat(mais.body()).isEqualTo("{\"error\":\"conflict\",\"reason\":\"organization_limit_reached\"}");
     }
 
     // ------------------------------------------------------------------ R11

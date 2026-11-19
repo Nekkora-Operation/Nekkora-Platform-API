@@ -313,6 +313,13 @@ public class PlatformConfig {
         return new com.nekkora.platform.admin.LicenseService(actions, access);
     }
 
+    /** PLATFORM-LICENCIAMENTO-001 (067): pedidos de criacao de organizacao feitos a esta organizacao, para quem a administra. */
+    @Bean
+    com.nekkora.platform.admin.OrganizationRequestService organizationRequestService(com.nekkora.platform.admin.AccessActions actions,
+                                                                                     com.nekkora.platform.access.WorkspaceAccess access) {
+        return new com.nekkora.platform.admin.OrganizationRequestService(actions, access);
+    }
+
     /**
      * Atos do operador da Nekkora sobre as licencas (PLATFORM-LICENCIAMENTO-001, D5). {@code NEKKORA_LICENCAS_ORGANIZACAO_OPERADORA}:
      * a organizacao interna da Nekkora. Sem ela (padrao), as rotas do operador respondem 404 e nenhum ato e possivel.

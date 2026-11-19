@@ -50,6 +50,32 @@ public enum ApiError {
      * CONHECIDO (conflict) com o motivo em "reason".
      */
     ORGANIZATION_NAME_TAKEN(HttpStatus.CONFLICT, "conflict", "organization_name_taken"),
+    /** 067 (D9): a pessoa so tem conta do tipo Cliente; nao cria nem solicita organizacao. */
+    ORGANIZATION_CREATION_CLIENT_PROFILE(HttpStatus.FORBIDDEN, "forbidden", "organization_creation_client_profile"),
+    /** 067 (D9, D10): membro que nao administra nenhuma organizacao nao cria direto; solicita ao administrador. */
+    ORGANIZATION_CREATION_REQUIRES_REQUEST(HttpStatus.CONFLICT, "conflict", "organization_creation_requires_request"),
+    /** 067 (D13): o responsavel ja tem o limite de organizacoes vazias (ativas, sem automacao). */
+    EMPTY_ORGANIZATION_LIMIT_REACHED(HttpStatus.CONFLICT, "conflict", "empty_organization_limit_reached"),
+    /** 017/067: o teto de organizacoes criadas pela mesma pessoa. */
+    ORGANIZATION_LIMIT_REACHED(HttpStatus.CONFLICT, "conflict", "organization_limit_reached"),
+    /** 067: o pedido nao pode ser feito por esta pessoa nesta organizacao (nao e membro dela, ja administra alguma, ou tem pedidos demais em aberto). */
+    ORGANIZATION_REQUEST_NOT_AVAILABLE(HttpStatus.CONFLICT, "conflict", "organization_request_not_available"),
+    /** 067: o pedido ja foi decidido. */
+    ORGANIZATION_REQUEST_NOT_PENDING(HttpStatus.CONFLICT, "conflict", "organization_request_not_pending"),
+    /** 067: quem pediu nao decide o proprio pedido. */
+    ORGANIZATION_REQUEST_OWN(HttpStatus.CONFLICT, "conflict", "organization_request_own"),
+    /** 067 (D12): quem aprova usa conta sem identidade geral e nao pode ser o responsavel; pode escolher o solicitante. */
+    ORGANIZATION_REQUEST_APPROVER_WITHOUT_IDENTITY(HttpStatus.CONFLICT, "conflict", "organization_request_approver_without_identity"),
+    /** 067 (D12): o responsavel escolhido deixou de poder receber a organizacao (conta inativa ou fora da organizacao do pedido). */
+    ORGANIZATION_REQUEST_RESPONSIBLE_NOT_ELIGIBLE(HttpStatus.CONFLICT, "conflict", "organization_request_responsible_not_eligible"),
+    /** 067 (D13): so o responsavel pela organizacao, que ainda a administra, a desativa ou reativa. */
+    ORGANIZATION_NOT_RESPONSIBLE(HttpStatus.CONFLICT, "conflict", "organization_not_responsible"),
+    /** 067 (D13): a organizacao tem, ou ainda pode ter, trabalho em andamento; nao e desativada agora. */
+    ORGANIZATION_WORK_IN_PROGRESS(HttpStatus.CONFLICT, "conflict", "organization_work_in_progress"),
+    /** 067: a organizacao esta parada por decisao da Nekkora; a reativacao pelo responsavel nao remove esse bloqueio. */
+    ORGANIZATION_BLOCKED_BY_NEKKORA(HttpStatus.CONFLICT, "conflict", "organization_blocked_by_nekkora"),
+    /** 067: a organizacao nao esta na situacao que o ato exige (desativar uma ativa; reativar uma desativada por esta acao). */
+    ORGANIZATION_STATE_CONFLICT(HttpStatus.CONFLICT, "conflict", "organization_state_conflict"),
     /**
      * Worker: a organizacao atingiu o limite de Workers cadastrados (WORKERS_REGISTERED; zero ate a ativacao)
      * (PLATFORM-AGENT-V2-002, T07). Codigo CONHECIDO (conflict) com o motivo em "reason". Nada foi gravado.
