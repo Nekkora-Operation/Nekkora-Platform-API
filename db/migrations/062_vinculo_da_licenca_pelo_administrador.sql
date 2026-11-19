@@ -57,6 +57,9 @@ BEGIN
     -- trava a LICENCA pelo identificador (como a 033 trava o escopo): a Platform nao tem UPDATE na tabela de licencas, e uma
     -- trava de linha (FOR UPDATE/SHARE) exigiria esse privilegio. Os atos do operador que encerram ou transferem a licenca
     -- pegam a mesma trava, entao um vinculo nunca corre contra o encerramento.
+    -- trava COMPARTILHADA do modelo da organizacao, sempre antes da trava da licenca: ligar a exigencia pega a mesma trava
+    -- em modo exclusivo, entao a cobertura conferida na previa nao muda enquanto o ato de ligar esta em curso.
+    PERFORM pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended('organization_license_model:' || NEW.organization_id::text, 0));
     PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('organization_license:' || NEW.license_id::text, 0));
     SELECT l.ended_at INTO v_ended FROM public.organization_licenses l
      WHERE l.organization_id = NEW.organization_id AND l.license_id = NEW.license_id;
