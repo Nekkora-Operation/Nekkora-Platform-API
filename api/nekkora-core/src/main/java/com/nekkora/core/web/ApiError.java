@@ -129,6 +129,14 @@ public enum ApiError {
     LICENSE_MODEL_UNCHANGED(HttpStatus.CONFLICT, "conflict", "license_model_unchanged"),
     /** 063: o conjunto de automacoes impedidas ou cobertas mudou desde a previa confirmada; refazer a previa. */
     LICENSE_PREVIEW_CHANGED(HttpStatus.CONFLICT, "conflict", "license_preview_changed"),
+    /** 065 (transferencia): a licenca nao esta vinculada a nenhuma automacao; nao ha de onde transferir. */
+    LICENSE_NOT_ASSIGNED(HttpStatus.CONFLICT, "conflict", "license_not_assigned"),
+    /** 065: a automacao de destino e a mesma de origem. */
+    LICENSE_TRANSFER_SAME_AUTOMATION(HttpStatus.CONFLICT, "conflict", "license_transfer_same_automation"),
+    /** 065: a automacao de origem tem trabalho em andamento; precisa terminar ou ter o cancelamento confirmado antes. */
+    LICENSE_TRANSFER_WORK_IN_PROGRESS(HttpStatus.CONFLICT, "conflict", "license_transfer_work_in_progress"),
+    /** 065: o solicitante informado nao administra a organizacao neste instante. */
+    LICENSE_TRANSFER_REQUESTER_NOT_ADMIN(HttpStatus.CONFLICT, "conflict", "license_transfer_requester_not_admin"),
     /** 064 (conferencia nos fluxos): a organizacao exige licenca e a automacao nao tem licenca vinculada; nada foi iniciado. */
     LICENSE_REQUIRED(HttpStatus.CONFLICT, "conflict", "license_required"),
     /** 064: a licenca vinculada a automacao esta fora de periodo (vencida, a espera de renovacao); nada foi iniciado. */

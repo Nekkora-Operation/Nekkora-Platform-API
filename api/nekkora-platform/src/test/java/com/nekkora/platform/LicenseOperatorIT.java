@@ -267,4 +267,132 @@ class LicenseOperatorIT extends ReadRoutesSupport {
             c.rollback();
         }
     }
+
+    /**
+     * 065, D6 - transferencia pelo operador, a pedido de um administrador (atendimento externo). O ato exige o solicitante, a
+     * referencia do chamado e a verificacao da identidade; preserva o fim do ciclo; troca o vinculo numa transacao so; e e
+     * recusado enquanto a automacao de origem tiver trabalho em andamento.
+     */
+    @Test
+    void transferenciaPeloOperadorComSolicitanteChamadoEVerificacaoSemUsoSimultaneo() throws Exception {
+        Org n = nekkora();
+        Org client = newOrganization();
+        Org stranger = newOrganization();
+        UUID m = client.adminMembership();
+        UUID w = AccessFixtures.namedWorkspace(client.id(), "Fiscal", 1);
+        UUID a1 = ProductFixtures.automation(client.id(), w, null, "Notas de entrada", m);
+        UUID v1 = ProductFixtures.version(client.id(), w, a1, true, m);
+        UUID a2 = ProductFixtures.automation(client.id(), w, null, "Notas de saida", m);
+        UUID a3 = ProductFixtures.automation(client.id(), w, null, "Arquivada", m);
+        UUID foreign = ProductFixtures.automation(stranger.id(), AccessFixtures.namedWorkspace(stranger.id(), "Outra", 1), null, "De outra organizacao",
+                stranger.adminMembership());
+        TestUser operator = internalUser(n, true, 2);
+        DB.asSuperuser("INSERT INTO license_operators (operator_user_id, organization_id, registered_by) VALUES ('" + operator.id() + "', '" + n.id()
+                + "', 'procedimento de ensaio do teste')");
+        BrowserClient staff = login(n, operator);
+        stepUp(staff, n.id(), operator.id());
+        String justification = "pedido do cliente: a automacao foi substituida";
+        BrowserClient.Response granted = staff.post(ops(client.id(), "/licenses"), "{\"count\":2,\"startsAt\":\"" + OffsetDateTime.now().minusDays(1)
+                + "\",\"endsAt\":\"" + OffsetDateTime.now().plusDays(29) + "\",\"justification\":\"" + justification + "\"}");
+        assertThat(granted.status()).as(granted.body()).isEqualTo(200);
+        UUID l1 = UUID.fromString(JSON.readTree(granted.body()).get("items").get(0).get("licenseId").asString());
+        UUID l2 = UUID.fromString(JSON.readTree(granted.body()).get("items").get(1).get("licenseId").asString());
+        BrowserClient clientAdmin = admin(client);
+        stepUp(clientAdmin, client.id(), client.adminId());
+        String transfer = ops(client.id(), "/licenses/" + l1 + "/transfer");
+        String body = "{\"toAutomationId\":\"%s\",\"requesterEmail\":\"%s\",\"ticketReference\":\"CH-2026-0042\",\"identityVerification\":"
+                + "\"retorno por telefone ao numero do cadastro\",\"justification\":\"" + justification + "\"}";
+
+        // ---- licenca sem vinculo: nao ha de onde transferir
+        conflict(staff.post(transfer, body.formatted(a2, client.adminEmail())), "license_not_assigned");
+        assertThat(clientAdmin.post(path(client.id(), "licenses/" + l1 + "/assignment", null), "{\"automationId\":\"" + a1 + "\"}").status()).isEqualTo(200);
+        String cycle = one("SELECT string_agg(period_number || ':' || starts_at || ':' || ends_at, ',' ORDER BY period_number) FROM organization_license_periods "
+                + "WHERE license_id = '" + l1 + "'");
+
+        // ---- quem nao transfere: o administrador do cliente (nem por rota propria), e o ato sem os dados do pedido
+        assertThat(clientAdmin.post(transfer, body.formatted(a2, client.adminEmail())).status()).isIn(401, 403, 404);
+        assertThat(clientAdmin.post("/api/v1/o/" + client.id() + "/licenses/" + l1 + "/transfer", body.formatted(a2, client.adminEmail())).status())
+                .as("o administrador nao tem rota de transferencia: so o suporte").isIn(404, 405);
+        assertThat(staff.post(transfer, body.formatted(a2, client.adminEmail()).replace("CH-2026-0042", "")).status()).as("sem referencia do chamado").isEqualTo(400);
+        assertThat(staff.post(transfer, body.formatted(a2, client.adminEmail()).replace("retorno por telefone ao numero do cadastro", "ok")).status())
+                .as("sem verificacao da identidade").isEqualTo(400);
+        assertThat(staff.post(transfer, "{\"toAutomationId\":\"" + a2 + "\",\"ticketReference\":\"CH-2026-0042\",\"identityVerification\":"
+                + "\"retorno por telefone ao numero do cadastro\",\"justification\":\"" + justification + "\"}").status()).as("sem solicitante").isEqualTo(400);
+        // o solicitante tem de administrar a organizacao AGORA: leitor, pessoa de outra organizacao e e-mail inexistente nao servem
+        TestUser reader = internalUser(client, true, 2);
+        conflict(staff.post(transfer, body.formatted(a2, reader.email())), "license_transfer_requester_not_admin");
+        conflict(staff.post(transfer, body.formatted(a2, stranger.adminEmail())), "license_transfer_requester_not_admin");
+        conflict(staff.post(transfer, body.formatted(a2, "ninguem@exemplo.test")), "license_transfer_requester_not_admin");
+
+        // ---- destino invalido: a propria origem, automacao de outra organizacao, arquivada, ja licenciada
+        conflict(staff.post(transfer, body.formatted(a1, client.adminEmail())), "license_transfer_same_automation");
+        assertThat(staff.post(transfer, body.formatted(foreign, client.adminEmail())).status()).as("automacao de outra organizacao nao existe aqui").isEqualTo(404);
+        DB.asSuperuser("SET session_replication_role = replica", "UPDATE automations SET status = 3 WHERE automation_id = '" + a3 + "'");
+        conflict(staff.post(transfer, body.formatted(a3, client.adminEmail())), "license_automation_archived");
+        assertThat(clientAdmin.post(path(client.id(), "licenses/" + l2 + "/assignment", null), "{\"automationId\":\"" + a2 + "\"}").status()).isEqualTo(200);
+        conflict(staff.post(transfer, body.formatted(a2, client.adminEmail())), "automation_already_licensed");
+        // (a licenca 2 e encerrada para liberar a2 como destino)
+        assertThat(staff.post(ops(client.id(), "/licenses/" + l2 + "/end"), "{\"justification\":\"" + justification + "\"}").status()).isEqualTo(204);
+
+        // ---- trabalho em andamento na ORIGEM: recusada ate terminar ou ter o cancelamento confirmado
+        for (int code = 1; code <= 5; code++) {
+            DB.asSuperuser("INSERT INTO organization_resource_limit_revisions (organization_id, resource_code, revision_number, effective_from, limit_mode, "
+                    + "limit_value, provisioned_by_user_id) VALUES ('" + client.id() + "', " + code + ", 1, now(), 2, NULL, '" + client.adminId() + "')");
+        }
+        UUID running = ProductFixtures.execution(client.id(), w, a1, v1, null, m);
+        conflict(staff.post(transfer, body.formatted(a2, client.adminEmail())), "license_transfer_work_in_progress");
+        assertThat(one("SELECT automation_id FROM organization_license_assignments WHERE license_id = '" + l1 + "' AND released_at IS NULL"))
+                .as("nada mudou").isEqualTo(a1.toString());
+        DB.asSuperuser("SET session_replication_role = replica", "UPDATE executions SET status = 6, status_reason = 4, finished_at = clock_timestamp() WHERE execution_id = '" + running + "'");
+
+        // ---- CONCORRENCIA: um inicio de trabalho em curso na origem (a conferencia de licenca ja passou, a transacao ainda nao
+        //      confirmou) segura a transferencia; ela so anda depois, e reconfere
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try (Connection held = DB.connectAs("nekkora_platform"); Statement st = held.createStatement()) {
+            held.setAutoCommit(false);
+            st.execute("SELECT set_config('nekkora.organization_id', '" + client.id() + "', true)");
+            st.execute("SELECT public.license_gate('" + client.id() + "', '" + a1 + "')");
+            java.util.concurrent.Future<BrowserClient.Response> moving = pool.submit(() -> staff.post(transfer, body.formatted(a2, client.adminEmail())));
+            Thread.sleep(1500);
+            assertThat(moving.isDone()).as("a transferencia espera o inicio de trabalho em curso").isFalse();
+            assertThat(one("SELECT count(*) FROM organization_license_assignments WHERE license_id = '" + l1 + "'")).isEqualTo("1");
+            held.rollback();
+            BrowserClient.Response moved = moving.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(moved.status()).as(moved.body()).isEqualTo(200);
+            JsonNode r = JSON.readTree(moved.body());
+            assertThat(r.get("fromAutomationId").asString()).isEqualTo(a1.toString());
+            assertThat(r.get("toAutomationId").asString()).isEqualTo(a2.toString());
+        } finally {
+            pool.shutdownNow();
+        }
+
+        // ---- o resultado: um vinculo encerrado como TRANSFERIDA e um aberto no destino; nunca os dois abertos; o ciclo e o mesmo
+        assertThat(one("SELECT string_agg(automation_id || ':' || coalesce(release_reason::text, 'aberto'), ',' ORDER BY assigned_at) FROM "
+                + "organization_license_assignments WHERE license_id = '" + l1 + "'")).isEqualTo(a1 + ":1," + a2 + ":aberto");
+        assertThat(one("SELECT (SELECT released_at FROM organization_license_assignments WHERE license_id = '" + l1 + "' AND automation_id = '" + a1
+                + "') <= (SELECT assigned_at FROM organization_license_assignments WHERE license_id = '" + l1 + "' AND automation_id = '" + a2 + "')"))
+                .as("sem instante com as duas automacoes atendidas").isEqualTo("t");
+        assertThat(one("SELECT string_agg(period_number || ':' || starts_at || ':' || ends_at, ',' ORDER BY period_number) FROM organization_license_periods "
+                + "WHERE license_id = '" + l1 + "'")).as("o fim do ciclo e preservado").isEqualTo(cycle);
+        assertThat(one("SELECT from_automation_id || '|' || to_automation_id || '|' || requester_membership_id || '|' || operator_user_id || '|' || justification "
+                + "|| '|' || (detail->>'ticket') || '|' || (detail->>'identityCheck') || '|' || (occurred_at IS NOT NULL) FROM organization_license_acts "
+                + "WHERE license_id = '" + l1 + "' AND act = 5"))
+                .as("auditoria: origem, destino, solicitante, responsavel, justificativa, chamado, verificacao e data")
+                .isEqualTo(a1 + "|" + a2 + "|" + m + "|" + operator.id() + "|" + justification + "|CH-2026-0042|retorno por telefone ao numero do cadastro|true");
+        assertThat(counts(get(clientAdmin, path(client.id(), "licenses/summary", null)).body())).as("a conta nao muda: 1 contratada, 1 utilizada")
+                .containsExactly(1L, 1L, 0L);
+        // a origem deixou de ter direito; o destino passou a ter (a organizacao e ligada ao modelo por licenca para conferir)
+        LicenseFixtures.enforce(client.id(), n.adminId());
+        assertThat(one("SELECT public.license_state('" + client.id() + "', '" + a1 + "') || '|' || public.license_state('" + client.id() + "', '" + a2 + "')"))
+                .isEqualTo("LICENSE_REQUIRED|OK");
+
+        // ---- o banco reconfere: o papel do servico nao transfere em nome de quem nao e operador
+        try (Connection c = DB.connectAs("nekkora_platform"); Statement st = c.createStatement()) {
+            c.setAutoCommit(false);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> st.execute("SELECT public.license_op_transfer('" + client.adminId() + "', '" + client.id()
+                    + "', '" + l1 + "', '" + a1 + "', '" + m + "', 'CH-1', 'verificacao inventada pelo teste', 'tentativa direta sem ser operador')"))
+                    .hasMessageContaining("OPERATOR_NOT_AUTHORIZED");
+            c.rollback();
+        }
+    }
 }

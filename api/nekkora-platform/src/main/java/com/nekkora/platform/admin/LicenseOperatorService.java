@@ -44,6 +44,13 @@ public class LicenseOperatorService {
     public record Renewal(OffsetDateTime startsAt, OffsetDateTime endsAt, String justification) {
     }
 
+    /**
+     * D6: o pedido chega pelo atendimento externo. {@code requesterEmail}: o administrador da organizacao que pediu;
+     * {@code ticketReference}: a referencia do chamado; {@code identityVerification}: como o operador confirmou que foi ele.
+     */
+    public record Transfer(UUID toAutomationId, String requesterEmail, String ticketReference, String identityVerification, String justification) {
+    }
+
     private final AccessActions actions;
     private final UUID operatorOrganization;
 
@@ -91,6 +98,47 @@ public class LicenseOperatorService {
                     .query((rs, n) -> 0).list();
             LOG.info("evento=licenca.encerrada organizacao={} licenca={} correlacao={}", target, license, AccessActions.correlation());
             return 0;
+        });
+    }
+
+    /**
+     * Transfere a licenca para outra automacao da mesma organizacao (065, D6). O operador ATESTA o pedido: solicitante, chamado
+     * e verificacao da identidade ficam no ato. A aplicacao confere que o solicitante administra a organizacao agora; o banco
+     * recusa enquanto a automacao de origem tiver trabalho em andamento, troca o vinculo numa transacao so e nao toca nos
+     * periodos (o fim do ciclo e preservado).
+     */
+    public Map<String, Object> transfer(UUID org, ValidSession actor, String token, UUID target, UUID license, Transfer t) {
+        if (t == null || t.toAutomationId() == null || t.requesterEmail() == null || t.requesterEmail().isBlank()
+                || t.ticketReference() == null || t.ticketReference().strip().length() < 3 || t.ticketReference().strip().length() > 200
+                || t.identityVerification() == null || t.identityVerification().strip().length() < 10 || t.identityVerification().strip().length() > 500) {
+            throw ApiException.invalid("transferencia");
+        }
+        return act(org, actor, token, target, t.justification(), j -> {
+            // a linha da organizacao antes da trava do modelo (a funcao pega a exclusiva): mesma ordem de quem inicia trabalho
+            j.sql("SELECT 1 FROM public.organizations WHERE organization_id = ? FOR UPDATE").param(target).query(Integer.class).optional();
+            // o solicitante: um vinculo DESTA organizacao que a administra neste instante. Isso nao prova o pedido - quem o
+            // atesta e o operador, pelo chamado e pela verificacao gravados
+            UUID requester = j.sql("""
+                    SELECT m.membership_id FROM public.organization_memberships m
+                      JOIN public.users u ON u.organization_id = m.organization_id AND u.user_id = m.user_id
+                     WHERE m.organization_id = ? AND lower(u.email) = lower(?) AND public.access_org_permission(m.organization_id, m.membership_id, 'org.manage')
+                    """).param(target).param(t.requesterEmail().strip()).query(UUID.class).optional().orElse(null);
+            if (requester == null) {
+                LOG.info("evento=acesso.negado regra=CONFLICT motivo=license_transfer_requester_not_admin correlacao={}", AccessActions.correlation());
+                throw new ApiException(ApiError.LICENSE_TRANSFER_REQUESTER_NOT_ADMIN, "solicitante_nao_administra");
+            }
+            UUID from = j.sql("SELECT automation_id FROM public.organization_license_assignments WHERE organization_id = ? AND license_id = ? "
+                    + "AND released_at IS NULL").param(target).param(license).query(UUID.class).optional().orElse(null);
+            UUID actId = j.sql("SELECT public.license_op_transfer(?, ?, ?, ?, ?, ?, ?, ?)").param(actor.userId()).param(target).param(license)
+                    .param(t.toAutomationId()).param(requester).param(t.ticketReference()).param(t.identityVerification()).param(t.justification())
+                    .query(UUID.class).single();
+            LOG.info("evento=licenca.transferida organizacao={} licenca={} correlacao={}", target, license, AccessActions.correlation());
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("licenseId", license);
+            r.put("fromAutomationId", from);
+            r.put("toAutomationId", t.toAutomationId());
+            r.put("actId", actId);
+            return r;
         });
     }
 
@@ -359,7 +407,13 @@ public class LicenseOperatorService {
         if (!DbErrors.raisedRefusal(e)) {
             return e;
         }
-        ApiError error = mentions(e, "LICENSE_NOT_FOUND") ? ApiError.NOT_FOUND
+        ApiError error = mentions(e, "LICENSE_NOT_FOUND") || mentions(e, "AUTOMATION_NOT_FOUND") ? ApiError.NOT_FOUND
+                : mentions(e, "LICENSE_NOT_ASSIGNED") ? ApiError.LICENSE_NOT_ASSIGNED
+                : mentions(e, "SAME_AUTOMATION") ? ApiError.LICENSE_TRANSFER_SAME_AUTOMATION
+                : mentions(e, "WORK_IN_PROGRESS") ? ApiError.LICENSE_TRANSFER_WORK_IN_PROGRESS
+                : mentions(e, "AUTOMATION_ALREADY_LICENSED") ? ApiError.AUTOMATION_ALREADY_LICENSED
+                : mentions(e, "AUTOMATION_ARCHIVED") ? ApiError.LICENSE_AUTOMATION_ARCHIVED
+                : mentions(e, "LICENSE_NOT_VALID") ? ApiError.LICENSE_NOT_VALID
                 : mentions(e, "LICENSE_ENDED") ? ApiError.LICENSE_ENDED
                 : mentions(e, "PERIOD_OVERLAPS") ? ApiError.LICENSE_PERIOD_OVERLAPS
                 : mentions(e, "PERIOD_ALREADY_ENDED") ? ApiError.LICENSE_PERIOD_ALREADY_ENDED

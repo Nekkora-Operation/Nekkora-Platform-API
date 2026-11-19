@@ -84,6 +84,26 @@ public class LicenseOperatorController {
         return ResponseEntity.noContent().build();
     }
 
+    public record TransferRequest(String toAutomationId, String requesterEmail, String ticketReference, String identityVerification,
+                                  String justification) {
+    }
+
+    @PostMapping(BASE + "/licenses/{licenseId}/transfer")
+    public Map<String, Object> transfer(@PathVariable UUID org, @PathVariable UUID target, @PathVariable UUID licenseId,
+                                        @RequestBody(required = false) TransferRequest body, HttpServletRequest req) {
+        if (body == null) {
+            throw ApiException.invalid("corpo");
+        }
+        UUID to;
+        try {
+            to = body.toAutomationId() == null ? null : UUID.fromString(body.toAutomationId());
+        } catch (IllegalArgumentException e) {
+            to = null;
+        }
+        return service.transfer(org, SessionFilter.principal(req), SessionFilter.token(req), target, licenseId,
+                new LicenseOperatorService.Transfer(to, body.requesterEmail(), body.ticketReference(), body.identityVerification(), body.justification()));
+    }
+
     @PostMapping(BASE + "/enforcement")
     public Map<String, Object> model(@PathVariable UUID org, @PathVariable UUID target, @RequestBody(required = false) ModelRequest body,
                                      HttpServletRequest req) {
