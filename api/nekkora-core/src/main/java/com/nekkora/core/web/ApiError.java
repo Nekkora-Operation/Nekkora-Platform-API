@@ -119,6 +119,16 @@ public enum ApiError {
     LICENSE_NOT_VALID(HttpStatus.CONFLICT, "conflict", "license_not_valid"),
     /** 062: a automacao esta arquivada; uma licenca nao e vinculada a uma automacao que nao executa. */
     LICENSE_AUTOMATION_ARCHIVED(HttpStatus.CONFLICT, "conflict", "license_automation_archived"),
+    /** 063 (atos do operador): a licenca ja foi encerrada. */
+    LICENSE_ENDED(HttpStatus.CONFLICT, "conflict", "license_ended"),
+    /** 063: o periodo pedido comeca antes do fim do ultimo periodo da licenca. */
+    LICENSE_PERIOD_OVERLAPS(HttpStatus.CONFLICT, "conflict", "license_period_overlaps"),
+    /** 063: o periodo pedido ja terminou. */
+    LICENSE_PERIOD_ALREADY_ENDED(HttpStatus.CONFLICT, "conflict", "license_period_already_ended"),
+    /** 063: a organizacao ja esta no modelo pedido. */
+    LICENSE_MODEL_UNCHANGED(HttpStatus.CONFLICT, "conflict", "license_model_unchanged"),
+    /** 063: o numero de automacoes que ficariam impedidas mudou desde a previa confirmada; refazer a previa. */
+    LICENSE_PREVIEW_CHANGED(HttpStatus.CONFLICT, "conflict", "license_preview_changed"),
     REMOTE_REQUIREMENTS_NOT_DECLARED(HttpStatus.CONFLICT, "conflict", "remote_requirements_not_declared"),
     REMOTE_REQUIREMENTS_CONFLICT(HttpStatus.CONFLICT, "conflict", "remote_requirements_conflict"),
     /** O pacote da versao nao e um pacote Python externo: a execucao remota nao o aceita (o formato Studio fica de fora). */

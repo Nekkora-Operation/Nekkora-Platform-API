@@ -1914,6 +1914,137 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
+  /api/v1/o/{org}/license-operations/organizations/{target}/enforcement-preview:
+    get:
+      tags: [Operador de licencas]
+      operationId: previewLicenseEnforcement
+      x-estado: implementado (PLATFORM-LICENCIAMENTO-001 D5; LicenseOperatorController/LicenseOperatorService; LicenseOperatorIT; migration 063, COM elevacao, so laboratorio)
+      summary: 'Previa: o que ligar a exigencia de licenca faria agora na organizacao alvo (operador da Nekkora)'
+      description: >
+        ROTAS DO OPERADOR: org e a organizacao interna da Nekkora definida na configuracao do servico (sem ela, ou em qualquer
+        outra organizacao, estas rotas respondem 404). Opera quem tem sessao dessa organizacao, conta interna COM segundo fator
+        e esta no cadastro de operadores (conferido no banco); os atos exigem confirmacao reforcada recente. Esta rota nao
+        altera nada. blockedAutomations: automacoes EM USO (autorizacao vigente em alguma maquina, execucao ou monitoramento
+        nos ultimos 30 dias, ou trabalho em andamento) e SEM licenca vigente - as que ficariam impedidas de iniciar trabalho
+        novo. offlineAuthorizations: LIMITACAO - autorizacoes ja entregues valem sem conexao ate offlineAuthorizationsValidUntil;
+        ligar a exigencia nao bloqueia de imediato uma maquina desconectada. workInProgress: trabalho em andamento, que nao e
+        interrompido.
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: target, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: 'Previa', content: { application/json: { schema: { $ref: '#/components/schemas/LicenseEnforcementPreview' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /api/v1/o/{org}/license-operations/organizations/{target}/licenses:
+    post:
+      tags: [Operador de licencas]
+      operationId: grantLicenses
+      x-estado: implementado (PLATFORM-LICENCIAMENTO-001 D5; LicenseOperatorController/LicenseOperatorService; LicenseOperatorIT; migration 063, COM elevacao, so laboratorio)
+      summary: 'Concede licencas a organizacao alvo, com o periodo e a justificativa (operador da Nekkora)'
+      description: >
+        Concede count licencas (1 a 100), todas com o periodo [startsAt, endsAt). Nenhuma nasce vinculada: vincular e ato do
+        administrador da organizacao. Nao liga a exigencia. Cada licenca gera um ato na trilha, com o operador e a
+        justificativa (10 a 1000 caracteres). Periodo ja terminado: 409 license_period_already_ended.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: target, in: path, required: true, schema: { type: string, format: uuid }, description: 'a organizacao do cliente (nunca a do operador)' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: false, required: [count, startsAt, endsAt, justification], properties: { count: { type: integer, minimum: 1, maximum: 100 }, startsAt: { type: string, format: date-time }, endsAt: { type: string, format: date-time }, justification: { type: string, minLength: 10, maxLength: 1000 } } } } }
+      responses:
+        '200': { description: 'Licencas concedidas', content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { type: object, required: [licenseId, number], properties: { licenseId: { type: string, format: uuid }, number: { type: integer } } } } } } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /api/v1/o/{org}/license-operations/organizations/{target}/licenses/{licenseId}/renewal:
+    post:
+      tags: [Operador de licencas]
+      operationId: renewLicense
+      x-estado: implementado (PLATFORM-LICENCIAMENTO-001 D5; LicenseOperatorController/LicenseOperatorService; LicenseOperatorIT; migration 063, COM elevacao, so laboratorio)
+      summary: 'Renova uma licenca: acrescenta um periodo, preserva os anteriores e mantem o vinculo (operador da Nekkora)'
+      description: >
+        startsAt ausente = comeca no fim do ultimo periodo. Recusas 409: license_ended, license_period_overlaps (comeca antes do
+        fim do ultimo periodo), license_period_already_ended.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: target, in: path, required: true, schema: { type: string, format: uuid }, description: 'a organizacao do cliente (nunca a do operador)' }
+        - { name: licenseId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: false, required: [endsAt, justification], properties: { startsAt: { type: string, format: date-time }, endsAt: { type: string, format: date-time }, justification: { type: string, minLength: 10, maxLength: 1000 } } } } }
+      responses:
+        '200': { description: 'Periodo acrescentado', content: { application/json: { schema: { type: object, required: [licenseId, periodId], properties: { licenseId: { type: string, format: uuid }, periodId: { type: string, format: uuid } } } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /api/v1/o/{org}/license-operations/organizations/{target}/licenses/{licenseId}/end:
+    post:
+      tags: [Operador de licencas]
+      operationId: endLicense
+      x-estado: implementado (PLATFORM-LICENCIAMENTO-001 D5; LicenseOperatorController/LicenseOperatorService; LicenseOperatorIT; migration 063, COM elevacao, so laboratorio)
+      summary: 'Encerra uma licenca e o vinculo aberto dela (operador da Nekkora)'
+      description: >
+        Uma vez; nao reabre nem renova depois (409 license_ended). Nao interrompe trabalho em andamento.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: target, in: path, required: true, schema: { type: string, format: uuid }, description: 'a organizacao do cliente (nunca a do operador)' }
+        - { name: licenseId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: false, required: [justification], properties: { justification: { type: string, minLength: 10, maxLength: 1000 } } } } }
+      responses:
+        '204': { description: 'Encerrada' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /api/v1/o/{org}/license-operations/organizations/{target}/enforcement:
+    post:
+      tags: [Operador de licencas]
+      operationId: setLicenseEnforcement
+      x-estado: implementado (PLATFORM-LICENCIAMENTO-001 D5; LicenseOperatorController/LicenseOperatorService; LicenseOperatorIT; migration 063, COM elevacao, so laboratorio)
+      summary: 'Liga ou desliga a exigencia de licenca da organizacao alvo, com a previa confirmada (operador da Nekkora)'
+      description: >
+        model licensed liga; legacy desliga. Para ligar, confirmBlockedAutomations e obrigatorio e tem de ser o numero de
+        automacoes em blockedAutomations da previa: a previa e refeita na mesma transacao e, se o numero mudou, 409
+        license_preview_changed e nada e gravado. O retrato da previa fica na trilha. Ja no modelo pedido: 409
+        license_model_unchanged. NESTA ETAPA o modelo e um dado visivel (resumo de licencas da organizacao): nenhum fluxo de
+        execucao ou de monitoracao o consulta ainda.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: target, in: path, required: true, schema: { type: string, format: uuid }, description: 'a organizacao do cliente (nunca a do operador)' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: false, required: [model, justification], properties: { model: { type: string, enum: [licensed, legacy] }, confirmBlockedAutomations: { type: integer, minimum: 0 }, justification: { type: string, minLength: 10, maxLength: 1000 } } } } }
+      responses:
+        '200': { description: 'Modelo alterado', content: { application/json: { schema: { type: object, required: [organizationId, model, blockedAutomations], properties: { organizationId: { type: string, format: uuid }, model: { type: string, enum: [licensed, legacy] }, blockedAutomations: { type: integer } } } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
   /api/v1/o/{org}/automations:
     get:
       tags: [Inicio da organizacao]
@@ -3219,7 +3350,7 @@ components:
     Error:
       type: object
       required: [error]
-      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, license_already_assigned, automation_already_licensed, license_not_valid, license_automation_archived, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_machine_unconfirmed, remote_machine_finishing, remote_previous_processes_pending, remote_previous_result_unconfirmed, remote_attempt_not_unconfirmed, remote_attempt_already_reconciled, remote_requirements_not_declared, remote_requirements_conflict, remote_package_not_supported, remote_package_not_registered, remote_python_not_selected, remote_python_not_in_inventory, remote_dependency_check_too_soon, remote_dependency_check_closed, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
+      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, license_already_assigned, automation_already_licensed, license_not_valid, license_automation_archived, license_ended, license_period_overlaps, license_period_already_ended, license_model_unchanged, license_preview_changed, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_machine_unconfirmed, remote_machine_finishing, remote_previous_processes_pending, remote_previous_result_unconfirmed, remote_attempt_not_unconfirmed, remote_attempt_already_reconciled, remote_requirements_not_declared, remote_requirements_conflict, remote_package_not_supported, remote_package_not_registered, remote_python_not_selected, remote_python_not_in_inventory, remote_dependency_check_too_soon, remote_dependency_check_closed, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
     WorkspacePermissionCode:
       description: 'Permissoes de workspace (13): podem aparecer em allWorkspaces e em atribuicoes de workspace.'
       type: string
@@ -3448,6 +3579,31 @@ components:
             workspaceName: { type: string }
             assignedAt: { type: string, format: date-time }
             executionInProgress: { type: boolean, description: 'ha trabalho em andamento agora; nao tem relacao com a licenca estar ativa' }
+    LicenseEnforcementPreview:
+      type: object
+      required: [organizationId, model, modelSince, contracted, used, available, blockedAutomations, licensedAutomations, offlineAuthorizations, offlineAuthorizationsValidUntil, workInProgress, asOf]
+      properties:
+        organizationId: { type: string, format: uuid }
+        model: { type: string, enum: [legacy, licensed] }
+        modelSince: { type: [string, 'null'], format: date-time }
+        contracted: { type: integer, format: int64 }
+        used: { type: integer, format: int64 }
+        available: { type: integer, format: int64 }
+        blockedAutomations: { type: array, items: { $ref: '#/components/schemas/LicensePreviewAutomation' } }
+        licensedAutomations: { type: array, items: { $ref: '#/components/schemas/LicensePreviewAutomation' } }
+        offlineAuthorizations: { type: integer, format: int64, description: 'autorizacoes vigentes das automacoes que ficariam impedidas; valem sem conexao ate a validade' }
+        offlineAuthorizationsValidUntil: { type: [string, 'null'], format: date-time }
+        workInProgress: { type: integer, format: int64 }
+        asOf: { type: string, format: date-time }
+    LicensePreviewAutomation:
+      type: object
+      required: [automationId, name, workspaceName, inUseBecause, authorizationsValidUntil]
+      properties:
+        automationId: { type: string, format: uuid }
+        name: { type: string }
+        workspaceName: { type: string }
+        inUseBecause: { type: array, items: { type: string, enum: [validAuthorization, recentUse, workInProgress] } }
+        authorizationsValidUntil: { type: [string, 'null'], format: date-time }
     LicenseAssignment:
       type: object
       required: [licenseId, number, automationId, workspaceId, assignedAt]
