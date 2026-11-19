@@ -1916,6 +1916,9 @@ class RemoteExecutionIT extends PlatformTestBase {
             assertThat(second.status()).as("simultaneas no limite: a solicitacao espera na fila, nao e recusada - " + second.body()).isEqualTo(201);
             String secondAttempt = JSON.readTree(second.body()).get("attempts").get(0).get("attemptId").asString();
             assertThat(JSON.readTree(second.body()).get("attempts").get(0).get("state").asString()).isEqualTo("QUEUED");
+            // a leitura diz POR QUE espera: na fila com a organizacao no limite de simultaneas = aguardando vaga (capacidade)
+            assertThat(JSON.readTree(second.body()).get("waitingForSlot").asBoolean()).as("aguardando vaga").isTrue();
+            assertThat(JSON.readTree(first.body()).get("waitingForSlot").asBoolean()).as("a primeira nasceu com vaga livre: so aguardava a maquina").isFalse();
             JsonNode full = JSON.readTree(s.admin().get(s.o() + "/capacity").body());
             assertThat(usage(full, "concurrentExecutions")).containsExactly("1", "1");
             assertThat(usage(full, "pendingExecutions")).containsExactly("1", "1");

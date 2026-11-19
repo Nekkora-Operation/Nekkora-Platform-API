@@ -651,17 +651,17 @@ class LicenseOperatorIT extends ReadRoutesSupport {
         String body = "{\"responsibleEmail\":\"%s\",\"name\":\"%s\",\"legalName\":\"%s\",\"justification\":\"" + justification + "\"}";
 
         // ---- quem nao cria por excecao: sem confirmacao reforcada; o administrador de um cliente; sem justificativa; sem responsavel
-        assertThat(staff.post(route, body.formatted(email, "Filial " + tag, "Filial " + tag + " Ltda")).status()).as("sem confirmacao reforcada").isEqualTo(403);
+        assertThat(staff.post(route, body.formatted(email, "Excecao " + tag, "Excecao " + tag + " Ltda")).status()).as("sem confirmacao reforcada").isEqualTo(403);
         stepUp(staff, n.id(), operator.id());
         BrowserClient clientAdmin = admin(existing);
         stepUp(clientAdmin, existing.id(), existing.adminId());
-        assertThat(clientAdmin.post(route, body.formatted(email, "Filial " + tag, "Filial " + tag + " Ltda")).status()).isIn(401, 403, 404);
-        assertThat(clientAdmin.post("/api/v1/o/" + existing.id() + "/license-operations/organizations", body.formatted(email, "Filial " + tag, "Filial Ltda"))
+        assertThat(clientAdmin.post(route, body.formatted(email, "Excecao " + tag, "Excecao " + tag + " Ltda")).status()).isIn(401, 403, 404);
+        assertThat(clientAdmin.post("/api/v1/o/" + existing.id() + "/license-operations/organizations", body.formatted(email, "Excecao " + tag, "Excecao Ltda"))
                 .status()).as("fora da organizacao interna a rota nao existe").isEqualTo(404);
-        assertThat(staff.post(route, body.formatted(email, "Filial " + tag, "Filial Ltda").replace(justification, "curta")).status()).isEqualTo(400);
-        assertThat(staff.post(route, "{\"name\":\"Filial\",\"legalName\":\"Filial Ltda\",\"justification\":\"" + justification + "\"}").status())
+        assertThat(staff.post(route, body.formatted(email, "Excecao " + tag, "Excecao Ltda").replace(justification, "curta")).status()).isEqualTo(400);
+        assertThat(staff.post(route, "{\"name\":\"Excecao\",\"legalName\":\"Excecao Ltda\",\"justification\":\"" + justification + "\"}").status())
                 .as("o responsavel e sempre indicado explicitamente").isEqualTo(400);
-        conflict(staff.post(route, body.formatted("ninguem-" + tag + "@exemplo.test", "Filial " + tag, "Filial Ltda")), "organization_responsible_not_found");
+        conflict(staff.post(route, body.formatted("ninguem-" + tag + "@exemplo.test", "Excecao " + tag, "Excecao Ltda")), "organization_responsible_not_found");
         // o Cliente nao recebe organizacao nem por excecao (D9)
         Org supplier = newOrganization();
         TestUser clientAccount = externalUser(supplier, newClient(supplier), null);
@@ -672,7 +672,7 @@ class LicenseOperatorIT extends ReadRoutesSupport {
                 .isEqualTo("0");
 
         // ---- cria: a pessoa indicada administra a nova organizacao e e a responsavel; o operador nao entra
-        BrowserClient.Response created = staff.post(route, body.formatted(email.toUpperCase(), "Filial " + tag, "Filial " + tag + " Ltda"));
+        BrowserClient.Response created = staff.post(route, body.formatted(email.toUpperCase(), "Excecao " + tag, "Excecao " + tag + " Ltda"));
         assertThat(created.status()).as(created.body()).isEqualTo(201);
         String org = JSON.readTree(created.body()).get("organizationId").asString();
         assertThat(one("SELECT source || '|' || responsible_identity_id FROM organization_responsibility WHERE organization_id = '" + org + "'"))
@@ -691,15 +691,15 @@ class LicenseOperatorIT extends ReadRoutesSupport {
 
         // ---- a excecao nao e segurada pelo limite de vazias (3): quatro organizacoes vazias da mesma responsavel
         for (int i = 2; i <= 4; i++) {
-            assertThat(staff.post(route, body.formatted(email, "Filial " + tag + " " + i, "Filial " + i + " Ltda")).status()).isEqualTo(201);
+            assertThat(staff.post(route, body.formatted(email, "Excecao " + tag + " " + i, "Excecao " + i + " Ltda")).status()).isEqualTo(201);
         }
         assertThat(one("SELECT count(*) FROM organization_exceptional_creations WHERE responsible_identity_id = '" + identity + "'")).isEqualTo("4");
         // mesmo nome para a mesma pessoa: recusado como nas outras criacoes
-        conflict(staff.post(route, body.formatted(email, "Filial " + tag, "Outra razao Ltda")), "organization_name_taken");
+        conflict(staff.post(route, body.formatted(email, "Excecao " + tag, "Outra razao Ltda")), "organization_name_taken");
         // operador retirado do cadastro: o banco recusa, mesmo chamado direto com o papel da Platform
         DB.asSuperuser("SET session_replication_role = replica", "UPDATE license_operators SET revoked_at = clock_timestamp() "
                 + "WHERE operator_user_id = '" + operator.id() + "'");
-        assertThat(staff.post(route, body.formatted(email, "Filial " + tag + " 9", "Filial 9 Ltda")).status()).isIn(403, 404);
+        assertThat(staff.post(route, body.formatted(email, "Excecao " + tag + " 9", "Excecao 9 Ltda")).status()).isIn(403, 404);
     }
 
     /** Massa de estados, como superusuario e sem gatilhos nem chaves estrangeiras (so nesta conexao). */
