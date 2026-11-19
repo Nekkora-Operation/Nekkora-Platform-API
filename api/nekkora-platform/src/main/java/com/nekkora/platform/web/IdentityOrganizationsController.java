@@ -115,7 +115,6 @@ public class IdentityOrganizationsController {
         r.put("canCreate", IdentityOrganizationsService.creationReason(c) == null);
         r.put("cannotCreateReason", IdentityOrganizationsService.creationReason(c));
         r.put("canRequest", "MEMBER".equals(c.profile()) && c.pendingRequests() < 3);
-        r.put("organizationsCreated", usage(c.organizationsCreated(), IdentityOrganizationsService.ORGANIZATIONS_PER_IDENTITY));
         Map<String, Object> empty = usage(c.emptyOrganizations().size(), c.emptyLimit());
         empty.put("organizationIds", c.emptyOrganizations());
         r.put("emptyOrganizations", empty);

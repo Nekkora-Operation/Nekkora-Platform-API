@@ -12,7 +12,7 @@ Depende das PRs 061 a 066. Migration **067, com elevação** — só laboratóri
 | A organização não pode ser desativada por quem a criou | O responsável desativa e reativa |
 | Toda organização nasce no modelo anterior | Uma chave, **desligada**, faz as novas nascerem no modelo por licença (D7) |
 
-O teto de 10 organizações criadas pela mesma pessoa continua.
+**Não há teto fixo de organizações criadas.** O teto de 10 da 017 foi retirado nesta migration (função de limite e a indicação `canCreateOrganization`): o que limita é só o limite configurável de vazias. O limite de frequência da rota de criação (três por dia por pessoa, R11) continua: é proteção contra abuso, não quantidade de organizações.
 
 ## Perfil de quem cria
 

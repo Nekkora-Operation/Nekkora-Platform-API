@@ -42,9 +42,6 @@ public final class IdentityOrganizationsService {
     public record Creation(IdentityOrgRepository.CreationState state, List<IdentityOrgRepository.Responsible> responsibleFor) {
     }
 
-    /** Teto de organizacoes criadas pela mesma pessoa (017). */
-    public static final int ORGANIZATIONS_PER_IDENTITY = 10;
-
     /** O motivo (texto do contrato) de {@link #creationRefusal}, ou nulo. */
     public static String creationReason(IdentityOrgRepository.CreationState s) {
         ApiError e = creationRefusal(s);
@@ -59,8 +56,8 @@ public final class IdentityOrganizationsService {
         return switch (s.profile()) {
             case "CLIENT" -> ApiError.ORGANIZATION_CREATION_CLIENT_PROFILE;
             case "MEMBER" -> ApiError.ORGANIZATION_CREATION_REQUIRES_REQUEST;
-            default -> s.organizationsCreated() >= ORGANIZATIONS_PER_IDENTITY ? ApiError.ORGANIZATION_LIMIT_REACHED
-                    : s.emptyOrganizations().size() >= s.emptyLimit() ? ApiError.EMPTY_ORGANIZATION_LIMIT_REACHED : null;
+            // sem teto fixo de organizacoes criadas: so o limite configuravel de vazias segura
+            default -> s.emptyOrganizations().size() >= s.emptyLimit() ? ApiError.EMPTY_ORGANIZATION_LIMIT_REACHED : null;
         };
     }
 

@@ -21,7 +21,8 @@
 --   2. RESPONSAVEL pela organizacao (organization_responsibility): a identidade que a criou ou que a aprovacao escolheu. As
 --      organizacoes existentes recebem o autor registrado na 034 (organization_authorship), quando ha.
 --   3. LIMITE DE VAZIAS: tres organizacoes ativas sem nenhuma automacao por responsavel (configuravel). Conferido na criacao,
---      na aprovacao e na reativacao, sob a trava da identidade responsavel. O teto de 10 organizacoes criadas (017) continua.
+--      na aprovacao e na reativacao, sob a trava da identidade responsavel. O TETO FIXO de 10 organizacoes criadas (017) e RETIRADO (decisao da
+--      titular): nao ha limite fixo de quantas organizacoes uma pessoa cria; o que limita e o limite configuravel de vazias.
 --   4. PEDIDO E APROVACAO (organization_creation_requests): o membro pede, com a confirmacao reforcada da sessao; um administrador
 --      da organizacao em que ele pediu aprova ou recusa. Na aprovacao ele ESCOLHE o responsavel - ele mesmo (padrao) ou o
 --      solicitante -, o limite do escolhido e reconferido e a organizacao nasce na MESMA transacao. So o responsavel recebe
@@ -51,7 +52,7 @@
 -- registrado na 034. Organizacoes acima do limite de vazias continuam como estao: so criacoes novas sao recusadas.
 --
 -- REVERSAO (manual, em janela de elevacao; so sem pedidos, desativacoes e organizacoes nascidas pelo ato 8):
---   recriar identity_create_organization_impl com o corpo da 017; DROP das funcoes novas; DROP das seis tabelas novas;
+--   recriar identity_create_organization_impl e identity_org_creation_allowed com o corpo da 017 (o teto de 10 volta); DROP das funcoes novas; DROP das seis tabelas novas;
 --   retirar as politicas identity_client_probe / identity_responsibility_context e os privilegios desta migration; devolver as
 --   CHECKs de organization_license_acts e o gatilho de organization_license_enforcement ao texto da 061.
 
@@ -344,9 +345,7 @@ $$;
 CREATE FUNCTION public.identity_org_limit_reason(p_identity UUID) RETURNS TEXT
 LANGUAGE plpgsql STABLE SET search_path = pg_catalog, pg_temp AS $$
 BEGIN
-    IF (SELECT pg_catalog.count(*) FROM public.identity_users iu WHERE iu.identity_id = p_identity AND iu.link_channel = 'cadastro_web') >= 10 THEN
-        RETURN 'ORGANIZATION_LIMIT';
-    END IF;
+    -- o teto fixo de 10 organizacoes criadas (017) foi retirado: so o limite configuravel de vazias segura
     IF pg_catalog.cardinality(public.identity_empty_organizations(p_identity))
        >= (SELECT s.empty_organizations_limit FROM public.organization_creation_settings s) THEN
         RETURN 'EMPTY_LIMIT';
@@ -406,7 +405,7 @@ BEGIN
     IF s.o_identity_id IS NULL THEN
         RETURN NULL;
     END IF;
-    -- a trava da identidade: o teto, o limite de vazias e a criacao sao uma coisa so
+    -- a trava da identidade: o limite de vazias e a criacao sao uma coisa so
     SELECT x.identity_id INTO v_ok FROM public.identities x
      WHERE x.identity_id = s.o_identity_id AND x.status = 2 AND x.email_verified_at IS NOT NULL FOR UPDATE;
     IF v_ok IS NULL THEN
@@ -429,6 +428,25 @@ END;
 $$;
 
 -- === 7. Funcoes publicas (SECURITY DEFINER, dono nekkora_identity_owner, EXECUTE so da Platform) ===
+
+-- canCreateOrganization (017, R5), SEM o teto fixo de 10: verdadeiro se a sessao esta ativa, no prazo, com MFA e nao restrita, e
+-- a identidade esta ACTIVE e verificada. So indicacao para a interface; o perfil e o limite de vazias sao conferidos pela
+-- aplicacao (identity_org_creation_state) e, de novo, pela criacao. Mesma assinatura, mesmo dono e mesmos privilegios da 017.
+CREATE OR REPLACE FUNCTION public.identity_org_creation_allowed(p_session_token TEXT)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+          FROM public.identity_sessions s JOIN public.identities i ON i.identity_id = s.identity_id
+         WHERE s.session_token_hash = public.identity_token_hash(p_session_token)
+           AND s.revoked_at IS NULL AND s.expires_at > pg_catalog.clock_timestamp() AND s.mfa_verified_at IS NOT NULL
+           AND (s.recovery_used_at IS NULL OR s.recovery_cleared_at IS NOT NULL)
+           AND i.status = 2 AND i.email_verified_at IS NOT NULL)
+$$;
 
 -- O estado da criacao para a pessoa da sessao: so indicacao para a interface e para a aplicacao escolher o motivo da recusa.
 -- A criacao e o pedido reconferem tudo.

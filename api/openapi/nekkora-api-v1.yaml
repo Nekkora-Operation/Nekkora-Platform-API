@@ -1016,15 +1016,15 @@ paths:
         organizacao. O membro interno que nao administra nenhuma NAO cria: 409 organization_creation_requires_request (ele
         solicita: POST /api/v1/organization-requests). Quem so tem conta do tipo Cliente (mesmo e-mail verificado) nao cria nem
         solicita: 403 forbidden + reason organization_creation_client_profile. Limite de organizacoes VAZIAS (ativas, sem
-        nenhuma automacao) por responsavel, tres: 409 empty_organization_limit_reached. Teto de 10 criadas: 409
-        organization_limit_reached. Quem cria fica registrado como RESPONSAVEL pela organizacao. A funcao do banco reconfere
+        nenhuma automacao) por responsavel, tres: 409 empty_organization_limit_reached. Nao ha teto fixo de organizacoes
+        criadas. Quem cria fica registrado como RESPONSAVEL pela organizacao. A funcao do banco reconfere
         tudo sob a trava da identidade (se ela recusar depois da conferencia da aplicacao, 403 generico). Em nenhuma recusa
         algo e criado, e a reserva de R11 e devolvida. Criar organizacao nao concede licenca.
       security: [ { identitySessionCookie: [], csrfHeader: [] } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationCreateRequest' } } } }
       responses:
         '201': { description: 'Organizacao criada', content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationCreated' } } } }
-        '409': { description: 'T10 (034): esta identidade ja criou, pelo cadastro, uma organizacao com esse nome (organization_name_taken); ou, 067: organization_creation_requires_request, empty_organization_limit_reached, organization_limit_reached. Nada foi criado', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: conflict, reason: organization_name_taken } } } }
+        '409': { description: 'T10 (034): esta identidade ja criou, pelo cadastro, uma organizacao com esse nome (organization_name_taken); ou, 067: organization_creation_requires_request, empty_organization_limit_reached. Nada foi criado', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: conflict, reason: organization_name_taken } } } }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { description: 'Origin/CSRF da sessao de identidade invalido; sem step-up recente, teto atingido, identidade inelegivel ou sessao restrita (recusa generica)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
@@ -1995,8 +1995,8 @@ paths:
       description: >
         responsible e obrigatorio e explicito: APPROVER (quem aprova; a escolha padrao da tela) ou REQUESTER (quem pediu). A
         escolha CONCEDE a administracao da nova organizacao ao escolhido e decide de quem e contado o limite de organizacoes
-        vazias. O limite do escolhido e reconferido aqui, sob a trava dele (409 empty_organization_limit_reached ou
-        organization_limit_reached; o pedido continua pendente). A organizacao nasce na MESMA transacao. So o responsavel
+        vazias. O limite do escolhido e reconferido aqui, sob a trava dele (409 empty_organization_limit_reached; o
+        pedido continua pendente). A organizacao nasce na MESMA transacao. So o responsavel
         recebe acesso: o outro nao entra na nova organizacao. createdOrganizationId so vem quando quem aprovou ficou
         responsavel. Quem aprova com conta sem identidade geral nao pode ser o responsavel (409
         organization_request_approver_without_identity; pode escolher REQUESTER). Pedido ja decidido: 409
@@ -3661,7 +3661,7 @@ components:
     Error:
       type: object
       required: [error]
-      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, license_already_assigned, automation_already_licensed, license_not_valid, license_automation_archived, license_ended, license_period_overlaps, license_period_already_ended, license_model_unchanged, license_preview_changed, license_required, license_expired, run_not_covered, capacity_pending_limit_reached, license_not_assigned, license_transfer_same_automation, license_transfer_work_in_progress, license_transfer_requester_not_admin, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_machine_unconfirmed, remote_machine_finishing, remote_previous_processes_pending, remote_previous_result_unconfirmed, remote_attempt_not_unconfirmed, remote_attempt_already_reconciled, remote_requirements_not_declared, remote_requirements_conflict, remote_package_not_supported, remote_package_not_registered, remote_python_not_selected, remote_python_not_in_inventory, remote_dependency_check_too_soon, remote_dependency_check_closed, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken, organization_creation_client_profile, organization_creation_requires_request, empty_organization_limit_reached, organization_limit_reached, organization_request_not_available, organization_request_not_pending, organization_request_own, organization_request_approver_without_identity, organization_request_responsible_not_eligible, organization_not_responsible, organization_work_in_progress, organization_blocked_by_nekkora, organization_state_conflict], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
+      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, license_already_assigned, automation_already_licensed, license_not_valid, license_automation_archived, license_ended, license_period_overlaps, license_period_already_ended, license_model_unchanged, license_preview_changed, license_required, license_expired, run_not_covered, capacity_pending_limit_reached, license_not_assigned, license_transfer_same_automation, license_transfer_work_in_progress, license_transfer_requester_not_admin, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_machine_unconfirmed, remote_machine_finishing, remote_previous_processes_pending, remote_previous_result_unconfirmed, remote_attempt_not_unconfirmed, remote_attempt_already_reconciled, remote_requirements_not_declared, remote_requirements_conflict, remote_package_not_supported, remote_package_not_registered, remote_python_not_selected, remote_python_not_in_inventory, remote_dependency_check_too_soon, remote_dependency_check_closed, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken, organization_creation_client_profile, organization_creation_requires_request, empty_organization_limit_reached, organization_request_not_available, organization_request_not_pending, organization_request_own, organization_request_approver_without_identity, organization_request_responsible_not_eligible, organization_not_responsible, organization_work_in_progress, organization_blocked_by_nekkora, organization_state_conflict], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
     WorkspacePermissionCode:
       description: 'Permissoes de workspace (13): podem aparecer em allWorkspaces e em atribuicoes de workspace.'
       type: string
@@ -4094,13 +4094,12 @@ components:
     UsedOfLimit: { type: object, required: [used, limit], properties: { used: { type: integer, format: int64, minimum: 0 }, limit: { type: integer, format: int64, minimum: 0 } } }
     OrganizationCreationState:
       type: object
-      required: [profile, canCreate, cannotCreateReason, canRequest, organizationsCreated, emptyOrganizations, pendingRequests, responsibleFor]
+      required: [profile, canCreate, cannotCreateReason, canRequest, emptyOrganizations, pendingRequests, responsibleFor]
       properties:
         profile: { type: string, enum: [FIRST, ADMIN, MEMBER, CLIENT] }
         canCreate: { type: boolean }
         cannotCreateReason: { type: [string, 'null'] }
         canRequest: { type: boolean }
-        organizationsCreated: { $ref: '#/components/schemas/UsedOfLimit' }
         emptyOrganizations:
           type: object
           required: [used, limit, organizationIds]
