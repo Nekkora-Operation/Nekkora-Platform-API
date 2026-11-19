@@ -40,10 +40,18 @@ fica gravado: chamado e verificação da identidade são obrigatórios e vão pa
 - **Fim do ciclo preservado.** Os períodos da licença não são tocados.
 - **Sem uso simultâneo.** O vínculo de origem é encerrado e o de destino é aberto na mesma transação. Não há instante com
   as duas automações atendidas, e o índice único do banco impede dois vínculos abertos da mesma licença.
-- **Trabalho em andamento.** A transferência é recusada (`license_transfer_work_in_progress`) enquanto a automação de
-  origem tiver execução da Platform não terminada, execução ou sessão de monitoramento do Agent anterior, pedido pendente
-  ao Agent anterior ou tentativa remota não terminada. Precisa terminar ou ter o cancelamento confirmado. A transferência
-  não interrompe nem cancela nada.
+- **Trabalho em andamento.** A transferência é recusada (`license_transfer_work_in_progress`) enquanto ainda puder existir
+  trabalho na automação de origem. A transferência não interrompe nem cancela nada. O que segura:
+
+  | Fluxo | Segura a transferência | Deixa de segurar |
+  |---|---|---|
+  | Execução da Platform | pendente, iniciando ou em execução | terminou ou foi cancelada |
+  | Sessão do Agent anterior | pronta, iniciando ou em execução | o Agent informou o fim |
+  | Pedido ao Agent anterior | pedido ou entregue dentro do prazo; aceito (mesmo depois do prazo) | recusado, vencido sem decisão, revogado ou virou sessão |
+  | Tentativa remota | na fila, oferecida, recebida até em execução. A oferta vencida que o servidor ainda não encerrou também | o servidor ou a máquina encerrou |
+  | Ocupação incerta (tentativa remota) | terminou sem confirmação, ou terminou com processo ainda vivo ou sem a máquina saber dizer | a máquina confirmou que não há processo, ou um administrador declarou a reconciliação |
+
+  Tempo decorrido, novo contato da máquina e o relato "ainda executa" não liberam a ocupação incerta.
 - **Concorrência.** Roda sob a trava exclusiva do modelo da organização. Um início de trabalho em curso segura a
   transferência; depois dela, a origem já não tem direito e o início seguinte é recusado.
 - **Licença vencida não é transferida.** Renova-se antes (`license_not_valid`).
@@ -52,7 +60,8 @@ fica gravado: chamado e verificação da identidade são obrigatórios e vão pa
 ## Por que elevação
 
 A função pertence ao dono das licenças (063). Para recusar com trabalho em andamento, esse dono passa a **ler** poucas
-colunas de seis tabelas de outras áreas: a situação da automação e o estado dos cinco registros de trabalho. Não lê
+colunas de sete tabelas de outras áreas: a situação da automação e o estado dos seis registros de trabalho (o sexto é o
+tipo do fato informado sobre os processos de uma tentativa). Não lê
 nome, conteúdo, parâmetros, registros, resultados, pessoas nem sessões, e não escreve em nenhuma delas (conferido nos
 invariantes da migration).
 
@@ -70,15 +79,25 @@ Pela API real, com a 065 aplicada no banco de teste:
 - sem chamado, sem verificação ou sem solicitante: 400;
 - solicitante leitor, de outra organização ou inexistente: recusado;
 - destino igual à origem, de outra organização (404), arquivado ou já licenciado: recusado;
-- execução em andamento na origem: recusada, nada muda; cancelada, passa;
-- concorrência: com um início de trabalho em curso na origem, a transferência espera e só conclui depois;
+- execução em andamento na origem: recusada, nada muda; cancelada, deixa de segurar;
+- sessão do Agent anterior pronta, iniciando e em execução: recusada; terminada, deixa de segurar;
+- pedido ao Agent anterior pedido, entregue e aceito: recusada; vencido sem decisão e recusado pela máquina, não seguram;
+- tentativa remota na fila, oferecida com a oferta vencida e ainda não encerrada, recebida, preparando, iniciando e em
+  execução: recusada; encerrada pelo servidor, deixa de segurar;
+- ocupação incerta: terminada sem confirmação há 30 dias e com "ainda executa": recusada; com a declaração do
+  administrador, deixa de segurar. Concluída com processo vivo ou sem a máquina saber: recusada até a máquina confirmar;
+- concorrência com um início que se confirma: a transferência espera e, quando anda, é recusada pelo trabalho novo;
+- concorrência com um início que não se confirma: a transferência espera e só conclui depois;
 - resultado: vínculo de origem encerrado como transferida, destino aberto, nunca os dois; períodos idênticos;
 - trilha com origem, destino, solicitante, responsável, justificativa, chamado, verificação e data;
 - a origem perde o direito e o destino ganha (`LICENSE_REQUIRED` e `OK` no modelo por licença);
 - o papel do serviço não transfere em nome de quem não é operador.
 
-Não testado: transferência com tentativa remota ou sessão do Agent anterior em andamento (o teste usa a execução da
-Platform; os outros três casos estão na mesma consulta do banco, sem teste próprio).
+Os estados dos outros fluxos são gravados direto no banco de teste (sem os gatilhos que os criam, que têm testes
+próprios); a transferência é sempre pedida pela rota real.
+
+Limite: a sessão do Agent anterior que termina como "resultado desconhecido" não segura a transferência. Esse estado é
+final para o Agent e o servidor não tem confirmação nem reconciliação para ele.
 
 ## Reversão
 
