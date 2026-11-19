@@ -6,7 +6,7 @@
 -- conteudo.
 --
 -- *** ELEVACAO: cria uma funcao SECURITY DEFINER do dono nekkora_licensing_owner (063) e da a esse dono LEITURA de poucas
--- colunas de seis tabelas de outras areas. Exige a janela de SUPERUSER do migrador. SO LABORATORIO E TESTES ate autorizacao
+-- colunas de sete tabelas de outras areas. Exige a janela de SUPERUSER do migrador. SO LABORATORIO E TESTES ate autorizacao
 -- especifica: NAO esta em ops/homologacao/implantacao/elevacao.txt. ***
 --
 -- O QUE FAZ
@@ -14,14 +14,16 @@
 --      verificacao da identidade, justificativa): na MESMA transacao encerra o vinculo com a automacao de origem (motivo 1,
 --      TRANSFERIDA) e abre o vinculo com a de destino. Nao ha instante com as duas atendidas nem com nenhuma das duas usando a
 --      mesma licenca. Os periodos da licenca NAO sao tocados: o fim do ciclo e preservado.
---   2. Recusa enquanto a automacao de ORIGEM tiver trabalho em andamento em qualquer fluxo (execucao da Platform, execucao ou
---      sessao de monitoramento do Agent anterior, pedido ao Agent anterior ainda pendente, tentativa remota nao terminada):
---      precisa terminar ou ter o cancelamento confirmado antes.
+--   2. Recusa enquanto a automacao de ORIGEM tiver, ou ainda puder ter, trabalho em andamento em qualquer fluxo (execucao da
+--      Platform, execucao ou sessao de monitoramento do Agent anterior, pedido ao Agent anterior ainda pendente, tentativa
+--      remota nao terminada - inclusive a oferta vencida que o servidor ainda nao encerrou - e tentativa com OCUPACAO INCERTA,
+--      058/060, sem confirmacao da maquina nem declaracao de um administrador): precisa terminar, ter o cancelamento
+--      confirmado ou ser reconciliada antes.
 --   3. Roda sob a trava EXCLUSIVA do modelo da organizacao: nenhum inicio de trabalho (064) corre contra a transferencia.
 --   4. Trilha: ato 5 com origem, destino, solicitante (o vinculo do administrador), responsavel (o operador), justificativa,
 --      instante e, em detail, a referencia do chamado e como a identidade do solicitante foi verificada.
---   5. O dono le, e so le, as colunas de que a regra precisa: situacao da automacao e o andamento dos cinco registros de
---      trabalho. Nada de conteudo, parametros, registros, resultados, pessoas ou sessoes.
+--   5. O dono le, e so le, as colunas de que a regra precisa: situacao da automacao e o andamento dos seis registros de
+--      trabalho (o sexto: o tipo do fato informado sobre os processos de uma tentativa). Nada de conteudo, parametros, registros, resultados, pessoas ou sessoes.
 --
 -- O QUE NAO FAZ
 --   - nao cria central de chamados: o pedido chega pelo atendimento externo (D6);
@@ -36,7 +38,7 @@
 --   BEGIN;
 --   DROP FUNCTION public.license_op_transfer(uuid, uuid, uuid, uuid, uuid, text, text, text);
 --   DROP FUNCTION public.license_work_in_progress(uuid, uuid);
---   -- e retirar de nekkora_licensing_owner a politica licensing_owner_read e as leituras por coluna das seis tabelas
+--   -- e retirar de nekkora_licensing_owner a politica licensing_owner_read e as leituras por coluna das sete tabelas
 --   COMMIT;
 
 BEGIN;
@@ -59,12 +61,14 @@ GRANT SELECT (organization_id, automation_id, status) ON public.executions TO ne
 GRANT SELECT (organization_id, automation_id, supervisor_state) ON public.agent_runs TO nekkora_licensing_owner;
 GRANT SELECT (organization_id, automation_id, state, valid_until) ON public.run_requests TO nekkora_licensing_owner;
 GRANT SELECT (organization_id, remote_execution_id, automation_id) ON public.remote_executions TO nekkora_licensing_owner;
-GRANT SELECT (organization_id, remote_execution_id, attempt_number, state, offer_valid_until) ON public.remote_attempts TO nekkora_licensing_owner;
+GRANT SELECT (organization_id, remote_execution_id, attempt_id, state) ON public.remote_attempts TO nekkora_licensing_owner;
+GRANT SELECT (attempt_id, kind) ON public.remote_attempt_process_reports TO nekkora_licensing_owner;
 DO $$
 DECLARE
     t TEXT;
 BEGIN
-    FOREACH t IN ARRAY ARRAY['automations', 'executions', 'agent_runs', 'run_requests', 'remote_executions', 'remote_attempts'] LOOP
+    FOREACH t IN ARRAY ARRAY['automations', 'executions', 'agent_runs', 'run_requests', 'remote_executions', 'remote_attempts',
+                             'remote_attempt_process_reports'] LOOP
         EXECUTE format('CREATE POLICY licensing_owner_read ON public.%I AS PERMISSIVE FOR SELECT TO nekkora_licensing_owner USING (true)', t);
     END LOOP;
 END;
@@ -78,17 +82,26 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
         -- pedido ao Agent anterior: pedido ou entregue ainda no prazo, ou aceito (a execucao pode nascer a qualquer momento)
         OR EXISTS (SELECT 1 FROM public.run_requests q WHERE q.organization_id = p_org AND q.automation_id = p_automation
                       AND (q.state = 3 OR (q.state IN (1, 2) AND q.valid_until > clock_timestamp())))
-        -- execucao remota: a ultima tentativa nao terminou (na fila ou oferecida dentro do prazo, ou recebida ate em execucao)
+        -- execucao remota sem tentativa (nao deveria existir: a solicitacao nasce com a primeira) ou com tentativa NAO TERMINADA.
+        -- A oferta vencida que ninguem encerrou ainda conta: a maquina pode confirmar o recebimento ate o servidor encerra-la
         OR EXISTS (SELECT 1 FROM public.remote_executions x
-                     LEFT JOIN LATERAL (SELECT t.state, t.offer_valid_until FROM public.remote_attempts t
-                                         WHERE t.organization_id = x.organization_id AND t.remote_execution_id = x.remote_execution_id
-                                         ORDER BY t.attempt_number DESC LIMIT 1) t ON true
                     WHERE x.organization_id = p_org AND x.automation_id = p_automation
-                      AND (t.state IS NULL OR t.state BETWEEN 3 AND 6 OR (t.state IN (1, 2) AND t.offer_valid_until > clock_timestamp())));
+                      AND (NOT EXISTS (SELECT 1 FROM public.remote_attempts t WHERE t.organization_id = x.organization_id
+                                          AND t.remote_execution_id = x.remote_execution_id)
+                           OR EXISTS (SELECT 1 FROM public.remote_attempts t WHERE t.organization_id = x.organization_id
+                                         AND t.remote_execution_id = x.remote_execution_id AND t.state BETWEEN 1 AND 6)))
+        -- OCUPACAO INCERTA (058, 060): tentativa terminada sem confirmacao (13) ou com processo ainda vivo / sem como saber
+        -- (fatos 4 e 5), enquanto nem a maquina (1) nem a declaracao de um administrador (2) confirmarem que nao ha processo
+        OR EXISTS (SELECT 1 FROM public.remote_executions x
+                     JOIN public.remote_attempts t ON t.organization_id = x.organization_id AND t.remote_execution_id = x.remote_execution_id
+                    WHERE x.organization_id = p_org AND x.automation_id = p_automation
+                      AND (t.state = 13 OR EXISTS (SELECT 1 FROM public.remote_attempt_process_reports p WHERE p.attempt_id = t.attempt_id AND p.kind IN (4, 5)))
+                      AND NOT EXISTS (SELECT 1 FROM public.remote_attempt_process_reports p WHERE p.attempt_id = t.attempt_id AND p.kind IN (1, 2)));
 $$;
 COMMENT ON FUNCTION public.license_work_in_progress(uuid, uuid) IS
-    'A automacao tem trabalho em andamento em algum fluxo (065): execucao da Platform, execucao ou monitoramento do Agent anterior, pedido '
-    'pendente ao Agent anterior ou tentativa remota nao terminada. Uso interno da transferencia.';
+    'A automacao tem, ou ainda pode ter, trabalho em andamento em algum fluxo (065): execucao da Platform, execucao ou monitoramento do '
+    'Agent anterior, pedido pendente ao Agent anterior, tentativa remota nao terminada ou com ocupacao incerta (058, 060). Uso interno da '
+    'transferencia.';
 
 -- === 4. A transferencia ===
 CREATE FUNCTION public.license_op_transfer(p_operator UUID, p_org UUID, p_license UUID, p_to_automation UUID, p_requester UUID,
@@ -179,7 +192,8 @@ BEGIN
         RAISE EXCEPTION '065: funcoes fora do padrao';
     END IF;
     -- o dono le por COLUNA; nao tem leitura da tabela inteira, nem escrita, em nenhuma das seis
-    FOREACH t IN ARRAY ARRAY['automations', 'executions', 'agent_runs', 'run_requests', 'remote_executions', 'remote_attempts'] LOOP
+    FOREACH t IN ARRAY ARRAY['automations', 'executions', 'agent_runs', 'run_requests', 'remote_executions', 'remote_attempts',
+                             'remote_attempt_process_reports'] LOOP
         IF has_table_privilege('nekkora_licensing_owner', 'public.' || t, 'SELECT')
            OR has_table_privilege('nekkora_licensing_owner', 'public.' || t, 'INSERT, UPDATE, DELETE') THEN
             RAISE EXCEPTION '065: o dono das licencas alcanca % alem das colunas previstas', t;

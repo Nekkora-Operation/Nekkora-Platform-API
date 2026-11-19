@@ -279,6 +279,63 @@ class ExternalPythonRunRequestIT extends PlatformTestBase {
         assertThat(value("SELECT expired_at IS NOT NULL FROM run_requests WHERE run_request_id = '" + id + "'")).isEqualTo("t");
     }
 
+    // =========================================================================== PLATFORM-LICENCIAMENTO-001 (064): licenca no pedido
+
+    /**
+     * O pedido ao Agent anterior e trabalho novo: no modelo por licenca a ROTA real recusa sem licenca vigente da automacao
+     * (409, motivo proprio), nada e gravado e o banco recusa tambem a gravacao direta. Com a licenca, o pedido nasce; vencida,
+     * volta a ser recusado. O que ja existia continua legivel, e a organizacao do lado, no modelo anterior, segue igual.
+     */
+    @Test
+    void noModeloPorLicencaOPedidoAoAgentAnteriorExigeLicencaVigentePelaRotaReal() throws Exception {
+        Setup s = setup();
+        stepUp(s);
+        UUID org = s.org().id();
+        UUID pkgAuth = authorizePackage(s);
+        String url = s.o() + "/workspaces/" + s.workspace() + "/run-requests";
+        String before = create(s, url, pkgAuth);
+        Setup neighbour = setup();
+        stepUp(neighbour);
+        UUID neighbourAuth = authorizePackage(neighbour);
+
+        LicenseFixtures.enforce(org, s.org().adminId());
+        // ---- sem licenca: recusado pela rota, com o motivo; nada gravado, nada auditado
+        BrowserClient.Response required = s.admin().post(url, "{\"authorizationId\":\"" + pkgAuth + "\",\"agentId\":\"" + s.agent()
+                + "\",\"validForSeconds\":600,\"requestKey\":\"" + UUID.randomUUID() + "\"}");
+        assertThat(required.status()).as(required.body()).isEqualTo(409);
+        assertThat(required.body()).isEqualTo("{\"error\":\"conflict\",\"reason\":\"license_required\"}");
+        assertThat(count("SELECT count(*) FROM run_requests WHERE organization_id = '" + org + "'")).as("nada gravado").isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM agent_admin_events WHERE organization_id = '" + org + "' AND act = 12")).isEqualTo(1);
+        // o banco reconfere: a gravacao direta com o papel da aplicacao tambem e recusada
+        String direct = "INSERT INTO run_requests (organization_id, workspace_id, automation_id, automation_version_id, authorization_id, worker_id, agent_id, "
+                + "source_kind, package_fingerprint, package_fingerprint_rule, request_key, requested_by_membership_id, valid_until) SELECT organization_id, "
+                + "workspace_id, automation_id, automation_version_id, authorization_id, worker_id, agent_id, source_kind, package_fingerprint, "
+                + "package_fingerprint_rule, gen_random_uuid(), requested_by_membership_id, clock_timestamp() + interval '5 minutes' FROM run_requests "
+                + "WHERE run_request_id = '" + before + "'";
+        assertThat(asPlatform(org, direct)).as("gatilho da 064").isEqualTo("23514");
+        // o pedido anterior continua legivel e a lista tambem
+        assertThat(s.admin().get(s.o() + "/run-requests/" + before).status()).isEqualTo(200);
+        assertThat(s.admin().get(url).body()).contains(before);
+
+        // ---- licenca vigente e vinculada: o pedido nasce (a autorizacao e a anterior ao modelo: transicao)
+        UUID license = LicenseFixtures.license(org, 1, "clock_timestamp() - interval '1 day'", "clock_timestamp() + interval '30 days'");
+        LicenseFixtures.assign(org, license, s.workspace(), s.automation(), s.org().adminMembership());
+        String covered = create(s, url, pkgAuth);
+        assertThat(asPlatform(org, direct)).isEqualTo("OK");
+
+        // ---- a licenca vence: recusado com o motivo de vencimento; o que ja foi pedido continua la
+        LicenseFixtures.endPeriodNow(license, 1);
+        BrowserClient.Response expired = s.admin().post(url, "{\"authorizationId\":\"" + pkgAuth + "\",\"agentId\":\"" + s.agent()
+                + "\",\"validForSeconds\":600,\"requestKey\":\"" + UUID.randomUUID() + "\"}");
+        assertThat(expired.status()).as(expired.body()).isEqualTo(409);
+        assertThat(expired.body()).isEqualTo("{\"error\":\"conflict\",\"reason\":\"license_expired\"}");
+        assertThat(s.admin().get(s.o() + "/run-requests/" + covered).field("state")).isEqualTo("REQUESTED");
+        assertThat(count("SELECT count(*) FROM run_requests WHERE organization_id = '" + org + "'")).isEqualTo(3);
+
+        // ---- a organizacao do lado, no modelo anterior, pede como sempre
+        create(neighbour, neighbour.o() + "/workspaces/" + neighbour.workspace() + "/run-requests", neighbourAuth);
+    }
+
     // =========================================================================== apoio
 
     private String create(Setup s, String url, UUID authorization) {
