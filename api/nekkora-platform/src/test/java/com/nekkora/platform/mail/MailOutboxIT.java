@@ -203,6 +203,15 @@ class MailOutboxIT {
     void trabalhoNaoComecaDepoisDePerderAPosse() throws Exception {
         UUID job = enqueue();
         MailDispatcher instantaneo = new MailDispatcher(tx, cipher, transport, templates, 1000, Duration.ofMillis(1), (n, o) -> { });
+        // a posse de 1 ms tem de ESTAR vencida quando o despachante a confere. Sem esta espera o teste dependia de a maquina
+        // levar mais de 1 ms entre a reivindicacao e a conferencia: numa maquina rapida a posse ainda valia e o envio saia
+        instantaneo.testHooks(() -> {
+            try {
+                Thread.sleep(25);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }, () -> { });
         int antes = FAKE.sends();
         Thread.sleep(5);
         assertThat(instantaneo.dispatchPending()).isZero();
