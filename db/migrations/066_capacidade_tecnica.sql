@@ -14,18 +14,35 @@
 --      contra abuso e sobrecarga; nao sao contratados e nao tem relacao com a quantidade de licencas.
 --   2. Cadastro de Worker: no modelo por licenca, o limite e o tecnico. A organizacao NAO precisa mais ter sido ativada pelo
 --      operador para registrar maquina. (Executar e monitorar continuam dependendo de licenca: 064.)
---   3. Execucao remota: no modelo por licenca, uma tentativa nova e recusada quando a organizacao ja tem o limite de
---      execucoes em andamento (recebidas pela maquina e nao terminadas) ou de pendentes (na fila ou oferecidas, no prazo).
---      A recusa e de CAPACIDADE (CAPACITY_CONCURRENT_LIMIT, CAPACITY_PENDING_LIMIT), nunca de licenca, e nao consome nem
---      libera licenca nenhuma.
---   4. capacity_state(org): a ocupacao e os limites, para a aplicacao responder e a tela mostrar, separados das licencas.
+--   3. VAGA de execucao: no modelo por licenca, o limite de simultaneas e UM SO para a organizacao e e compartilhado pelos
+--      fluxos de execucao. A vaga e reservada NO MOMENTO EM QUE O TRABALHO E AUTORIZADO A INICIAR, sob uma trava da
+--      organizacao (capacity_lock), e fica ocupada ate o trabalho terminar:
+--        - execucao remota: quando o servidor ENTREGA a tentativa a maquina (QUEUED -> OFFERED). Sem vaga, a tentativa NAO e
+--          entregue e continua na fila (pendente) ate haver vaga ou vencer o prazo da oferta. Com limite 5, a sexta espera;
+--        - pedido ao Agent anterior: quando o servidor ENTREGA o pedido a maquina (REQUESTED -> DELIVERED). Sem vaga, o
+--          pedido nao e entregue e continua pendente ate haver vaga ou vencer;
+--        - execucao da Platform (executions): na reserva (PENDING -> STARTING). Sem vaga, continua pendente.
+--      Ocupam vaga: tentativa remota oferecida ate em execucao; tentativa remota com OCUPACAO INCERTA (058, 060: terminou
+--      sem confirmacao, ou com processo vivo / sem a maquina saber, enquanto nem a maquina nem a declaracao de um
+--      administrador confirmarem que nao ha processo); execucao da Platform iniciando ou em execucao; pedido ao Agent
+--      anterior entregue (no prazo) ou aceito; sessao do Agent anterior pronta, iniciando ou em execucao.
+--      A sessao que o Agent anterior inicia NA MAQUINA, sem pedido, nao pode ser segurada pelo servidor: o registro e aceito
+--      e passa a ocupar vaga (a ocupacao pode passar do limite por isso; enquanto passar, nada novo e entregue).
+--   4. FILA: uma tentativa remota nova ou um pedido novo ao Agent anterior e recusado quando a organizacao ja tem o limite
+--      de PENDENTES (na fila, ainda nao entregues, no prazo). A recusa e de CAPACIDADE (CAPACITY_PENDING_LIMIT), nunca de
+--      licenca, e nao consome nem libera licenca nenhuma. Nao ha mais recusa da solicitacao por simultaneas: ela espera.
+--   5. capacity_state(org): a ocupacao (com a composicao por fluxo) e os limites, para a aplicacao responder e a tela mostrar,
+--      separados das licencas.
 --
 -- O QUE NAO FAZ
 --   - nao muda o modelo de nenhuma organizacao; nao ativa nem desativa ninguem; nao apaga a ativacao nem os limites da 010/022
 --     (continuam valendo no modelo anterior e ficam guardados, sem efeito, para quem passar ao modelo por licenca);
 --   - nao cria limite por organizacao: o valor e um so. Mudar o valor e procedimento administrativo (UPDATE pelo migrador,
 --     com updated_by preenchido), nao ato do dia a dia;
---   - nao mexe na execucao da Platform (tabela executions): ela nao tem rota de criacao hoje e segue pelas regras da 010;
+--   - nao substitui os limites da 010 na execucao da Platform (tabela executions): ela nao tem rota de criacao hoje e continua
+--     passando TAMBEM pelas regras da 010; a 066 so acrescenta a ela a vaga compartilhada;
+--   - nao segura nem recusa o registro de uma sessao que o Agent anterior ja iniciou na maquina (ver 3);
+--   - nao cria fila com ordem garantida: havendo vaga, recebe a maquina que perguntar primeiro;
 --   - nao limita a execucao local privada do Agent Client, que nao passa pela Platform.
 --
 -- DADOS EXISTENTES: nenhuma linha e alterada. Tres linhas novas na tabela de limites tecnicos.
@@ -33,13 +50,17 @@
 -- REVERSAO (manual; so enquanto nenhuma organizacao estiver no modelo por licenca):
 --   BEGIN;
 --   DROP TRIGGER trg_remote_attempts_capacity ON public.remote_attempts;
---   DROP FUNCTION public.capacity_remote_attempt_on_insert();
+--   DROP TRIGGER trg_remote_attempts_capacity_slot ON public.remote_attempts;
+--   DROP TRIGGER trg_run_requests_capacity ON public.run_requests;
+--   DROP TRIGGER trg_run_requests_capacity_slot ON public.run_requests;
+--   DROP TRIGGER trg_executions_zz_capacity_slot ON public.executions;
+--   DROP FUNCTION public.capacity_pending_on_insert(), public.capacity_slot_on_update(), public.capacity_reserve(uuid), public.capacity_lock(uuid);
 --   -- recriar enforce_worker_registration_capacity() com o corpo da 010
 --   DROP FUNCTION public.capacity_state(uuid), public.technical_capacity_limit(integer);
 --   DROP TABLE public.technical_capacity_limits;
 --   COMMIT;
 --
--- SEM ELEVACAO: uma tabela, funcoes e gatilho SECURITY INVOKER do proprio dono, um gatilho da 010 substituido. Nenhum papel
+-- SEM ELEVACAO: uma tabela, funcoes e gatilhos SECURITY INVOKER do proprio dono, um gatilho da 010 substituido. Nenhum papel
 -- novo, nenhuma funcao SECURITY DEFINER.
 
 BEGIN;
@@ -86,25 +107,71 @@ LANGUAGE sql STABLE SET search_path = pg_catalog, pg_temp AS $$
 $$;
 
 -- === 3. Ocupacao e limites de uma organizacao do modelo por licenca ===
+-- Nenhum privilegio novo: os dois papeis de servico ja leem, no contexto da propria organizacao, as tabelas contadas aqui.
 -- Nulo em todas as colunas de limite: a organizacao esta no modelo anterior (a capacidade dela e a da 010/022).
+-- concurrent_used = remote + uncertain + platform + previous_agent (a composicao vem ao lado, para a tela explicar).
 CREATE FUNCTION public.capacity_state(p_org UUID)
 RETURNS TABLE (model SMALLINT, workers_used BIGINT, workers_limit BIGINT, concurrent_used BIGINT, concurrent_limit BIGINT,
-               pending_used BIGINT, pending_limit BIGINT)
+               pending_used BIGINT, pending_limit BIGINT, concurrent_remote BIGINT, concurrent_uncertain BIGINT,
+               concurrent_platform BIGINT, concurrent_previous_agent BIGINT)
 LANGUAGE sql STABLE SET search_path = pg_catalog, pg_temp AS $$
+    WITH u AS (
+        SELECT
+            -- execucao remota: entregue a maquina (a oferta so deixa de ocupar quando alguem a encerra) ate em execucao
+            (SELECT count(*) FROM public.remote_attempts t WHERE t.organization_id = p_org AND t.state BETWEEN 2 AND 6) AS remote,
+            -- ocupacao incerta (058, 060): ainda pode haver processo, e ninguem confirmou que nao ha
+            (SELECT count(*) FROM public.remote_attempts t WHERE t.organization_id = p_org AND t.state IN (7, 8, 9, 10, 13)
+                AND (t.state = 13 OR EXISTS (SELECT 1 FROM public.remote_attempt_process_reports r WHERE r.attempt_id = t.attempt_id AND r.kind IN (4, 5)))
+                AND NOT EXISTS (SELECT 1 FROM public.remote_attempt_process_reports r WHERE r.attempt_id = t.attempt_id AND r.kind IN (1, 2))) AS uncertain,
+            (SELECT count(*) FROM public.executions e WHERE e.organization_id = p_org AND e.status IN (2, 3)) AS platform,
+            -- Agent anterior: pedido entregue (no prazo) ou aceito, e sessao pronta, iniciando ou em execucao
+            (SELECT count(*) FROM public.run_requests q WHERE q.organization_id = p_org
+                AND (q.state = 3 OR (q.state = 2 AND q.valid_until > clock_timestamp())))
+            + (SELECT count(*) FROM public.agent_runs r WHERE r.organization_id = p_org AND r.supervisor_state IN (1, 2, 3)) AS previous_agent,
+            -- pendentes: na fila, ainda nao entregues, dentro do prazo
+            (SELECT count(*) FROM public.remote_attempts t WHERE t.organization_id = p_org AND t.state = 1 AND t.offer_valid_until > clock_timestamp())
+            + (SELECT count(*) FROM public.run_requests q WHERE q.organization_id = p_org AND q.state = 1 AND q.valid_until > clock_timestamp())
+            + (SELECT count(*) FROM public.executions e WHERE e.organization_id = p_org AND e.status = 1) AS pending
+    )
     SELECT m.model,
            (SELECT count(*) FROM public.workers w WHERE w.organization_id = p_org AND w.status <> 3),
            CASE WHEN m.model = 2 THEN public.technical_capacity_limit(1) END,
-           -- em andamento: a maquina recebeu e ainda nao terminou
-           (SELECT count(*) FROM public.remote_attempts t WHERE t.organization_id = p_org AND t.state BETWEEN 3 AND 6),
+           u.remote + u.uncertain + u.platform + u.previous_agent,
            CASE WHEN m.model = 2 THEN public.technical_capacity_limit(2) END,
-           -- pendentes: na fila ou oferecidas, dentro do prazo da oferta
-           (SELECT count(*) FROM public.remote_attempts t WHERE t.organization_id = p_org AND t.state IN (1, 2) AND t.offer_valid_until > clock_timestamp()),
-           CASE WHEN m.model = 2 THEN public.technical_capacity_limit(3) END
-      FROM (SELECT public.license_model(p_org) AS model) m;
+           u.pending,
+           CASE WHEN m.model = 2 THEN public.technical_capacity_limit(3) END,
+           u.remote, u.uncertain, u.platform, u.previous_agent
+      FROM (SELECT public.license_model(p_org) AS model) m, u;
 $$;
 COMMENT ON FUNCTION public.capacity_state(uuid) IS
-    'Ocupacao e limites tecnicos de capacidade da organizacao (066): Workers cadastrados, execucoes remotas em andamento e pendentes. '
-    'Limites nulos = organizacao no modelo anterior. Nao olha licencas.';
+    'Ocupacao e limites tecnicos de capacidade da organizacao (066): Workers cadastrados; vagas de execucao ocupadas (execucao remota '
+    'entregue ate em execucao, ocupacao incerta, execucao da Platform, Agent anterior) e pendentes (na fila, no prazo). Limites nulos = '
+    'organizacao no modelo anterior. Nao olha licencas.';
+
+-- A trava da capacidade da organizacao: toda reserva de vaga e toda entrada na fila passam por ela, em qualquer fluxo.
+CREATE FUNCTION public.capacity_lock(p_org UUID) RETURNS VOID
+LANGUAGE sql VOLATILE SET search_path = pg_catalog, pg_temp AS $$
+    SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('organization_capacity:' || p_org::text, 0));
+$$;
+
+-- RESERVA: ha vaga para autorizar mais um inicio? Pega a trava (que vale ate o fim da transacao) e conta. Quem chama faz a
+-- transicao que ocupa a vaga NA MESMA transacao; os gatilhos abaixo reconferem. Modelo anterior: sempre verdadeiro.
+CREATE FUNCTION public.capacity_reserve(p_org UUID) RETURNS BOOLEAN
+LANGUAGE plpgsql VOLATILE SET search_path = pg_catalog, pg_temp AS $$
+DECLARE
+    c RECORD;
+BEGIN
+    IF public.license_model(p_org) <> 2 THEN
+        RETURN true;
+    END IF;
+    PERFORM public.capacity_lock(p_org);
+    SELECT s.concurrent_used, s.concurrent_limit INTO c FROM public.capacity_state(p_org) s;
+    RETURN c.concurrent_limit IS NOT NULL AND c.concurrent_used < c.concurrent_limit;
+END;
+$$;
+COMMENT ON FUNCTION public.capacity_reserve(uuid) IS
+    'Reserva de vaga de execucao (066): sob a trava da capacidade da organizacao, diz se ha vaga para autorizar mais um inicio. A '
+    'transicao que ocupa a vaga e feita por quem chama, na mesma transacao.';
 
 -- === 4. Cadastro de Worker: no modelo por licenca, o limite e o tecnico e nao depende da ativacao ===
 CREATE OR REPLACE FUNCTION public.enforce_worker_registration_capacity() RETURNS TRIGGER AS $$
@@ -141,8 +208,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- === 5. Execucao remota: tentativa nova respeita os limites de simultaneas e de pendentes ===
-CREATE FUNCTION public.capacity_remote_attempt_on_insert() RETURNS TRIGGER
+-- === 5. FILA: tentativa remota nova e pedido novo ao Agent anterior respeitam o limite de pendentes ===
+CREATE FUNCTION public.capacity_pending_on_insert() RETURNS TRIGGER
 LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
 DECLARE
     c RECORD;
@@ -150,24 +217,42 @@ BEGIN
     IF public.license_model(NEW.organization_id) <> 2 THEN
         RETURN NEW;
     END IF;
-    -- a contagem e a gravacao sao uma coisa so: quem cria tentativa ja segura a linha da organizacao; o gatilho garante
-    PERFORM 1 FROM public.organizations o WHERE o.organization_id = NEW.organization_id FOR UPDATE;
-    SELECT * INTO c FROM public.capacity_state(NEW.organization_id);
-    IF c.concurrent_used >= c.concurrent_limit THEN
-        RAISE EXCEPTION 'tentativa recusada: CAPACITY_CONCURRENT_LIMIT' USING ERRCODE = '23514';
-    END IF;
-    IF c.pending_used >= c.pending_limit THEN
-        RAISE EXCEPTION 'tentativa recusada: CAPACITY_PENDING_LIMIT' USING ERRCODE = '23514';
+    PERFORM public.capacity_lock(NEW.organization_id);
+    SELECT s.pending_used, s.pending_limit INTO c FROM public.capacity_state(NEW.organization_id) s;
+    IF c.pending_limit IS NULL OR c.pending_used >= c.pending_limit THEN
+        RAISE EXCEPTION 'trabalho recusado: CAPACITY_PENDING_LIMIT' USING ERRCODE = '23514';
     END IF;
     RETURN NEW;
 END;
 $$;
 CREATE TRIGGER trg_remote_attempts_capacity BEFORE INSERT ON public.remote_attempts
-    FOR EACH ROW EXECUTE FUNCTION public.capacity_remote_attempt_on_insert();
+    FOR EACH ROW EXECUTE FUNCTION public.capacity_pending_on_insert();
+CREATE TRIGGER trg_run_requests_capacity BEFORE INSERT ON public.run_requests
+    FOR EACH ROW EXECUTE FUNCTION public.capacity_pending_on_insert();
+
+-- === 5b. VAGA: a transicao que autoriza o inicio so acontece com vaga (a aplicacao pergunta antes; o banco garante) ===
+CREATE FUNCTION public.capacity_slot_on_update() RETURNS TRIGGER
+LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+BEGIN
+    IF NOT public.capacity_reserve(NEW.organization_id) THEN
+        RAISE EXCEPTION 'inicio nao autorizado: CAPACITY_CONCURRENT_LIMIT (limite de execucoes simultaneas atingido)' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER trg_remote_attempts_capacity_slot BEFORE UPDATE ON public.remote_attempts
+    FOR EACH ROW WHEN (OLD.state = 1 AND NEW.state = 2) EXECUTE FUNCTION public.capacity_slot_on_update();
+CREATE TRIGGER trg_run_requests_capacity_slot BEFORE UPDATE ON public.run_requests
+    FOR EACH ROW WHEN (OLD.state = 1 AND NEW.state = 2) EXECUTE FUNCTION public.capacity_slot_on_update();
+-- "zz": depois do gatilho de reserva da 010, que trava a linha da organizacao. Ordem unica: linha da organizacao, trava da capacidade
+CREATE TRIGGER trg_executions_zz_capacity_slot BEFORE UPDATE ON public.executions
+    FOR EACH ROW WHEN (OLD.status = 1 AND NEW.status = 2) EXECUTE FUNCTION public.capacity_slot_on_update();
 
 -- === 6. Privilegios ===
-REVOKE ALL ON FUNCTION public.technical_capacity_limit(integer), public.capacity_state(uuid), public.capacity_remote_attempt_on_insert() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.technical_capacity_limit(integer), public.capacity_state(uuid) TO nekkora_platform, nekkora_ingestion;
+REVOKE ALL ON FUNCTION public.technical_capacity_limit(integer), public.capacity_state(uuid), public.capacity_lock(uuid), public.capacity_reserve(uuid),
+    public.capacity_pending_on_insert(), public.capacity_slot_on_update() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.technical_capacity_limit(integer), public.capacity_state(uuid), public.capacity_lock(uuid), public.capacity_reserve(uuid)
+    TO nekkora_platform, nekkora_ingestion;
 
 -- === 7. Invariantes ===
 DO $$
@@ -180,9 +265,14 @@ BEGIN
         RAISE EXCEPTION '066: um papel de servico altera os limites tecnicos';
     END IF;
     IF EXISTS (SELECT 1 FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
-                  AND p.proname IN ('technical_capacity_limit', 'capacity_state', 'capacity_remote_attempt_on_insert', 'enforce_worker_registration_capacity')
+                  AND p.proname IN ('technical_capacity_limit', 'capacity_state', 'capacity_lock', 'capacity_reserve', 'capacity_pending_on_insert',
+                                    'capacity_slot_on_update', 'enforce_worker_registration_capacity')
                   AND p.prosecdef) THEN
         RAISE EXCEPTION '066: funcao SECURITY DEFINER inesperada';
+    END IF;
+    IF (SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname IN ('trg_remote_attempts_capacity', 'trg_remote_attempts_capacity_slot',
+            'trg_run_requests_capacity', 'trg_run_requests_capacity_slot', 'trg_executions_zz_capacity_slot')) <> 5 THEN
+        RAISE EXCEPTION '066: gatilhos de capacidade incompletos';
     END IF;
 END;
 $$;

@@ -840,13 +840,22 @@ public final class GatewayService {
                             rs.getObject(9, OffsetDateTime.class), rs.getObject(10, OffsetDateTime.class),
                             REQUEST_STATES.get(rs.getShort(11) - 1), rs.getString(12)))
                     .list();
+            // 066: entregar o pedido e o que autoriza a maquina a iniciar - a vaga de execucao da organizacao e reservada aqui.
+            // Sem vaga, o pedido ainda nao entregue NAO e entregue: continua pendente ate haver vaga ou vencer
+            List<PendingRequest> held = new java.util.ArrayList<>();
             for (PendingRequest p : items) {
+                if ("REQUESTED".equals(p.state()) && !Boolean.TRUE.equals(j.sql("SELECT public.capacity_reserve(?)").param(m.organization())
+                        .query(Boolean.class).single())) {
+                    held.add(p);
+                    LOG.info("evento=agente.pedido_aguardando_vaga pedido={} correlacao={}", p.runRequestId(), RequestContext.correlation());
+                    continue;
+                }
                 if (!"ACCEPTED".equals(p.state())) {
                     j.sql("UPDATE public.run_requests SET state = 2, deliveries = deliveries + 1 WHERE organization_id = ? AND run_request_id = ?")
                             .param(m.organization()).param(p.runRequestId()).update();
                 }
             }
-            return items.stream().map(p -> "REQUESTED".equals(p.state())
+            return items.stream().filter(p -> !held.contains(p)).map(p -> "REQUESTED".equals(p.state())
                     ? new PendingRequest(p.runRequestId(), p.authorizationId(), p.workspaceId(), p.automationId(), p.automationVersionId(), p.sourceKind(),
                             p.packageFingerprint(), p.packageFingerprintRule(), p.requestedAt(), p.validUntil(), "DELIVERED", p.agentExecutionId())
                     : p).toList();

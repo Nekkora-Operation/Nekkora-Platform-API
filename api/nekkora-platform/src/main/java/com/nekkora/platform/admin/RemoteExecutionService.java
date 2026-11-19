@@ -1038,22 +1038,13 @@ public class RemoteExecutionService {
     }
 
     /**
-     * 066, D2: no modelo por licenca, a tentativa nova respeita os limites TECNICOS de execucoes em andamento e pendentes da
-     * organizacao. E recusa de capacidade, com motivo proprio - nunca de licenca, e nao consome nem libera licenca. O gatilho
-     * da 066 reconfere na gravacao. Modelo anterior: limites nulos, nada conferido aqui.
+     * 066, D2: no modelo por licenca, a tentativa nova entra na FILA da organizacao, que tem limite tecnico de pendentes. Fila
+     * cheia e recusa de capacidade, com motivo proprio - nunca de licenca, e nao consome nem libera licenca. O limite de
+     * execucoes SIMULTANEAS nao recusa a solicitacao: a vaga e reservada na entrega a maquina, e sem vaga a tentativa espera
+     * na fila. O gatilho da 066 reconfere na gravacao. Modelo anterior: limite nulo, nada conferido aqui.
      */
     private static void requireCapacity(JdbcClient j, UUID org) {
-        String full = j.sql("SELECT concurrent_used, concurrent_limit, pending_used, pending_limit FROM public.capacity_state(?)").param(org)
-                .query((rs, n) -> {
-                    Long concurrent = rs.getObject(2, Long.class);
-                    Long pending = rs.getObject(4, Long.class);
-                    return concurrent != null && rs.getLong(1) >= concurrent ? "CONCURRENT" : pending != null && rs.getLong(3) >= pending ? "PENDING" : "";
-                }).single();
-        if (!full.isEmpty()) {
-            ApiError refused = full.equals("CONCURRENT") ? ApiError.CAPACITY_CONCURRENT_LIMIT_REACHED : ApiError.CAPACITY_PENDING_LIMIT_REACHED;
-            LOG.info("evento=acesso.negado regra=CAPACIDADE motivo={} correlacao={}", refused.reason(), AccessActions.correlation());
-            throw new ApiException(refused, String.valueOf(refused.reason()));
-        }
+        com.nekkora.core.license.Capacity.requireRoomInQueue(j, org);
     }
 
     private void attempt(JdbcClient j, UUID org, UUID executionId, int number, Target t, UUID membership) {

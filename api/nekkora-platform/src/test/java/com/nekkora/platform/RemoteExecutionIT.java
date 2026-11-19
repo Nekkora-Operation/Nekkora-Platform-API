@@ -1,6 +1,7 @@
 package com.nekkora.platform;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.net.URI;
 import java.net.http.HttpRequest;
@@ -1847,8 +1848,9 @@ class RemoteExecutionIT extends PlatformTestBase {
 
     /**
      * D2: no modelo por licenca a organizacao registra maquina SEM a ativacao do operador, e os limites de capacidade sao
-     * tecnicos (50 Workers, 5 em andamento, 50 pendentes), configuraveis e separados das licencas. Bater num limite e recusa de
-     * capacidade - nao de licenca - e nao consome licenca nenhuma. No modelo anterior, tudo como antes.
+     * tecnicos (50 Workers, 5 simultaneas, 50 pendentes), configuraveis e separados das licencas. Fila cheia e recusa de
+     * capacidade - nao de licenca - e nao consome licenca nenhuma. Simultaneas no limite NAO recusa: a vaga e reservada na
+     * entrega e o trabalho espera na fila, em qualquer fluxo. No modelo anterior, tudo como antes.
      */
     @Test
     void capacidadeTecnicaSubstituiAAtivacaoNoModeloPorLicencaESeparadaDasLicencas() throws Exception {
@@ -1884,7 +1886,7 @@ class RemoteExecutionIT extends PlatformTestBase {
         // quem nao administra nao le a capacidade; outra organizacao nao le a desta
         assertThat(setup().admin().get(waiting.o() + "/capacity").status()).isIn(401, 403, 404);
 
-        // ---- execucao remota: limites de pendentes e de em andamento, com motivo proprio
+        // ---- execucao remota: a FILA tem limite (recusa de capacidade); a VAGA e reservada na entrega, e sem vaga a tentativa ESPERA
         Setup s = setup();
         UUID org = s.org().id();
         declare(s, null);
@@ -1902,26 +1904,51 @@ class RemoteExecutionIT extends PlatformTestBase {
         try {
             BrowserClient.Response first = s.admin().post(s.requests(), body(s, a, UUID.randomUUID()).replace("}", accept));
             assertThat(first.status()).as(first.body()).isEqualTo(201);
-            // 1 pendente (limite 1): a segunda solicitacao e recusada por CAPACIDADE
+            String firstAttempt = JSON.readTree(first.body()).get("attempts").get(0).get("attemptId").asString();
+            // 1 pendente (limite 1): a segunda solicitacao e recusada por CAPACIDADE da fila
             refused(s.admin().post(s.requests(), body(s, b, UUID.randomUUID()).replace("}", accept)), "capacity_pending_limit_reached");
             assertThat(value("SELECT count(*) FROM remote_executions WHERE organization_id = '" + org + "'")).as("nada gravado").isEqualTo("1");
-            // o banco reconfere: a tentativa direta tambem e recusada
             assertThat(usage(JSON.readTree(s.admin().get(s.o() + "/capacity").body()), "pendingExecutions")).containsExactly("1", "1");
-            // a primeira passa a executar: sai das pendentes, entra nas em andamento (limite 1)
-            machineMoves(s, JSON.readTree(first.body()).get("attempts").get(0).get("attemptId").asString(), 2, 3, 4, 5, 6);
-            refused(s.admin().post(s.requests(), body(s, b, UUID.randomUUID()).replace("}", accept)), "capacity_concurrent_limit_reached");
+            // a primeira e entregue e passa a executar: sai da fila e ocupa a UNICA vaga
+            machineMoves(s, firstAttempt, 2, 3, 4, 5, 6);
+            // a vaga cheia NAO recusa a solicitacao: a segunda nasce e fica PENDENTE (a fila tem lugar)
+            BrowserClient.Response second = s.admin().post(s.requests(), body(s, b, UUID.randomUUID()).replace("}", accept));
+            assertThat(second.status()).as("simultaneas no limite: a solicitacao espera na fila, nao e recusada - " + second.body()).isEqualTo(201);
+            String secondAttempt = JSON.readTree(second.body()).get("attempts").get(0).get("attemptId").asString();
+            assertThat(JSON.readTree(second.body()).get("attempts").get(0).get("state").asString()).isEqualTo("QUEUED");
             JsonNode full = JSON.readTree(s.admin().get(s.o() + "/capacity").body());
             assertThat(usage(full, "concurrentExecutions")).containsExactly("1", "1");
-            assertThat(usage(full, "pendingExecutions")).containsExactly("0", "1");
+            assertThat(usage(full, "pendingExecutions")).containsExactly("1", "1");
+            assertThat(full.get("concurrentExecutions").get("breakdown").toString()).as("de que e feita a ocupacao")
+                    .isEqualTo("{\"remote\":1,\"unconfirmed\":0,\"platform\":0,\"previousAgent\":0}");
+            // sem vaga, o banco nao deixa ENTREGAR a segunda (a aplicacao do canal pergunta antes: CapacityReservationIT)
+            assertThat(as("nekkora_ingestion", org, "UPDATE remote_attempts SET state = 2, token_hash = repeat('a', 64), epoch = epoch + 1 WHERE attempt_id = '"
+                    + secondAttempt + "'")).as("entrega sem vaga").isEqualTo("23514");
+            assertThat(value("SELECT state FROM remote_attempts WHERE attempt_id = '" + secondAttempt + "'")).as("continua pendente").isEqualTo("1");
+            // a execucao da PLATFORM divide a mesma vaga: a reserva dela tambem espera
+            UUID platformExecution = ProductFixtures.execution(org, s.workspace(), s.automation(), s.version(), null, s.org().adminMembership());
+            assertThatThrownBy(() -> ProductFixtures.start(org, s.workspace(), platformExecution, s.org().adminMembership()))
+                    .as("execucao da Platform sem vaga").rootCause().hasMessageContaining("CAPACITY_CONCURRENT_LIMIT");
+            assertThat(value("SELECT status FROM executions WHERE execution_id = '" + platformExecution + "'")).as("continua pendente").isEqualTo("1");
+            // com a fila cheia (a segunda), a terceira solicitacao e recusada pela FILA
+            refused(s.admin().post(s.requests(), body(s, c, UUID.randomUUID()).replace("}", accept)), "capacity_pending_limit_reached");
             // CAPACIDADE NAO E LICENCA: a conta de licencas e a mesma, e a automacao continua com direito
             JsonNode licenses = JSON.readTree(s.admin().get(s.o() + "/licenses/summary").body());
             assertThat(List.of(licenses.get("contracted").asLong(), licenses.get("used").asLong(), licenses.get("available").asLong()))
                     .as("bater no limite de capacidade nao consome licenca").containsExactly(1L, 1L, 0L);
             assertThat(value("SELECT public.license_state('" + org + "', '" + s.automation() + "')")).isEqualTo("OK");
-            assertThat(missing(s, b)).as("a maquina B nao tem pendencia de licenca").doesNotContain("LICENSE_REQUIRED", "LICENSE_EXPIRED");
-            // terminou: volta a caber
-            machineMoves(s, JSON.readTree(first.body()).get("attempts").get(0).get("attemptId").asString(), 7);
-            assertThat(s.admin().post(s.requests(), body(s, b, UUID.randomUUID()).replace("}", accept)).status()).isEqualTo(201);
+            assertThat(missing(s, c)).as("a maquina C nao tem pendencia de licenca").doesNotContain("LICENSE_REQUIRED", "LICENSE_EXPIRED");
+            // a primeira termina: a vaga volta. A execucao da Platform reserva a vaga; a tentativa remota continua esperando
+            machineMoves(s, firstAttempt, 7);
+            ProductFixtures.start(org, s.workspace(), platformExecution, s.org().adminMembership());
+            assertThat(JSON.readTree(s.admin().get(s.o() + "/capacity").body()).get("concurrentExecutions").get("breakdown").toString())
+                    .isEqualTo("{\"remote\":0,\"unconfirmed\":0,\"platform\":1,\"previousAgent\":0}");
+            assertThat(as("nekkora_ingestion", org, "UPDATE remote_attempts SET state = 2, token_hash = repeat('a', 64), epoch = epoch + 1 WHERE attempt_id = '"
+                    + secondAttempt + "'")).as("a vaga e da execucao da Platform").isEqualTo("23514");
+            ProductFixtures.succeed(platformExecution, "1 second");
+            machineMoves(s, secondAttempt, 2);
+            assertThat(usage(JSON.readTree(s.admin().get(s.o() + "/capacity").body()), "concurrentExecutions")).containsExactly("1", "1");
+            assertThat(s.admin().post(s.requests(), body(s, c, UUID.randomUUID()).replace("}", accept)).status()).as("a fila voltou a ter lugar").isEqualTo(201);
         } finally {
             DB.asSuperuser("UPDATE technical_capacity_limits SET limit_value = 5, updated_by = 'teste de capacidade (restaurado)' WHERE resource_code = 2",
                     "UPDATE technical_capacity_limits SET limit_value = 50, updated_by = 'teste de capacidade (restaurado)' WHERE resource_code = 3");

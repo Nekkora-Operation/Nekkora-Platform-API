@@ -113,6 +113,9 @@ paths:
         entregar, o servidor REVALIDA as condicoes da solicitacao (Worker autorizado no ambiente, maquina habilitada e
         compativel, autorizacao vigente da versao para este Worker): se algo deixou de valer, a tentativa fica REFUSED com o
         motivo e nada e entregue. Maquina pausada: nada e entregue (a tentativa espera ate o prazo da oferta e entao expira).
+        Organizacao do modelo por licenca sem VAGA de execucao (066: limite tecnico de simultaneas, um so para a organizacao,
+        compartilhado pelos fluxos de execucao): a tentativa ainda nao entregue NAO e entregue e nao e recusada - continua na
+        fila, e a resposta e o objeto vazio, ate haver vaga ou vencer o prazo da oferta. A vaga e reservada nesta entrega.
         Perguntar de novo antes de confirmar o recebimento entrega a MESMA tentativa com token e epoca novos: os anteriores
         deixam de valer. Maquina nao habilitada: 409 + remote_execution_not_enabled. Entregar nao prova recebimento.
         dependencyCheck (054): alem disso, e sem depender disso, um pedido de verificacao de dependencias a responder em
@@ -691,6 +694,8 @@ paths:
       description: >
         REQUESTED/DELIVERED no prazo e ACCEPTED (para a maquina reconciliar). A primeira leitura marca DELIVERED; cada leitura conta
         uma entrega. Os vencidos sem decisao passam a EXPIRED aqui (instante do servidor). Entregar NAO e iniciar. Ate 50 itens.
+        Organizacao do modelo por licenca sem VAGA de execucao (066): o pedido ainda nao entregue fica FORA desta lista e
+        continua pendente ate haver vaga ou vencer; a vaga e reservada na entrega. Os ja entregues e aceitos continuam vindo.
       parameters: [ { $ref: '#/components/parameters/Contract' } ]
       responses:
         '200': { description: 'Pedidos', content: { application/json: { schema: { $ref: '#/components/schemas/RunRequestList' } } } }
