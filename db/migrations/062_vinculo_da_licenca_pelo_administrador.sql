@@ -69,9 +69,12 @@ BEGIN
     IF NEW.assigned_by_membership_id IS NULL AND current_user = 'nekkora_platform' THEN
         RAISE EXCEPTION 'o vinculo feito pela Platform identifica quem vinculou' USING ERRCODE = '42501';
     END IF;
-    IF NEW.assigned_by_membership_id IS NOT NULL
-       AND NOT public.access_org_permission(NEW.organization_id, NEW.assigned_by_membership_id, 'org.manage') THEN
-        RAISE EXCEPTION 'quem vincula a licenca precisa administrar a organizacao (org.manage)' USING ERRCODE = '42501';
+    -- em dois niveis de proposito: a chamada a access_org_permission so e preparada quando ha quem conferir. O vinculo aberto
+    -- por um ato do operador (sem "vinculado por") nao depende de o dono das funcoes do operador poder executa-la.
+    IF NEW.assigned_by_membership_id IS NOT NULL THEN
+        IF NOT public.access_org_permission(NEW.organization_id, NEW.assigned_by_membership_id, 'org.manage') THEN
+            RAISE EXCEPTION 'quem vincula a licenca precisa administrar a organizacao (org.manage)' USING ERRCODE = '42501';
+        END IF;
     END IF;
     SELECT a.status INTO v_status FROM public.automations a
      WHERE a.organization_id = NEW.organization_id AND a.workspace_id = NEW.workspace_id AND a.automation_id = NEW.automation_id;
