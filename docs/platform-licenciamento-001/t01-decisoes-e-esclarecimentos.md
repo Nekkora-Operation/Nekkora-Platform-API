@@ -384,3 +384,47 @@ Consequências para a implementação (etapa da conferência nos fluxos, ainda n
 - **D8, o que resta decidir:** com a licença vencida, a Platform recusa também o **registro** de execuções novas do
   Agent anterior, ou aceita o registro e apenas deixa de entregar autorizações novas? A orientação recebida fecha a
   entrega de autorizações; o registro ficou sem resposta explícita.
+
+---
+
+## 9. Decisões de 19/11/2026, terceira rodada
+
+Com esta rodada, as oito pendentes da seção 2 estão decididas. Onde este texto diverge das seções anteriores, vale este.
+
+| # | Decisão | Onde entra |
+|---|---|---|
+| D2 | Sai a ativação comercial das organizações que usam licenciamento. Limites **técnicos**, configuráveis, iniciais de 50 Workers, 5 execuções simultâneas e 50 pendentes por organização, apresentados separados das licenças. Atingir um limite de capacidade não consome outra licença. | etapa de capacidade |
+| D3 | Prazo mantido no Agent anterior; renovação periódica retirada só na execução remota do Agent Client. A validade da autorização offline **nunca atravessa uma lacuna entre períodos de licença**; não basta o fim do último período cadastrado. | T05 (064) |
+| D6 | Transferência pelo atendimento externo. O operador registra o administrador solicitante, a **referência do chamado**, a justificativa e a **verificação da identidade**. Informar só o identificador de um administrador não comprova o pedido. Sem central de chamados nesta missão. | etapa da transferência |
+| D7 | Organizações novas nascem exigindo licença a partir da **ativação controlada** da nova versão, depois de fluxos e interface validados. Sem data fixa. As existentes seguem com migração explícita e auditada. | etapa de organizações novas |
+| D8 | Aceitar registros e entregas de execuções cobertas por autorização válida para aquele início, inclusive quando os dados chegam depois do vencimento. Organização, automação, versão, Worker e autorização conferidos pelos registros do servidor. Autorizações anteriores à migração têm tratamento de transição registrado, limitado à validade já emitida, sem renovação automática. Documentar o limite da comprovação do horário de início sem conexão. | T05 (064) |
+| D10 | Sem papel novo. Qualquer membro interno ativo pode solicitar uma organização, inclusive leitor e operador; a aprovação é do administrador. Cliente fica excluído. | etapa de criação de organizações |
+| D11 | Vale o contexto da organização em que a pessoa atua. Ser Cliente em A não elimina a administração legítima de B; o perfil de B não permite criar ou solicitar em nome de A. Quem só tem vínculos ativos como Cliente não usa a criação independente para contornar a restrição. | etapa de criação de organizações |
+| D12 | Quem autoriza escolhe entre si e o solicitante; o administrador aprovador é o padrão. A tela explica que a escolha concede a administração da nova organização e define de quem conta o limite de vazias. O limite é revalidado na aprovação, a escolha é registrada e ninguém mais ganha acesso. | etapa de criação de organizações |
+| S1, S2 | Aprovadas. | T05 (064) |
+| S3 | Fora. | — |
+
+### Correção à seção 8
+
+A seção 8 dizia que a autorização nova teria a validade limitada "ao fim do último período da licença". Isso está
+**errado** quando há intervalo entre períodos: a autorização atravessaria a lacuna. A regra é o fim da **cobertura sem
+lacuna**: o período que cobre agora, estendido só pelos períodos seguintes que começam exatamente onde o anterior termina.
+É o que a 064 implementa e o que o teste confere (T05).
+
+### Ajuste da prévia
+
+Ao ligar a exigência, o servidor valida que o **conjunto** continua igual ao apresentado: a identidade de cada automação
+que ficaria impedida e, de cada coberta, a licença que a cobre. Mesma quantidade com outro conjunto exige nova prévia.
+A conferência e a ativação acontecem sob trava exclusiva do modelo da organização; vínculo, concessão, renovação,
+encerramento e todo início de trabalho pegam a mesma trava em modo compartilhado. Detalhe em T04 e T05.
+
+### D8, por extenso
+
+- **Aceito:** o registro cuja autorização (a do servidor) valia no início informado, com licença vigente naquele início.
+  Se os dados chegam depois do vencimento, o registro é aceito do mesmo jeito e marcado.
+- **Transição:** autorização emitida antes de a organização passar ao modelo por licença vale até a validade já emitida.
+  Cada registro feito com ela fica marcado como transição. Não é renovada automaticamente.
+- **Recusado:** início sem licença e sem transição, ou autorização que não valia naquele início.
+- **Do servidor:** organização, automação, versão, Worker e autorização. **Da máquina:** só o instante do início.
+- **Limite:** sem conexão, o instante do início é o relógio da máquina. O servidor o restringe ao intervalo entre a emissão
+  da autorização e agora, mas não o comprova.
