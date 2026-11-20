@@ -171,6 +171,16 @@ public enum ApiError {
     PREVIOUS_AGENT_SESSION_ALREADY_RECONCILED(HttpStatus.CONFLICT, "conflict", "previous_agent_session_already_reconciled"),
     /** 065: o solicitante informado nao administra a organizacao neste instante. */
     LICENSE_TRANSFER_REQUESTER_NOT_ADMIN(HttpStatus.CONFLICT, "conflict", "license_transfer_requester_not_admin"),
+    /** PLATFORM-FLUXO-002: nao ha licenca vigente disponivel para ativar a automacao; nada foi vinculado nem autorizado. */
+    LICENSE_UNAVAILABLE(HttpStatus.CONFLICT, "conflict", "license_unavailable"),
+    /** PLATFORM-FLUXO-002: um Worker informado nao esta ativo e autorizado no ambiente de trabalho da automacao; nada foi feito. */
+    ACTIVATION_WORKER_NOT_IN_WORKSPACE(HttpStatus.CONFLICT, "conflict", "activation_worker_not_in_workspace"),
+    /** PLATFORM-FLUXO-002: a automacao (ou o ambiente dela) nao esta ativa; nao e ativada nem recebe autorizacao. */
+    ACTIVATION_AUTOMATION_INACTIVE(HttpStatus.CONFLICT, "conflict", "activation_automation_inactive"),
+    /** PLATFORM-FLUXO-002: a ativacao ainda nao tem Worker; escolha os Workers antes de aceitar uma versao. */
+    ACTIVATION_WITHOUT_WORKERS(HttpStatus.CONFLICT, "conflict", "activation_without_workers"),
+    /** PLATFORM-FLUXO-002: renovar autorizacoes so existe no modelo por licenca (no anterior, a validade e a informada). */
+    ACTIVATION_RENEWAL_NOT_APPLICABLE(HttpStatus.CONFLICT, "conflict", "activation_renewal_not_applicable"),
     /** 064 (conferencia nos fluxos): a organizacao exige licenca e a automacao nao tem licenca vinculada; nada foi iniciado. */
     LICENSE_REQUIRED(HttpStatus.CONFLICT, "conflict", "license_required"),
     /** 064: a licenca vinculada a automacao esta fora de periodo (vencida, a espera de renovacao); nada foi iniciado. */

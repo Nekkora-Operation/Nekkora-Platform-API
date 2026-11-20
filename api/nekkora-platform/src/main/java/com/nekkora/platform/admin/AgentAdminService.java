@@ -507,27 +507,70 @@ public final class AgentAdminService {
             access.requireWorkspace(j, org, actor.membershipId(), workspaceId, "automation.execute");
             actions.requireStepUp(j, actor);
             actions.lockOrganizationAndActor(j, org, actor.userId());
-            Boolean active = j.sql("SELECT a.status = 1 AND w.status = 1 FROM public.automations a JOIN public.workspaces w "
-                            + "ON w.organization_id = a.organization_id AND w.workspace_id = a.workspace_id "
-                            + "WHERE a.organization_id = ? AND a.workspace_id = ? AND a.automation_id = ?")
-                    .param(org).param(workspaceId).param(automationId).query(Boolean.class).optional()
-                    .orElseThrow(() -> AccessActions.refuse(Failure.TARGET_NOT_FOUND, "automacao"));
-            if (!active) {
-                throw AccessActions.refuse(Failure.CONFLICT, "automacao_ou_workspace_inativo");
-            }
-            UUID assignment = j.sql("SELECT assignment_id FROM public.worker_workspace_assignments WHERE organization_id = ? AND worker_id = ? "
-                            + "AND workspace_id = ? AND status = 1").param(org).param(workerId).param(workspaceId).query(UUID.class).optional()
-                    .orElseThrow(() -> AccessActions.refuse(Failure.CONFLICT, "worker_nao_autorizado_no_workspace"));
-            OffsetDateTime until = licensedValidity(j, org, automationId, validUntil);
-            LocalAuthorization a = oneValid(() -> j.sql("""
-                    INSERT INTO public.local_run_authorizations (organization_id, workspace_id, worker_id, worker_workspace_assignment_id, automation_id,
-                        automation_version_id, package_fingerprint, package_fingerprint_rule, source_kind, granted_by_membership_id, valid_until)
-                    VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, 3, ?, ?)
-                    RETURNING """ + " " + AUTHORIZATION_COLUMNS).param(org).param(workspaceId).param(workerId).param(assignment).param(automationId)
-                    .param(actor.membershipId()).param(until).query((rs, n) -> authorization(rs)).single());
-            audit(j, org, 10, actor.membershipId(), null, workerId, workspaceId, null, null, a.authorizationId(), null);
-            return a;
+            return grantMonitoring(j, org, actor.membershipId(), workspaceId, workerId, automationId, validUntil);
         });
+    }
+
+    /**
+     * O ato de autorizar o MONITORAMENTO da automacao no Worker (source_kind 3), dentro da transacao de quem chama (sessao,
+     * permissao, confirmacao e travas JA conferidas). Usado pela rota propria e pela ativacao da automacao (PLATFORM-FLUXO-002).
+     */
+    static LocalAuthorization grantMonitoring(JdbcClient j, UUID org, UUID membership, UUID workspaceId, UUID workerId, UUID automationId,
+                                              OffsetDateTime validUntil) {
+        Boolean active = j.sql("SELECT a.status = 1 AND w.status = 1 FROM public.automations a JOIN public.workspaces w "
+                    + "ON w.organization_id = a.organization_id AND w.workspace_id = a.workspace_id "
+                    + "WHERE a.organization_id = ? AND a.workspace_id = ? AND a.automation_id = ?")
+                .param(org).param(workspaceId).param(automationId).query(Boolean.class).optional()
+                .orElseThrow(() -> AccessActions.refuse(Failure.TARGET_NOT_FOUND, "automacao"));
+        if (!active) {
+            throw AccessActions.refuse(Failure.CONFLICT, "automacao_ou_workspace_inativo");
+        }
+        UUID assignment = j.sql("SELECT assignment_id FROM public.worker_workspace_assignments WHERE organization_id = ? AND worker_id = ? "
+                    + "AND workspace_id = ? AND status = 1").param(org).param(workerId).param(workspaceId).query(UUID.class).optional()
+                .orElseThrow(() -> AccessActions.refuse(Failure.CONFLICT, "worker_nao_autorizado_no_workspace"));
+        OffsetDateTime until = licensedValidity(j, org, automationId, validUntil);
+        LocalAuthorization a = oneValid(() -> j.sql("""
+                INSERT INTO public.local_run_authorizations (organization_id, workspace_id, worker_id, worker_workspace_assignment_id, automation_id,
+                automation_version_id, package_fingerprint, package_fingerprint_rule, source_kind, granted_by_membership_id, valid_until)
+                VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, 3, ?, ?)
+                RETURNING """ + " " + AUTHORIZATION_COLUMNS).param(org).param(workspaceId).param(workerId).param(assignment).param(automationId)
+                .param(membership).param(until).query((rs, n) -> authorization(rs)).single());
+        audit(j, org, 10, membership, null, workerId, workspaceId, null, null, a.authorizationId(), null);
+        return a;
+    }
+
+    /**
+     * PLATFORM-FLUXO-002 (069): RENOVA a autorizacao {@code previous} depois de a licenca ser renovada. Emite uma autorizacao
+     * NOVA do MESMO escopo (Worker no workspace, automacao, versao, origem e pacote), valida ate o fim da cobertura atual (D3),
+     * apontando para a anterior; se a anterior ainda vigora, ela e revogada antes, NA MESMA TRANSACAO, com o motivo 2
+     * (substituida). Nada e estendido. A anterior revogada por uma pessoa nunca e renovada (o banco recusa). Dentro da
+     * transacao de quem chama (sessao, permissao, confirmacao e travas JA conferidas).
+     */
+    static LocalAuthorization renewAuthorization(JdbcClient j, UUID org, UUID membership, LocalAuthorization previous) {
+        OffsetDateTime until = licensedValidity(j, org, previous.automationId(), null);
+        if (!until.isAfter(previous.validUntil())) {
+            throw AccessActions.refuse(Failure.CONFLICT, "renovacao_sem_cobertura_nova");
+        }
+        if (previous.revokedAt() == null && previous.validUntil().isAfter(OffsetDateTime.now())) {
+            int n = j.sql("UPDATE public.local_run_authorizations SET revoked_at = clock_timestamp(), revoked_by_membership_id = ?, revocation_reason = 2 "
+                            + "WHERE organization_id = ? AND authorization_id = ? AND revoked_at IS NULL")
+                    .param(membership).param(org).param(previous.authorizationId()).update();
+            if (n == 0) {
+                throw AccessActions.refuse(Failure.CONFLICT, "autorizacao_alterada");
+            }
+            audit(j, org, 11, membership, null, previous.workerId(), previous.workspaceId(), null, null, previous.authorizationId(), null);
+        }
+        LocalAuthorization a = oneValid(() -> j.sql("""
+                INSERT INTO public.local_run_authorizations (organization_id, workspace_id, worker_id, worker_workspace_assignment_id, automation_id,
+                    automation_version_id, package_fingerprint, package_fingerprint_rule, source_kind, granted_by_membership_id, valid_until,
+                    renewal_of_authorization_id)
+                SELECT organization_id, workspace_id, worker_id, worker_workspace_assignment_id, automation_id, automation_version_id, package_fingerprint,
+                       package_fingerprint_rule, source_kind, ?, ?, authorization_id
+                  FROM public.local_run_authorizations WHERE organization_id = ? AND authorization_id = ?
+                RETURNING """ + " " + AUTHORIZATION_COLUMNS).param(membership).param(until).param(org).param(previous.authorizationId())
+                .query((rs, n) -> authorization(rs)).single());
+        audit(j, org, 10, membership, null, a.workerId(), a.workspaceId(), null, null, a.authorizationId(), null);
+        return a;
     }
 
     /** Nome da recusa do gatilho da 033 (uma autorizacao local vigente por escopo; SQLSTATE 23505 com este nome). */
@@ -634,8 +677,26 @@ public final class AgentAdminService {
      */
     public record WorkerView(UUID workerId, String name, String status, UUID agentId, List<UUID> workspaceIds, String agentName,
                              String agentStatus, String agentVersion, UUID installationId, OffsetDateTime lastHeartbeatAt, String connectivity,
-                             OffsetDateTime credentialExpiresAt, OffsetDateTime createdAt) {
+                             OffsetDateTime credentialExpiresAt, OffsetDateTime createdAt, String machineState) {
     }
+
+    /**
+     * PLATFORM-FLUXO-002 - o estado da MAQUINA (o Worker com o computador vinculado a ele), para a tela dizer sem ambiguidade:
+     * REGISTERED (cadastrada, sem computador vinculado), AWAITING_CONNECTION (codigo de pareamento ainda valido, ou computador
+     * vinculado que ainda nao fez contato), CONNECTED (contato autenticado nos ultimos 180 s), NO_CONTACT (vinculada, sem
+     * contato recente), LINK_SUSPENDED (vinculo do computador suspenso) e INACTIVE (maquina desativada). Expressao SQL sobre
+     * {@code w} (workers) e {@code a} (agents do vinculo ATIVO, LEFT JOIN); o parametro e o prazo de conexao em segundos.
+     */
+    static final String MACHINE_STATE_SQL = """
+            CASE WHEN w.status <> 1 THEN 'INACTIVE'
+                 WHEN a.agent_id IS NOT NULL AND a.status = 3 THEN 'LINK_SUSPENDED'
+                 WHEN a.agent_id IS NOT NULL AND a.status = 2 AND a.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?) THEN 'CONNECTED'
+                 WHEN a.agent_id IS NOT NULL AND a.status = 2 AND a.last_heartbeat_at IS NOT NULL THEN 'NO_CONTACT'
+                 WHEN a.agent_id IS NOT NULL AND a.status IN (1, 2) THEN 'AWAITING_CONNECTION'
+                 WHEN EXISTS (SELECT 1 FROM public.agent_enrollments e WHERE e.organization_id = w.organization_id AND e.worker_id = w.worker_id
+                                 AND e.purpose = 1 AND e.consumed_at IS NULL AND e.cancelled_at IS NULL AND e.expires_at > clock_timestamp())
+                      THEN 'AWAITING_CONNECTION'
+                 ELSE 'REGISTERED' END""";
 
     public List<WorkerView> listWorkers(UUID org, ValidSession actor, String token) {
         return actions.read(org, j -> {
@@ -646,13 +707,15 @@ public final class AgentAdminService {
                            coalesce((SELECT array_agg(x.workspace_id ORDER BY x.workspace_id) FROM public.worker_workspace_assignments x
                                       WHERE x.organization_id = w.organization_id AND x.worker_id = w.worker_id AND x.status = 1), '{}'),
                            a.name, a.status, a.agent_version, a.installation_id, a.last_heartbeat_at,
-                           a.status = 2 AND a.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?), c.expires_at, w.created_at
+                           a.status = 2 AND a.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?), c.expires_at, w.created_at,
+                           """ + MACHINE_STATE_SQL + """
+
                       FROM public.workers w
                       LEFT JOIN public.worker_agent_assignments wa ON wa.organization_id = w.organization_id AND wa.worker_id = w.worker_id AND wa.status = 1
                       LEFT JOIN public.agents a ON a.organization_id = wa.organization_id AND a.agent_id = wa.agent_id
                       LEFT JOIN public.agent_credentials c ON c.organization_id = a.organization_id AND c.agent_id = a.agent_id AND c.revoked_at IS NULL
                      WHERE w.organization_id = ? ORDER BY w.created_at, w.worker_id
-                    """).param(CONNECTED_SECONDS).param(org).query((rs, n) -> {
+                    """).param(CONNECTED_SECONDS).param(CONNECTED_SECONDS).param(org).query((rs, n) -> {
                 UUID agent = rs.getObject(4, UUID.class);
                 return new WorkerView(rs.getObject(1, UUID.class), rs.getString(2),
                         switch (rs.getShort(3)) { case 1 -> "ACTIVE"; case 2 -> "SUSPENDED"; default -> "RETIRED"; }, agent,
@@ -660,7 +723,7 @@ public final class AgentAdminService {
                         agent == null ? null : switch (rs.getShort(7)) { case 1 -> "PENDING"; case 2 -> "ACTIVE"; case 3 -> "SUSPENDED"; default -> "REVOKED"; },
                         rs.getString(8), rs.getObject(9, UUID.class), rs.getObject(10, OffsetDateTime.class),
                         agent == null ? null : Boolean.TRUE.equals(rs.getObject(11, Boolean.class)) ? "CONNECTED" : "DISCONNECTED", rs.getObject(12, OffsetDateTime.class),
-                        rs.getObject(13, OffsetDateTime.class));
+                        rs.getObject(13, OffsetDateTime.class), rs.getString(14));
             }).list();
         });
     }

@@ -313,6 +313,13 @@ public class PlatformConfig {
         return new com.nekkora.platform.admin.LicenseService(actions, access);
     }
 
+    /** PLATFORM-FLUXO-002: ativacao unificada da automacao (licenca + autorizacoes dos Workers escolhidos, em um passo). */
+    @Bean
+    com.nekkora.platform.admin.AutomationActivationService automationActivationService(com.nekkora.platform.admin.AccessActions actions,
+                                                                                       com.nekkora.platform.access.WorkspaceAccess access) {
+        return new com.nekkora.platform.admin.AutomationActivationService(actions, access);
+    }
+
     /** PLATFORM-LICENCIAMENTO-001 (067): pedidos de criacao de organizacao feitos a esta organizacao, para quem a administra. */
     @Bean
     com.nekkora.platform.admin.OrganizationRequestService organizationRequestService(com.nekkora.platform.admin.AccessActions actions,

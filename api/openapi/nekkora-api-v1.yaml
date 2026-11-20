@@ -2187,6 +2187,161 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
+  /api/v1/o/{org}/automation-activations:
+    get:
+      tags: [Ativacao de automacoes]
+      operationId: listAutomationActivations
+      x-estado: implementado (PLATFORM-FLUXO-002; AutomationActivationController/Service; AutomationActivationIT)
+      summary: 'Licencas e automacoes: a conta das licencas e cada automacao ativada, com ambiente, licenca, validade, versao e Workers (org.manage)'
+      description: >
+        So leitura, para quem administra a organizacao (conta interna). Itens: automacoes com licenca vinculada ou com
+        autorizacoes da ativacao (as de execucao e de monitoramento por Worker). state: ACTIVE (pronta), CONFIGURATION_PENDING
+        (falta Worker, versao publicada ou alguma autorizacao), RENEWAL_AVAILABLE (a licenca foi renovada e ha autorizacoes a
+        renovar), LICENSE_REQUIRED, LICENSE_EXPIRED. pending lista o que falta, um codigo por item: LICENSE_REQUIRED,
+        LICENSE_EXPIRED, NO_PUBLISHED_VERSION, NO_WORKER, WORKER_WITHOUT_EXECUTION, WORKER_WITHOUT_MONITORING,
+        NEW_VERSION_AVAILABLE (ha versao publicada mais nova que a aceita; ela NAO e autorizada sozinha), RENEWAL_AVAILABLE.
+        Uma autorizacao revogada por uma pessoa tira aquele escopo da ativacao.
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' } ]
+      responses:
+        '200': { description: 'Ativacoes', content: { application/json: { schema: { $ref: '#/components/schemas/AutomationActivationList' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    post:
+      tags: [Ativacao de automacoes]
+      operationId: activateAutomation
+      x-estado: implementado (PLATFORM-FLUXO-002; AutomationActivationController/Service; AutomationActivationIT)
+      summary: 'Ativar execucao e monitoramento da automacao nos Workers escolhidos, com uma licenca (org.manage + confirmacao reforcada)'
+      description: >
+        Um passo: (1) se a automacao ainda nao tem licenca, vincula a licenca vigente e disponivel de menor numero (ato 4 da
+        trilha); sem nenhuma, 409 license_unavailable e nada e gravado (no modelo anterior a licenca nao e exigida). (2) Para
+        cada Worker informado - nenhum e marcado implicitamente -, emite a autorizacao de EXECUCAO da versao publicada atual
+        (se houver) e a de MONITORAMENTO da automacao, validas ate o fim da cobertura sem lacuna da licenca (D3) e no maximo
+        366 dias; no modelo anterior, ate validUntil (obrigatorio quando ha Worker). Uma licenca cobre a automacao qualquer
+        que seja o numero de Workers; o Worker nao consome licenca. Cada autorizacao e um ato proprio: o que falhar volta em
+        results com outcome failed e o reason, sem desfazer o resto; repetir conclui sem consumir outra licenca e sem duplicar
+        (a vigente do escopo e reaproveitada: outcome already). Tambem e o "Gerenciar ativacao > acrescentar Worker". Os
+        Workers sao conferidos ANTES de consumir a licenca: um Worker fora do ambiente da automacao da 409
+        activation_worker_not_in_workspace. Automacao ou ambiente inativo: 409 activation_automation_inactive.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AutomationActivationRequest' } } }
+      responses:
+        '200': { description: 'Resultado de cada ato e a ativacao atualizada', content: { application/json: { schema: { $ref: '#/components/schemas/AutomationActivationOutcome' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/automation-activations/options:
+    get:
+      tags: [Ativacao de automacoes]
+      operationId: getAutomationActivationOptions
+      x-estado: implementado (PLATFORM-FLUXO-002; AutomationActivationController/Service; AutomationActivationIT)
+      summary: 'Preparacao de "Ativar automacao" num ambiente de trabalho: automacoes, Workers do ambiente e a licenca que seria usada (org.manage)'
+      description: >
+        Nada e reservado: a licenca (nextLicense, nula se nao ha disponivel) e os Workers sao conferidos de novo na confirmacao.
+        Ambiente inexistente, inativo ou de outra organizacao: 404.
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: workspaceId, in: query, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: 'Preparacao', content: { application/json: { schema: { $ref: '#/components/schemas/AutomationActivationOptions' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/automation-activations/{automationId}:
+    get:
+      tags: [Ativacao de automacoes]
+      operationId: getAutomationActivation
+      x-estado: implementado (PLATFORM-FLUXO-002; AutomationActivationController/Service; AutomationActivationIT)
+      summary: 'Uma ativacao (a mesma forma de cada item da lista) (org.manage)'
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: automationId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: 'Ativacao', content: { application/json: { schema: { $ref: '#/components/schemas/AutomationActivation' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/automation-activations/{automationId}/version:
+    post:
+      tags: [Ativacao de automacoes]
+      operationId: acceptAutomationActivationVersion
+      x-estado: implementado (PLATFORM-FLUXO-002; AutomationActivationController/Service; AutomationActivationIT)
+      summary: 'Aceitar uma versao publicada nos Workers da ativacao (org.manage + confirmacao reforcada); nao consome licenca'
+      description: >
+        Emite a autorizacao de EXECUCAO daquele pacote para cada Worker da ativacao. O monitoramento ja autorizado continua
+        valendo e nao e reemitido. A licenca nunca autoriza versoes futuras sozinha: cada versao nova passa por aqui. Sem
+        Worker na ativacao: 409 activation_without_workers. Versao nao publicada: 409.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: automationId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [automationVersionId]
+              properties:
+                automationVersionId: { type: string, format: uuid }
+                validUntil: { type: string, format: date-time, description: 'So no modelo anterior (obrigatorio nele)' }
+      responses:
+        '200': { description: 'Resultado de cada ato e a ativacao atualizada', content: { application/json: { schema: { $ref: '#/components/schemas/AutomationActivationOutcome' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/automation-activations/{automationId}/renewal:
+    post:
+      tags: [Ativacao de automacoes]
+      operationId: renewAutomationActivation
+      x-estado: implementado (PLATFORM-FLUXO-002; AutomationActivationController/Service; AutomationActivationIT; migration 069)
+      summary: 'Renovar autorizacoes depois da renovacao da licenca (org.manage + confirmacao reforcada); nao consome licenca'
+      description: >
+        Para cada Worker da ativacao, emite autorizacoes NOVAS da versao ja aceita e do monitoramento, validas a partir de agora
+        ate o fim da cobertura atual, quando as correntes terminam antes dela. A anterior ainda vigente e revogada na mesma
+        transacao como SUBSTITUIDA (069); o historico fica. Nunca renova autorizacao revogada por uma pessoa, nunca inclui
+        maquina nova, nunca troca para a versao mais nova (aceitar versao continua explicito). Nao cobre intervalos anteriores
+        nem regulariza execucoes iniciadas sem licenca. Repetir nao duplica (results vazio). So no modelo por licenca: no
+        anterior, 409 activation_renewal_not_applicable. Licenca vencida: 409 license_expired.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: automationId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: 'Resultado de cada ato e a ativacao atualizada', content: { application/json: { schema: { $ref: '#/components/schemas/AutomationActivationOutcome' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /api/v1/o/{org}/license-operations:
     get:
       tags: [Operador de licencas]
@@ -3837,7 +3992,7 @@ components:
     Error:
       type: object
       required: [error]
-      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, license_already_assigned, automation_already_licensed, license_not_valid, license_automation_archived, license_ended, license_period_overlaps, license_period_already_ended, license_model_unchanged, license_preview_changed, license_required, license_expired, run_not_covered, capacity_pending_limit_reached, license_not_assigned, license_transfer_same_automation, license_transfer_work_in_progress, organization_responsible_not_found, organization_responsible_is_client, previous_agent_session_has_outcome, previous_agent_session_already_reconciled, license_transfer_requester_not_admin, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_machine_unconfirmed, remote_machine_finishing, remote_previous_processes_pending, remote_previous_result_unconfirmed, remote_attempt_not_unconfirmed, remote_attempt_already_reconciled, remote_requirements_not_declared, remote_requirements_conflict, remote_package_not_supported, remote_package_not_registered, remote_python_not_selected, remote_python_not_in_inventory, remote_dependency_check_too_soon, remote_dependency_check_closed, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken, organization_creation_client_profile, organization_creation_requires_request, empty_organization_limit_reached, organization_request_not_available, organization_request_not_pending, organization_request_own, organization_request_approver_without_identity, organization_request_responsible_not_eligible, organization_not_responsible, organization_work_in_progress, organization_blocked_by_nekkora, organization_state_conflict], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
+      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, license_already_assigned, automation_already_licensed, license_not_valid, license_automation_archived, license_ended, license_period_overlaps, license_period_already_ended, license_model_unchanged, license_preview_changed, license_required, license_expired, run_not_covered, capacity_pending_limit_reached, license_not_assigned, license_transfer_same_automation, license_transfer_work_in_progress, organization_responsible_not_found, organization_responsible_is_client, previous_agent_session_has_outcome, previous_agent_session_already_reconciled, license_transfer_requester_not_admin, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_machine_unconfirmed, remote_machine_finishing, remote_previous_processes_pending, remote_previous_result_unconfirmed, remote_attempt_not_unconfirmed, remote_attempt_already_reconciled, remote_requirements_not_declared, remote_requirements_conflict, remote_package_not_supported, remote_package_not_registered, remote_python_not_selected, remote_python_not_in_inventory, remote_dependency_check_too_soon, remote_dependency_check_closed, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken, organization_creation_client_profile, organization_creation_requires_request, empty_organization_limit_reached, organization_request_not_available, organization_request_not_pending, organization_request_own, organization_request_approver_without_identity, organization_request_responsible_not_eligible, organization_not_responsible, organization_work_in_progress, organization_blocked_by_nekkora, organization_state_conflict, license_unavailable, activation_worker_not_in_workspace, activation_automation_inactive, activation_without_workers, activation_renewal_not_applicable], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
     WorkspacePermissionCode:
       description: 'Permissoes de workspace (13): podem aparecer em allWorkspaces e em atribuicoes de workspace.'
       type: string
@@ -4032,6 +4187,139 @@ components:
                 outcome: { type: string, enum: [succeeded, failed, inProgress, cancelled, notStarted, unconfirmed] }
                 requestedAt: { type: string, format: date-time }
             - type: 'null'
+    LicenseCount:
+      type: object
+      required: [contracted, used, available]
+      properties:
+        contracted: { type: integer, minimum: 0, description: 'Vigentes' }
+        used: { type: integer, minimum: 0, description: 'Vigentes com automacao' }
+        available: { type: integer, minimum: 0, description: 'Vigentes sem automacao' }
+    AutomationActivationVersion:
+      type: [object, 'null']
+      required: [versionId, number]
+      properties:
+        versionId: { type: string, format: uuid }
+        number: { type: integer }
+        publishedAt: { type: [string, 'null'], format: date-time }
+    AutomationActivationAuthorization:
+      type: [object, 'null']
+      required: [authorizationId, validUntil, status]
+      properties:
+        authorizationId: { type: string, format: uuid }
+        automationVersionId: { type: [string, 'null'], format: uuid, description: 'Nulo no monitoramento' }
+        validUntil: { type: string, format: date-time }
+        status: { type: string, enum: [active, expired, replaced] }
+    AutomationActivation:
+      type: object
+      required: [automationId, name, automationStatus, workspaceId, workspaceName, state, pending, license, currentVersion, acceptedVersion, workers]
+      properties:
+        automationId: { type: string, format: uuid }
+        name: { type: string }
+        automationStatus: { type: string, enum: [active, suspended, archived] }
+        workspaceId: { type: string, format: uuid }
+        workspaceName: { type: string }
+        state: { type: string, enum: [ACTIVE, CONFIGURATION_PENDING, RENEWAL_AVAILABLE, LICENSE_REQUIRED, LICENSE_EXPIRED] }
+        pending:
+          type: array
+          items: { type: string, enum: [LICENSE_REQUIRED, LICENSE_EXPIRED, NO_PUBLISHED_VERSION, NO_WORKER, WORKER_WITHOUT_EXECUTION, WORKER_WITHOUT_MONITORING, NEW_VERSION_AVAILABLE, RENEWAL_AVAILABLE] }
+        license:
+          type: [object, 'null']
+          required: [licenseId, number, assignedAt, state]
+          properties:
+            licenseId: { type: string, format: uuid }
+            number: { type: integer }
+            assignedAt: { type: string, format: date-time }
+            lastPeriodEndsAt: { type: [string, 'null'], format: date-time, description: 'Fim do ultimo periodo da licenca' }
+            state: { type: string, enum: [LEGACY, OK, LICENSE_EXPIRED, LICENSE_REQUIRED] }
+            coverageUntil: { type: [string, 'null'], format: date-time, description: 'Ate quando a cobertura de agora segue sem lacuna (nulo: sem cobertura)' }
+        currentVersion: { $ref: '#/components/schemas/AutomationActivationVersion' }
+        acceptedVersion: { $ref: '#/components/schemas/AutomationActivationVersion' }
+        workers:
+          type: array
+          items:
+            type: object
+            required: [workerId, name, machineState, execution, monitoring]
+            properties:
+              workerId: { type: string, format: uuid }
+              name: { type: string }
+              computerName: { type: [string, 'null'], description: 'Nome do computador vinculado, informado na vinculacao (a Platform nao coleta o nome real do computador); nulo sem computador' }
+              lastContactAt: { type: [string, 'null'], format: date-time }
+              machineState: { type: string, enum: [REGISTERED, AWAITING_CONNECTION, CONNECTED, NO_CONTACT, LINK_SUSPENDED, INACTIVE], description: 'PLATFORM-FLUXO-002: estado da maquina para a tela. REGISTERED cadastrada sem computador vinculado; AWAITING_CONNECTION codigo de vinculacao ainda valido ou computador vinculado ainda sem contato; CONNECTED contato nos ultimos 180 s; NO_CONTACT vinculada sem contato recente; LINK_SUSPENDED vinculo do computador suspenso; INACTIVE maquina desativada. Cadastrar ou conectar nao consome licenca' }
+              execution: { $ref: '#/components/schemas/AutomationActivationAuthorization' }
+              monitoring: { $ref: '#/components/schemas/AutomationActivationAuthorization' }
+    AutomationActivationList:
+      type: object
+      required: [model, licenses, items, asOf]
+      properties:
+        model: { type: string, enum: [legacy, licensed] }
+        licenses: { $ref: '#/components/schemas/LicenseCount' }
+        items: { type: array, items: { $ref: '#/components/schemas/AutomationActivation' } }
+        asOf: { type: string, format: date-time }
+    AutomationActivationOptions:
+      type: object
+      required: [workspaceId, workspaceName, model, licenses, nextLicense, automations, workers]
+      properties:
+        workspaceId: { type: string, format: uuid }
+        workspaceName: { type: string }
+        model: { type: string, enum: [legacy, licensed] }
+        licenses: { $ref: '#/components/schemas/LicenseCount' }
+        nextLicense:
+          type: [object, 'null']
+          required: [licenseId, number]
+          properties:
+            licenseId: { type: string, format: uuid }
+            number: { type: integer }
+            validUntil: { type: [string, 'null'], format: date-time }
+        automations:
+          type: array
+          items:
+            type: object
+            required: [automationId, name, licensed, state, currentVersion, workerIds]
+            properties:
+              automationId: { type: string, format: uuid }
+              name: { type: string }
+              licensed: { type: boolean }
+              state: { type: string, enum: [ACTIVE, CONFIGURATION_PENDING, RENEWAL_AVAILABLE, LICENSE_REQUIRED, LICENSE_EXPIRED] }
+              currentVersion: { $ref: '#/components/schemas/AutomationActivationVersion' }
+              workerIds: { type: array, items: { type: string, format: uuid }, description: 'Workers que ja fazem parte da ativacao' }
+        workers:
+          type: array
+          items:
+            type: object
+            required: [workerId, name, machineState]
+            properties:
+              workerId: { type: string, format: uuid }
+              name: { type: string }
+              computerName: { type: [string, 'null'], description: 'Nome do computador vinculado, informado na vinculacao (a Platform nao coleta o nome real do computador); nulo sem computador' }
+              lastContactAt: { type: [string, 'null'], format: date-time }
+              machineState: { type: string, enum: [REGISTERED, AWAITING_CONNECTION, CONNECTED, NO_CONTACT, LINK_SUSPENDED, INACTIVE], description: 'PLATFORM-FLUXO-002: estado da maquina para a tela. REGISTERED cadastrada sem computador vinculado; AWAITING_CONNECTION codigo de vinculacao ainda valido ou computador vinculado ainda sem contato; CONNECTED contato nos ultimos 180 s; NO_CONTACT vinculada sem contato recente; LINK_SUSPENDED vinculo do computador suspenso; INACTIVE maquina desativada. Cadastrar ou conectar nao consome licenca' }
+    AutomationActivationRequest:
+      type: object
+      additionalProperties: false
+      required: [automationId]
+      properties:
+        automationId: { type: string, format: uuid }
+        workerIds: { type: array, maxItems: 50, items: { type: string, format: uuid }, description: 'So estes Workers; vazio: so a licenca (configuracao pendente)' }
+        validUntil: { type: string, format: date-time, description: 'So no modelo anterior (obrigatorio nele quando ha Worker)' }
+    AutomationActivationOutcome:
+      type: object
+      required: [results, activation]
+      properties:
+        licenseConsumedNow: { type: boolean, description: 'true: este pedido vinculou uma licenca; false: ja estava vinculada. Ausente no modelo anterior sem licenca' }
+        results:
+          type: array
+          items:
+            type: object
+            required: [workerId, kind, outcome]
+            properties:
+              workerId: { type: string, format: uuid }
+              kind: { type: string, enum: [execution, monitoring] }
+              automationVersionId: { type: [string, 'null'], format: uuid }
+              outcome: { type: string, enum: [issued, already, failed] }
+              authorizationId: { type: string, format: uuid }
+              validUntil: { type: string, format: date-time }
+              reason: { type: string, description: 'Com failed: o motivo (reason do contrato ou a classe da recusa)' }
+        activation: { $ref: '#/components/schemas/AutomationActivation' }
     LicenseSummary:
       type: object
       required: [model, modelSince, contracted, used, available, licensedAutomations, expiredWithAutomation, asOf]
@@ -5002,6 +5290,7 @@ components:
               connectivity: { type: [string, 'null'], enum: [CONNECTED, DISCONNECTED, null], description: 'T07: null = sem Agent. T11: CONNECTED so com o Agent ACTIVE e contato autenticado nos ultimos 180 s (heartbeat a cada 60 s); ver listAgents' }
               credentialExpiresAt: { type: [string, 'null'], format: date-time }
               createdAt: { type: string, format: date-time }
+              machineState: { type: string, enum: [REGISTERED, AWAITING_CONNECTION, CONNECTED, NO_CONTACT, LINK_SUSPENDED, INACTIVE], description: 'PLATFORM-FLUXO-002: estado da maquina para a tela. REGISTERED cadastrada sem computador vinculado; AWAITING_CONNECTION codigo de vinculacao ainda valido ou computador vinculado ainda sem contato; CONNECTED contato nos ultimos 180 s; NO_CONTACT vinculada sem contato recente; LINK_SUSPENDED vinculo do computador suspenso; INACTIVE maquina desativada. Cadastrar ou conectar nao consome licenca' }
     WorkerCreateRequest:
       type: object
       additionalProperties: false
