@@ -108,6 +108,74 @@ public final class IdentityOrgRepository {
                 .param(sessionToken).param(name).param(legalName).query(UUID.class).optional();
     }
 
+    /** 067: o perfil de quem cria e os limites, pela sessao. {@code profile}: FIRST, ADMIN, MEMBER ou CLIENT. */
+    public record CreationState(String profile, long organizationsCreated, List<UUID> emptyOrganizations, int emptyLimit, long pendingRequests) {
+    }
+
+    /** {@code identity_org_creation_state} (067): vazio para sessao que nao resolve ou restrita. A criacao e o pedido reconferem. */
+    public Optional<CreationState> creationState(JdbcClient j, String sessionToken) {
+        return j.sql("SELECT profile, organizations_created, empty_organization_ids, empty_limit, pending_requests FROM public.identity_org_creation_state(?)")
+                .param(sessionToken)
+                .query((rs, n) -> new CreationState(rs.getString(1), rs.getLong(2), uuids(rs.getArray(3)), rs.getInt(4), rs.getLong(5))).optional();
+    }
+
+    /**
+     * D7 (067): a chave {@code license_rollout}. Ligada, a organizacao criada agora nasce no modelo por licenca (ato 8). So leitura,
+     * para a tela de criacao dizer a verdade sobre o que a organizacao nova podera fazer; quem decide e a criacao, no banco.
+     */
+    public boolean newOrganizationsLicensed(JdbcClient j) {
+        return j.sql("SELECT new_organizations_licensed FROM public.license_rollout").query(Boolean.class).optional().orElse(false);
+    }
+
+    private static List<UUID> uuids(Array a) throws SQLException {
+        if (a == null) {
+            return List.of();
+        }
+        return Arrays.stream((Object[]) a.getArray()).map(o -> o instanceof UUID u ? u : UUID.fromString(String.valueOf(o))).toList();
+    }
+
+    /** {@code identity_request_organization} (067): o pedido, ou vazio (a funcao nao diz o motivo). */
+    public Optional<UUID> requestOrganization(JdbcClient j, String sessionToken, UUID organization, String name, String legalName) {
+        return j.sql("SELECT public.identity_request_organization(?::text, ?, ?::text, ?::text)")
+                .param(sessionToken).param(organization).param(name).param(legalName).query(UUID.class).optional();
+    }
+
+    public record Request(UUID requestId, UUID organizationId, String organizationName, String name, String legalName, String state,
+                          OffsetDateTime requestedAt, OffsetDateTime decidedAt, String responsible, String refusalReason, UUID createdOrganizationId) {
+    }
+
+    public static final List<String> REQUEST_STATES = List.of("PENDING", "APPROVED", "REFUSED");
+    public static final List<String> RESPONSIBLE = List.of("APPROVER", "REQUESTER");
+
+    /** {@code identity_organization_requests} (067): os pedidos da pessoa da sessao. */
+    public List<Request> requests(JdbcClient j, String sessionToken) {
+        return j.sql("SELECT request_id, organization_id, organization_name, name, legal_name, state, requested_at, decided_at, responsible, "
+                        + "refusal_reason, created_organization_id FROM public.identity_organization_requests(?)").param(sessionToken)
+                .query((rs, n) -> new Request(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getString(3), rs.getString(4), rs.getString(5),
+                        REQUEST_STATES.get(rs.getShort(6) - 1), rs.getObject(7, OffsetDateTime.class), rs.getObject(8, OffsetDateTime.class),
+                        rs.getObject(9) == null ? null : RESPONSIBLE.get(rs.getShort(9) - 1), rs.getString(10), rs.getObject(11, UUID.class)))
+                .list();
+    }
+
+    /** As organizacoes de que a pessoa e responsavel (067): ACTIVE, DEACTIVATED (por ela; reativavel) ou BLOCKED (parada por outro caminho). */
+    public record Responsible(UUID organizationId, String name, String state, boolean empty, OffsetDateTime deactivatedAt, boolean canReactivate) {
+    }
+
+    public List<Responsible> responsibleFor(JdbcClient j, String sessionToken) {
+        return j.sql("SELECT organization_id, name, status, empty, deactivated_at, reactivable FROM public.identity_responsible_organizations(?)")
+                .param(sessionToken)
+                .query((rs, n) -> new Responsible(rs.getObject(1, UUID.class), rs.getString(2),
+                        rs.getShort(3) == 1 ? "ACTIVE" : rs.getBoolean(6) ? "DEACTIVATED" : "BLOCKED", rs.getBoolean(4),
+                        rs.getObject(5, OffsetDateTime.class), rs.getBoolean(6)))
+                .list();
+    }
+
+    /** {@code identity_deactivate_organization} / {@code identity_reactivate_organization} (067): 'OK', o motivo, ou vazio (sessao sem condicao). */
+    public Optional<String> setActive(JdbcClient j, String sessionToken, UUID organization, boolean active) {
+        return j.sql("SELECT public." + (active ? "identity_reactivate_organization" : "identity_deactivate_organization") + "(?::text, ?)")
+                .param(sessionToken).param(organization).query(String.class).optional();
+    }
+
     /** {@code identity_org_creation_allowed} (R5): SO indicacao para a interface ({@code canCreateOrganization}). */
     public boolean creationAllowed(JdbcClient j, String sessionToken) {
         return j.sql("SELECT public.identity_org_creation_allowed(?)").param(sessionToken).query(Boolean.class).single();

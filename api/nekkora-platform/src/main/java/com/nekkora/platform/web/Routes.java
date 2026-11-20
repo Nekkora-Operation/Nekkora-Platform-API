@@ -96,6 +96,8 @@ public final class Routes {
             // aceite de convite (023): com a sessao de identidade
             case "/api/v1/sessions/organization", "/api/v1/auth/step-up", "/api/v1/organizations",
                  "/api/v1/links/start", "/api/v1/links/confirm", "/api/v1/invitations/accept" -> Context.IDENTITY_SESSION;
+            // 067: pedido de criacao de organizacao, desativar e reativar, com a sessao de identidade
+            case "/api/v1/organization-requests", "/api/v1/organization-deactivations", "/api/v1/organization-reactivations" -> Context.IDENTITY_SESSION;
             // credenciais da identidade (missao 002): troca de senha e regeneracao dos codigos, com a sessao de identidade
             case "/api/v1/auth/password", "/api/v1/auth/mfa/recovery-codes" -> Context.IDENTITY_SESSION;
             // 029: reconfirmacao da senha e ativacao voluntaria do MFA, com a sessao de identidade

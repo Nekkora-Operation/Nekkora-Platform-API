@@ -43,7 +43,11 @@ public final class IdentityRoutesGate extends OncePerRequestFilter {
             IdentityOrganizationsController.MY_ORGANIZATIONS, IdentityOrganizationsController.ORG_SESSION, IdentityAuthController.ME_SESSION,
             IdentityAuthController.PASSWORD, IdentityAuthController.RECOVERY_CODES, IdentityAuthController.PASSWORD_CONFIRM,
             IdentityAuthController.ACTIVATE_START, IdentityAuthController.ACTIVATE_CONFIRM);
-    static final Set<String> CREATION_ROUTES = Set.of(IdentityOrganizationsController.ORGANIZATIONS);
+    static final Set<String> CREATION_ROUTES = Set.of(IdentityOrganizationsController.ORGANIZATIONS,
+            // 067: tudo o que decorre da criacao (perfil, pedido, desativar e reativar) abre e fecha com a mesma chave
+            IdentityOrganizationsController.MY_ORGANIZATION_CREATION, IdentityOrganizationsController.ORGANIZATION_REQUESTS,
+            IdentityOrganizationsController.MY_ORGANIZATION_REQUESTS, IdentityOrganizationsController.DEACTIVATIONS,
+            IdentityOrganizationsController.REACTIVATIONS);
     static final Set<String> LINK_ROUTES = Set.of(AccountLinkController.START, AccountLinkController.CONFIRM);
     static final Set<String> RECOVERY_ROUTES = Set.of(IdentityAuthController.PASSWORD_RESET_REQUEST, IdentityAuthController.PASSWORD_RESET_CONFIRM);
     static final Set<String> INVITATION_ROUTES = Set.of(InvitationAcceptController.ACCEPT);
