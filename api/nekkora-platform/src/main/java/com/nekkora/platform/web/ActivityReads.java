@@ -46,7 +46,7 @@ public final class ActivityReads {
              WHERE e.organization_id = :org AND e.workspace_id IN %s
             UNION ALL
             SELECT 'local_agent', r.agent_run_id, r.workspace_id, r.automation_id, r.worker_id, r.registered_at, r.agent_started_at,
-                   r.agent_ended_at, %s,
+                   r.agent_ended_at, CASE WHEN r.supervisor_state = 4 AND r.supervisor_code = 'AGT-EXT-001' THEN 'no_error_signaled' ELSE %s END,
                    r.supervisor_state = 9 AND NOT EXISTS (SELECT 1 FROM public.agent_run_reconciliations c WHERE c.agent_run_id = r.agent_run_id)
               FROM public.agent_runs r
              WHERE r.organization_id = :org AND r.workspace_id IN %s AND r.platform_execution_id IS NULL

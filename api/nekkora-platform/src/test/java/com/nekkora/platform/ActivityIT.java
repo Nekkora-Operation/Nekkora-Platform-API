@@ -89,7 +89,7 @@ class ActivityIT extends ReadRoutesSupport {
         UUID w1 = UUID.fromString(one("INSERT INTO workers (organization_id, name, status) VALUES ('" + o.id() + "', 'Estacao fiscal', 1) RETURNING worker_id"));
         UUID w2 = UUID.fromString(one("INSERT INTO workers (organization_id, name, status) VALUES ('" + o.id() + "', 'Estacao dois', 1) RETURNING worker_id"));
         UUID platformRunning = UUID.randomUUID(), platformDone = UUID.randomUUID(), linked = UUID.randomUUID();
-        UUID oldUnknown = UUID.randomUUID(), reconciledUnknown = UUID.randomUUID(), runDone = UUID.randomUUID();
+        UUID oldUnknown = UUID.randomUUID(), reconciledUnknown = UUID.randomUUID(), runDone = UUID.randomUUID(), noSignal = UUID.randomUUID();
         UUID remoteUnknown = UUID.randomUUID(), remoteSolved = UUID.randomUUID(), attUnknown = UUID.randomUUID(), attSolved = UUID.randomUUID();
         mass(
                 // Platform: uma em andamento muito antiga (nenhum periodo a esconde) e uma concluida; outra concluida que tem execucao do Agent ligada
@@ -102,6 +102,9 @@ class ActivityIT extends ReadRoutesSupport {
                 "INSERT INTO agent_run_reconciliations (organization_id, agent_run_id, state_at, last_report_at_seen, operator_user_id, justification, verification) VALUES ('" + o.id() + "', '"
                         + reconciledUnknown + "', 9, TIMESTAMPTZ '2026-03-07T08:00:00Z', '" + o.adminId() + "', 'reconciliacao na massa do teste', 'conferido na massa do teste de acompanhamento')",
                 run(runDone, o.id(), ws, a, v, w1, 4, "2026-03-08T08:00:00Z", null),
+                // Python externo monitorado: codigo 0 SEM sinal de sucesso (AGT-EXT-001) nunca vira "concluida"
+                run(noSignal, o.id(), ws, a, v, w1, 4, "2026-03-08T09:00:00Z", null),
+                "UPDATE agent_runs SET supervisor_code = 'AGT-EXT-001', exit_code = 0 WHERE agent_run_id = '" + noSignal + "'",
                 // remota: ultima tentativa ENDED_UNKNOWN sem confirmacao (pendencia) e outra ja confirmada pela maquina
                 remote(remoteUnknown, o.id(), ws, a, v, m, "2026-03-09T08:00:00Z"),
                 attempt(attUnknown, o.id(), remoteUnknown, w2, UUID.randomUUID(), m, 13, "2026-03-09T08:00:00Z"),
@@ -121,13 +124,13 @@ class ActivityIT extends ReadRoutesSupport {
         // ---- Historico no periodo: o que tem desfecho; uma linha por execucao (a ligada e o pedido que virou execucao nao repetem)
         Got history = get(admin, path(o.id(), "activity", "tab=history&from=2026-03-01T00:00:00Z&to=2026-04-01T00:00:00Z"));
         assertOk(history, "historico");
-        assertThat(kinds(history.body().get("items"))).containsExactly("remote:unconfirmed", "remote:unconfirmed:atencao", "local_agent:succeeded",
-                "local_agent:unconfirmed", "platform:succeeded", "platform:succeeded");
+        assertThat(kinds(history.body().get("items"))).containsExactly("remote:unconfirmed", "remote:unconfirmed:atencao", "local_agent:no_error_signaled",
+                "local_agent:succeeded", "local_agent:unconfirmed", "platform:succeeded", "platform:succeeded");
         // o periodo nao esconde a pendencia antiga: ela continua em "Em andamento"
         assertThat(field(inProgress.body().get("items"), "id")).contains(oldUnknown.toString());
 
         // ---- a maquina de cada linha e o filtro por maquina
-        JsonNode first = history.body().get("items").get(2);
+        JsonNode first = history.body().get("items").get(3);
         assertThat(first.get("machine").get("workerId").asString()).isEqualTo(w1.toString());
         assertThat(first.get("machine").get("name").asString()).isEqualTo("Estacao fiscal");
         Got byMachine = get(admin, path(o.id(), "activity", "tab=history&workerId=" + w2));

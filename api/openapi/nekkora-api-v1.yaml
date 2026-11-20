@@ -4393,7 +4393,10 @@ components:
             workerId: { type: string, format: uuid }
             name: { type: [string, 'null'] }
             computerName: { type: [string, 'null'], description: 'Computador vinculado hoje a maquina (informado na vinculacao)' }
-        outcome: { type: string, enum: [succeeded, failed, in_progress, cancelled, not_started, unconfirmed] }
+        outcome:
+          type: string
+          enum: [succeeded, failed, in_progress, cancelled, not_started, unconfirmed, no_error_signaled]
+          description: 'no_error_signaled: Python externo monitorado que terminou com codigo 0 SEM sinal de sucesso (AGT-EXT-001); nunca e sucesso de negocio'
         attention: { type: boolean, description: 'Resultado desconhecido ainda nao reconciliado' }
         requestedAt: { type: string, format: date-time }
         startedAt: { type: [string, 'null'], format: date-time }
