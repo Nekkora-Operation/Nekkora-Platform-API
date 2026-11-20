@@ -127,8 +127,18 @@ public enum ApiError {
     LICENSE_PERIOD_ALREADY_ENDED(HttpStatus.CONFLICT, "conflict", "license_period_already_ended"),
     /** 063: a organizacao ja esta no modelo pedido. */
     LICENSE_MODEL_UNCHANGED(HttpStatus.CONFLICT, "conflict", "license_model_unchanged"),
-    /** 063: o numero de automacoes que ficariam impedidas mudou desde a previa confirmada; refazer a previa. */
+    /** 063: o conjunto de automacoes impedidas ou cobertas mudou desde a previa confirmada; refazer a previa. */
     LICENSE_PREVIEW_CHANGED(HttpStatus.CONFLICT, "conflict", "license_preview_changed"),
+    /** 064 (conferencia nos fluxos): a organizacao exige licenca e a automacao nao tem licenca vinculada; nada foi iniciado. */
+    LICENSE_REQUIRED(HttpStatus.CONFLICT, "conflict", "license_required"),
+    /** 064: a licenca vinculada a automacao esta fora de periodo (vencida, a espera de renovacao); nada foi iniciado. */
+    LICENSE_EXPIRED(HttpStatus.CONFLICT, "conflict", "license_expired"),
+    /** 064, canal da maquina: registro recusado, a automacao nao tem licenca (403: o Agent anterior trata 409 como registro divergente). */
+    RUN_LICENSE_REQUIRED(HttpStatus.FORBIDDEN, "forbidden", "license_required"),
+    /** 064, canal da maquina: registro recusado, a licenca da automacao estava vencida no inicio informado. */
+    RUN_LICENSE_EXPIRED(HttpStatus.FORBIDDEN, "forbidden", "license_expired"),
+    /** 064, canal da maquina: registro recusado, a autorizacao usada nao valia no inicio informado. */
+    RUN_NOT_COVERED(HttpStatus.FORBIDDEN, "forbidden", "run_not_covered"),
     REMOTE_REQUIREMENTS_NOT_DECLARED(HttpStatus.CONFLICT, "conflict", "remote_requirements_not_declared"),
     REMOTE_REQUIREMENTS_CONFLICT(HttpStatus.CONFLICT, "conflict", "remote_requirements_conflict"),
     /** O pacote da versao nao e um pacote Python externo: a execucao remota nao o aceita (o formato Studio fica de fora). */

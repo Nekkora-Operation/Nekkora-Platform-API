@@ -31,10 +31,26 @@ import jakarta.servlet.http.HttpServletRequest;
 public class RemoteExecutionController {
 
     /** {@code requestKey}: UUID gerado pelo navegador para a repeticao idempotente (resposta perdida). */
-    public record CreateRequest(String automationVersionId, String agentId, String requestKey) {
+    public record CreateRequest(String automationVersionId, String agentId, String requestKey, Boolean authorizeVersion,
+                                String authorizationValidUntil) {
     }
 
-    public record RetryRequest(String agentId) {
+    public record RetryRequest(String agentId, Boolean authorizeVersion, String authorizationValidUntil) {
+    }
+
+    /**
+     * S2: {@code authorizeVersion: true} e o aceite EXPLICITO da versao naquela maquina, no mesmo passo. Ausente ou falso: nada
+     * e autorizado e a falta de autorizacao continua recusando. A validade so e lida com o aceite.
+     */
+    private static RemoteExecutionService.VersionAcceptance acceptance(Boolean authorizeVersion, String validUntil) {
+        if (!Boolean.TRUE.equals(authorizeVersion)) {
+            return null;
+        }
+        java.time.OffsetDateTime until = instant(validUntil);
+        if (until != null && !until.isAfter(java.time.OffsetDateTime.now())) {
+            throw ApiException.invalid("validade");
+        }
+        return new RemoteExecutionService.VersionAcceptance(until);
     }
 
     public record PythonSelection(String environmentId) {
@@ -83,7 +99,8 @@ public class RemoteExecutionController {
             throw ApiException.invalid("corpo");
         }
         RemoteExecutionService.Created c = service.request(org, SessionFilter.principal(req), SessionFilter.token(req), workspace,
-                uuid(body.automationVersionId()), uuid(body.agentId()), uuid(body.requestKey()));
+                uuid(body.automationVersionId()), uuid(body.agentId()), uuid(body.requestKey()),
+                acceptance(body.authorizeVersion(), body.authorizationValidUntil()));
         return ResponseEntity.status(c.created() ? HttpStatus.CREATED : HttpStatus.OK).cacheControl(CacheControl.noStore()).body(c.execution());
     }
 
@@ -170,7 +187,8 @@ public class RemoteExecutionController {
             throw ApiException.invalid("corpo");
         }
         return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore())
-                .body(service.retry(org, SessionFilter.principal(req), SessionFilter.token(req), execution, uuid(body.agentId())));
+                .body(service.retry(org, SessionFilter.principal(req), SessionFilter.token(req), execution, uuid(body.agentId()),
+                        acceptance(body.authorizeVersion(), body.authorizationValidUntil())));
     }
 
     public record ReconciliationRequest(String reason, String verification, Boolean acknowledgePartialEffects) {

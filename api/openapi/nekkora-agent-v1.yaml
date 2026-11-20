@@ -663,6 +663,14 @@ paths:
         enviado com as regras do relatorio; o mesmo agentExecutionId com outra autorizacao ou outro pacote: 409. Autorizacao
         revogada ou vencida no momento do registro: o fato e ACEITO e marcado (authorizationStateAtRegistration). Pacote sem
         versao publicada nao e registravel (nao ha autorizacao para ele).
+        PLATFORM-LICENCIAMENTO-001 (064, D8) - SO na organizacao do modelo por licenca: o registro NOVO e aceito quando a
+        autorizacao (a do servidor) valia no inicio informado (started, ou created; sem nenhum, o instante do servidor) e
+        (a) a automacao tinha licenca vigente naquele inicio - inclusive quando os dados chegam depois do vencimento - ou
+        (b) a autorizacao foi emitida antes de a organizacao passar ao modelo por licenca (transicao, limitada a validade ja
+        emitida). Fora disso: 403 forbidden com reason run_not_covered (a autorizacao nao valia no inicio), license_required
+        ou license_expired, e nada e gravado. O instante do inicio e limitado pelo servidor ao intervalo entre a emissao da
+        autorizacao e agora; o relogio da maquina desconectada nao e comprovavel. Eventos, relatorio do supervisor e lacunas
+        de uma execucao ja registrada nao reconferem licenca.
       parameters: [ { $ref: '#/components/parameters/Contract' } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RegisterRequest' } } } }
       responses:
@@ -786,7 +794,7 @@ components:
       required: [error]
       properties:
         error: { type: string, enum: [invalid_request, unsupported_contract, unauthenticated, forbidden, not_found, conflict, rate_limited, internal_error, service_unavailable] }
-        reason: { type: string, enum: [pairing_code_for_rotation, rotation_code_for_pairing, link_ended_by_machine, link_ended_by_administration, remote_execution_unavailable, remote_code_without_enablement, code_not_for_remote_execution, remote_execution_not_enabled, credential_renewal_not_due, remote_attempt_stale, remote_attempt_transition, remote_package_unavailable, remote_result_conflict, remote_result_limit, remote_log_conflict, remote_log_limit, remote_dependency_check_closed], description: 'Motivo opcional de um codigo conhecido (conflict): T06 (codigos de pareamento/rotacao), T13 (vinculo ja encerrado) e EXECUCAO-REMOTA-001 T01a (habilitacao). Cliente que nao o conhece trata o codigo como sempre' }
+        reason: { type: string, enum: [license_required, license_expired, run_not_covered, pairing_code_for_rotation, rotation_code_for_pairing, link_ended_by_machine, link_ended_by_administration, remote_execution_unavailable, remote_code_without_enablement, code_not_for_remote_execution, remote_execution_not_enabled, credential_renewal_not_due, remote_attempt_stale, remote_attempt_transition, remote_package_unavailable, remote_result_conflict, remote_result_limit, remote_log_conflict, remote_log_limit, remote_dependency_check_closed], description: 'Motivo opcional de um codigo conhecido (conflict): T06 (codigos de pareamento/rotacao), T13 (vinculo ja encerrado) e EXECUCAO-REMOTA-001 T01a (habilitacao). Cliente que nao o conhece trata o codigo como sempre' }
     UnlinkRequest:
       type: object
       required: [operationId, agentId, launchedRunRequests]
@@ -885,7 +893,7 @@ components:
         attemptId: { type: string, format: uuid }
         state: { type: string, enum: [QUEUED, OFFERED, RECEIVED, PREPARING, STARTING, RUNNING, SUCCEEDED, FAILED, CANCELLED, TIMED_OUT, REFUSED, EXPIRED, ENDED_UNKNOWN] }
         proceed: { type: boolean, description: 'false: a maquina NAO deve seguir (inicio recusado pelo servidor, ou tentativa ja terminada)' }
-        refusalReason: { type: string, description: 'So em REFUSED; inclui os motivos do servidor (AUTHORIZATION_REVOKED, AUTHORIZATION_EXPIRED, AUTHORIZATION_MISSING, WORKER_NOT_AUTHORIZED, MACHINE_NOT_LINKED, MACHINE_NOT_ENABLED, MACHINE_INCOMPATIBLE, COMMUNICATION_LOST)' }
+        refusalReason: { type: string, description: 'So em REFUSED; inclui os motivos do servidor (AUTHORIZATION_REVOKED, AUTHORIZATION_EXPIRED, AUTHORIZATION_MISSING, WORKER_NOT_AUTHORIZED, MACHINE_NOT_LINKED, MACHINE_NOT_ENABLED, MACHINE_INCOMPATIBLE, COMMUNICATION_LOST; 064, no modelo por licenca: LICENSE_REQUIRED, LICENSE_EXPIRED)' }
         cancelRequested: { type: boolean }
         leaseSeconds: { type: integer }
         closureCause: { type: string, enum: [MACHINE_UNLINKED, MACHINE_REVOKED, COMMUNICATION_LOST], description: 'So quando o SERVIDOR encerrou a tentativa' }

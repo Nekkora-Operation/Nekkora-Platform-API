@@ -11,6 +11,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 import com.nekkora.core.db.DbErrors;
 import com.nekkora.core.token.Tokens;
+import com.nekkora.core.license.LicenseGate;
 import com.nekkora.core.web.ApiError;
 import com.nekkora.core.web.ApiException;
 import com.nekkora.core.web.RequestContext;
@@ -413,6 +414,19 @@ public final class AgentAdminService {
             access.requireWorkspace(j, org, actor.membershipId(), workspaceId, "automation.execute");
             actions.requireStepUp(j, actor);
             actions.lockOrganizationAndActor(j, org, actor.userId());
+            return grantVersion(j, org, actor.membershipId(), workspaceId, workerId, versionId, validUntil);
+        });
+    }
+
+    /**
+     * O ato de autorizar a versao no Worker, dentro da transacao de quem chama (sessao, permissao automation.execute no
+     * ambiente, confirmacao reforcada e travas JA conferidas). Usado pela rota propria e pela solicitacao de execucao remota
+     * que traz o aceite explicito da versao (S2). No modelo por licenca: exige licenca vigente e limita a validade ao fim da
+     * cobertura sem lacuna (D3); {@code validUntil} nulo so e aceito nesse modelo (vale ate o fim da cobertura).
+     */
+    static LocalAuthorization grantVersion(JdbcClient j, UUID org, UUID membership, UUID workspaceId, UUID workerId, UUID versionId,
+                                           OffsetDateTime validUntil) {
+        {
             // a impressao do pacote declarada na versao, com a regra (contrato, sec. 6.4); nunca o sha256 dos bytes do artefato
             // a regra declarada na versao decide a origem: /1 = pacote Studio, external-python-fingerprint/1 = pacote externo (030)
             Version v = j.sql("SELECT automation_id, status, command_json -> 'agent_package' ->> 'fingerprint_rule', "
@@ -434,16 +448,39 @@ public final class AgentAdminService {
             UUID assignment = j.sql("SELECT assignment_id FROM public.worker_workspace_assignments WHERE organization_id = ? AND worker_id = ? "
                             + "AND workspace_id = ? AND status = 1").param(org).param(workerId).param(workspaceId).query(UUID.class).optional()
                     .orElseThrow(() -> AccessActions.refuse(Failure.CONFLICT, "worker_nao_autorizado_no_workspace"));
+            OffsetDateTime until = licensedValidity(j, org, v.automationId(), validUntil);
             LocalAuthorization a = oneValid(() -> j.sql("""
                     INSERT INTO public.local_run_authorizations (organization_id, workspace_id, worker_id, worker_workspace_assignment_id, automation_id,
                         automation_version_id, package_fingerprint, package_fingerprint_rule, source_kind, granted_by_membership_id, valid_until)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     RETURNING """ + " " + AUTHORIZATION_COLUMNS).param(org).param(workspaceId).param(workerId).param(assignment).param(v.automationId()).param(versionId)
-                    .param(v.packageFingerprint()).param(v.rule()).param(kind).param(actor.membershipId()).param(validUntil)
+                    .param(v.packageFingerprint()).param(v.rule()).param(kind).param(membership).param(until)
                     .query((rs, n) -> authorization(rs)).single());
-            audit(j, org, 10, actor.membershipId(), null, workerId, workspaceId, null, null, a.authorizationId(), null);
+            audit(j, org, 10, membership, null, workerId, workspaceId, null, null, a.authorizationId(), null);
             return a;
-        });
+        }
+    }
+
+    /**
+     * D3: no modelo por licenca a autorizacao so nasce com licenca vigente e a validade NUNCA passa do fim da cobertura sem
+     * lacuna (uma renovacao que comeca depois de um intervalo nao a estende), nem dos 366 dias da 025. No modelo anterior a
+     * validade pedida e a que vale. O gatilho da 064 reconfere.
+     */
+    private static OffsetDateTime licensedValidity(JdbcClient j, UUID org, UUID automation, OffsetDateTime requested) {
+        LicenseGate.requireForNewWork(j, org, automation);
+        if (!LicenseGate.licensedModel(j, org)) {
+            if (requested == null) {
+                throw ApiException.invalid("validade");
+            }
+            return requested;
+        }
+        OffsetDateTime end = LicenseGate.coverageEnd(j, org, automation);
+        if (end == null) {
+            throw new ApiException(ApiError.LICENSE_EXPIRED, "licenca_sem_cobertura");
+        }
+        OffsetDateTime ceiling = OffsetDateTime.now().plusDays(366).minusMinutes(5);
+        OffsetDateTime until = requested == null || requested.isAfter(end) ? end : requested;
+        return until.isAfter(ceiling) ? ceiling : until;
     }
 
     /**
@@ -472,12 +509,13 @@ public final class AgentAdminService {
             UUID assignment = j.sql("SELECT assignment_id FROM public.worker_workspace_assignments WHERE organization_id = ? AND worker_id = ? "
                             + "AND workspace_id = ? AND status = 1").param(org).param(workerId).param(workspaceId).query(UUID.class).optional()
                     .orElseThrow(() -> AccessActions.refuse(Failure.CONFLICT, "worker_nao_autorizado_no_workspace"));
+            OffsetDateTime until = licensedValidity(j, org, automationId, validUntil);
             LocalAuthorization a = oneValid(() -> j.sql("""
                     INSERT INTO public.local_run_authorizations (organization_id, workspace_id, worker_id, worker_workspace_assignment_id, automation_id,
                         automation_version_id, package_fingerprint, package_fingerprint_rule, source_kind, granted_by_membership_id, valid_until)
                     VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, 3, ?, ?)
                     RETURNING """ + " " + AUTHORIZATION_COLUMNS).param(org).param(workspaceId).param(workerId).param(assignment).param(automationId)
-                    .param(actor.membershipId()).param(validUntil).query((rs, n) -> authorization(rs)).single());
+                    .param(actor.membershipId()).param(until).query((rs, n) -> authorization(rs)).single());
             audit(j, org, 10, actor.membershipId(), null, workerId, workspaceId, null, null, a.authorizationId(), null);
             return a;
         });
