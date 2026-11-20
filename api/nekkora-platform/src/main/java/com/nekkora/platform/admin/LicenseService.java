@@ -77,6 +77,10 @@ public class LicenseService {
     }
 
     /** As recusas do banco (061/062) viram 409 com o motivo do contrato; a transacao e desfeita e nada fica gravado. */
+    static RuntimeException refusalOf(RuntimeException e) {
+        return refusal(e);
+    }
+
     private static RuntimeException refusal(RuntimeException e) {
         ApiError error = null;
         if (DbErrors.uniqueViolation(e, ONE_AUTOMATION_PER_LICENSE)) {
