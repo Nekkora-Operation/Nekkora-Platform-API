@@ -4110,7 +4110,8 @@ components:
             organizationIds: { type: array, items: { type: string, format: uuid } }
         pendingRequests: { $ref: '#/components/schemas/UsedOfLimit' }
         newOrganizationLicenseModel:
-          allOf: [ { $ref: '#/components/schemas/OrganizationLicenseModel' } ]
+          type: string
+          enum: [legacy, licensed]
           description: >
             D7: o modelo em que uma organizacao criada AGORA nasce (a chave license_rollout). licensed: nasce pronta para
             configurar, sem ativacao a esperar; executar e monitorar uma automacao depende de licenca vinculada a ela. legacy:
