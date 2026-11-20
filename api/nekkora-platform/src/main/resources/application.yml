@@ -76,6 +76,10 @@ nekkora:
   # execucao remota (PLATFORM-CLIENT-EXECUCAO-REMOTA-001): DESLIGADA por padrao. Ligada, um codigo de pareamento pode ser
   # criado marcado para habilitar a maquina a receber execucoes solicitadas pela Platform. Tem de ter o mesmo valor no
   # agent-gateway.
+  # licencas por organizacao (PLATFORM-LICENCIAMENTO-001): a organizacao interna da Nekkora, de onde os operadores de licenca agem.
+  # VAZIA por padrao: as rotas do operador respondem 404 e ninguem concede licenca nem liga a exigencia
+  licensing:
+    operator-organization: ${NEKKORA_LICENCAS_ORGANIZACAO_OPERADORA:}
   remote-execution:
     enabled: ${NEKKORA_EXECUCAO_REMOTA:false}
     # T02: quanto tempo a tentativa espera a maquina receber antes de expirar (ponto de partida de laboratorio)

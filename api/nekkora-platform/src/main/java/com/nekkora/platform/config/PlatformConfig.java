@@ -313,6 +313,18 @@ public class PlatformConfig {
         return new com.nekkora.platform.admin.LicenseService(actions, access);
     }
 
+    /**
+     * Atos do operador da Nekkora sobre as licencas (PLATFORM-LICENCIAMENTO-001, D5). {@code NEKKORA_LICENCAS_ORGANIZACAO_OPERADORA}:
+     * a organizacao interna da Nekkora. Sem ela (padrao), as rotas do operador respondem 404 e nenhum ato e possivel.
+     */
+    @Bean
+    com.nekkora.platform.admin.LicenseOperatorService licenseOperatorService(
+            com.nekkora.platform.admin.AccessActions actions,
+            @org.springframework.beans.factory.annotation.Value("${nekkora.licensing.operator-organization:}") String operatorOrganization) {
+        return new com.nekkora.platform.admin.LicenseOperatorService(actions,
+                operatorOrganization == null || operatorOrganization.isBlank() ? null : java.util.UUID.fromString(operatorOrganization.strip()));
+    }
+
     /** Solicitacao de execucao remota (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T02). Desligada, nenhuma solicitacao e aceita. */
     @Bean
     com.nekkora.platform.admin.RemoteExecutionService remoteExecutionService(
