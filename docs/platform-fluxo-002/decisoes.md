@@ -43,3 +43,16 @@ Partida: `dev` integrada (API `4f518bcd2e887f64f7ffc46b46791017d4379c4b`, Web `e
   na API, por compatibilidade. A Web deixa de oferecer a criação como etapa separada.
 - **Diferença a conhecer**: uma organização que hoje usa as autorizações manuais com validade escolhida passa, no modelo
   por licença, a ter validade até o fim da cobertura da licença (limite técnico de 366 dias).
+
+## Máquinas na interface (pedido da titular, 20/11/2026)
+
+- **Máquina** (interface) = **Worker** (contrato): o nome amigável que a pessoa cadastra; é o alvo da ativação.
+- **Computador** = onde o Agent está instalado; vinculado a uma máquina por vez, pelo código de vinculação.
+- **Nome do computador**: é o informado pela pessoa na vinculação (`agentName`). A Platform **não coleta** o nome real do
+  computador (o contrato diz "nada é coletado da máquina"); mostrá-lo exigiria o Agent e o Agent Client o informarem,
+  uma decisão de privacidade e uma mudança neles que **não** foi feita nesta missão.
+- **Estado** (`machineState`, calculado pelo servidor): REGISTERED (cadastrada), AWAITING_CONNECTION (aguardando conexão:
+  código válido ou computador ainda sem contato), CONNECTED (conectada: contato nos últimos 180 s), NO_CONTACT (sem
+  contato, com o último contato), LINK_SUSPENDED, INACTIVE.
+- Cadastrar ou conectar uma máquina não consome licença; a licença continua vinculada à automação.
+
