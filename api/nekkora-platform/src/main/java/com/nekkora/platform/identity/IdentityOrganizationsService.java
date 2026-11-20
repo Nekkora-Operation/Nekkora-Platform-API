@@ -100,9 +100,12 @@ public final class IdentityOrganizationsService {
         // T10 (034): o identificador de cada organizacao da lista, lido no contexto DELA (uma transacao curta por organizacao,
         // com a mesma sessao de identidade; a lista ja passou pela elegibilidade da 017)
         List<IdentityOrgRepository.Organization> withHandles = found.get().organizations().stream()
-                .map(o -> new IdentityOrgRepository.Organization(o.organizationId(), o.name(), o.roles(), o.activationState(),
-                        tx.inIdentityAndOrganization(new TokenSessao(sessionToken), o.organizationId(), Mode.READ_ONLY,
-                                (id, j) -> IdentityOrgRepository.handle(j, o.organizationId()).orElse(null)).orElse(null)))
+                .map(o -> tx.inIdentityAndOrganization(new TokenSessao(sessionToken), o.organizationId(), Mode.READ_ONLY,
+                        (id, j) -> new IdentityOrgRepository.Organization(o.organizationId(), o.name(), o.roles(), o.activationState(),
+                                IdentityOrgRepository.handle(j, o.organizationId()).orElse(null),
+                                IdentityOrgRepository.licenseModel(j, o.organizationId())))
+                        // sem a leitura no contexto dela: sem identificador e no modelo anterior (o lado que nao promete capacidade)
+                        .orElse(new IdentityOrgRepository.Organization(o.organizationId(), o.name(), o.roles(), o.activationState(), null, "legacy")))
                 .toList();
         return new Listing(withHandles, found.get().canCreateOrganization());
     }

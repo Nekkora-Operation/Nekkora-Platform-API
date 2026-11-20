@@ -681,6 +681,45 @@ class AgentGatewayIT {
         // o banco e quem decide: o papel do canal nao grava o registro por fora, nem escolhe a base
         assertThat(f.value("SELECT public.license_run_basis(" + o + ", '" + f.automation + "', '" + authorization + "', clock_timestamp())")).isEqualTo("-3");
 
+        // ---- RENOVAR DEPOIS NAO COBRE RETROATIVAMENTE (068). Uma execucao comeca com a licenca vencida e e recusada. A renovacao
+        //      vem depois, com o inicio escrito no fim do periodo anterior (nas DATAS nao ha intervalo): ela nao existia quando
+        //      a execucao comecou, e o registro dessa execucao continua recusado
+        String lapsed = newExecution();
+        java.time.Instant inTheLapse = java.time.Instant.now();
+        assertThat(m.register(lapsed, authorization.toString(), AgentFixture.REAL_FINGERPRINT, runningAt(inTheLapse)).status()).isEqualTo(403);
+        Thread.sleep(60);
+        DB.asSuperuser("INSERT INTO organization_license_periods (organization_id, license_id, period_number, kind, starts_at, ends_at) "
+                + "SELECT organization_id, license_id, 2, 2, ends_at, clock_timestamp() + interval '30 days' FROM organization_license_periods "
+                + "WHERE license_id = '" + license + "' AND period_number = 1");
+        assertThat(f.count("SELECT count(*) FROM organization_license_periods WHERE license_id = '" + license + "' AND period_number = 2 AND starts_at <= '"
+                + inTheLapse + "' AND ends_at > '" + inTheLapse + "' AND created_at > '" + inTheLapse + "'"))
+                .as("pelas datas o periodo novo abrange aquele instante; mas foi concedido depois dele").isEqualTo(1);
+        MachineClient.Response retroactive = m.register(lapsed, authorization.toString(), AgentFixture.REAL_FINGERPRINT, runningAt(inTheLapse));
+        assertThat(retroactive.status()).as("renovar hoje nao autoriza o que comecou sem licenca").isEqualTo(403);
+        assertThat(retroactive.body().get("reason").asString()).isEqualTo("license_expired");
+        assertThat(f.count("SELECT count(*) FROM agent_runs WHERE organization_id = " + o + " AND agent_execution_id = '" + lapsed + "'")).isZero();
+        // trabalho NOVO depois da renovacao: aceito, base 1
+        MachineClient.Response fresh = m.register(newExecution(), authorization.toString(), AgentFixture.REAL_FINGERPRINT, runningAt(java.time.Instant.now()));
+        assertThat(fresh.status()).as(String.valueOf(fresh.body())).isEqualTo(201);
+        assertThat(f.value("SELECT license_basis FROM agent_runs WHERE agent_run_id = '" + fresh.body().get("runId").asString() + "'")).isEqualTo("1");
+        // ENTREGA TARDIA de execucao que JA ESTAVA AUTORIZADA (comecou na validade do primeiro periodo): continua aceita. E o caso
+        // que a regra distingue do anterior
+        MachineClient.Response authorized = m.register(newExecution(), authorization.toString(), AgentFixture.REAL_FINGERPRINT, runningAt(duringValidity));
+        assertThat(authorized.status()).as("comecou com a licenca vigente: entrega tardia aceita").isEqualTo(201);
+        // ---- renovacao COM INTERVALO nas datas: o segundo periodo vence, passa um tempo sem licenca, e o terceiro comeca depois.
+        //      A execucao iniciada no intervalo nao e coberta nem pelas datas
+        DB.asSuperuser("SET session_replication_role = replica",
+                "UPDATE organization_license_periods SET ends_at = clock_timestamp() WHERE license_id = '" + license + "' AND period_number = 2");
+        Thread.sleep(60);
+        String inGap = newExecution();
+        java.time.Instant gap = java.time.Instant.now();
+        Thread.sleep(60);
+        DB.asSuperuser("INSERT INTO organization_license_periods (organization_id, license_id, period_number, kind, starts_at, ends_at) VALUES (" + o + ", '"
+                + license + "', 3, 2, clock_timestamp(), clock_timestamp() + interval '30 days')");
+        MachineClient.Response gapped = m.register(inGap, authorization.toString(), AgentFixture.REAL_FINGERPRINT, runningAt(gap));
+        assertThat(gapped.status()).as("iniciada no intervalo entre os periodos").isEqualTo(403);
+        assertThat(f.count("SELECT count(*) FROM agent_runs WHERE organization_id = " + o + " AND agent_execution_id = '" + inGap + "'")).isZero();
+
         // ---- a organizacao do lado, no modelo anterior, segue como sempre
         Paired neighbour = paired(other);
         assertThat(neighbour.m().register(newExecution(), neighbour.authorization().toString(), AgentFixture.REAL_FINGERPRINT, running()).status()).isEqualTo(201);

@@ -88,8 +88,8 @@ public class LicenseReadController {
             access.requireAnyOrganizationPermission(j, org, s.membershipId(), "org.manage");
             OffsetDateTime now = now(j);
             return j.sql("SELECT model, workers_used, workers_limit, concurrent_used, concurrent_limit, pending_used, pending_limit, "
-                    + "concurrent_remote, concurrent_uncertain, concurrent_platform, concurrent_previous_agent "
-                    + "FROM public.capacity_state(?)").param(org).query((rs, n) -> {
+                    + "concurrent_remote, concurrent_uncertain, concurrent_platform, concurrent_previous_agent, "
+                    + "concurrent_previous_agent_uncertain FROM public.capacity_state(?)").param(org).query((rs, n) -> {
                 Map<String, Object> r = new LinkedHashMap<>();
                 r.put("model", rs.getInt(1) == 2 ? "licensed" : "legacy");
                 r.put("workers", usage(rs.getLong(2), rs.getObject(3, Long.class)));
@@ -100,7 +100,11 @@ public class LicenseReadController {
                 by.put("unconfirmed", rs.getLong(9));
                 by.put("platform", rs.getLong(10));
                 by.put("previousAgent", rs.getLong(11));
+                by.put("previousAgentUnconfirmed", rs.getLong(12));
                 concurrent.put("breakdown", by);
+                // 068: execucoes ATIVAS (confirmadas pela maquina ou pela Platform) separadas das RESERVAS por situacao incerta
+                concurrent.put("active", rs.getLong(8) + rs.getLong(10) + rs.getLong(11));
+                concurrent.put("reservedUncertain", rs.getLong(9) + rs.getLong(12));
                 r.put("concurrentExecutions", concurrent);
                 r.put("pendingExecutions", usage(rs.getLong(6), rs.getObject(7, Long.class)));
                 r.put("asOf", now);

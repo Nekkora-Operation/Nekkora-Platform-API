@@ -14,6 +14,19 @@ Depende das PRs 061 a 066. Migration **067, com elevação** — só laboratóri
 
 **Não há teto fixo de organizações criadas.** O teto de 10 da 017 foi retirado nesta migration (função de limite e a indicação `canCreateOrganization`): o que limita é só o limite configurável de vazias. O limite de frequência da rota de criação (três por dia por pessoa, R11) continua: é proteção contra abuso, não quantidade de organizações.
 
+## Efeito imediato da migration, mesmo com a D7 desligada
+
+Aplicar a 067 **muda quem cria organização no mesmo instante**, sem chave e sem relação com a D7 (que só decide o modelo
+das organizações novas):
+
+- quem aceitou um convite e não administra nenhuma organização **deixa de criar direto** e passa a solicitar;
+- quem só tem conta do tipo Cliente deixa de criar e de solicitar;
+- o limite de três organizações vazias passa a valer para todos (quem já tem mais continua com elas; só a próxima criação é
+  recusada).
+
+Não há como aplicar a 067 e manter a criação antiga. Para voltar, é a reversão da migration (abaixo): recriar
+`identity_create_organization_impl` com o corpo da 017. O plano de implantação precisa avisar os convidados antes.
+
 ## Perfil de quem cria
 
 | Perfil | Como o servidor reconhece | Regra |

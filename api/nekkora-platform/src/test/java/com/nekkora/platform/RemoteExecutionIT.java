@@ -1916,11 +1916,14 @@ class RemoteExecutionIT extends PlatformTestBase {
             assertThat(second.status()).as("simultaneas no limite: a solicitacao espera na fila, nao e recusada - " + second.body()).isEqualTo(201);
             String secondAttempt = JSON.readTree(second.body()).get("attempts").get(0).get("attemptId").asString();
             assertThat(JSON.readTree(second.body()).get("attempts").get(0).get("state").asString()).isEqualTo("QUEUED");
+            // a leitura diz POR QUE espera: na fila com a organizacao no limite de simultaneas = aguardando vaga (capacidade)
+            assertThat(JSON.readTree(second.body()).get("waitingForSlot").asBoolean()).as("aguardando vaga").isTrue();
+            assertThat(JSON.readTree(first.body()).get("waitingForSlot").asBoolean()).as("a primeira nasceu com vaga livre: so aguardava a maquina").isFalse();
             JsonNode full = JSON.readTree(s.admin().get(s.o() + "/capacity").body());
             assertThat(usage(full, "concurrentExecutions")).containsExactly("1", "1");
             assertThat(usage(full, "pendingExecutions")).containsExactly("1", "1");
             assertThat(full.get("concurrentExecutions").get("breakdown").toString()).as("de que e feita a ocupacao")
-                    .isEqualTo("{\"remote\":1,\"unconfirmed\":0,\"platform\":0,\"previousAgent\":0}");
+                    .isEqualTo("{\"remote\":1,\"unconfirmed\":0,\"platform\":0,\"previousAgent\":0,\"previousAgentUnconfirmed\":0}");
             // sem vaga, o banco nao deixa ENTREGAR a segunda (a aplicacao do canal pergunta antes: CapacityReservationIT)
             assertThat(as("nekkora_ingestion", org, "UPDATE remote_attempts SET state = 2, token_hash = repeat('a', 64), epoch = epoch + 1 WHERE attempt_id = '"
                     + secondAttempt + "'")).as("entrega sem vaga").isEqualTo("23514");
@@ -1942,7 +1945,7 @@ class RemoteExecutionIT extends PlatformTestBase {
             machineMoves(s, firstAttempt, 7);
             ProductFixtures.start(org, s.workspace(), platformExecution, s.org().adminMembership());
             assertThat(JSON.readTree(s.admin().get(s.o() + "/capacity").body()).get("concurrentExecutions").get("breakdown").toString())
-                    .isEqualTo("{\"remote\":0,\"unconfirmed\":0,\"platform\":1,\"previousAgent\":0}");
+                    .isEqualTo("{\"remote\":0,\"unconfirmed\":0,\"platform\":1,\"previousAgent\":0,\"previousAgentUnconfirmed\":0}");
             assertThat(as("nekkora_ingestion", org, "UPDATE remote_attempts SET state = 2, token_hash = repeat('a', 64), epoch = epoch + 1 WHERE attempt_id = '"
                     + secondAttempt + "'")).as("a vaga e da execucao da Platform").isEqualTo("23514");
             ProductFixtures.succeed(platformExecution, "1 second");

@@ -90,6 +90,7 @@ public class IdentityOrganizationsController {
             m.put("roles", List.copyOf(o.roles()));
             m.put("activationState", o.activationState());
             m.put("handle", o.handle());
+            m.put("licenseModel", o.licenseModel() == null ? "legacy" : o.licenseModel());
             return m;
         }).toList();
         Map<String, Object> r = new LinkedHashMap<>();
