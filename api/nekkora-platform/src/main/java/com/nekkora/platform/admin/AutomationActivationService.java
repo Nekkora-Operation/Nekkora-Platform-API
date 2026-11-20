@@ -119,16 +119,14 @@ public class AutomationActivationService {
                 o.put("workerIds", ((List<?>) d.get("workers")).stream().map(w -> ((Map<?, ?>) w).get("workerId")).toList());
                 automations.add(o);
             }
-            List<Map<String, Object>> workers = j.sql("""
-                    SELECT w.worker_id, w.name FROM public.worker_workspace_assignments x
+            List<Map<String, Object>> workers = new ArrayList<>();
+            for (UUID w : j.sql("""
+                    SELECT w.worker_id FROM public.worker_workspace_assignments x
                       JOIN public.workers w ON w.organization_id = x.organization_id AND w.worker_id = x.worker_id AND w.status = 1
                      WHERE x.organization_id = ? AND x.workspace_id = ? AND x.status = 1 ORDER BY w.name, w.worker_id
-                    """).param(org).param(workspace).query((rs, n) -> {
-                        Map<String, Object> m = new LinkedHashMap<>();
-                        m.put("workerId", rs.getObject(1, UUID.class));
-                        m.put("name", rs.getString(2));
-                        return m;
-                    }).list();
+                    """).param(org).param(workspace).query(UUID.class).list()) {
+                workers.add(machine(j, org, w));
+            }
             Map<String, Object> r = new LinkedHashMap<>();
             r.put("workspaceId", workspace);
             r.put("workspaceName", wsName);
@@ -568,6 +566,30 @@ public class AutomationActivationService {
         return due;
     }
 
+    /**
+     * A maquina (o Worker) como a tela a mostra: o nome amigavel, o nome do computador vinculado (informado na vinculacao;
+     * a Platform nao coleta o nome real do computador), o estado (AgentAdminService.MACHINE_STATE_SQL) e o ultimo contato.
+     * Cadastrar ou conectar uma maquina nao consome licenca.
+     */
+    private static Map<String, Object> machine(JdbcClient j, UUID org, UUID worker) {
+        return j.sql("""
+                SELECT w.worker_id, w.name, a.name, a.last_heartbeat_at, """ + AgentAdminService.MACHINE_STATE_SQL + """
+
+                  FROM public.workers w
+                  LEFT JOIN public.worker_agent_assignments wa ON wa.organization_id = w.organization_id AND wa.worker_id = w.worker_id AND wa.status = 1
+                  LEFT JOIN public.agents a ON a.organization_id = wa.organization_id AND a.agent_id = wa.agent_id
+                 WHERE w.organization_id = ? AND w.worker_id = ?
+                """).param(AgentAdminService.CONNECTED_SECONDS).param(org).param(worker).query((rs, n) -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("workerId", rs.getObject(1, UUID.class));
+                    m.put("name", rs.getString(2));
+                    m.put("computerName", rs.getString(3));
+                    m.put("lastContactAt", rs.getObject(4, OffsetDateTime.class));
+                    m.put("machineState", rs.getString(5));
+                    return m;
+                }).single();
+    }
+
     /** A forma de uma ativacao para a tela. */
     private static Map<String, Object> describe(JdbcClient j, UUID org, UUID automation) {
         record A(String name, String status, UUID workspace, String workspaceName) {
@@ -595,9 +617,7 @@ public class AutomationActivationService {
             }
             LocalAuthorization la = x.a();
             Map<String, Object> w = byWorker.computeIfAbsent(la.workerId(), id -> {
-                Map<String, Object> m = new LinkedHashMap<>();
-                m.put("workerId", id);
-                m.put("name", j.sql("SELECT name FROM public.workers WHERE organization_id = ? AND worker_id = ?").param(org).param(id).query(String.class).single());
+                Map<String, Object> m = machine(j, org, id);
                 m.put("execution", null);
                 m.put("monitoring", null);
                 return m;

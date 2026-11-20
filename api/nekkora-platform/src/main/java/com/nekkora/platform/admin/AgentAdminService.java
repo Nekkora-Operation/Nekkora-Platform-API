@@ -677,8 +677,26 @@ public final class AgentAdminService {
      */
     public record WorkerView(UUID workerId, String name, String status, UUID agentId, List<UUID> workspaceIds, String agentName,
                              String agentStatus, String agentVersion, UUID installationId, OffsetDateTime lastHeartbeatAt, String connectivity,
-                             OffsetDateTime credentialExpiresAt, OffsetDateTime createdAt) {
+                             OffsetDateTime credentialExpiresAt, OffsetDateTime createdAt, String machineState) {
     }
+
+    /**
+     * PLATFORM-FLUXO-002 - o estado da MAQUINA (o Worker com o computador vinculado a ele), para a tela dizer sem ambiguidade:
+     * REGISTERED (cadastrada, sem computador vinculado), AWAITING_CONNECTION (codigo de pareamento ainda valido, ou computador
+     * vinculado que ainda nao fez contato), CONNECTED (contato autenticado nos ultimos 180 s), NO_CONTACT (vinculada, sem
+     * contato recente), LINK_SUSPENDED (vinculo do computador suspenso) e INACTIVE (maquina desativada). Expressao SQL sobre
+     * {@code w} (workers) e {@code a} (agents do vinculo ATIVO, LEFT JOIN); o parametro e o prazo de conexao em segundos.
+     */
+    static final String MACHINE_STATE_SQL = """
+            CASE WHEN w.status <> 1 THEN 'INACTIVE'
+                 WHEN a.agent_id IS NOT NULL AND a.status = 3 THEN 'LINK_SUSPENDED'
+                 WHEN a.agent_id IS NOT NULL AND a.status = 2 AND a.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?) THEN 'CONNECTED'
+                 WHEN a.agent_id IS NOT NULL AND a.status = 2 AND a.last_heartbeat_at IS NOT NULL THEN 'NO_CONTACT'
+                 WHEN a.agent_id IS NOT NULL AND a.status IN (1, 2) THEN 'AWAITING_CONNECTION'
+                 WHEN EXISTS (SELECT 1 FROM public.agent_enrollments e WHERE e.organization_id = w.organization_id AND e.worker_id = w.worker_id
+                                 AND e.purpose = 1 AND e.consumed_at IS NULL AND e.cancelled_at IS NULL AND e.expires_at > clock_timestamp())
+                      THEN 'AWAITING_CONNECTION'
+                 ELSE 'REGISTERED' END""";
 
     public List<WorkerView> listWorkers(UUID org, ValidSession actor, String token) {
         return actions.read(org, j -> {
@@ -689,13 +707,15 @@ public final class AgentAdminService {
                            coalesce((SELECT array_agg(x.workspace_id ORDER BY x.workspace_id) FROM public.worker_workspace_assignments x
                                       WHERE x.organization_id = w.organization_id AND x.worker_id = w.worker_id AND x.status = 1), '{}'),
                            a.name, a.status, a.agent_version, a.installation_id, a.last_heartbeat_at,
-                           a.status = 2 AND a.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?), c.expires_at, w.created_at
+                           a.status = 2 AND a.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?), c.expires_at, w.created_at,
+                           """ + MACHINE_STATE_SQL + """
+
                       FROM public.workers w
                       LEFT JOIN public.worker_agent_assignments wa ON wa.organization_id = w.organization_id AND wa.worker_id = w.worker_id AND wa.status = 1
                       LEFT JOIN public.agents a ON a.organization_id = wa.organization_id AND a.agent_id = wa.agent_id
                       LEFT JOIN public.agent_credentials c ON c.organization_id = a.organization_id AND c.agent_id = a.agent_id AND c.revoked_at IS NULL
                      WHERE w.organization_id = ? ORDER BY w.created_at, w.worker_id
-                    """).param(CONNECTED_SECONDS).param(org).query((rs, n) -> {
+                    """).param(CONNECTED_SECONDS).param(CONNECTED_SECONDS).param(org).query((rs, n) -> {
                 UUID agent = rs.getObject(4, UUID.class);
                 return new WorkerView(rs.getObject(1, UUID.class), rs.getString(2),
                         switch (rs.getShort(3)) { case 1 -> "ACTIVE"; case 2 -> "SUSPENDED"; default -> "RETIRED"; }, agent,
@@ -703,7 +723,7 @@ public final class AgentAdminService {
                         agent == null ? null : switch (rs.getShort(7)) { case 1 -> "PENDING"; case 2 -> "ACTIVE"; case 3 -> "SUSPENDED"; default -> "REVOKED"; },
                         rs.getString(8), rs.getObject(9, UUID.class), rs.getObject(10, OffsetDateTime.class),
                         agent == null ? null : Boolean.TRUE.equals(rs.getObject(11, Boolean.class)) ? "CONNECTED" : "DISCONNECTED", rs.getObject(12, OffsetDateTime.class),
-                        rs.getObject(13, OffsetDateTime.class));
+                        rs.getObject(13, OffsetDateTime.class), rs.getString(14));
             }).list();
         });
     }

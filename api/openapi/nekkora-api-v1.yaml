@@ -4238,10 +4238,13 @@ components:
           type: array
           items:
             type: object
-            required: [workerId, name, execution, monitoring]
+            required: [workerId, name, machineState, execution, monitoring]
             properties:
               workerId: { type: string, format: uuid }
               name: { type: string }
+              computerName: { type: [string, 'null'], description: 'Nome do computador vinculado, informado na vinculacao (a Platform nao coleta o nome real do computador); nulo sem computador' }
+              lastContactAt: { type: [string, 'null'], format: date-time }
+              machineState: { type: string, enum: [REGISTERED, AWAITING_CONNECTION, CONNECTED, NO_CONTACT, LINK_SUSPENDED, INACTIVE], description: 'PLATFORM-FLUXO-002: estado da maquina para a tela. REGISTERED cadastrada sem computador vinculado; AWAITING_CONNECTION codigo de vinculacao ainda valido ou computador vinculado ainda sem contato; CONNECTED contato nos ultimos 180 s; NO_CONTACT vinculada sem contato recente; LINK_SUSPENDED vinculo do computador suspenso; INACTIVE maquina desativada. Cadastrar ou conectar nao consome licenca' }
               execution: { $ref: '#/components/schemas/AutomationActivationAuthorization' }
               monitoring: { $ref: '#/components/schemas/AutomationActivationAuthorization' }
     AutomationActivationList:
@@ -4283,10 +4286,13 @@ components:
           type: array
           items:
             type: object
-            required: [workerId, name]
+            required: [workerId, name, machineState]
             properties:
               workerId: { type: string, format: uuid }
               name: { type: string }
+              computerName: { type: [string, 'null'], description: 'Nome do computador vinculado, informado na vinculacao (a Platform nao coleta o nome real do computador); nulo sem computador' }
+              lastContactAt: { type: [string, 'null'], format: date-time }
+              machineState: { type: string, enum: [REGISTERED, AWAITING_CONNECTION, CONNECTED, NO_CONTACT, LINK_SUSPENDED, INACTIVE], description: 'PLATFORM-FLUXO-002: estado da maquina para a tela. REGISTERED cadastrada sem computador vinculado; AWAITING_CONNECTION codigo de vinculacao ainda valido ou computador vinculado ainda sem contato; CONNECTED contato nos ultimos 180 s; NO_CONTACT vinculada sem contato recente; LINK_SUSPENDED vinculo do computador suspenso; INACTIVE maquina desativada. Cadastrar ou conectar nao consome licenca' }
     AutomationActivationRequest:
       type: object
       additionalProperties: false
@@ -5284,6 +5290,7 @@ components:
               connectivity: { type: [string, 'null'], enum: [CONNECTED, DISCONNECTED, null], description: 'T07: null = sem Agent. T11: CONNECTED so com o Agent ACTIVE e contato autenticado nos ultimos 180 s (heartbeat a cada 60 s); ver listAgents' }
               credentialExpiresAt: { type: [string, 'null'], format: date-time }
               createdAt: { type: string, format: date-time }
+              machineState: { type: string, enum: [REGISTERED, AWAITING_CONNECTION, CONNECTED, NO_CONTACT, LINK_SUSPENDED, INACTIVE], description: 'PLATFORM-FLUXO-002: estado da maquina para a tela. REGISTERED cadastrada sem computador vinculado; AWAITING_CONNECTION codigo de vinculacao ainda valido ou computador vinculado ainda sem contato; CONNECTED contato nos ultimos 180 s; NO_CONTACT vinculada sem contato recente; LINK_SUSPENDED vinculo do computador suspenso; INACTIVE maquina desativada. Cadastrar ou conectar nao consome licenca' }
     WorkerCreateRequest:
       type: object
       additionalProperties: false

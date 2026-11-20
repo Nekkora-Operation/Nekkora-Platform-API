@@ -146,6 +146,19 @@ class AutomationActivationIT extends ReadRoutesSupport {
         assertThat(field(opt.body().get("workers"), "name")).containsExactly("Estacao 1", "Estacao 2", "Estacao 3 (nao escolhida)");
         assertThat(opt.body().get("automations").get(0).get("licensed").asBoolean()).isFalse();
         assertThat(assignments(o.id())).isZero();
+        // a maquina como a tela a mostra: cadastrada, sem computador; com um codigo de vinculacao valido, aguardando conexao
+        opt.body().get("workers").forEach(w -> {
+            assertThat(w.get("machineState").asString()).isEqualTo("REGISTERED");
+            assertThat(w.get("computerName").isNull()).isTrue();
+        });
+        DB.asSuperuser("INSERT INTO agent_enrollments (organization_id, purpose, worker_id, agent_name, code_hash, created_by_membership_id, expires_at) VALUES ('"
+                + o.id() + "', 1, '" + w2 + "', 'NOTE-FISCAL-02', '" + "c".repeat(64) + "', '" + o.adminMembership() + "', clock_timestamp() + interval '15 minutes')");
+        Got pending = get(admin, path(o.id(), "automation-activations/options", "workspaceId=" + ws));
+        assertThat(field(pending.body().get("workers"), "machineState")).containsExactly("REGISTERED", "AWAITING_CONNECTION", "REGISTERED");
+        // a lista de Workers traz o mesmo estado
+        Got list0 = get(admin, path(o.id(), "workers", null));
+        assertOk(list0, "workers");
+        assertThat(field(list0.body().get("items"), "machineState")).contains("AWAITING_CONNECTION", "REGISTERED");
 
         // ---- sem confirmacao reforcada: recusado, nada gravado
         assertThat(activate(admin, o.id(), robo, List.of(w1, w2)).status()).isEqualTo(403);
