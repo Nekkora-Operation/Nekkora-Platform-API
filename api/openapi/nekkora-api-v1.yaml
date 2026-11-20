@@ -1831,6 +1831,58 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/CatalogInconsistent' }
 
+  /api/v1/o/{org}/licenses/summary:
+    get:
+      tags: [Licencas da organizacao]
+      operationId: getLicenseSummary
+      x-estado: implementado (PLATFORM-LICENCIAMENTO-001 E2; LicenseReadController; LicenseReadsIT; migration 061)
+      summary: 'Modelo de habilitacao da organizacao e a conta das licencas de execucao e monitoracao (org.manage)'
+      description: >
+        So leitura, para quem administra a organizacao. Agregacao feita no banco sobre TODAS as licencas - nunca a soma de uma
+        pagina da lista. Vigente = a licenca nao foi encerrada e tem um periodo com inicio <= asOf < fim. contracted: vigentes;
+        used: vigentes com automacao vinculada; available: vigentes sem automacao (contracted = used + available);
+        licensedAutomations: automacoes com licenca ativa (uma licenca atende uma automacao: igual a used);
+        expiredWithAutomation: licencas vencidas que continuam vinculadas a uma automacao (renovar mantem o vinculo). Licenca
+        ativa NAO significa execucao em andamento: uma automacao parada continua consumindo a licenca. model: legacy (a
+        organizacao segue pela ativacao e pelos limites anteriores; licencas aparecem mas nao sao exigidas) ou licensed
+        (executar e monitorar exige licenca). NESTA ETAPA nenhum caminho de execucao consulta licenca e toda organizacao e legacy.
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+      responses:
+        '200': { description: 'Resumo das licencas', content: { application/json: { schema: { $ref: '#/components/schemas/LicenseSummary' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/CatalogInconsistent' }
+
+  /api/v1/o/{org}/licenses:
+    get:
+      tags: [Licencas da organizacao]
+      operationId: listOrganizationLicenses
+      x-estado: implementado (PLATFORM-LICENCIAMENTO-001 E2; LicenseReadController; LicenseReadsIT; migration 061)
+      summary: 'Licencas da organizacao, com a situacao, a validade e a automacao vinculada (org.manage)'
+      description: >
+        Uma linha por licenca, inclusive as vencidas e as encerradas. status: active (vigente), scheduled (so tem periodo no
+        futuro), expired (o ultimo periodo venceu) ou ended (encerrada por ato). validFrom e o inicio do primeiro periodo e
+        validUntil o fim do ultimo (exclusivo). automation e nulo quando a licenca esta disponivel; quando ha vinculo, traz a
+        automacao, o ambiente de trabalho, a situacao da automacao e, A PARTE, executionInProgress - se a automacao tem
+        trabalho em andamento em alguma origem (as mesmas regras do resumo do Inicio). Suspender, renomear ou arquivar a
+        automacao nao desfaz o vinculo.
+      x-ordenacao: number asc, licenseId asc
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Org'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: 'Pagina de licencas', content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationLicensePage' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/CatalogInconsistent' }
+
   /api/v1/o/{org}/automations:
     get:
       tags: [Inicio da organizacao]
@@ -3331,6 +3383,41 @@ components:
                 outcome: { type: string, enum: [succeeded, failed, inProgress, cancelled, notStarted, unconfirmed] }
                 requestedAt: { type: string, format: date-time }
             - type: 'null'
+    LicenseSummary:
+      type: object
+      required: [model, modelSince, contracted, used, available, licensedAutomations, expiredWithAutomation, asOf]
+      properties:
+        model: { type: string, enum: [legacy, licensed], description: 'legacy: ativacao e limites anteriores; licensed: exige licenca' }
+        modelSince: { type: [string, 'null'], format: date-time, description: 'quando o modelo atual passou a valer; nulo se a organizacao nunca mudou de modelo' }
+        contracted: { type: integer, format: int64, minimum: 0 }
+        used: { type: integer, format: int64, minimum: 0 }
+        available: { type: integer, format: int64, minimum: 0 }
+        licensedAutomations: { type: integer, format: int64, minimum: 0 }
+        expiredWithAutomation: { type: integer, format: int64, minimum: 0 }
+        asOf: { type: string, format: date-time, description: 'instante da conta, medido no banco' }
+    OrganizationLicense:
+      type: object
+      required: [licenseId, number, status, validFrom, validUntil, nextPeriodStartsAt, renewals, automation]
+      properties:
+        licenseId: { type: string, format: uuid }
+        number: { type: integer, minimum: 1, description: 'sequencial por organizacao' }
+        status: { type: string, enum: [active, scheduled, expired, ended] }
+        validFrom: { type: [string, 'null'], format: date-time }
+        validUntil: { type: [string, 'null'], format: date-time, description: 'fim do ultimo periodo, exclusivo' }
+        nextPeriodStartsAt: { type: [string, 'null'], format: date-time, description: 'inicio do proximo periodo ainda nao iniciado, se houver' }
+        renewals: { type: integer, minimum: 0 }
+        automation:
+          type: [object, 'null']
+          required: [automationId, name, status, workspaceId, workspaceName, assignedAt, executionInProgress]
+          properties:
+            automationId: { type: string, format: uuid }
+            name: { type: string }
+            status: { $ref: '#/components/schemas/ResourceStatus' }
+            workspaceId: { type: string, format: uuid }
+            workspaceName: { type: string }
+            assignedAt: { type: string, format: date-time }
+            executionInProgress: { type: boolean, description: 'ha trabalho em andamento agora; nao tem relacao com a licenca estar ativa' }
+    OrganizationLicensePage: { type: object, required: [items, nextCursor, asOf], properties: { items: { type: array, items: { $ref: '#/components/schemas/OrganizationLicense' } }, nextCursor: { type: [string, 'null'] }, asOf: { type: string, format: date-time } } }
     OrganizationAutomationPage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/OrganizationAutomation' } }, nextCursor: { type: [string, 'null'] } } }
     AutomationPage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/Automation' } }, nextCursor: { type: [string, 'null'] } } }
     AutomationVersion:
