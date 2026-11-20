@@ -2342,6 +2342,58 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /api/v1/o/{org}/activity:
+    get:
+      tags: [Acompanhamento]
+      operationId: listActivity
+      x-estado: implementado (PLATFORM-FLUXO-002; ActivityController/ActivityReads; ActivityIT)
+      summary: 'Acompanhamento unificado das execucoes: "Em andamento" e "Historico", com a maquina de cada uma (automation.read por ambiente)'
+      description: >
+        Uma linha por EXECUCAO, com as mesmas quatro origens e as mesmas situacoes do resumo do Inicio (getExecutionSummary):
+        platform (execucao da Platform), local_agent (execucao relatada pelo Agent anterior), local_request (pedido ao Agent
+        anterior que nao virou execucao) e remote (solicitacao remota, pela ultima tentativa). Nada e repetido e nenhuma execucao
+        e criada. attention = resultado desconhecido ainda nao reconciliado (Agent anterior em OUTCOME_UNKNOWN sem reconciliacao;
+        ultima tentativa remota ENDED_UNKNOWN sem confirmacao da maquina nem declaracao): nunca e tratado como em andamento nem
+        como maquina livre. tab=in_progress (padrao): em andamento OU com attention, SEM periodo (uma pendencia antiga nunca some).
+        tab=history: o que ja tem desfecho, no periodo [from, to) pelo instante do pedido (as pendencias tambem aparecem, marcadas).
+        Filtros por ambiente, automacao e maquina (workerId). Ordem: pedido mais recente primeiro, com cursor.
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: tab, in: query, schema: { type: string, enum: [in_progress, history], default: in_progress } }
+        - { name: workspaceId, in: query, schema: { type: string, format: uuid } }
+        - { name: automationId, in: query, schema: { type: string, format: uuid } }
+        - { name: workerId, in: query, schema: { type: string, format: uuid }, description: 'A maquina (Worker)' }
+        - { name: from, in: query, schema: { type: string, format: date-time }, description: 'So em history' }
+        - { name: to, in: query, schema: { type: string, format: date-time }, description: 'So em history; periodo de ate 366 dias' }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+      responses:
+        '200': { description: 'Pagina do acompanhamento', content: { application/json: { schema: { $ref: '#/components/schemas/ActivityPage' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/activity/machines:
+    get:
+      tags: [Acompanhamento]
+      operationId: listMachineActivity
+      x-estado: implementado (PLATFORM-FLUXO-002; ActivityController/ActivityReads; ActivityIT)
+      summary: 'Atividade por maquina: em andamento, pendencias de atencao e o ultimo pedido (as mesmas linhas de listActivity, contadas)'
+      description: >
+        So nos ambientes com automation.read; uma maquina sem atividade visivel nao aparece. inProgress nao inclui as pendencias
+        (attention), que sao contadas a parte e nunca indicam maquina livre nem execucao comprovadamente ativa.
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' } ]
+      responses:
+        '200': { description: 'Atividade por maquina', content: { application/json: { schema: { $ref: '#/components/schemas/MachineActivityList' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /api/v1/o/{org}/license-operations:
     get:
       tags: [Operador de licencas]
@@ -4320,6 +4372,52 @@ components:
               validUntil: { type: string, format: date-time }
               reason: { type: string, description: 'Com failed: o motivo (reason do contrato ou a classe da recusa)' }
         activation: { $ref: '#/components/schemas/AutomationActivation' }
+    ActivityRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+    ActivityItem:
+      type: object
+      required: [kind, id, workspace, automation, machine, outcome, attention, requestedAt, startedAt, endedAt]
+      properties:
+        kind: { type: string, enum: [platform, local_agent, local_request, remote], description: 'Origem; decide a pagina de detalhe' }
+        id: { type: string, format: uuid, description: 'executionId, agentRunId, runRequestId ou remoteExecutionId, conforme kind' }
+        workspace: { $ref: '#/components/schemas/ActivityRef' }
+        automation: { $ref: '#/components/schemas/ActivityRef' }
+        machine:
+          type: [object, 'null']
+          required: [workerId, name, computerName]
+          properties:
+            workerId: { type: string, format: uuid }
+            name: { type: [string, 'null'] }
+            computerName: { type: [string, 'null'], description: 'Computador vinculado hoje a maquina (informado na vinculacao)' }
+        outcome: { type: string, enum: [succeeded, failed, in_progress, cancelled, not_started, unconfirmed] }
+        attention: { type: boolean, description: 'Resultado desconhecido ainda nao reconciliado' }
+        requestedAt: { type: string, format: date-time }
+        startedAt: { type: [string, 'null'], format: date-time }
+        endedAt: { type: [string, 'null'], format: date-time }
+    ActivityPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/ActivityItem' } }
+        nextCursor: { type: [string, 'null'] }
+    MachineActivityList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [workerId, inProgress, attention, lastActivityAt]
+            properties:
+              workerId: { type: string, format: uuid }
+              inProgress: { type: integer, minimum: 0 }
+              attention: { type: integer, minimum: 0 }
+              lastActivityAt: { type: [string, 'null'], format: date-time }
     LicenseSummary:
       type: object
       required: [model, modelSince, contracted, used, available, licensedAutomations, expiredWithAutomation, asOf]
