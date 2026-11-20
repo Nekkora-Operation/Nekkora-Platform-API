@@ -120,6 +120,8 @@ public class IdentityOrganizationsController {
         empty.put("organizationIds", c.emptyOrganizations());
         r.put("emptyOrganizations", empty);
         r.put("pendingRequests", usage(c.pendingRequests(), 3));
+        // D7: o modelo em que a organizacao criada AGORA nasceria. No modelo por licenca nao ha ativacao a esperar.
+        r.put("newOrganizationLicenseModel", l.newOrganizationsLicensed() ? "licensed" : "legacy");
         r.put("responsibleFor", l.responsibleFor().stream().map(o -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("organizationId", o.organizationId());
