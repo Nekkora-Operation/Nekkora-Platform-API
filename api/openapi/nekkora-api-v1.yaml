@@ -1883,6 +1883,37 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/CatalogInconsistent' }
 
+  /api/v1/o/{org}/licenses/{licenseId}/assignment:
+    post:
+      tags: [Licencas da organizacao]
+      operationId: assignLicense
+      x-estado: implementado (PLATFORM-LICENCIAMENTO-001 D1; LicenseController/LicenseService; LicenseAssignmentIT; migration 062)
+      summary: 'Vincula uma licenca disponivel a uma automacao (org.manage + confirmacao reforcada)'
+      description: >
+        Ato EXPLICITO do administrador da organizacao: a licenca passa a atender a automacao e fica vinculada a ela durante o
+        ciclo. Suspender, renomear ou arquivar a automacao depois NAO desfaz o vinculo; renovar a licenca o mantem; so a
+        transferencia pelo suporte muda a automacao atendida. A licenca tem de estar vigente e sem automacao; a automacao nao
+        pode estar arquivada nem ja consumir outra licenca. Recusas com 409 conflict e reason: license_already_assigned,
+        automation_already_licensed, license_not_valid, license_automation_archived. Duas tentativas simultaneas de vincular a
+        mesma licenca: uma e aceita e a outra recebe license_already_assigned; nunca ha dois vinculos. O ato fica na trilha
+        (quem, licenca, automacao, instante). NESTA ETAPA o vinculo nao muda o que a organizacao pode executar: nenhum fluxo
+        confere licenca.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: licenseId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: false, required: [automationId], properties: { automationId: { type: string, format: uuid } } } } }
+      responses:
+        '200': { description: 'Licenca vinculada', content: { application/json: { schema: { $ref: '#/components/schemas/LicenseAssignment' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
   /api/v1/o/{org}/automations:
     get:
       tags: [Inicio da organizacao]
@@ -3188,7 +3219,7 @@ components:
     Error:
       type: object
       required: [error]
-      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_machine_unconfirmed, remote_machine_finishing, remote_previous_processes_pending, remote_previous_result_unconfirmed, remote_attempt_not_unconfirmed, remote_attempt_already_reconciled, remote_requirements_not_declared, remote_requirements_conflict, remote_package_not_supported, remote_package_not_registered, remote_python_not_selected, remote_python_not_in_inventory, remote_dependency_check_too_soon, remote_dependency_check_closed, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
+      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, license_already_assigned, automation_already_licensed, license_not_valid, license_automation_archived, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_machine_unconfirmed, remote_machine_finishing, remote_previous_processes_pending, remote_previous_result_unconfirmed, remote_attempt_not_unconfirmed, remote_attempt_already_reconciled, remote_requirements_not_declared, remote_requirements_conflict, remote_package_not_supported, remote_package_not_registered, remote_python_not_selected, remote_python_not_in_inventory, remote_dependency_check_too_soon, remote_dependency_check_closed, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
     WorkspacePermissionCode:
       description: 'Permissoes de workspace (13): podem aparecer em allWorkspaces e em atribuicoes de workspace.'
       type: string
@@ -3417,6 +3448,15 @@ components:
             workspaceName: { type: string }
             assignedAt: { type: string, format: date-time }
             executionInProgress: { type: boolean, description: 'ha trabalho em andamento agora; nao tem relacao com a licenca estar ativa' }
+    LicenseAssignment:
+      type: object
+      required: [licenseId, number, automationId, workspaceId, assignedAt]
+      properties:
+        licenseId: { type: string, format: uuid }
+        number: { type: integer, minimum: 1 }
+        automationId: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        assignedAt: { type: string, format: date-time }
     OrganizationLicensePage: { type: object, required: [items, nextCursor, asOf], properties: { items: { type: array, items: { $ref: '#/components/schemas/OrganizationLicense' } }, nextCursor: { type: [string, 'null'] }, asOf: { type: string, format: date-time } } }
     OrganizationAutomationPage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/OrganizationAutomation' } }, nextCursor: { type: [string, 'null'] } } }
     AutomationPage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/Automation' } }, nextCursor: { type: [string, 'null'] } } }
