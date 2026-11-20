@@ -48,9 +48,11 @@ Partida: `dev` integrada (API `4f518bcd2e887f64f7ffc46b46791017d4379c4b`, Web `e
 
 - **Máquina** (interface) = **Worker** (contrato): o nome amigável que a pessoa cadastra; é o alvo da ativação.
 - **Computador** = onde o Agent está instalado; vinculado a uma máquina por vez, pelo código de vinculação.
-- **Nome do computador**: é o informado pela pessoa na vinculação (`agentName`). A Platform **não coleta** o nome real do
-  computador (o contrato diz "nada é coletado da máquina"); mostrá-lo exigiria o Agent e o Agent Client o informarem,
-  uma decisão de privacidade e uma mudança neles que **não** foi feita nesta missão.
+- **Nome da máquina** (decisão da titular, 20/11, etapa de acompanhamento): o valor informado pela pessoa no pareamento
+  (`agentName`) aparece na interface como "Nome da máquina" — no campo do pareamento, na coluna de Máquinas, nos detalhes
+  das execuções e como complemento do nome amigável ("Estação 1 (nome da máquina: NOTE-01)"). Nunca é apresentado como
+  nome detectado: a Platform **não coleta** o nome do computador. A coleta automática (pelo Agent e pelo Agent Client,
+  com a decisão de privacidade) fica para outra etapa.
 - **Estado** (`machineState`, calculado pelo servidor): REGISTERED (cadastrada), AWAITING_CONNECTION (aguardando conexão:
   código válido ou computador ainda sem contato), CONNECTED (conectada: contato nos últimos 180 s), NO_CONTACT (sem
   contato, com o último contato), LINK_SUSPENDED, INACTIVE.
