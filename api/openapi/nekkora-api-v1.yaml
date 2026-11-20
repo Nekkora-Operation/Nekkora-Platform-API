@@ -1831,6 +1831,60 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/CatalogInconsistent' }
 
+  /api/v1/o/{org}/capacity:
+    get:
+      tags: [Licencas da organizacao]
+      operationId: getOrganizationCapacity
+      x-estado: implementado (PLATFORM-LICENCIAMENTO-001 D2; LicenseReadController; RemoteExecutionIT; migration 066)
+      summary: 'Capacidade tecnica da organizacao, separada das licencas (org.manage)'
+      description: >
+        Workers cadastrados, vagas de execucao ocupadas e execucoes pendentes, cada uma com o limite TECNICO. Os limites sao
+        iguais para todas as organizacoes do modelo por licenca (iniciais: 50 Workers, 5 simultaneas, 50 pendentes),
+        configuraveis por procedimento administrativo; nao sao contratados e nao tem relacao com a quantidade de licencas.
+        A VAGA de execucao e uma so para a organizacao e e reservada quando o trabalho e autorizado a iniciar: na entrega da
+        tentativa remota a maquina, na entrega do pedido ao Agent anterior e na reserva da execucao da Platform. Sem vaga, o
+        trabalho NAO e recusado: continua pendente ate haver vaga ou vencer o proprio prazo. concurrentExecutions.breakdown
+        diz de que a ocupacao e feita (a soma e used): remote (tentativa remota entregue ate em execucao), unconfirmed
+        (tentativa remota com ocupacao incerta: terminou sem confirmacao ou com processo possivelmente vivo, ate a maquina
+        confirmar ou um administrador declarar a reconciliacao), platform (execucao da Platform) e previousAgent (pedido
+        entregue ou aceito e sessao em andamento do Agent anterior). A sessao que o Agent anterior inicia na propria maquina
+        nao pode ser segurada: ocupa vaga ao ser registrada, e used pode passar de limit. pendingExecutions: na fila, ainda nao
+        entregues, no prazo; fila cheia responde 409 capacity_pending_limit_reached a solicitacao nova. O cadastro de Worker
+        no limite responde 409 worker_limit_reached. Nenhum limite daqui consome nem libera licenca. Na organizacao do modelo
+        anterior, limit vem nulo: a capacidade dela continua sendo a da ativacao.
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+      responses:
+        '200':
+          description: 'Capacidade'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [model, workers, concurrentExecutions, pendingExecutions, asOf]
+                properties:
+                  model: { type: string, enum: [legacy, licensed] }
+                  workers: { $ref: '#/components/schemas/CapacityUsage' }
+                  concurrentExecutions:
+                    allOf:
+                      - { $ref: '#/components/schemas/CapacityUsage' }
+                      - type: object
+                        required: [breakdown]
+                        properties:
+                          breakdown:
+                            type: object
+                            required: [remote, unconfirmed, platform, previousAgent]
+                            properties:
+                              remote: { type: integer, format: int64, minimum: 0 }
+                              unconfirmed: { type: integer, format: int64, minimum: 0 }
+                              platform: { type: integer, format: int64, minimum: 0 }
+                              previousAgent: { type: integer, format: int64, minimum: 0 }
+                  pendingExecutions: { $ref: '#/components/schemas/CapacityUsage' }
+                  asOf: { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/o/{org}/licenses/summary:
     get:
       tags: [Licencas da organizacao]
@@ -3395,7 +3449,7 @@ components:
     Error:
       type: object
       required: [error]
-      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, license_already_assigned, automation_already_licensed, license_not_valid, license_automation_archived, license_ended, license_period_overlaps, license_period_already_ended, license_model_unchanged, license_preview_changed, license_required, license_expired, run_not_covered, license_not_assigned, license_transfer_same_automation, license_transfer_work_in_progress, license_transfer_requester_not_admin, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_machine_unconfirmed, remote_machine_finishing, remote_previous_processes_pending, remote_previous_result_unconfirmed, remote_attempt_not_unconfirmed, remote_attempt_already_reconciled, remote_requirements_not_declared, remote_requirements_conflict, remote_package_not_supported, remote_package_not_registered, remote_python_not_selected, remote_python_not_in_inventory, remote_dependency_check_too_soon, remote_dependency_check_closed, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
+      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, license_already_assigned, automation_already_licensed, license_not_valid, license_automation_archived, license_ended, license_period_overlaps, license_period_already_ended, license_model_unchanged, license_preview_changed, license_required, license_expired, run_not_covered, capacity_pending_limit_reached, license_not_assigned, license_transfer_same_automation, license_transfer_work_in_progress, license_transfer_requester_not_admin, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_machine_unconfirmed, remote_machine_finishing, remote_previous_processes_pending, remote_previous_result_unconfirmed, remote_attempt_not_unconfirmed, remote_attempt_already_reconciled, remote_requirements_not_declared, remote_requirements_conflict, remote_package_not_supported, remote_package_not_registered, remote_python_not_selected, remote_python_not_in_inventory, remote_dependency_check_too_soon, remote_dependency_check_closed, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
     WorkspacePermissionCode:
       description: 'Permissoes de workspace (13): podem aparecer em allWorkspaces e em atribuicoes de workspace.'
       type: string
@@ -3641,6 +3695,12 @@ components:
         previewToken: { type: string, description: 'resumo do conjunto apresentado; devolvido em confirmPreview para ligar a exigencia' }
         workInProgress: { type: integer, format: int64 }
         asOf: { type: string, format: date-time }
+    CapacityUsage:
+      type: object
+      required: [used, limit]
+      properties:
+        used: { type: integer, minimum: 0 }
+        limit: { type: [integer, 'null'], description: 'nulo na organizacao do modelo anterior' }
     LicensePreviewAutomation:
       type: object
       required: [automationId, name, workspaceName, inUseBecause, authorizationsValidUntil]

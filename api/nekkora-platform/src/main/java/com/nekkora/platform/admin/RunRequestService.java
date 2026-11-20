@@ -125,6 +125,8 @@ public final class RunRequestService {
                     .param(org).param(g.automationId()).query(Boolean.class).optional().orElse(false))) {
                 throw AccessActions.refuse(Failure.CONFLICT, "automacao_ou_workspace_inativo");
             }
+            // 066: pedido novo entra na fila da organizacao (limite tecnico de pendentes, no modelo por licenca)
+            com.nekkora.core.license.Capacity.requireRoomInQueue(j, org);
             UUID id = j.sql("""
                     INSERT INTO public.run_requests (organization_id, workspace_id, automation_id, automation_version_id, authorization_id, worker_id, agent_id,
                         source_kind, package_fingerprint, package_fingerprint_rule, request_key, requested_by_membership_id, valid_until)

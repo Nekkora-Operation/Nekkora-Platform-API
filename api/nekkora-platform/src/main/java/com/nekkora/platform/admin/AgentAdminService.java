@@ -142,8 +142,17 @@ public final class AgentAdminService {
             UUID worker = workerId;
             if (worker == null) {
                 // a 010 trava a organizacao e confere WORKERS_REGISTERED (zero ate a ativacao da 022)
-                worker = j.sql("INSERT INTO public.workers (organization_id, name, status) VALUES (?, ?, 1) RETURNING worker_id")
-                        .param(org).param(workerName).query(UUID.class).single();
+                try {
+                    worker = j.sql("INSERT INTO public.workers (organization_id, name, status) VALUES (?, ?, 1) RETURNING worker_id")
+                            .param(org).param(workerName).query(UUID.class).single();
+                } catch (RuntimeException e) {
+                    // o mesmo motivo do cadastro direto de Worker: limite atingido (tecnico, no modelo por licenca) ou sem ativacao
+                    if (DbErrors.workerCapacityRefused(e)) {
+                        LOG.info("evento=worker.limite_atingido correlacao={}", RequestContext.correlation());
+                        throw new ApiException(ApiError.WORKER_LIMIT_REACHED, "limite_workers");
+                    }
+                    throw e;
+                }
                 audit(j, org, 7, actor.membershipId(), null, worker, null, null, null);
             } else {
                 Short status = j.sql("SELECT status FROM public.workers WHERE organization_id = ? AND worker_id = ?").param(org).param(worker)

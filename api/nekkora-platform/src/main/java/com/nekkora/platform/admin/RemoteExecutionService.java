@@ -505,6 +505,7 @@ public class RemoteExecutionService {
             ArrayNode frozen = JSON.createArrayNode();
             requirements.effective().dependencies().forEach(frozen::add);
             Target target = target(j, org, workspaceId, versionId, agentId, actor.membershipId(), acceptance);
+            requireCapacity(j, org);
             UUID id = j.sql("""
                     INSERT INTO public.remote_executions (organization_id, workspace_id, automation_id, automation_version_id, package_fingerprint,
                         package_fingerprint_rule, requirements_revision, effective_dependencies, request_key, requested_by_membership_id)
@@ -567,6 +568,7 @@ public class RemoteExecutionService {
             requireRegistered(j, org, x.automationVersionId(), j.sql("SELECT package_fingerprint FROM public.remote_executions "
                     + "WHERE organization_id = ? AND remote_execution_id = ?").param(org).param(executionId).query(String.class).single(), SUPPORTED_RULE);
             Target target = target(j, org, x.workspaceId(), x.automationVersionId(), agentId, actor.membershipId(), acceptance);
+            requireCapacity(j, org);
             attempt(j, org, executionId, last.attemptNumber() + 1, target, actor.membershipId());
             LOG.info("evento=execucao_remota.nova_tentativa solicitacao={} tentativa={} correlacao={}", executionId, last.attemptNumber() + 1,
                     AccessActions.correlation());
@@ -1033,6 +1035,16 @@ public class RemoteExecutionService {
             throw new ApiException(ApiError.REMOTE_PYTHON_NOT_IN_INVENTORY, "python_fora_do_inventario");
         }
         return new Target(agentId, m.worker(), g.id());
+    }
+
+    /**
+     * 066, D2: no modelo por licenca, a tentativa nova entra na FILA da organizacao, que tem limite tecnico de pendentes. Fila
+     * cheia e recusa de capacidade, com motivo proprio - nunca de licenca, e nao consome nem libera licenca. O limite de
+     * execucoes SIMULTANEAS nao recusa a solicitacao: a vaga e reservada na entrega a maquina, e sem vaga a tentativa espera
+     * na fila. O gatilho da 066 reconfere na gravacao. Modelo anterior: limite nulo, nada conferido aqui.
+     */
+    private static void requireCapacity(JdbcClient j, UUID org) {
+        com.nekkora.core.license.Capacity.requireRoomInQueue(j, org);
     }
 
     private void attempt(JdbcClient j, UUID org, UUID executionId, int number, Target t, UUID membership) {

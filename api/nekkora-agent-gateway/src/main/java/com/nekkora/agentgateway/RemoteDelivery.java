@@ -251,6 +251,12 @@ public final class RemoteDelivery {
                 if (receiving != 1) {
                     return new Next(null, null);
                 }
+                // 066: a vaga de execucao da organizacao e reservada AQUI, na entrega (e a entrega que autoriza a maquina a
+                // iniciar). Sem vaga, a tentativa continua na fila; a reentrega de uma ja oferecida mantem a vaga que ja tem
+                if (a.state() == 1 && !reserve(j, m)) {
+                    LOG.info("evento=execucao_remota.aguardando_vaga tentativa={} correlacao={}", a.attemptId(), RequestContext.correlation());
+                    return new Next(null, null);
+                }
                 String token = Tokens.newToken();
                 int epoch = a.epoch() + 1;
                 j.sql("UPDATE public.remote_attempts SET state = 2, token_hash = ?, epoch = ?, lease_expires_at = clock_timestamp() + make_interval(secs => ?) "
@@ -751,6 +757,11 @@ public final class RemoteDelivery {
             throw new ApiException(ApiError.REMOTE_ATTEMPT_STALE, "token_ou_epoca");
         }
         return a;
+    }
+
+    /** 066: ha vaga de execucao na organizacao? Pega a trava da capacidade ate o fim da transacao. Modelo anterior: sempre. */
+    private static boolean reserve(JdbcClient j, Machine m) {
+        return Boolean.TRUE.equals(j.sql("SELECT public.capacity_reserve(?)").param(m.organization()).query(Boolean.class).single());
     }
 
     private static String blocker(JdbcClient j, Machine m, Row a) {

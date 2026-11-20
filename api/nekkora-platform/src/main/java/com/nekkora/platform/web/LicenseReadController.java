@@ -77,6 +77,46 @@ public class LicenseReadController {
     }
 
     /**
+     * D2 (066) - CAPACIDADE tecnica da organizacao, separada das licencas: Workers cadastrados, execucoes remotas em andamento e
+     * pendentes, com os limites tecnicos. No modelo anterior os limites vem nulos (a capacidade e a da ativacao, sem mudanca).
+     * Atingir um limite daqui nunca consome nem libera licenca.
+     */
+    @GetMapping("/api/v1/o/{org}/capacity")
+    public Map<String, Object> capacity(@PathVariable UUID org, HttpServletRequest req) {
+        ValidSession s = internal(SessionFilter.principal(req));
+        return tx.inOrganization(org, Mode.READ_ONLY, j -> {
+            access.requireAnyOrganizationPermission(j, org, s.membershipId(), "org.manage");
+            OffsetDateTime now = now(j);
+            return j.sql("SELECT model, workers_used, workers_limit, concurrent_used, concurrent_limit, pending_used, pending_limit, "
+                    + "concurrent_remote, concurrent_uncertain, concurrent_platform, concurrent_previous_agent "
+                    + "FROM public.capacity_state(?)").param(org).query((rs, n) -> {
+                Map<String, Object> r = new LinkedHashMap<>();
+                r.put("model", rs.getInt(1) == 2 ? "licensed" : "legacy");
+                r.put("workers", usage(rs.getLong(2), rs.getObject(3, Long.class)));
+                Map<String, Object> concurrent = usage(rs.getLong(4), rs.getObject(5, Long.class));
+                // de que e feita a ocupacao (a soma e used): cada fluxo de execucao ocupa a mesma vaga da organizacao
+                Map<String, Object> by = new LinkedHashMap<>();
+                by.put("remote", rs.getLong(8));
+                by.put("unconfirmed", rs.getLong(9));
+                by.put("platform", rs.getLong(10));
+                by.put("previousAgent", rs.getLong(11));
+                concurrent.put("breakdown", by);
+                r.put("concurrentExecutions", concurrent);
+                r.put("pendingExecutions", usage(rs.getLong(6), rs.getObject(7, Long.class)));
+                r.put("asOf", now);
+                return r;
+            }).single();
+        });
+    }
+
+    private static Map<String, Object> usage(long used, Long limit) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("used", used);
+        m.put("limit", limit);
+        return m;
+    }
+
+    /**
      * Resumo: modelo de habilitacao da organizacao e a conta das licencas - contratadas (vigentes), utilizadas (vigentes com
      * automacao vinculada), disponiveis (vigentes sem automacao) e as que venceram ainda vinculadas a uma automacao.
      */
