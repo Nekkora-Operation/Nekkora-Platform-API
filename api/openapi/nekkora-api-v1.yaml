@@ -1048,6 +1048,7 @@ paths:
         (tres, configuravel); desativadas nao contam. responsibleFor: as organizacoes de que a pessoa e responsavel, inclusive
         as desativadas, que nao aparecem em /api/v1/me/organizations - state ACTIVE, DEACTIVATED (desativada por esta acao;
         canReactivate) ou BLOCKED (parada por decisao da Nekkora, ou com bloqueio registrado: a reativacao nao a remove).
+        newOrganizationLicenseModel: o modelo em que a organizacao criada agora nasce (D7).
         Mesmas chaves da criacao: qualquer uma desligada, 404.
       security: [ { identitySessionCookie: [] } ]
       responses:
@@ -4094,7 +4095,7 @@ components:
     UsedOfLimit: { type: object, required: [used, limit], properties: { used: { type: integer, format: int64, minimum: 0 }, limit: { type: integer, format: int64, minimum: 0 } } }
     OrganizationCreationState:
       type: object
-      required: [profile, canCreate, cannotCreateReason, canRequest, emptyOrganizations, pendingRequests, responsibleFor]
+      required: [profile, canCreate, cannotCreateReason, canRequest, emptyOrganizations, pendingRequests, newOrganizationLicenseModel, responsibleFor]
       properties:
         profile: { type: string, enum: [FIRST, ADMIN, MEMBER, CLIENT] }
         canCreate: { type: boolean }
@@ -4108,6 +4109,12 @@ components:
             limit: { type: integer, format: int64, minimum: 0 }
             organizationIds: { type: array, items: { type: string, format: uuid } }
         pendingRequests: { $ref: '#/components/schemas/UsedOfLimit' }
+        newOrganizationLicenseModel:
+          allOf: [ { $ref: '#/components/schemas/OrganizationLicenseModel' } ]
+          description: >
+            D7: o modelo em que uma organizacao criada AGORA nasce (a chave license_rollout). licensed: nasce pronta para
+            configurar, sem ativacao a esperar; executar e monitorar uma automacao depende de licenca vinculada a ela. legacy:
+            nasce aguardando a ativacao pela operacao. So indicacao para a tela; quem decide e a criacao.
         responsibleFor:
           type: array
           items:

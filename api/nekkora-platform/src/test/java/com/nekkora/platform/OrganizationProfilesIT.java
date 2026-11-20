@@ -491,8 +491,10 @@ class OrganizationProfilesIT extends IdentityTestBase {
         ComFator f = comFator();
         stepUp(f);
         String earlier = direct(f, "Antes da chave");
+        assertThat(f.browser().get(CRIACAO).field("newOrganizationLicenseModel")).as("chave desligada: a tela sabe que nasce no modelo anterior").isEqualTo("legacy");
         DB.asSuperuser("UPDATE license_rollout SET new_organizations_licensed = true, updated_by = 'titular, ensaio do teste', updated_at = clock_timestamp()");
         try {
+            assertThat(f.browser().get(CRIACAO).field("newOrganizationLicenseModel")).as("chave ligada: a tela sabe que nasce por licenca").isEqualTo("licensed");
             String born = f.browser().post(CRIAR, "{\"name\":\"Depois da chave\"}").field("organizationId");
             assertThat(value("SELECT e.model || '|' || a.act || '|' || (a.operator_user_id IS NULL) || '|' || (a.detail->>'rolloutAuthorizedBy') FROM "
                     + "organization_license_enforcement e JOIN organization_license_acts a ON a.act_id = e.act_id WHERE e.organization_id = '" + born + "'"))

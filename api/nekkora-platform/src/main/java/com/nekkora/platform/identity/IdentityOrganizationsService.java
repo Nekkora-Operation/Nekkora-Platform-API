@@ -39,7 +39,8 @@ public final class IdentityOrganizationsService {
      * 067: o perfil de quem cria, os limites e as organizacoes de que a pessoa e responsavel (para desativar e reativar).
      * So indicacao para a interface: a criacao, o pedido, a desativacao e a reativacao reconferem tudo no banco.
      */
-    public record Creation(IdentityOrgRepository.CreationState state, List<IdentityOrgRepository.Responsible> responsibleFor) {
+    public record Creation(IdentityOrgRepository.CreationState state, List<IdentityOrgRepository.Responsible> responsibleFor,
+                           boolean newOrganizationsLicensed) {
     }
 
     /** O motivo (texto do contrato) de {@link #creationRefusal}, ou nulo. */
@@ -246,7 +247,7 @@ public final class IdentityOrganizationsService {
                 return null;
             }
             IdentityOrgRepository.CreationState state = orgs.creationState(j, sessionToken).orElse(null);
-            return state == null ? null : new Creation(state, orgs.responsibleFor(j, sessionToken));
+            return state == null ? null : new Creation(state, orgs.responsibleFor(j, sessionToken), orgs.newOrganizationsLicensed(j));
         }).orElseThrow(() -> ApiException.unauthenticated("sessao_identidade"));
     }
 

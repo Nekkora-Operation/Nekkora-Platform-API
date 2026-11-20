@@ -95,6 +95,15 @@ O bloqueio é registrado por procedimento administrativo (tabela `organization_n
 - Ligada, toda organização criada dali em diante nasce no modelo por licença, com um ato próprio na trilha (ato 8) dizendo
   quem autorizou a chave. As existentes não mudam: continuam por migração explícita e auditada.
 - A organização que nasce assim registra máquinas sem ativação (T07) e só executa e monitora com licença concedida.
+- **A criação pelo administrador não depende de autorização da Nekkora.** No modelo por licença não existe "aguardando
+  ativação": a organização nasce operacional para configuração (pessoas, workspaces, automações e Workers), e a falta de
+  licença só impede executar e monitorar a automação, não preparar. A Nekkora mantém a suspensão por irregularidade, com
+  motivo registrado (`organization_nekkora_holds`), que é outra coisa que aprovar o começo.
+- `GET /api/v1/me/organization-creation` devolve `newOrganizationLicenseModel` (`licensed` com a chave ligada, `legacy`
+  desligada): a tela de criação diz o que vale para a organização que vai nascer, em vez de anunciar sempre a ativação. Só
+  indicação; quem decide o modelo é a criação, no banco.
+- Enquanto a chave estiver desligada (antes do último passo da implantação), a organização nova ainda nasce no modelo
+  anterior, aguardando ativação. O fluxo novo começa quando a chave é ligada.
 
 ## Por que elevação
 

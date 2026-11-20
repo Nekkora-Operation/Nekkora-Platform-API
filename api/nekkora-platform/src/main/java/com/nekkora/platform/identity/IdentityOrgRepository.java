@@ -119,6 +119,14 @@ public final class IdentityOrgRepository {
                 .query((rs, n) -> new CreationState(rs.getString(1), rs.getLong(2), uuids(rs.getArray(3)), rs.getInt(4), rs.getLong(5))).optional();
     }
 
+    /**
+     * D7 (067): a chave {@code license_rollout}. Ligada, a organizacao criada agora nasce no modelo por licenca (ato 8). So leitura,
+     * para a tela de criacao dizer a verdade sobre o que a organizacao nova podera fazer; quem decide e a criacao, no banco.
+     */
+    public boolean newOrganizationsLicensed(JdbcClient j) {
+        return j.sql("SELECT new_organizations_licensed FROM public.license_rollout").query(Boolean.class).optional().orElse(false);
+    }
+
     private static List<UUID> uuids(Array a) throws SQLException {
         if (a == null) {
             return List.of();
