@@ -267,4 +267,256 @@ class LicenseOperatorIT extends ReadRoutesSupport {
             c.rollback();
         }
     }
+
+    /**
+     * 065, D6 - transferencia pelo operador, a pedido de um administrador (atendimento externo). O ato exige o solicitante, a
+     * referencia do chamado e a verificacao da identidade; preserva o fim do ciclo; troca o vinculo numa transacao so; e e
+     * recusado enquanto a automacao de origem tiver trabalho em andamento.
+     */
+    @Test
+    void transferenciaPeloOperadorComSolicitanteChamadoEVerificacaoSemUsoSimultaneo() throws Exception {
+        Org n = nekkora();
+        Org client = newOrganization();
+        Org stranger = newOrganization();
+        UUID m = client.adminMembership();
+        UUID w = AccessFixtures.namedWorkspace(client.id(), "Fiscal", 1);
+        UUID a1 = ProductFixtures.automation(client.id(), w, null, "Notas de entrada", m);
+        UUID v1 = ProductFixtures.version(client.id(), w, a1, true, m);
+        UUID a2 = ProductFixtures.automation(client.id(), w, null, "Notas de saida", m);
+        UUID a3 = ProductFixtures.automation(client.id(), w, null, "Arquivada", m);
+        UUID foreign = ProductFixtures.automation(stranger.id(), AccessFixtures.namedWorkspace(stranger.id(), "Outra", 1), null, "De outra organizacao",
+                stranger.adminMembership());
+        TestUser operator = internalUser(n, true, 2);
+        DB.asSuperuser("INSERT INTO license_operators (operator_user_id, organization_id, registered_by) VALUES ('" + operator.id() + "', '" + n.id()
+                + "', 'procedimento de ensaio do teste')");
+        BrowserClient staff = login(n, operator);
+        stepUp(staff, n.id(), operator.id());
+        String justification = "pedido do cliente: a automacao foi substituida";
+        BrowserClient.Response granted = staff.post(ops(client.id(), "/licenses"), "{\"count\":2,\"startsAt\":\"" + OffsetDateTime.now().minusDays(1)
+                + "\",\"endsAt\":\"" + OffsetDateTime.now().plusDays(29) + "\",\"justification\":\"" + justification + "\"}");
+        assertThat(granted.status()).as(granted.body()).isEqualTo(200);
+        UUID l1 = UUID.fromString(JSON.readTree(granted.body()).get("items").get(0).get("licenseId").asString());
+        UUID l2 = UUID.fromString(JSON.readTree(granted.body()).get("items").get(1).get("licenseId").asString());
+        BrowserClient clientAdmin = admin(client);
+        stepUp(clientAdmin, client.id(), client.adminId());
+        String transfer = ops(client.id(), "/licenses/" + l1 + "/transfer");
+        String body = "{\"toAutomationId\":\"%s\",\"requesterEmail\":\"%s\",\"ticketReference\":\"CH-2026-0042\",\"identityVerification\":"
+                + "\"retorno por telefone ao numero do cadastro\",\"justification\":\"" + justification + "\"}";
+
+        // ---- licenca sem vinculo: nao ha de onde transferir
+        conflict(staff.post(transfer, body.formatted(a2, client.adminEmail())), "license_not_assigned");
+        assertThat(clientAdmin.post(path(client.id(), "licenses/" + l1 + "/assignment", null), "{\"automationId\":\"" + a1 + "\"}").status()).isEqualTo(200);
+        String cycle = one("SELECT string_agg(period_number || ':' || starts_at || ':' || ends_at, ',' ORDER BY period_number) FROM organization_license_periods "
+                + "WHERE license_id = '" + l1 + "'");
+
+        // ---- quem nao transfere: o administrador do cliente (nem por rota propria), e o ato sem os dados do pedido
+        assertThat(clientAdmin.post(transfer, body.formatted(a2, client.adminEmail())).status()).isIn(401, 403, 404);
+        assertThat(clientAdmin.post("/api/v1/o/" + client.id() + "/licenses/" + l1 + "/transfer", body.formatted(a2, client.adminEmail())).status())
+                .as("o administrador nao tem rota de transferencia: so o suporte").isIn(404, 405);
+        assertThat(staff.post(transfer, body.formatted(a2, client.adminEmail()).replace("CH-2026-0042", "")).status()).as("sem referencia do chamado").isEqualTo(400);
+        assertThat(staff.post(transfer, body.formatted(a2, client.adminEmail()).replace("retorno por telefone ao numero do cadastro", "ok")).status())
+                .as("sem verificacao da identidade").isEqualTo(400);
+        assertThat(staff.post(transfer, "{\"toAutomationId\":\"" + a2 + "\",\"ticketReference\":\"CH-2026-0042\",\"identityVerification\":"
+                + "\"retorno por telefone ao numero do cadastro\",\"justification\":\"" + justification + "\"}").status()).as("sem solicitante").isEqualTo(400);
+        // o solicitante tem de administrar a organizacao AGORA: leitor, pessoa de outra organizacao e e-mail inexistente nao servem
+        TestUser reader = internalUser(client, true, 2);
+        conflict(staff.post(transfer, body.formatted(a2, reader.email())), "license_transfer_requester_not_admin");
+        conflict(staff.post(transfer, body.formatted(a2, stranger.adminEmail())), "license_transfer_requester_not_admin");
+        conflict(staff.post(transfer, body.formatted(a2, "ninguem@exemplo.test")), "license_transfer_requester_not_admin");
+
+        // ---- destino invalido: a propria origem, automacao de outra organizacao, arquivada, ja licenciada
+        conflict(staff.post(transfer, body.formatted(a1, client.adminEmail())), "license_transfer_same_automation");
+        assertThat(staff.post(transfer, body.formatted(foreign, client.adminEmail())).status()).as("automacao de outra organizacao nao existe aqui").isEqualTo(404);
+        DB.asSuperuser("SET session_replication_role = replica", "UPDATE automations SET status = 3 WHERE automation_id = '" + a3 + "'");
+        conflict(staff.post(transfer, body.formatted(a3, client.adminEmail())), "license_automation_archived");
+        assertThat(clientAdmin.post(path(client.id(), "licenses/" + l2 + "/assignment", null), "{\"automationId\":\"" + a2 + "\"}").status()).isEqualTo(200);
+        conflict(staff.post(transfer, body.formatted(a2, client.adminEmail())), "automation_already_licensed");
+        // (a licenca 2 e encerrada para liberar a2 como destino)
+        assertThat(staff.post(ops(client.id(), "/licenses/" + l2 + "/end"), "{\"justification\":\"" + justification + "\"}").status()).isEqualTo(204);
+
+        // ---- trabalho em andamento na ORIGEM: recusada ate terminar ou ter o cancelamento confirmado
+        for (int code = 1; code <= 5; code++) {
+            DB.asSuperuser("INSERT INTO organization_resource_limit_revisions (organization_id, resource_code, revision_number, effective_from, limit_mode, "
+                    + "limit_value, provisioned_by_user_id) VALUES ('" + client.id() + "', " + code + ", 1, now(), 2, NULL, '" + client.adminId() + "')");
+        }
+        UUID running = ProductFixtures.execution(client.id(), w, a1, v1, null, m);
+        conflict(staff.post(transfer, body.formatted(a2, client.adminEmail())), "license_transfer_work_in_progress");
+        assertThat(one("SELECT automation_id FROM organization_license_assignments WHERE license_id = '" + l1 + "' AND released_at IS NULL"))
+                .as("nada mudou").isEqualTo(a1.toString());
+        DB.asSuperuser("SET session_replication_role = replica", "UPDATE executions SET status = 6, status_reason = 4, finished_at = clock_timestamp() WHERE execution_id = '" + running + "'");
+
+        // ---- os OUTROS fluxos da origem. Massa de ESTADOS gravada direto (sem gatilhos nem chaves: os caminhos que criam cada
+        //      registro tem os proprios testes); o que se confere aqui e a regra da transferencia sobre cada estado, pela rota real
+        String o = client.id().toString();
+        String busy = "SELECT public.license_work_in_progress('" + o + "', '" + a1 + "')";
+        String again = body.formatted(a2, client.adminEmail());
+        assertThat(one(busy)).as("execucao cancelada: nada em andamento").isEqualTo("f");
+        // (1) sessao do Agent anterior: pronta, iniciando ou em execucao seguram; terminada, nao
+        UUID run = UUID.randomUUID();
+        mass("INSERT INTO agent_runs (agent_run_id, organization_id, workspace_id, automation_id, automation_version_id, authorization_id, agent_id, worker_id, "
+                + "worker_agent_assignment_id, agent_execution_id, package_fingerprint, authorization_state_at_registration, supervisor_state) VALUES ('" + run
+                + "', '" + o + "', '" + w + "', '" + a1 + "', '" + v1 + "', gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), 'ex-"
+                + "1a".repeat(16) + "', repeat('a', 64), 1, 1)");
+        for (int state : new int[] {1, 2, 3}) {
+            mass("UPDATE agent_runs SET supervisor_state = " + state + " WHERE agent_run_id = '" + run + "'");
+            conflict(staff.post(transfer, again), "license_transfer_work_in_progress");
+        }
+        mass("UPDATE agent_runs SET supervisor_state = 4 WHERE agent_run_id = '" + run + "'");
+        assertThat(one(busy)).as("sessao do Agent anterior terminada").isEqualTo("f");
+        // (2) pedido ao Agent anterior: pedido, entregue (no prazo) e aceito seguram; o aceito segura mesmo depois do prazo
+        //     (a execucao pode nascer a qualquer momento); vencido sem decisao e recusado, nao
+        UUID request = UUID.randomUUID();
+        mass("INSERT INTO run_requests (run_request_id, organization_id, workspace_id, automation_id, automation_version_id, authorization_id, worker_id, "
+                + "agent_id, source_kind, package_fingerprint, package_fingerprint_rule, request_key, requested_by_membership_id, valid_until) VALUES ('" + request
+                + "', '" + o + "', '" + w + "', '" + a1 + "', '" + v1 + "', gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), 1, repeat('a', 64), "
+                + "'nekkora-agent/package-fingerprint/1', gen_random_uuid(), '" + m + "', clock_timestamp() + interval '10 minutes')");
+        conflict(staff.post(transfer, again), "license_transfer_work_in_progress");
+        mass("UPDATE run_requests SET state = 2, delivered_at = clock_timestamp(), deliveries = 1 WHERE run_request_id = '" + request + "'");
+        conflict(staff.post(transfer, again), "license_transfer_work_in_progress");
+        mass("UPDATE run_requests SET requested_at = clock_timestamp() - interval '20 minutes', valid_until = clock_timestamp() - interval '5 minutes' "
+                + "WHERE run_request_id = '" + request + "'");
+        assertThat(one(busy)).as("pedido vencido sem decisao: a maquina ja nao pode aceita-lo").isEqualTo("f");
+        mass("UPDATE run_requests SET state = 3, decided_at = clock_timestamp(), agent_execution_id = 'ex-" + "2b".repeat(16) + "' WHERE run_request_id = '"
+                + request + "'");
+        conflict(staff.post(transfer, again), "license_transfer_work_in_progress");
+        mass("UPDATE run_requests SET state = 4, decision_reason = 'BUSY', agent_execution_id = NULL WHERE run_request_id = '" + request + "'");
+        assertThat(one(busy)).as("pedido recusado pela maquina").isEqualTo("f");
+        // (3) tentativa remota: na fila, oferecida, recebida ate em execucao seguram. A oferta VENCIDA que o servidor ainda nao
+        //     encerrou tambem: a maquina pode confirmar o recebimento ate la
+        UUID remote = UUID.randomUUID();
+        UUID t1 = UUID.randomUUID();
+        mass("INSERT INTO remote_executions (remote_execution_id, organization_id, workspace_id, automation_id, automation_version_id, package_fingerprint, "
+                        + "package_fingerprint_rule, requirements_revision, effective_dependencies, request_key, requested_by_membership_id) VALUES ('" + remote
+                        + "', '" + o + "', '" + w + "', '" + a1 + "', '" + v1 + "', repeat('a', 64), 'nekkora-agent/external-python-fingerprint/1', 1, "
+                        + "'[]'::jsonb, gen_random_uuid(), '" + m + "')",
+                attempt(t1, o, remote, 1, m));
+        conflict(staff.post(transfer, again), "license_transfer_work_in_progress");
+        mass("UPDATE remote_attempts SET created_at = clock_timestamp() - interval '2 hours', offer_valid_until = clock_timestamp() - interval '1 hour', "
+                + "state = 2, token_hash = repeat('a', 64) WHERE attempt_id = '" + t1 + "'");
+        conflict(staff.post(transfer, again), "license_transfer_work_in_progress");
+        mass("UPDATE remote_attempts SET state = 12, ended_at = clock_timestamp() WHERE attempt_id = '" + t1 + "'");
+        assertThat(one(busy)).as("oferta encerrada pelo servidor como vencida").isEqualTo("f");
+        UUID t2 = UUID.randomUUID();
+        mass(attempt(t2, o, remote, 2, m));
+        for (int state : new int[] {3, 4, 5, 6}) {
+            mass("UPDATE remote_attempts SET state = " + state + ", token_hash = repeat('a', 64) WHERE attempt_id = '" + t2 + "'");
+            conflict(staff.post(transfer, again), "license_transfer_work_in_progress");
+        }
+        // (4) OCUPACAO INCERTA: terminou sem confirmacao (13). Nem o tempo, nem "ainda executa" liberam; a declaracao de um
+        //     administrador (ou a confirmacao da maquina) libera
+        mass("UPDATE remote_attempts SET state = 13, closure_cause = 'COMMUNICATION_LOST', ended_at = clock_timestamp() - interval '30 days' WHERE attempt_id = '"
+                + t2 + "'");
+        conflict(staff.post(transfer, again), "license_transfer_work_in_progress");
+        mass(report(t2, o, 3, null));
+        conflict(staff.post(transfer, again), "license_transfer_work_in_progress");
+        mass(report(t2, o, 2, m));
+        assertThat(one(busy)).as("declaracao do administrador: nao ha processo").isEqualTo("f");
+        //     tentativa CONCLUIDA com processo ainda vivo (4) ou sem como saber (5): segura ate a maquina confirmar (1)
+        UUID t3 = UUID.randomUUID();
+        mass(attempt(t3, o, remote, 3, m),
+                "UPDATE remote_attempts SET state = 7, token_hash = repeat('a', 64), exit_code = 0, ended_at = clock_timestamp() WHERE attempt_id = '" + t3 + "'");
+        assertThat(one(busy)).as("concluida, sem fato pendente").isEqualTo("f");
+        mass(report(t3, o, 4, null));
+        conflict(staff.post(transfer, again), "license_transfer_work_in_progress");
+        mass(report(t3, o, 5, null));
+        conflict(staff.post(transfer, again), "license_transfer_work_in_progress");
+        mass(report(t3, o, 1, null));
+        assertThat(one(busy)).as("a maquina confirmou: nenhum processo da tentativa").isEqualTo("f");
+        assertThat(one("SELECT automation_id FROM organization_license_assignments WHERE license_id = '" + l1 + "' AND released_at IS NULL"))
+                .as("nenhuma recusa mudou o vinculo").isEqualTo(a1.toString());
+        // (5) CONCORRENCIA com um inicio que SE CONFIRMA: o pedido novo ja passou pela conferencia de licenca e ainda nao
+        //     confirmou; a transferencia espera e, quando anda, encontra o trabalho e e recusada
+        UUID racing = UUID.randomUUID();
+        java.util.concurrent.ExecutorService starting = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try (Connection held = DB.connectAsSuperuser(); Statement st = held.createStatement()) {
+            held.setAutoCommit(false);
+            st.execute("SELECT public.license_gate('" + o + "', '" + a1 + "')");
+            st.execute("SET LOCAL session_replication_role = replica");
+            st.execute("INSERT INTO run_requests (run_request_id, organization_id, workspace_id, automation_id, automation_version_id, authorization_id, worker_id, "
+                    + "agent_id, source_kind, package_fingerprint, package_fingerprint_rule, request_key, requested_by_membership_id, valid_until) VALUES ('"
+                    + racing + "', '" + o + "', '" + w + "', '" + a1 + "', '" + v1 + "', gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), 1, "
+                    + "repeat('a', 64), 'nekkora-agent/package-fingerprint/1', gen_random_uuid(), '" + m + "', clock_timestamp() + interval '10 minutes')");
+            java.util.concurrent.Future<BrowserClient.Response> waiting = starting.submit(() -> staff.post(transfer, again));
+            Thread.sleep(1500);
+            assertThat(waiting.isDone()).as("a transferencia espera o inicio em curso").isFalse();
+            held.commit();
+            conflict(waiting.get(30, java.util.concurrent.TimeUnit.SECONDS), "license_transfer_work_in_progress");
+        } finally {
+            starting.shutdownNow();
+        }
+        mass("UPDATE run_requests SET state = 4, delivered_at = clock_timestamp(), decided_at = clock_timestamp(), decision_reason = 'BUSY' "
+                + "WHERE run_request_id = '" + racing + "'");
+        assertThat(one(busy)).isEqualTo("f");
+
+        // ---- CONCORRENCIA: um inicio de trabalho em curso na origem (a conferencia de licenca ja passou, a transacao ainda nao
+        //      confirmou) segura a transferencia; ela so anda depois, e reconfere
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try (Connection held = DB.connectAs("nekkora_platform"); Statement st = held.createStatement()) {
+            held.setAutoCommit(false);
+            st.execute("SELECT set_config('nekkora.organization_id', '" + client.id() + "', true)");
+            st.execute("SELECT public.license_gate('" + client.id() + "', '" + a1 + "')");
+            java.util.concurrent.Future<BrowserClient.Response> moving = pool.submit(() -> staff.post(transfer, body.formatted(a2, client.adminEmail())));
+            Thread.sleep(1500);
+            assertThat(moving.isDone()).as("a transferencia espera o inicio de trabalho em curso").isFalse();
+            assertThat(one("SELECT count(*) FROM organization_license_assignments WHERE license_id = '" + l1 + "'")).isEqualTo("1");
+            held.rollback();
+            BrowserClient.Response moved = moving.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(moved.status()).as(moved.body()).isEqualTo(200);
+            JsonNode r = JSON.readTree(moved.body());
+            assertThat(r.get("fromAutomationId").asString()).isEqualTo(a1.toString());
+            assertThat(r.get("toAutomationId").asString()).isEqualTo(a2.toString());
+        } finally {
+            pool.shutdownNow();
+        }
+
+        // ---- o resultado: um vinculo encerrado como TRANSFERIDA e um aberto no destino; nunca os dois abertos; o ciclo e o mesmo
+        assertThat(one("SELECT string_agg(automation_id || ':' || coalesce(release_reason::text, 'aberto'), ',' ORDER BY assigned_at) FROM "
+                + "organization_license_assignments WHERE license_id = '" + l1 + "'")).isEqualTo(a1 + ":1," + a2 + ":aberto");
+        assertThat(one("SELECT (SELECT released_at FROM organization_license_assignments WHERE license_id = '" + l1 + "' AND automation_id = '" + a1
+                + "') <= (SELECT assigned_at FROM organization_license_assignments WHERE license_id = '" + l1 + "' AND automation_id = '" + a2 + "')"))
+                .as("sem instante com as duas automacoes atendidas").isEqualTo("t");
+        assertThat(one("SELECT string_agg(period_number || ':' || starts_at || ':' || ends_at, ',' ORDER BY period_number) FROM organization_license_periods "
+                + "WHERE license_id = '" + l1 + "'")).as("o fim do ciclo e preservado").isEqualTo(cycle);
+        assertThat(one("SELECT from_automation_id || '|' || to_automation_id || '|' || requester_membership_id || '|' || operator_user_id || '|' || justification "
+                + "|| '|' || (detail->>'ticket') || '|' || (detail->>'identityCheck') || '|' || (occurred_at IS NOT NULL) FROM organization_license_acts "
+                + "WHERE license_id = '" + l1 + "' AND act = 5"))
+                .as("auditoria: origem, destino, solicitante, responsavel, justificativa, chamado, verificacao e data")
+                .isEqualTo(a1 + "|" + a2 + "|" + m + "|" + operator.id() + "|" + justification + "|CH-2026-0042|retorno por telefone ao numero do cadastro|true");
+        assertThat(counts(get(clientAdmin, path(client.id(), "licenses/summary", null)).body())).as("a conta nao muda: 1 contratada, 1 utilizada")
+                .containsExactly(1L, 1L, 0L);
+        // a origem deixou de ter direito; o destino passou a ter (a organizacao e ligada ao modelo por licenca para conferir)
+        LicenseFixtures.enforce(client.id(), n.adminId());
+        assertThat(one("SELECT public.license_state('" + client.id() + "', '" + a1 + "') || '|' || public.license_state('" + client.id() + "', '" + a2 + "')"))
+                .isEqualTo("LICENSE_REQUIRED|OK");
+
+        // ---- o banco reconfere: o papel do servico nao transfere em nome de quem nao e operador
+        try (Connection c = DB.connectAs("nekkora_platform"); Statement st = c.createStatement()) {
+            c.setAutoCommit(false);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> st.execute("SELECT public.license_op_transfer('" + client.adminId() + "', '" + client.id()
+                    + "', '" + l1 + "', '" + a1 + "', '" + m + "', 'CH-1', 'verificacao inventada pelo teste', 'tentativa direta sem ser operador')"))
+                    .hasMessageContaining("OPERATOR_NOT_AUTHORIZED");
+            c.rollback();
+        }
+    }
+
+    /** Massa de estados, como superusuario e sem gatilhos nem chaves estrangeiras (so nesta conexao). */
+    private static void mass(String... sqls) {
+        String[] all = new String[sqls.length + 1];
+        all[0] = "SET session_replication_role = replica";
+        System.arraycopy(sqls, 0, all, 1, sqls.length);
+        DB.asSuperuser(all);
+    }
+
+    private static String attempt(UUID id, String org, UUID execution, int number, UUID membership) {
+        return "INSERT INTO remote_attempts (attempt_id, organization_id, remote_execution_id, attempt_number, agent_id, worker_id, authorization_id, "
+                + "created_by_membership_id, offer_valid_until) VALUES ('" + id + "', '" + org + "', '" + execution + "', " + number + ", gen_random_uuid(), "
+                + "gen_random_uuid(), gen_random_uuid(), '" + membership + "', clock_timestamp() + interval '15 minutes')";
+    }
+
+    /** Fato sobre os processos de uma tentativa (058, 060); o 2 e a declaracao de um administrador. */
+    private static String report(UUID attempt, String org, int kind, UUID membership) {
+        return "INSERT INTO remote_attempt_process_reports (attempt_id, kind, organization_id, agent_id, reason, verification, by_membership_id) VALUES ('"
+                + attempt + "', " + kind + ", '" + org + "', gen_random_uuid(), " + (kind == 2 ? "'OTHER_VERIFIED', 'conferido na maquina: nenhum processo da tentativa', '"
+                + membership + "'" : "NULL, NULL, NULL") + ")";
+    }
 }
