@@ -895,8 +895,7 @@ $$;
 -- resumo do periodo [de, ate) de UMA automacao, com dashboard: contagem por estado (mesmo escopo de automacao e maquina)
 CREATE FUNCTION public.portal_client_summary(p_organization_id UUID, p_identity_token TEXT, p_automation_id UUID, p_from TIMESTAMPTZ,
     p_to TIMESTAMPTZ)
-RETURNS TABLE (total BIGINT, succeeded BIGINT, failed BIGINT, in_progress BIGINT, not_started BIGINT, cancelled BIGINT, unconfirmed BIGINT,
-               no_error_signaled BIGINT,
+RETURNS TABLE (total BIGINT, succeeded BIGINT, failed BIGINT, in_progress BIGINT, not_started BIGINT, cancelled BIGINT, other BIGINT,
                last_requested_at TIMESTAMPTZ, last_outcome TEXT)
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -924,9 +923,8 @@ BEGIN
                pg_catalog.count(*) FILTER (WHERE ex.requested_at >= p_from AND ex.requested_at < p_to AND ex.outcome = 'in_progress'),
                pg_catalog.count(*) FILTER (WHERE ex.requested_at >= p_from AND ex.requested_at < p_to AND ex.outcome = 'not_started'),
                pg_catalog.count(*) FILTER (WHERE ex.requested_at >= p_from AND ex.requested_at < p_to AND ex.outcome = 'cancelled'),
-               -- resultado desconhecido e "terminou sem sinal de erro" (codigo 0 sem confirmacao de sucesso) ficam separados: nunca contam como concluidas
-               pg_catalog.count(*) FILTER (WHERE ex.requested_at >= p_from AND ex.requested_at < p_to AND ex.outcome = 'unconfirmed'),
-               pg_catalog.count(*) FILTER (WHERE ex.requested_at >= p_from AND ex.requested_at < p_to AND ex.outcome = 'no_error_signaled'),
+               pg_catalog.count(*) FILTER (WHERE ex.requested_at >= p_from AND ex.requested_at < p_to
+                                             AND ex.outcome IN ('unconfirmed', 'no_error_signaled')),
                (SELECT e2.requested_at FROM ex e2 ORDER BY e2.requested_at DESC, e2.id DESC LIMIT 1),
                (SELECT e2.outcome FROM ex e2 ORDER BY e2.requested_at DESC, e2.id DESC LIMIT 1)
           FROM ex;

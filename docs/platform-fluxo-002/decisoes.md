@@ -152,3 +152,7 @@ homologação/produção.
 **Limitações.** Relatórios personalizados: próxima etapa. O nome do convite só é sugerido quando o cadastro começa pelo link
 do convite (cadastro feito por fora pede o nome). Concessão por automação continua sem prazo nem revisão periódica. O download do
 cliente continua registrado só no log do Portal.
+
+**072 (21/11).** O resumo do dashboard do cliente separa "resultado desconhecido" (`unconfirmed`) e "terminou sem sinal de erro"
+(`no_error_signaled`: código de saída zero sem confirmação de sucesso); na 071 os dois vinham somados. Nenhum dos dois conta como
+concluída. Só recria `portal_client_summary` (janela de SUPERUSER, como a 071); nenhum dado muda.
