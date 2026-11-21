@@ -326,6 +326,25 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /api/v1/signup/preview:
+    post:
+      tags: [Cadastro web (identidade)]
+      operationId: signupPreview
+      x-estado: implementado (PLATFORM-FLUXO-002, 071; SignupController)
+      summary: 'O que a confirmacao ja sabe pelo token do link: o e-mail e o nome vindo do convite (nulo se nao houver)'
+      description: >
+        071. Sem consumir o token. displayName so vem quando o pedido de cadastro foi feito a partir de um convite aberto para o
+        mesmo e-mail (o nome informado por quem convidou); a pessoa confirma ou ajusta na confirmacao. Token malformado,
+        desconhecido, vencido, consumido ou de identidade fora de PENDING: 400. Desligado: 404.
+      security: [ { preAuthCookie: [], csrfHeader: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [token], properties: { token: { type: string } } } } } }
+      responses:
+        '200': { description: 'Cadastro pendente', content: { application/json: { schema: { $ref: '#/components/schemas/SignupPreview' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '403': { $ref: '#/components/responses/CsrfForbidden' }
+        '404': { $ref: '#/components/responses/SignupDisabled' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
   /api/v1/signup/confirmation/resend:
     post:
       tags: [Cadastro web (identidade)]
@@ -5522,6 +5541,17 @@ components:
       required: [email]
       properties:
         email: { type: string, maxLength: 254 }
+        invitation:
+          type: object
+          description: '071 (opcional): o convite aberto de onde a pessoa veio. Para o mesmo e-mail, o nome do convite vira o nome provisorio (a resposta nao muda; convite invalido e ignorado).'
+          required: [organizationId, token]
+          properties: { organizationId: { type: string, format: uuid }, token: { type: string } }
+    SignupPreview:
+      type: object
+      required: [email, displayName]
+      properties:
+        email: { type: string }
+        displayName: { type: [string, 'null'], description: 'nome vindo do convite; nulo = a pessoa escolhe' }
     SignupConfirmation:
       type: object
       description: 'Conclusao do cadastro pela titular do e-mail: token recebido, senha pela politica atual (12-128 pontos de codigo, sem regras de composicao) e nome (ate 120 pontos de codigo, nao em branco, sem caracteres de controle).'

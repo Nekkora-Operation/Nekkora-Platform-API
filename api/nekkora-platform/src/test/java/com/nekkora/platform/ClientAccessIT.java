@@ -473,6 +473,33 @@ class ClientAccessIT extends IdentityTestBase {
     }
 
     @Test
+    void primeiroAcessoPeloConviteNaoPedeDeNovoNomeEEmail() throws Exception {
+        Admin a = admin();
+        UUID org = a.org().id();
+        World x = world(a.org());
+        String nova = email();
+        assertThat(a.browser().post("/api/v1/o/" + org + "/client-invitations", inviteBody(nova, null, x.a1(), null, true, false)).status()).isEqualTo(201);
+        String inviteToken = lastToken(nova);
+        // pedido de cadastro a partir do convite: o nome do convite vira o nome provisorio; a confirmacao continua pelo e-mail
+        String inv = ",\"invitation\":{\"organizationId\":\"" + org + "\",\"token\":" + q(inviteToken) + "}";
+        assertThat(client().post("/api/v1/signup", "{\"email\":" + q(nova) + inv + "}").status()).isEqualTo(202);
+        List<PlatformTestBase.SentMessage> m = mails(nova).stream().filter(s -> s.kind() == MailSender.Kind.IDENTITY_SIGNUP_CONFIRMATION).toList();
+        String signupToken = m.get(m.size() - 1).token();
+        BrowserClient.Response pv = client().post("/api/v1/signup/preview", "{\"token\":" + q(signupToken) + "}");
+        assertThat(pv.status()).as(pv.body()).isEqualTo(200);
+        assertThat(pv.field("displayName")).isEqualTo("Pessoa Cliente");
+        assertThat(pv.field("email")).isEqualToIgnoringCase(nova);
+        assertThat(client().post("/api/v1/signup/preview", "{\"token\":" + q("x".repeat(43)) + "}").status()).isEqualTo(400);
+        // o convite de OUTRO e-mail nao empresta o nome (resposta igual, nome provisorio = o proprio e-mail)
+        String outra = email();
+        assertThat(client().post("/api/v1/signup", "{\"email\":" + q(outra) + inv + "}").status()).isEqualTo(202);
+        List<PlatformTestBase.SentMessage> m2 = mails(outra).stream().filter(s -> s.kind() == MailSender.Kind.IDENTITY_SIGNUP_CONFIRMATION).toList();
+        BrowserClient.Response pv2 = client().post("/api/v1/signup/preview", "{\"token\":" + q(m2.get(m2.size() - 1).token()) + "}");
+        assertThat(pv2.status()).isEqualTo(200);
+        assertThat(pv2.body()).contains("\"displayName\":null");
+    }
+
+    @Test
     void pedidoDeMembroAprovadoPorOutraPessoaAntesDoConviteSemAExcecaoDaAdministradora() throws Exception {
         Admin a = admin();
         UUID org = a.org().id();
