@@ -1782,6 +1782,32 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/CatalogInconsistent' }
 
+  /api/v1/o/{org}/people:
+    get:
+      tags: [GAP-03 administracao]
+      operationId: listPeople
+      x-estado: implementado (PLATFORM-FLUXO-002; PeopleController; PeopleIT)
+      summary: 'Pessoas e acessos: membros e convites de conta interna numa lista so (exige org.manage)'
+      description: >-
+        So leitura. Ordem da lista inteira (com cursor): convites pendentes (criacao, do mais recente), depois membros (entrada,
+        do mais recente), depois convites encerrados (so com o filtro). Sem `situation`: pendentes e todos os membros; o
+        convite aceito nao aparece ao lado do membro que criou. Convites so entram com a funcionalidade ligada
+        (`invitationsEnabled` na resposta).
+      x-ordenacao: grupo asc (0 convite pendente, 1 membro, 2 convite encerrado), instante desc, id desc
+      parameters:
+        - $ref: '#/components/parameters/Org'
+        - { name: situation, in: query, required: false, schema: { type: array, maxItems: 8, uniqueItems: true, items: { $ref: '#/components/schemas/PersonSituation' } }, style: form, explode: true }
+        - { name: q, in: query, required: false, schema: { type: string, minLength: 1, maxLength: 120 }, description: 'busca por nome ou e-mail (contem, sem diferenciar maiusculas)' }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': { description: Pagina de pessoas, content: { application/json: { schema: { $ref: '#/components/schemas/PeoplePage' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/CatalogInconsistent' }
+
   /api/v1/o/{org}/clients:
     get:
       tags: [GAP-03 administracao]
@@ -4113,6 +4139,61 @@ components:
         mfaConfigured: { type: boolean, description: 'fator com confirmed_at preenchido e disabled_at nulo', x-decisoes: DC-04 }
         organizationRoles: { type: array, uniqueItems: true, items: { $ref: '#/components/schemas/OrganizationRoleCode' } }
         createdAt: { type: string, format: date-time }
+    PersonSituation:
+      type: string
+      enum: [invitation_pending, invitation_expired, invitation_revoked, invitation_accepted, member_pending, member_active, member_suspended, member_revoked]
+    PersonRole:
+      type: object
+      required: [role, workspaceId, workspaceName]
+      properties:
+        role: { $ref: '#/components/schemas/RoleCode' }
+        workspaceId: { type: [string, 'null'], format: uuid }
+        workspaceName: { type: [string, 'null'] }
+    PersonMember:
+      type: object
+      required: [membershipId, userId, displayName, email, emailVerified, accountStatus, membershipStatus, mfaConfigured, joinedAt, roles]
+      properties:
+        membershipId: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        displayName: { type: string }
+        email: { type: string }
+        emailVerified: { type: boolean }
+        accountStatus: { $ref: '#/components/schemas/AccountStatus' }
+        membershipStatus: { $ref: '#/components/schemas/MembershipStatus' }
+        mfaConfigured: { type: boolean }
+        joinedAt: { type: string, format: date-time, description: 'entrada no vinculo' }
+        roles: { type: array, items: { $ref: '#/components/schemas/PersonRole' }, description: 'papeis ativos: os da organizacao e os de ambiente' }
+    PersonInvitation:
+      type: object
+      required: [invitationId, email, role, workspaceId, workspaceName, state, createdAt, expiresAt, acceptedAt, revokedAt, revokeReason, acceptedUserId]
+      properties:
+        invitationId: { type: string, format: uuid }
+        email: { type: string }
+        role: { type: [string, 'null'] }
+        workspaceId: { type: [string, 'null'], format: uuid }
+        workspaceName: { type: [string, 'null'] }
+        state: { type: string, enum: [PENDENTE, EXPIRADO, ACEITO, REVOGADO] }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        acceptedAt: { type: [string, 'null'], format: date-time }
+        revokedAt: { type: [string, 'null'], format: date-time }
+        revokeReason: { type: [string, 'null'], enum: [REVOGADO, REENVIADO, EXPIRADO, EMISSOR_SEM_AUTORIDADE, null] }
+        acceptedUserId: { type: [string, 'null'], format: uuid, description: 'conta criada pelo aceite (o membro)' }
+    PersonItem:
+      type: object
+      required: [kind, id, member, invitation]
+      properties:
+        kind: { type: string, enum: [member, invitation] }
+        id: { type: string, format: uuid, description: 'membershipId ou invitationId, conforme kind' }
+        member: { oneOf: [ { $ref: '#/components/schemas/PersonMember' }, { type: 'null' } ] }
+        invitation: { oneOf: [ { $ref: '#/components/schemas/PersonInvitation' }, { type: 'null' } ] }
+    PeoplePage:
+      type: object
+      required: [items, nextCursor, invitationsEnabled]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/PersonItem' } }
+        nextCursor: { type: [string, 'null'] }
+        invitationsEnabled: { type: boolean, description: 'convites ligados nesta Platform (emitir e listar)' }
     MemberPage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/Member' } }, nextCursor: { type: [string, 'null'] } } }
     ClientRef: { type: object, required: [clientId, name], properties: { clientId: { type: string, format: uuid }, name: { type: string } } }
     WorkspaceRef: { type: object, required: [workspaceId, name], properties: { workspaceId: { type: string, format: uuid }, name: { type: string } } }
