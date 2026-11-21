@@ -40,6 +40,8 @@ public class SecurityConfig {
             "/api/v1/o/*/auth/mfa-emergencia/aviso/confirmar", "/api/v1/o/*/auth/mfa-emergencia/aviso/contestar",
             // cadastro web (Missao 1): sem sessao; CSRF de pre-autenticacao. Desligado: IdentityRoutesGate responde 404 antes daqui
             "/api/v1/signup", "/api/v1/signup/confirm", "/api/v1/signup/confirmation/resend",
+            // 071: primeiro acesso pelo convite (nome e e-mail do convite aberto); sem sessao; CSRF de pre-autenticacao
+            "/api/v1/invitations/preview",
             // entrada geral (Missao 1): sem sessao de organizacao; desafio e sessao de identidade conferidos pelo servico e
             // pelo CsrfFilter. Desligado: IdentityRoutesGate responde 404 antes daqui
             "/api/v1/auth/login", "/api/v1/auth/mfa/enroll/start", "/api/v1/auth/mfa/enroll/confirm", "/api/v1/auth/mfa/verify",

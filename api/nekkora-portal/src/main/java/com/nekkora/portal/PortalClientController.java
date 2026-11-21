@@ -25,9 +25,9 @@ import com.nekkora.core.web.ApiException;
 import com.nekkora.core.web.RequestContextFilter;
 
 /**
- * Area do cliente (PLATFORM-FLUXO-002, 070): so GET, pela sessao de IDENTIDADE (cookie {@code __Host-nekkora_id}). A pessoa e
+ * Area do cliente (PLATFORM-FLUXO-002, 070/071): so GET, pela sessao de IDENTIDADE (cookie {@code __Host-nekkora_id}). A pessoa e
  * autenticada pela identidade global; o que ela ve em cada organizacao e o que o vinculo de cliente e as concessoes vigentes
- * permitem, reconferido no banco a cada requisicao. R7 (limite de leitura do portal) por IP antes e por sessao depois.
+ * permitem (dashboard de execucao e arquivos de retorno; nunca registros tecnicos), reconferido no banco a cada requisicao. R7 (limite de leitura do portal) por IP antes e por sessao depois.
  */
 @RestController
 public class PortalClientController {
@@ -61,47 +61,48 @@ public class PortalClientController {
         return Map.of("items", r);
     }
 
+    /** Resumo do periodo (padrao: 30 dias) de uma automacao com dashboard; sem dashboard: 403; nao compartilhada: 404. */
+    @GetMapping(BASE + "/o/{org}/shared-automations/{automation}/summary")
+    public Map<String, Object> summary(@PathVariable UUID org, @PathVariable UUID automation, @RequestParam(required = false) String from,
+                                       @RequestParam(required = false) String to, HttpServletRequest req) {
+        String token = before(req);
+        Map<String, Object> r = client.summary(org, token, automation, PortalClientService.Period.of(from, to));
+        after(token);
+        return r;
+    }
+
     @GetMapping(BASE + "/o/{org}/shared-automations/{automation}/executions")
-    public Map<String, Object> executions(@PathVariable UUID org, @PathVariable UUID automation, @RequestParam(required = false) String cursor,
+    public Map<String, Object> executions(@PathVariable UUID org, @PathVariable UUID automation, @RequestParam(required = false) String from,
+                                          @RequestParam(required = false) String to, @RequestParam(required = false) String cursor,
                                           @RequestParam(required = false) Integer limit, HttpServletRequest req) {
         String token = before(req);
-        Map<String, Object> r = client.executions(org, token, automation, cursor, limit == null ? PortalClientService.DEFAULT_PAGE : limit);
+        Map<String, Object> r = client.executions(org, token, automation, PortalClientService.Period.of(from, to), cursor,
+                limit == null ? PortalClientService.DEFAULT_PAGE : limit);
         after(token);
         return r;
     }
 
-    @GetMapping(BASE + "/o/{org}/shared-executions/{kind}/{id}")
-    public Map<String, Object> execution(@PathVariable UUID org, @PathVariable String kind, @PathVariable UUID id, HttpServletRequest req) {
+    /** Arquivos de retorno autorizados (todas as automacoes com arquivos ou uma), pelo periodo da execucao e busca no nome. */
+    @GetMapping(BASE + "/o/{org}/shared-files")
+    public ResponseEntity<Map<String, Object>> files(@PathVariable UUID org, @RequestParam(required = false) UUID automationId,
+                                                     @RequestParam(required = false) String from, @RequestParam(required = false) String to,
+                                                     @RequestParam(required = false) String q, @RequestParam(required = false) String cursor,
+                                                     @RequestParam(required = false) Integer limit, HttpServletRequest req) {
         String token = before(req);
-        Map<String, Object> r = client.execution(org, token, kind, id);
-        after(token);
-        return r;
-    }
-
-    @GetMapping(BASE + "/o/{org}/shared-executions/remote/{id}/attempts/{attempt}/logs")
-    public ResponseEntity<Map<String, Object>> logs(@PathVariable UUID org, @PathVariable UUID id, @PathVariable UUID attempt,
-                                                    @RequestParam(required = false) Integer after, @RequestParam(required = false) Integer limit,
-                                                    HttpServletRequest req) {
-        String token = before(req);
-        Map<String, Object> r = client.logs(org, token, id, attempt, after == null ? 0 : after, limit == null ? PortalClientService.MAX_LOG_PAGE : limit);
+        Map<String, Object> r = client.files(org, token, automationId, PortalClientService.Period.of(from, to), q, cursor,
+                limit == null ? PortalClientService.DEFAULT_PAGE : limit);
         after(token);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
     }
 
-    @GetMapping(BASE + "/o/{org}/shared-executions/remote/{id}/attempts/{attempt}/results")
-    public ResponseEntity<Map<String, Object>> results(@PathVariable UUID org, @PathVariable UUID id, @PathVariable UUID attempt, HttpServletRequest req) {
+    /**
+     * Os bytes como anexo, nunca interpretados pelo navegador nesta origem (como a rota interna T03b). A tela "Visualizar" le os bytes
+     * e mostra o conteudo na propria pagina (texto, imagem ou PDF), sem servir conteudo ativo pelo Portal.
+     */
+    @GetMapping(BASE + "/o/{org}/shared-files/{attempt}/{number}/content")
+    public ResponseEntity<byte[]> content(@PathVariable UUID org, @PathVariable UUID attempt, @PathVariable int number, HttpServletRequest req) {
         String token = before(req);
-        Map<String, Object> r = client.results(org, token, id, attempt);
-        after(token);
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
-    }
-
-    /** Os bytes como anexo, nunca interpretados pelo navegador (como a rota interna T03b). */
-    @GetMapping(BASE + "/o/{org}/shared-executions/remote/{id}/attempts/{attempt}/results/{number}/content")
-    public ResponseEntity<byte[]> content(@PathVariable UUID org, @PathVariable UUID id, @PathVariable UUID attempt, @PathVariable int number,
-                                          HttpServletRequest req) {
-        String token = before(req);
-        PortalClientService.Download d = client.download(org, token, id, attempt, number);
+        PortalClientService.Download d = client.download(org, token, attempt, number);
         after(token);
         String base = d.fileName().substring(d.fileName().lastIndexOf('/') + 1);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).contentType(MediaType.APPLICATION_OCTET_STREAM)

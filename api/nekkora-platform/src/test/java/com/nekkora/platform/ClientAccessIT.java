@@ -23,12 +23,12 @@ import tools.jackson.databind.json.JsonMapper;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * PLATFORM-FLUXO-002 (070) — "Clientes e acessos", ponta a ponta contra o banco real: convite de Cliente para UMA automacao (com a
- * excecao a D-GRANT-1 registrada), aceite pela identidade global, area do cliente pelas funcoes do Portal (como o papel real
- * nekkora_portal, com o token da sessao de identidade), isolamento por automacao e por maquina, permissoes de registros e de
- * resultados, pedido e aprovacao por segunda pessoa, so-reducao, revogacao, suspensao e retirada com efeito na proxima consulta,
- * recusas (membro interno, conta antiga, convite vencido, rota direta), reenvio sem ampliar, historico com filtros e a permissao
- * propria da auditoria.
+ * PLATFORM-FLUXO-002 (070/071) — "Clientes e acessos", ponta a ponta contra o banco real: compartilhamento por pessoa (nome e e-mail,
+ * cliente interno criado sem etapa) para UMA automacao (com a excecao a D-GRANT-1 registrada), primeiro acesso com nome e e-mail do
+ * convite, aceite pela identidade global, area do cliente pelas funcoes do Portal (como o papel real nekkora_portal, com o token da
+ * sessao de identidade): so dashboard e arquivos de retorno, isolamento por automacao e por maquina nos totais, listas, busca e
+ * downloads; registros tecnicos recusados na API, no banco e ausentes do Portal; pedido de membro (client_share.request) aprovado por
+ * outra pessoa antes do convite; so-reducao, revogacao, suspensao e retirada com efeito na proxima consulta; recusas; historico.
  */
 @DirtiesContext
 class ClientAccessIT extends IdentityTestBase {
@@ -79,9 +79,16 @@ class ClientAccessIT extends IdentityTestBase {
         return JSON.readTree(r.body());
     }
 
-    private static String inviteBody(String email, UUID client, UUID automation, UUID worker, boolean logs, boolean results) {
-        return "{\"email\":" + q(email) + ",\"clientId\":\"" + client + "\",\"automationId\":\"" + automation + "\",\"workerId\":"
-                + (worker == null ? "null" : "\"" + worker + "\"") + ",\"canReadLogs\":" + logs + ",\"canDownloadResults\":" + results + "}";
+    /** 071: nome e e-mail, automacao, maquina opcional, conteudos; cliente opcional (nulo = criado ou reutilizado). */
+    private static String inviteBody(String email, UUID client, UUID automation, UUID worker, boolean dashboard, boolean files) {
+        return "{\"email\":" + q(email) + ",\"name\":\"Pessoa Cliente\",\"clientId\":" + (client == null ? "null" : "\"" + client + "\"")
+                + ",\"automationId\":\"" + automation + "\",\"workerId\":" + (worker == null ? "null" : "\"" + worker + "\"")
+                + ",\"canViewDashboard\":" + dashboard + ",\"canDownloadResults\":" + files + "}";
+    }
+
+    private static String shareBody(String email, UUID automation, UUID worker, boolean dashboard, boolean files) {
+        return "{\"email\":" + q(email) + ",\"name\":\"Pessoa Pedida\",\"automationId\":\"" + automation + "\",\"workerId\":"
+                + (worker == null ? "null" : "\"" + worker + "\"") + ",\"canViewDashboard\":" + dashboard + ",\"canDownloadResults\":" + files + "}";
     }
 
     private BrowserClient.Response accept(ComFator f, UUID org, String token) {
@@ -129,25 +136,34 @@ class ClientAccessIT extends IdentityTestBase {
         return f.browser().cookies().get("__Host-nekkora_id");
     }
 
+    private static final String FROM = "TIMESTAMPTZ '2026-01-01T00:00:00Z'";
+    private static final String TO = "TIMESTAMPTZ '2026-12-31T00:00:00Z'";
+
     private static P automations(UUID org, ComFator f) {
-        return portal("SELECT automation_id::text, automation_name, all_machines::text, machines::text, can_read_logs::text, can_download_results::text "
-                + "FROM public.portal_client_automations(?, ?)", org, idToken(f));
+        return portal("SELECT automation_id::text, automation_name, can_view_dashboard::text, can_download_results::text, executions_30d::text, "
+                + "files_available::text FROM public.portal_client_automations(?, ?)", org, idToken(f));
     }
 
     private static P executions(UUID org, ComFator f, UUID automation) {
-        return portal("SELECT id::text, kind, worker_id::text FROM public.portal_client_list_executions(?, ?, ?, NULL, NULL, 100)", org, idToken(f), automation);
+        return portal("SELECT id::text, outcome, files::text FROM public.portal_client_list_executions(?, ?, ?, " + FROM + ", " + TO + ", NULL, NULL, 100)",
+                org, idToken(f), automation);
     }
 
-    private static P execution(UUID org, ComFator f, String kind, UUID id) {
-        return portal("SELECT id::text, attempts::text FROM public.portal_client_get_execution(?, ?, ?, ?)", org, idToken(f), kind, id);
+    private static P summary(UUID org, ComFator f, UUID automation) {
+        return portal("SELECT total::text, succeeded::text FROM public.portal_client_summary(?, ?, ?, " + FROM + ", " + TO + ")", org, idToken(f), automation);
     }
 
-    private static P logs(UUID org, ComFator f, UUID execution, UUID attempt) {
-        return portal("SELECT sequence::text, message FROM public.portal_client_list_logs(?, ?, ?, ?, 0, 500)", org, idToken(f), execution, attempt);
+    private static P files(UUID org, ComFator f, UUID automation, String query) {
+        return files(org, f, automation, query, FROM, TO);
     }
 
-    private static P results(UUID org, ComFator f, UUID execution, UUID attempt) {
-        return portal("SELECT result_number::text, file_name FROM public.portal_client_list_results(?, ?, ?, ?)", org, idToken(f), execution, attempt);
+    private static P files(UUID org, ComFator f, UUID automation, String query, String from, String to) {
+        return portal("SELECT attempt_id::text, file_name, automation_name FROM public.portal_client_list_files(?, ?, ?, " + from + ", " + to
+                + ", ?, NULL, NULL, NULL, 100)", org, idToken(f), automation, query);
+    }
+
+    private static P file(UUID org, ComFator f, UUID attempt, int number) {
+        return portal("SELECT file_name FROM public.portal_client_get_file(?, ?, ?, ?)", org, idToken(f), attempt, number);
     }
 
     // ------------------------------------------------------------------ massa
@@ -223,7 +239,10 @@ class ClientAccessIT extends IdentityTestBase {
                 "INSERT INTO remote_attempt_log_lines (attempt_id, sequence, organization_id, captured_at, channel, truncated, message) SELECT '" + x.att1()
                         + "', g, '" + o.id() + "', clock_timestamp(), 1, false, 'linha ' || g FROM generate_series(1, 3) g",
                 "INSERT INTO remote_attempt_results (attempt_id, result_number, organization_id, file_name, size_bytes, sha256) VALUES ('" + x.att1()
-                        + "', 1, '" + o.id() + "', 'relatorio.csv', 3, '" + "d".repeat(64) + "')");
+                        + "', 1, '" + o.id() + "', 'relatorio.csv', 3, '" + "d".repeat(64) + "')",
+                // o mesmo arquivo na outra maquina (w2): fora de uma concessao restrita a w1
+                "INSERT INTO remote_attempt_results (attempt_id, result_number, organization_id, file_name, size_bytes, sha256) VALUES ('" + x.att2()
+                        + "', 1, '" + o.id() + "', 'outra-maquina.csv', 3, '" + "e".repeat(64) + "')");
         return x;
     }
 
@@ -242,67 +261,88 @@ class ClientAccessIT extends IdentityTestBase {
     // ------------------------------------------------------------------ testes
 
     @Test
-    void conviteDeClienteAceiteEscopoPorAutomacaoEMaquinaSegundaPessoaReducaoRevogacaoEAuditoria() throws Exception {
+    void compartilhamentoPorPessoaDashboardArquivosEscopoPorAutomacaoEMaquinaSegundaPessoaReducaoRevogacaoEAuditoria() throws Exception {
         Admin a = admin();
         UUID org = a.org().id();
         World x = world(a.org());
-        UUID client = createClient(a, "Contabil Exemplo");
         ComFator f = comFator();
 
-        // opcoes do formulario: as duas automacoes do ambiente
+        // opcoes do formulario: as duas automacoes do ambiente, convite direto
         BrowserClient.Response opt = a.browser().get("/api/v1/o/" + org + "/client-share-options");
         assertThat(opt.status()).as(opt.body()).isEqualTo(200);
         assertThat(json(opt).get("automations").size()).isEqualTo(2);
+        assertThat(json(opt).get("mode").asString()).isEqualTo("invite");
 
-        // 1. convite: a1, so na maquina w1, com registros e sem resultados. Nada e concedido antes do aceite.
-        BrowserClient.Response inv = a.browser().post("/api/v1/o/" + org + "/client-invitations", inviteBody(f.email(), client, x.a1(), x.w1(), true, false));
+        // registros tecnicos nao se compartilham: pedir e 400 (e o banco recusa tambem, abaixo)
+        String withLogs = inviteBody(f.email(), null, x.a1(), x.w1(), true, false).replace("}", ",\"canReadLogs\":true}");
+        assertThat(a.browser().post("/api/v1/o/" + org + "/client-invitations", withLogs).status()).isEqualTo(400);
+        assertThat(a.browser().post("/api/v1/o/" + org + "/client-invitations", inviteBody(f.email(), null, x.a1(), x.w1(), false, false)).status())
+                .isEqualTo(400);
+
+        // 1. compartilhar so com nome e e-mail: a1, so na maquina w1, so o dashboard. Cliente interno criado sem etapa; nada concedido
+        BrowserClient.Response inv = a.browser().post("/api/v1/o/" + org + "/client-invitations", inviteBody(f.email(), null, x.a1(), x.w1(), true, false));
         assertThat(inv.status()).as(inv.body()).isEqualTo(201);
+        UUID client = UUID.fromString(inv.field("clientId"));
+        assertThat(value("SELECT name FROM clients WHERE client_id = '" + client + "'")).isEqualTo("Pessoa Cliente");
         String firstToken = lastToken(f.email());
         assertThat(portal("SELECT * FROM public.portal_client_organizations(?)", idToken(f)).rows()).isEmpty();
         assertThat(automations(org, f).state()).isEqualTo("NK403");
 
-        // reenvio: o mesmo escopo, o link anterior deixa de valer
+        // primeiro acesso pelo link: organizacao, nome e e-mail do convite (so convite aberto)
+        BrowserClient.Response pv = client().post("/api/v1/invitations/preview", "{\"organizationId\":\"" + org + "\",\"token\":" + q(firstToken) + "}");
+        assertThat(pv.status()).as(pv.body()).isEqualTo(200);
+        assertThat(pv.field("recipientName")).isEqualTo("Pessoa Cliente");
+        assertThat(pv.field("email")).isEqualToIgnoringCase(f.email());
+        assertThat(pv.field("audience")).isEqualTo("client");
+        assertThat(client().post("/api/v1/invitations/preview", "{\"organizationId\":\"" + org + "\",\"token\":" + q("x".repeat(43)) + "}").status())
+                .isEqualTo(404);
+
+        // reenvio: o mesmo escopo (e o mesmo nome), o link anterior deixa de valer
         BrowserClient.Response re = a.browser().post("/api/v1/o/" + org + "/invitations/" + inv.field("invitationId") + "/resend", null);
         assertThat(re.status()).as(re.body()).isEqualTo(201);
         assertThat(accept(f, org, firstToken).status()).isEqualTo(404);
-        assertThat(value("SELECT automation_id::text || worker_id::text || can_read_logs::text || can_download_results::text FROM identity_invitations "
-                + "WHERE invitation_id = '" + re.field("invitationId") + "'")).isEqualTo(x.a1().toString() + x.w1() + "truefalse");
+        assertThat(client().post("/api/v1/invitations/preview", "{\"organizationId\":\"" + org + "\",\"token\":" + q(firstToken) + "}").status())
+                .isEqualTo(404);
+        assertThat(value("SELECT automation_id::text || worker_id::text || can_read_logs::text || can_view_dashboard::text || can_download_results::text "
+                + "|| recipient_name || client_id::text FROM identity_invitations WHERE invitation_id = '" + re.field("invitationId") + "'"))
+                .isEqualTo(x.a1().toString() + x.w1() + "falsetruefalsePessoa Cliente" + client);
 
         // 2. aceite pela identidade global: conta e vinculo de cliente, concessao ativa pela excecao
         BrowserClient.Response ac = accept(f, org, lastToken(f.email()));
         assertThat(ac.status()).as(ac.body()).isEqualTo(200);
         assertThat(ac.field("audience")).isEqualTo("client");
         assertThat(count("SELECT count(*) FROM users WHERE organization_id = '" + org + "' AND account_type = 2 AND email_normalized = '" + f.email().toLowerCase() + "'")).isEqualTo(1);
-        assertThat(value("SELECT basis || ':' || status FROM client_automation_grants WHERE organization_id = '" + org + "'")).isEqualTo("2:2");
-        // a conta de cliente nao abre sessao da organizacao (rotas da Platform continuam fechadas)
+        assertThat(value("SELECT basis || ':' || status || ':' || can_view_dashboard || ':' || can_read_logs FROM client_automation_grants "
+                + "WHERE organization_id = '" + org + "'")).isEqualTo("2:2:true:false");
         BrowserClient.Response troca = f.browser().post("/api/v1/sessions/organization", "{\"organizationId\":\"" + org + "\"}");
         assertThat(troca.field("status")).as(troca.body()).isNotEqualTo("sessao_criada");
         assertThat(troca.setCookies()).noneMatch(c -> c.startsWith("__Host-nekkora_session="));
 
-        // 3. area do cliente: so a1, so w1
+        // 3. area do cliente: so a1, so w1; dashboard sim, arquivos nao; nada de maquina, ambiente ou registros
         P orgs = portal("SELECT organization_id::text, shared_automations::text FROM public.portal_client_organizations(?)", idToken(f));
         assertThat(orgs.rows()).containsExactly(List.of(org.toString(), "1"));
         P au = automations(org, f);
         assertThat(au.col(0)).containsExactly(x.a1().toString());
-        assertThat(au.rows().get(0).subList(2, 6)).containsExactly("false", "[{\"name\": \"Estacao fiscal\", \"workerId\": \"" + x.w1() + "\"}]", "true", "false");
+        assertThat(au.rows().get(0).subList(2, 4)).containsExactly("true", "false");
+        assertThat(au.rows().get(0).get(5)).isNull();
         assertThat(executions(org, f, x.a1()).col(0)).containsExactlyInAnyOrder(x.e1().toString(), x.r1().toString());
-        // a outra automacao da MESMA maquina e do MESMO ambiente continua inacessivel, por lista, detalhe e endereco
+        assertThat(executions(org, f, x.a1()).col(2)).containsOnlyNulls();
+        // totais do dashboard: so as execucoes de a1 em w1 (e1, r1), nunca as de w2 nem as de a2
+        assertThat(summary(org, f, x.a1()).rows()).containsExactly(List.of("2", "2"));
+        // a outra automacao da MESMA maquina e do MESMO ambiente continua inacessivel
         assertThat(executions(org, f, x.a2()).state()).isEqualTo("NK404");
-        assertThat(execution(org, f, "platform", x.e3()).state()).isEqualTo("NK404");
-        // a mesma automacao em outra maquina: fora da restricao
-        assertThat(execution(org, f, "platform", x.e2()).state()).isEqualTo("NK404");
-        assertThat(execution(org, f, "remote", x.r2()).state()).isEqualTo("NK404");
-        assertThat(logs(org, f, x.r2(), x.att2()).state()).isEqualTo("NK404");
-        // registros concedidos; resultados nao
-        assertThat(execution(org, f, "remote", x.r1()).rows().get(0).get(1)).contains("\"canReadLogs\": true", "\"canDownloadResults\": false");
-        assertThat(logs(org, f, x.r1(), x.att1()).col(1)).containsExactly("linha 1", "linha 2", "linha 3");
-        assertThat(results(org, f, x.r1(), x.att1()).state()).isEqualTo("NK403");
-        // tentativa de outra execucao com a tentativa certa: fora do escopo
-        assertThat(logs(org, f, x.r2(), x.att1()).state()).isEqualTo("NK404");
-        // outra organizacao: sem vinculo
+        assertThat(summary(org, f, x.a2()).state()).isEqualTo("NK404");
+        // arquivos de retorno nao compartilhados: lista e download recusados no banco
+        assertThat(files(org, f, x.a1(), null).state()).isEqualTo("NK403");
+        assertThat(files(org, f, null, null).rows()).isEmpty();
+        assertThat(file(org, f, x.att1(), 1).state()).isEqualTo("NK403");
+        // registros tecnicos e detalhe de tentativa nao existem no Portal; o owner do Portal nao le as tabelas de registros
+        assertThat(portal("SELECT * FROM public.portal_client_list_logs(?, ?, ?, ?, 0, 500)", org, idToken(f), x.r1(), x.att1()).state()).isEqualTo("42883");
+        assertThat(portal("SELECT * FROM public.portal_client_get_execution(?, ?, 'remote', ?)", org, idToken(f), x.r1()).state()).isEqualTo("42883");
+        assertThat(value("SELECT has_any_column_privilege('nekkora_portal_owner', 'public.remote_attempt_log_lines', 'SELECT')::text")).isEqualTo("false");
+        // outra organizacao: sem vinculo; sessao invalida
         Admin other = admin();
         assertThat(automations(other.org().id(), f).state()).isEqualTo("NK403");
-        // sessao de identidade invalida
         assertThat(portal("SELECT * FROM public.portal_client_automations(?, ?)", org, "x".repeat(43)).state()).isEqualTo("NK401");
 
         // 4. Pessoas e acessos: o cliente aparece uma vez, com a concessao; o convite aceito so no historico
@@ -311,18 +351,20 @@ class ClientAccessIT extends IdentityTestBase {
         people.get("items").forEach(n -> kinds.add(n.get("kind").asString()));
         assertThat(kinds).containsExactly("client", "member");
         JsonNode cl = people.get("items").get(0).get("client");
-        assertThat(cl.get("clientName").asString()).isEqualTo("Contabil Exemplo");
+        assertThat(cl.get("clientName").asString()).isEqualTo("Pessoa Cliente");
         assertThat(cl.get("linkedToIdentity").asBoolean()).isTrue();
         assertThat(cl.get("grants").size()).isEqualTo(1);
+        assertThat(cl.get("grants").get(0).get("canViewDashboard").asBoolean()).isTrue();
         UUID membership = UUID.fromString(cl.get("clientMembershipId").asString());
         UUID g1 = UUID.fromString(cl.get("grants").get(0).get("grantId").asString());
         JsonNode accepted = json(a.browser().get("/api/v1/o/" + org + "/people?situation=invitation_accepted"));
         assertThat(accepted.get("items").get(0).get("invitation").get("audience").asString()).isEqualTo("client");
+        assertThat(accepted.get("items").get(0).get("invitation").get("clientScope").get("recipientName").asString()).isEqualTo("Pessoa Cliente");
 
-        // 5. compartilhar outra automacao depois: pedido PENDENTE; quem pediu nao aprova; outra administradora aprova
+        // 5. compartilhar outra automacao depois (so arquivos): pedido PENDENTE; quem pediu nao aprova; outra administradora aprova
         Admin b = secondAdmin(a.org());
         BrowserClient.Response req = a.browser().post("/api/v1/o/" + org + "/client-automation-grants", "{\"clientMembershipId\":\"" + membership
-                + "\",\"automationId\":\"" + x.a2() + "\",\"workerId\":null,\"canReadLogs\":false,\"canDownloadResults\":true}");
+                + "\",\"automationId\":\"" + x.a2() + "\",\"workerId\":null,\"canViewDashboard\":false,\"canDownloadResults\":true}");
         assertThat(req.status()).as(req.body()).isEqualTo(201);
         UUID g2 = UUID.fromString(req.field("grantId"));
         assertThat(automations(org, f).col(0)).containsExactly(x.a1().toString());
@@ -330,48 +372,68 @@ class ClientAccessIT extends IdentityTestBase {
         BrowserClient.Response ap = b.browser().post("/api/v1/o/" + org + "/client-automation-grants/" + g2 + "/approve", null);
         assertThat(ap.status()).as(ap.body()).isEqualTo(200);
         assertThat(automations(org, f).col(0)).containsExactlyInAnyOrder(x.a1().toString(), x.a2().toString());
-        assertThat(executions(org, f, x.a2()).col(0)).containsExactly(x.e3().toString());
+        // a2 so com arquivos: sem dashboard (nem execucoes nem totais)
+        assertThat(executions(org, f, x.a2()).state()).isEqualTo("NK403");
+        assertThat(summary(org, f, x.a2()).state()).isEqualTo("NK403");
+        assertThat(files(org, f, x.a2(), null).rows()).isEmpty();
 
-        // 6. so reducao: ligar resultados em a1 exige outro pedido (que substitui a concessao na aprovacao)
+        // 6. so reducao: ligar arquivos em a1 exige outro pedido (que substitui a concessao na aprovacao)
         BrowserClient.Response widen = a.browser().post("/api/v1/o/" + org + "/client-automation-grants/" + g1 + "/reduce",
-                "{\"canReadLogs\":true,\"canDownloadResults\":true}");
+                "{\"canViewDashboard\":true,\"canDownloadResults\":true}");
         assertThat(widen.status()).isEqualTo(409);
         assertThat(widen.body()).contains("client_grant_widening_requires_request");
         BrowserClient.Response wider = a.browser().post("/api/v1/o/" + org + "/client-automation-grants", "{\"clientMembershipId\":\"" + membership
-                + "\",\"automationId\":\"" + x.a1() + "\",\"workerId\":\"" + x.w1() + "\",\"canReadLogs\":true,\"canDownloadResults\":true}");
+                + "\",\"automationId\":\"" + x.a1() + "\",\"workerId\":\"" + x.w1() + "\",\"canViewDashboard\":true,\"canDownloadResults\":true}");
         assertThat(wider.status()).as(wider.body()).isEqualTo(201);
-        assertThat(results(org, f, x.r1(), x.att1()).state()).isEqualTo("NK403");
+        assertThat(files(org, f, x.a1(), null).state()).isEqualTo("NK403");
         assertThat(b.browser().post("/api/v1/o/" + org + "/client-automation-grants/" + wider.field("grantId") + "/approve", null).status()).isEqualTo(200);
-        assertThat(results(org, f, x.r1(), x.att1()).col(1)).containsExactly("relatorio.csv");
+        // arquivos de retorno: so os da maquina concedida (w1), identificados pela automacao; busca e periodo no servidor
+        assertThat(files(org, f, x.a1(), null).col(1)).containsExactly("relatorio.csv");
+        assertThat(files(org, f, null, null).col(2)).containsExactly("Conciliacao");
+        assertThat(files(org, f, null, "RELAT").col(1)).containsExactly("relatorio.csv");
+        assertThat(files(org, f, null, "outra").rows()).isEmpty();
+        assertThat(files(org, f, null, null, "TIMESTAMPTZ '2026-03-01T00:00:00Z'", "TIMESTAMPTZ '2026-03-08T00:00:00Z'").rows()).isEmpty();
+        assertThat(file(org, f, x.att1(), 1).col(0)).containsExactly("relatorio.csv");
+        assertThat(file(org, f, x.att2(), 1).state()).isEqualTo("NK404");
+        assertThat(executions(org, f, x.a1()).rows()).anySatisfy(r -> assertThat(r).containsExactly(x.r1().toString(), "succeeded", "1"));
         assertThat(value("SELECT status || ':' || revoke_reason FROM client_automation_grants WHERE grant_id = '" + g1 + "'")).isEqualTo("4:2");
         UUID g3 = UUID.fromString(wider.field("grantId"));
-        // reduzir: registros desligados valem na proxima consulta
-        assertThat(a.browser().post("/api/v1/o/" + org + "/client-automation-grants/" + g3 + "/reduce", "{\"canReadLogs\":false,\"canDownloadResults\":true}")
-                .status()).isEqualTo(200);
-        assertThat(logs(org, f, x.r1(), x.att1()).state()).isEqualTo("NK403");
+        // reduzir: dashboard desligado vale na proxima consulta; os dois desligados e revogacao, nao reducao
+        assertThat(a.browser().post("/api/v1/o/" + org + "/client-automation-grants/" + g3 + "/reduce",
+                "{\"canViewDashboard\":false,\"canDownloadResults\":false}").status()).isEqualTo(400);
+        assertThat(a.browser().post("/api/v1/o/" + org + "/client-automation-grants/" + g3 + "/reduce",
+                "{\"canViewDashboard\":false,\"canDownloadResults\":true}").status()).isEqualTo(200);
+        assertThat(executions(org, f, x.a1()).state()).isEqualTo("NK403");
+        assertThat(files(org, f, x.a1(), null).col(1)).containsExactly("relatorio.csv");
 
         // 7. revogar so aquele acesso (a1 continua); a sessao do cliente segue aberta e a proxima consulta ja nao ve a2
         assertThat(a.browser().post("/api/v1/o/" + org + "/client-automation-grants/" + g2 + "/revoke", null).status()).isEqualTo(204);
-        assertThat(executions(org, f, x.a2()).state()).isEqualTo("NK404");
+        assertThat(files(org, f, x.a2(), null).state()).isEqualTo("NK404");
         assertThat(automations(org, f).col(0)).containsExactly(x.a1().toString());
 
         // 8. suspender o vinculo barra tudo; reativar (com step-up) devolve o que estava concedido
         assertThat(a.browser().post("/api/v1/o/" + org + "/client-memberships/" + membership + "/suspend", null).status()).isEqualTo(200);
         assertThat(automations(org, f).state()).isEqualTo("NK403");
+        assertThat(file(org, f, x.att1(), 1).state()).isEqualTo("NK403");
         assertThat(a.browser().post("/api/v1/o/" + org + "/client-memberships/" + membership + "/reactivate", null).status()).isEqualTo(200);
         assertThat(automations(org, f).col(0)).containsExactly(x.a1().toString());
 
-        // 9. a excecao nao pode ser usada pelas rotas diretas nem pelo papel da Platform no banco
+        // 9. a excecao nao pode ser usada pelas rotas diretas nem pelo papel da Platform; registros tecnicos recusados no banco
         String direct = "INSERT INTO client_automation_grants (organization_id, client_id, client_membership_id, workspace_id, automation_id, can_read_logs, "
-                + "can_download_results, status, basis, invitation_id, requested_by_membership_id, approved_by_membership_id, approved_at) SELECT '" + org + "', '"
-                + client + "', '" + membership + "', '" + x.ws() + "', '" + x.a2() + "', true, true, 2, 2, invitation_id, '" + a.org().adminMembership() + "', '"
-                + a.org().adminMembership() + "', accepted_at FROM identity_invitations WHERE organization_id = '" + org + "' AND accepted_at IS NOT NULL LIMIT 1";
+                + "can_view_dashboard, can_download_results, status, basis, invitation_id, requested_by_membership_id, approved_by_membership_id, approved_at) SELECT '"
+                + org + "', '" + client + "', '" + membership + "', '" + x.ws() + "', '" + x.a2() + "', false, true, true, 2, 2, invitation_id, '"
+                + a.org().adminMembership() + "', '" + a.org().adminMembership() + "', accepted_at FROM identity_invitations WHERE organization_id = '" + org
+                + "' AND accepted_at IS NOT NULL LIMIT 1";
         assertThat(asPlatform(org, direct)).isEqualTo("42501");
         assertThat(asPlatform(org, "INSERT INTO client_automation_grants (organization_id, client_id, client_membership_id, workspace_id, automation_id, can_read_logs, "
-                + "can_download_results, status, basis, requested_by_membership_id, approved_by_membership_id, approved_at) VALUES ('" + org + "', '" + client + "', '"
-                + membership + "', '" + x.ws() + "', '" + x.a2() + "', true, true, 2, 1, '" + a.org().adminMembership() + "', '" + b.org().adminMembership()
-                + "', now())")).isEqualTo("42501");
-        assertThat(asPlatform(org, "UPDATE client_automation_grants SET can_read_logs = true WHERE grant_id = '" + g3 + "'")).isEqualTo("42501");
+                + "can_view_dashboard, can_download_results, status, basis, requested_by_membership_id, approved_by_membership_id, approved_at) VALUES ('" + org + "', '"
+                + client + "', '" + membership + "', '" + x.ws() + "', '" + x.a2() + "', false, true, true, 2, 1, '" + a.org().adminMembership() + "', '"
+                + b.org().adminMembership() + "', now())")).isEqualTo("42501");
+        assertThat(asPlatform(org, "UPDATE client_automation_grants SET can_view_dashboard = true WHERE grant_id = '" + g3 + "'")).isEqualTo("42501");
+        assertThat(asPlatform(org, "UPDATE client_automation_grants SET can_read_logs = true WHERE grant_id = '" + g3 + "'")).isIn("42501", "23514");
+        assertThat(asPlatform(org, "INSERT INTO client_automation_grants (organization_id, client_id, client_membership_id, workspace_id, automation_id, can_read_logs, "
+                + "can_view_dashboard, can_download_results, status, basis, requested_by_membership_id) VALUES ('" + org + "', '" + client + "', '" + membership
+                + "', '" + x.ws() + "', '" + x.a2() + "', true, true, false, 1, 1, '" + a.org().adminMembership() + "')")).isEqualTo("23514");
 
         // 10. auditoria: cada ato com responsavel e escopo; a excecao marcada no convite e na concessao aplicada no aceite
         JsonNode h = json(a.browser().get("/api/v1/o/" + org + "/access-history?clientId=" + client + "&limit=100"));
@@ -379,29 +441,120 @@ class ClientAccessIT extends IdentityTestBase {
         assertThat(types(h)).contains("CONVITE_EMITIDO*", "CONVITE_REENVIADO*", "CONVITE_ACEITO", "CLIENTE_CONCESSAO_APLICADA_NO_ACEITE*",
                 "CLIENTE_CONCESSAO_SOLICITADA", "CLIENTE_CONCESSAO_APROVADA", "CLIENTE_CONCESSAO_REDUZIDA", "CLIENTE_CONCESSAO_REVOGADA",
                 "VINCULO_CLIENTE_SUSPENSO", "VINCULO_CLIENTE_REATIVADO", "CLIENTE_CADASTRADO");
+        h.get("items").forEach(n -> assertThat(n.get("technicalLogs").asBoolean()).isFalse());
         JsonNode byGrant = json(a.browser().get("/api/v1/o/" + org + "/access-history?grantId=" + g2));
         assertThat(types(byGrant)).containsExactly("CLIENTE_CONCESSAO_REVOGADA", "CLIENTE_CONCESSAO_APROVADA", "CLIENTE_CONCESSAO_SOLICITADA");
         JsonNode approved = byGrant.get("items").get(1);
         assertThat(approved.get("actor").get("email").asString()).isEqualToIgnoringCase(b.user().email());
         assertThat(approved.get("automation").get("name").asString()).isEqualTo("Folha interna");
         assertThat(approved.get("target").get("email").asString()).isEqualToIgnoringCase(f.email());
-        // concessoes: as duas especies, com filtros; a revogada continua consultavel
+        assertThat(approved.get("canDownloadResults").asBoolean()).isTrue();
+        assertThat(approved.get("canViewDashboard").asBoolean()).isFalse();
         JsonNode gr = json(a.browser().get("/api/v1/o/" + org + "/access-grants?clientId=" + client + "&situation=revoked"));
         assertThat(gr.get("items").size()).isEqualTo(2);
         JsonNode act = json(a.browser().get("/api/v1/o/" + org + "/access-grants?automationId=" + x.a1() + "&workerId=" + x.w1() + "&situation=active"));
         assertThat(act.get("items").size()).isEqualTo(1);
         assertThat(act.get("items").get(0).get("canDownloadResults").asBoolean()).isTrue();
+        assertThat(act.get("items").get(0).get("canViewDashboard").asBoolean()).isFalse();
 
         // 11. retirar o vinculo revoga as concessoes (motivo proprio) e barra o Portal; a identidade global continua
         assertThat(a.browser().post("/api/v1/o/" + org + "/client-memberships/" + membership + "/retire", null).status()).isEqualTo(200);
         assertThat(automations(org, f).state()).isEqualTo("NK403");
         assertThat(count("SELECT count(*) FROM client_automation_grants WHERE client_membership_id = '" + membership + "' AND status <> 4")).isZero();
         assertThat(value("SELECT status::text FROM identities WHERE identity_id = '" + f.identity() + "'")).isEqualTo("2");
-        // readmissao por novo convite: a mesma conta, sem duplicar; so o escopo novo
-        assertThat(a.browser().post("/api/v1/o/" + org + "/client-invitations", inviteBody(f.email(), client, x.a2(), null, false, false)).status()).isEqualTo(201);
+        // readmissao por novo convite, de novo sem escolher cliente: o MESMO cliente interno (reutilizado), a mesma conta, so o escopo novo
+        BrowserClient.Response again = a.browser().post("/api/v1/o/" + org + "/client-invitations", inviteBody(f.email(), null, x.a2(), null, true, false));
+        assertThat(again.status()).as(again.body()).isEqualTo(201);
+        assertThat(again.field("clientId")).isEqualTo(client.toString());
         assertThat(accept(f, org, lastToken(f.email())).status()).isEqualTo(200);
         assertThat(count("SELECT count(*) FROM users WHERE organization_id = '" + org + "' AND email_normalized = '" + f.email().toLowerCase() + "'")).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM clients WHERE organization_id = '" + org + "'")).isEqualTo(1);
         assertThat(automations(org, f).col(0)).containsExactly(x.a2().toString());
+    }
+
+    @Test
+    void pedidoDeMembroAprovadoPorOutraPessoaAntesDoConviteSemAExcecaoDaAdministradora() throws Exception {
+        Admin a = admin();
+        UUID org = a.org().id();
+        World x = world(a.org());
+        UUID m = a.org().adminMembership();
+        // membro com WORKSPACE_ADMIN no ambiente (client_share.request) e uma pessoa so com Leitura
+        TestUser wsAdmin = internalUser(a.org(), true, 2);
+        UUID wsAdminMembership = AccessFixtures.membershipOf(org, wsAdmin.id());
+        AccessFixtures.assignWorkspaceRole(org, wsAdminMembership, x.ws(), "WORKSPACE_ADMIN", m);
+        BrowserClient wb = browser();
+        firstLogin(wb, org, wsAdmin);
+        TestUser viewer = internalUser(a.org(), true, 2);
+        AccessFixtures.assignWorkspaceRole(org, AccessFixtures.membershipOf(org, viewer.id()), x.ws(), "VIEWER", m);
+        BrowserClient vb = browser();
+        firstLogin(vb, org, viewer);
+
+        // opcoes: o membro ve as automacoes do ambiente dele, modo pedido; quem so le nao compartilha
+        JsonNode opt = json(wb.get("/api/v1/o/" + org + "/client-share-options"));
+        assertThat(opt.get("mode").asString()).isEqualTo("request");
+        assertThat(opt.get("automations").size()).isEqualTo(2);
+        assertThat(opt.get("automations").get(0).get("canShareFiles").asBoolean()).isTrue();
+        assertThat(vb.get("/api/v1/o/" + org + "/client-share-options").status()).isEqualTo(403);
+        ComFator f = comFator();
+        assertThat(vb.post("/api/v1/o/" + org + "/client-share-requests", shareBody(f.email(), x.a1(), null, true, true)).status()).isEqualTo(403);
+        // o membro nao usa o convite direto (excecao da administradora)
+        assertThat(wb.post("/api/v1/o/" + org + "/client-invitations", inviteBody(f.email(), null, x.a1(), null, true, true)).status()).isEqualTo(403);
+        // registros tecnicos: 400
+        assertThat(wb.post("/api/v1/o/" + org + "/client-share-requests", shareBody(f.email(), x.a1(), null, true, true).replace("}", ",\"canReadLogs\":true}"))
+                .status()).isEqualTo(400);
+
+        // pedido: nao concede nem envia nada
+        int mailsBefore = mails(f.email()).size();
+        BrowserClient.Response rq = wb.post("/api/v1/o/" + org + "/client-share-requests", shareBody(f.email(), x.a1(), x.w1(), true, true));
+        assertThat(rq.status()).as(rq.body()).isEqualTo(201);
+        UUID request = UUID.fromString(rq.field("shareRequestId"));
+        assertThat(rq.field("status")).isEqualTo("PENDENTE");
+        assertThat(mails(f.email())).hasSize(mailsBefore);
+        assertThat(wb.post("/api/v1/o/" + org + "/client-share-requests", shareBody(f.email(), x.a1(), x.w1(), true, false)).body()).contains("client_grant_exists");
+        // quem pediu ve o proprio pedido; a administradora ve todos, com os nomes
+        assertThat(json(wb.get("/api/v1/o/" + org + "/client-share-requests")).get("items").size()).isEqualTo(1);
+        JsonNode all = json(a.browser().get("/api/v1/o/" + org + "/client-share-requests?pendingOnly=true"));
+        assertThat(all.get("items").get(0).get("automation").get("name").asString()).isEqualTo("Conciliacao");
+        assertThat(all.get("items").get(0).get("recipientName").asString()).isEqualTo("Pessoa Pedida");
+        // quem pediu nao aprova (nem tem a permissao); a administradora aprova com step-up e o convite sai nesse ato, sem excecao
+        assertThat(wb.post("/api/v1/o/" + org + "/client-share-requests/" + request + "/approve", null).status()).isEqualTo(403);
+        BrowserClient.Response ok = a.browser().post("/api/v1/o/" + org + "/client-share-requests/" + request + "/approve", null);
+        assertThat(ok.status()).as(ok.body()).isEqualTo(200);
+        assertThat(ok.field("status")).isEqualTo("APROVADO");
+        assertThat(ok.field("invitationId")).isNotNull();
+        assertThat(mails(f.email())).hasSize(mailsBefore + 1);
+        assertThat(value("SELECT share_request_id::text || ':' || recipient_name FROM identity_invitations WHERE invitation_id = '" + ok.field("invitationId") + "'"))
+                .isEqualTo(request + ":Pessoa Pedida");
+
+        // aceite: concessao com o escopo do pedido; a excecao NAO e marcada (houve segunda pessoa)
+        assertThat(accept(f, org, lastToken(f.email())).status()).isEqualTo(200);
+        assertThat(value("SELECT can_view_dashboard || ':' || can_download_results || ':' || worker_id FROM client_automation_grants WHERE organization_id = '"
+                + org + "'")).isEqualTo("true:true:" + x.w1());
+        JsonNode h = json(a.browser().get("/api/v1/o/" + org + "/access-history?limit=100&category=share_requests&category=invitations&category=grants"));
+        assertThat(types(h)).contains("COMPARTILHAMENTO_SOLICITADO", "COMPARTILHAMENTO_APROVADO", "CONVITE_EMITIDO", "CLIENTE_CONCESSAO_APLICADA_NO_ACEITE")
+                .doesNotContain("CONVITE_EMITIDO*", "CLIENTE_CONCESSAO_APLICADA_NO_ACEITE*");
+        assertThat(files(org, f, x.a1(), null).col(1)).containsExactly("relatorio.csv");
+
+        // recusar e cancelar: nada e enviado; so quem pediu cancela; decidido e imutavel
+        String g = email();
+        UUID r2 = UUID.fromString(wb.post("/api/v1/o/" + org + "/client-share-requests", shareBody(g, x.a2(), null, true, false)).field("shareRequestId"));
+        assertThat(a.browser().post("/api/v1/o/" + org + "/client-share-requests/" + r2 + "/cancel", null).status()).isEqualTo(403);
+        assertThat(a.browser().post("/api/v1/o/" + org + "/client-share-requests/" + r2 + "/refuse", null).field("status")).isEqualTo("RECUSADO");
+        assertThat(a.browser().post("/api/v1/o/" + org + "/client-share-requests/" + r2 + "/approve", null).status()).isEqualTo(409);
+        UUID r3 = UUID.fromString(wb.post("/api/v1/o/" + org + "/client-share-requests", shareBody(g, x.a2(), null, true, false)).field("shareRequestId"));
+        assertThat(wb.post("/api/v1/o/" + org + "/client-share-requests/" + r3 + "/cancel", null).field("status")).isEqualTo("CANCELADO");
+        assertThat(mails(g)).isEmpty();
+
+        // aprovado, mas quem pediu perdeu a permissao antes do aceite: o aceite recusa (o servidor reconfere)
+        ComFator f2 = comFator();
+        UUID r4 = UUID.fromString(wb.post("/api/v1/o/" + org + "/client-share-requests", shareBody(f2.email(), x.a2(), null, true, false)).field("shareRequestId"));
+        assertThat(a.browser().post("/api/v1/o/" + org + "/client-share-requests/" + r4 + "/approve", null).status()).isEqualTo(200);
+        DB.asSuperuser("UPDATE workspace_role_assignments SET status = 2, revoked_at = now(), revoked_by_membership_id = '" + m + "' WHERE organization_id = '"
+                + org + "' AND membership_id = '" + wsAdminMembership + "' AND status = 1");
+        BrowserClient.Response late = accept(f2, org, lastToken(f2.email()));
+        assertThat(late.status()).isEqualTo(409);
+        assertThat(late.body()).contains("client_scope_unavailable");
+        assertThat(count("SELECT count(*) FROM users WHERE organization_id = '" + org + "' AND email_normalized = '" + f2.email().toLowerCase() + "'")).isZero();
     }
 
     @Test
@@ -460,7 +613,7 @@ class ClientAccessIT extends IdentityTestBase {
         assertThat(vb.get("/api/v1/o/" + org + "/access-grants").status()).isEqualTo(403);
         assertThat(vb.get("/api/v1/o/" + org + "/people").status()).isEqualTo(403);
         assertThat(vb.get("/api/v1/o/" + org + "/client-share-options").status()).isEqualTo(403);
-        assertThat(vb.post("/api/v1/o/" + org + "/client-invitations", inviteBody(email(), client, x.a1(), null, false, false)).status()).isEqualTo(403);
+        assertThat(vb.post("/api/v1/o/" + org + "/client-invitations", inviteBody(email(), client, x.a1(), null, true, false)).status()).isEqualTo(403);
         assertThat(vb.post("/api/v1/o/" + org + "/clients", "{\"name\":\"Nao pode\"}").status()).isEqualTo(403);
         // quem administra ve tudo, inclusive os atos de papel
         JsonNode roles = json(a.browser().get("/api/v1/o/" + org + "/access-history?category=roles"));

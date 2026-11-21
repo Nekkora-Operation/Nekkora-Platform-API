@@ -34,36 +34,83 @@ final class ClientAccessReads {
             "roles", List.of(5, 6, 7, 8),
             "grants", List.of(9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19),
             "client_links", List.of(20, 21, 22),
-            "clients", List.of(23, 24));
+            "clients", List.of(23, 24),
+            "share_requests", List.of(25, 26, 27, 28, 29));
 
     // ------------------------------------------------------------------ opcoes do formulario
 
     /**
      * Automacoes compartilhaveis (ativas, em ambiente ativo) com as maquinas desta automacao: as que ja receberam autorizacao de
      * execucao para ela (a ativacao) e continuam ativas e autorizadas no ambiente. A lista de maquinas so orienta a escolha; a
-     * emissao e a aprovacao reconferem a maquina no servidor.
+     * emissao e a aprovacao reconferem a maquina no servidor. {@code all}: administradora (todas, os dois conteudos); senao (071),
+     * so as dos ambientes em que a pessoa tem client_share.request, com os conteudos que ela mesma pode ver.
      */
-    static List<Map<String, Object>> shareOptions(JdbcClient j, UUID org) {
+    static List<Map<String, Object>> shareOptions(JdbcClient j, UUID org, UUID membership, boolean all) {
         return j.sql("""
+                SELECT * FROM (
                 SELECT a.automation_id, a.name, a.workspace_id, w.name AS workspace_name,
                        coalesce((SELECT jsonb_agg(jsonb_build_object('workerId', k.worker_id, 'name', k.name) ORDER BY k.name, k.worker_id)
                                    FROM (SELECT DISTINCT z.worker_id FROM public.local_run_authorizations z
                                           WHERE z.organization_id = a.organization_id AND z.automation_id = a.automation_id) d
                                    JOIN public.workers k ON k.organization_id = a.organization_id AND k.worker_id = d.worker_id AND k.status = 1
-                                  WHERE public.access_worker_in_workspace(a.organization_id, k.worker_id, a.workspace_id)), '[]'::jsonb)::text AS machines
+                                  WHERE public.access_worker_in_workspace(a.organization_id, k.worker_id, a.workspace_id)), '[]'::jsonb)::text AS machines,
+                       :all OR public.access_share_request_allowed(a.organization_id, :m, a.workspace_id, true, false) AS dashboard,
+                       :all OR public.access_share_request_allowed(a.organization_id, :m, a.workspace_id, false, true) AS files
                   FROM public.automations a
                   JOIN public.workspaces w ON w.organization_id = a.organization_id AND w.workspace_id = a.workspace_id AND w.status = 1
-                 WHERE a.organization_id = :org AND a.status = 1
-                 ORDER BY w.name, w.workspace_id, a.name, a.automation_id
-                """).param("org", org).query((rs, n) -> {
+                 WHERE a.organization_id = :org AND a.status = 1) o
+                 WHERE o.dashboard OR o.files
+                 ORDER BY o.workspace_name, o.workspace_id, o.name, o.automation_id
+                """).param("org", org).param("m", membership).param("all", all).query((rs, n) -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("automationId", rs.getObject("automation_id", UUID.class).toString());
                     m.put("name", rs.getString("name"));
                     m.put("workspaceId", rs.getObject("workspace_id", UUID.class).toString());
                     m.put("workspaceName", rs.getString("workspace_name"));
                     m.put("machines", Json.parse(rs.getString("machines")));
+                    m.put("canShareDashboard", rs.getBoolean("dashboard"));
+                    m.put("canShareFiles", rs.getBoolean("files"));
                     return m;
                 }).list();
+    }
+
+    /** Pedidos de compartilhamento com os nomes (automacao, ambiente, maquina, quem pediu, quem decidiu). */
+    static List<Map<String, Object>> shareRequestItems(JdbcClient j, UUID org, List<com.nekkora.platform.admin.ShareRequestService.ShareRequest> items) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (com.nekkora.platform.admin.ShareRequestService.ShareRequest r : items) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("shareRequestId", r.shareRequestId().toString());
+            m.put("status", r.status());
+            m.put("recipientName", r.recipientName());
+            m.put("email", r.email());
+            j.sql("""
+                    SELECT a.name, w.name, k.name, ru.display_name, du.display_name
+                      FROM public.client_share_requests q
+                      JOIN public.automations a ON a.organization_id = q.organization_id AND a.automation_id = q.automation_id
+                      JOIN public.workspaces w ON w.organization_id = q.organization_id AND w.workspace_id = q.workspace_id
+                      LEFT JOIN public.workers k ON k.organization_id = q.organization_id AND k.worker_id = q.worker_id
+                      JOIN public.organization_memberships rm ON rm.organization_id = q.organization_id AND rm.membership_id = q.requested_by_membership_id
+                      JOIN public.users ru ON ru.organization_id = q.organization_id AND ru.user_id = rm.user_id
+                      LEFT JOIN public.organization_memberships dm ON dm.organization_id = q.organization_id AND dm.membership_id = q.decided_by_membership_id
+                      LEFT JOIN public.users du ON du.organization_id = q.organization_id AND du.user_id = dm.user_id
+                     WHERE q.organization_id = :org AND q.share_request_id = :r
+                    """).param("org", org).param("r", r.shareRequestId()).query((rs, n) -> {
+                        m.put("automation", ref("automationId", r.automationId(), rs.getString(1)));
+                        m.put("workspace", ref("workspaceId", r.workspaceId(), rs.getString(2)));
+                        m.put("machine", r.workerId() == null ? null : ref("workerId", r.workerId(), rs.getString(3)));
+                        m.put("requestedBy", rs.getString(4));
+                        m.put("decidedBy", rs.getString(5));
+                        return null;
+                    }).list();
+            m.put("canViewDashboard", r.canViewDashboard());
+            m.put("canDownloadResults", r.canDownloadResults());
+            m.put("requestedByMembershipId", r.requestedByMembershipId().toString());
+            m.put("createdAt", r.createdAt());
+            m.put("decidedAt", r.decidedAt());
+            m.put("invitationId", r.invitationId() == null ? null : r.invitationId().toString());
+            out.add(m);
+        }
+        return out;
     }
 
     // ------------------------------------------------------------------ concessoes de um vinculo
@@ -77,13 +124,13 @@ final class ClientAccessReads {
     /** As duas especies numa forma so. Parametro :org. */
     private static final String GRANTS_UNION = """
             SELECT 'automation' AS kind, g.grant_id AS id, CASE g.status WHEN 1 THEN 'pending' WHEN 2 THEN 'active' ELSE 'revoked' END AS situation,
-                   g.created_at, g.client_membership_id, g.client_id, g.workspace_id, g.automation_id, g.worker_id, g.can_read_logs,
+                   g.created_at, g.client_membership_id, g.client_id, g.workspace_id, g.automation_id, g.worker_id, g.can_view_dashboard,
                    g.can_download_results, g.basis, g.requested_by_membership_id, g.approved_by_membership_id, g.approved_at, g.revoked_at,
                    g.revoke_reason, g.replaces_grant_id, NULL::timestamptz AS expires_at, NULL::timestamptz AS next_review_at
               FROM public.client_automation_grants g WHERE g.organization_id = :org
             UNION ALL
             SELECT 'workspace', g.grant_id, CASE g.status WHEN 1 THEN 'pending' WHEN 2 THEN 'active' WHEN 3 THEN 'suspended' ELSE 'revoked' END,
-                   g.created_at, g.client_membership_id, g.client_id, g.workspace_id, NULL::uuid, NULL::uuid, false, false, 1::smallint,
+                   g.created_at, g.client_membership_id, g.client_id, g.workspace_id, NULL::uuid, NULL::uuid, true, false, 1::smallint,
                    g.requested_by_membership_id, g.approved_by_membership_id, g.approved_at, g.revoked_at, NULL::smallint, NULL::uuid,
                    g.expires_at, g.next_review_at
               FROM public.client_workspace_grants g WHERE g.organization_id = :org
@@ -172,7 +219,7 @@ final class ClientAccessReads {
         m.put("automation", automation ? ref("automationId", rs.getObject("automation_id", UUID.class), rs.getString("automation_name")) : null);
         UUID worker = rs.getObject("worker_id", UUID.class);
         m.put("machine", worker == null ? null : ref("workerId", worker, rs.getString("worker_name")));
-        m.put("canReadLogs", rs.getBoolean("can_read_logs"));
+        m.put("canViewDashboard", rs.getBoolean("can_view_dashboard"));
         m.put("canDownloadResults", rs.getBoolean("can_download_results"));
         m.put("basis", automation ? (rs.getShort("basis") == 2 ? "client_invitation" : "second_person") : "second_person");
         m.put("requestedBy", rs.getString("requested_by_name"));
@@ -209,9 +256,11 @@ final class ClientAccessReads {
                 SELECT e.event_id, e.event_type, e.created_at, e.actor_user_id, e.actor_identity_id IS NOT NULL AS by_identity, e.target_user_id,
                        r.code AS role, pr.code AS previous_role, coalesce(e.workspace_id, cwg.workspace_id) AS workspace_id,
                        coalesce(e.client_id, cwg.client_id) AS client_id, e.automation_id, e.worker_id, e.invitation_id,
-                       e.grant_id, e.automation_grant_id, e.decision, e.can_read_logs, e.can_download_results, e.grant_exception, e.correlation_id,
+                       e.grant_id, e.automation_grant_id, e.decision, e.can_read_logs, e.can_download_results, e.can_view_dashboard, e.share_request_id,
+                       e.grant_exception, e.correlation_id, sr.recipient_name AS share_name, sr.email_normalized AS share_email,
                        au.display_name AS actor_name, au.email AS actor_email, tu.display_name AS target_name,
-                       coalesce(tu.email, inv.email_normalized) AS target_email,
+                       coalesce(tu.email, inv.email_normalized, sr.email_normalized) AS target_email,
+                       coalesce(tu.display_name, inv.recipient_name, sr.recipient_name) AS target_display,
                        w.name AS workspace_name, c.name AS client_name, a.name AS automation_name, k.name AS worker_name
                   FROM public.access_events e
                   LEFT JOIN public.client_workspace_grants cwg ON cwg.organization_id = e.organization_id AND cwg.grant_id = e.grant_id
@@ -220,6 +269,7 @@ final class ClientAccessReads {
                   LEFT JOIN public.users au ON au.organization_id = e.organization_id AND au.user_id = e.actor_user_id
                   LEFT JOIN public.users tu ON tu.organization_id = e.organization_id AND tu.user_id = e.target_user_id
                   LEFT JOIN public.identity_invitations inv ON inv.organization_id = e.organization_id AND inv.invitation_id = e.invitation_id
+                  LEFT JOIN public.client_share_requests sr ON sr.organization_id = e.organization_id AND sr.share_request_id = e.share_request_id
                   LEFT JOIN public.workspaces w ON w.organization_id = e.organization_id AND w.workspace_id = coalesce(e.workspace_id, cwg.workspace_id)
                   LEFT JOIN public.clients c ON c.organization_id = e.organization_id AND c.client_id = coalesce(e.client_id, cwg.client_id)
                   LEFT JOIN public.automations a ON a.organization_id = e.organization_id AND a.automation_id = e.automation_id
@@ -227,7 +277,7 @@ final class ClientAccessReads {
                  WHERE e.organization_id = :org AND e.event_type IN (:types)
                 """);
         if (f.clientOnly()) {
-            sql.append(" AND coalesce(e.client_id, cwg.client_id) IS NOT NULL");
+            sql.append(" AND (coalesce(e.client_id, cwg.client_id) IS NOT NULL OR e.share_request_id IS NOT NULL)");
         }
         if (f.person() != null) {
             sql.append(" AND (e.target_user_id = :person OR e.actor_user_id = :person)");
@@ -281,7 +331,7 @@ final class ClientAccessReads {
             m.put("byInvitee", rs.getBoolean("by_identity"));
             UUID target = rs.getObject("target_user_id", UUID.class);
             m.put("target", target == null && rs.getString("target_email") == null ? null
-                    : person(target, rs.getString("target_name"), rs.getString("target_email")));
+                    : person(target, rs.getString("target_display"), rs.getString("target_email")));
             m.put("role", rs.getString("role"));
             m.put("previousRole", rs.getString("previous_role"));
             m.put("workspace", nullableRef("workspaceId", rs.getObject("workspace_id", UUID.class), rs.getString("workspace_name")));
@@ -295,8 +345,12 @@ final class ClientAccessReads {
             m.put("invitationId", inv == null ? null : inv.toString());
             Object d = rs.getObject("decision");
             m.put("decision", d == null ? null : GrantAdminService.Decision.values()[((Number) d).intValue() - 1].name());
-            m.put("canReadLogs", rs.getObject("can_read_logs"));
+            // 071: can_read_logs fica so no banco (historico); a resposta diz se o ato envolveu registros tecnicos (so os antigos)
+            m.put("technicalLogs", Boolean.TRUE.equals(rs.getObject("can_read_logs")));
+            m.put("canViewDashboard", rs.getObject("can_view_dashboard"));
             m.put("canDownloadResults", rs.getObject("can_download_results"));
+            UUID sr = rs.getObject("share_request_id", UUID.class);
+            m.put("shareRequestId", sr == null ? null : sr.toString());
             m.put("grantException", rs.getBoolean("grant_exception"));
             m.put("correlationId", rs.getObject("correlation_id", UUID.class).toString());
             return m;

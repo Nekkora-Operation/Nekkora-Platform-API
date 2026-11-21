@@ -16,7 +16,7 @@ import static com.nekkora.platform.admin.AccessActions.refuse;
 
 /**
  * Clientes e acessos de cliente (PLATFORM-FLUXO-002, 070), lado da administracao: cadastro de clientes, concessoes por automacao
- * e o vinculo de cliente. A concessao do convite de Cliente nasce SO no aceite (excecao a D-GRANT-1); tudo o que passa por aqui
+ * e o vinculo de cliente. Conteudos (071): dashboard de execucao e arquivos de retorno; registros tecnicos nao se compartilham. A concessao do convite de Cliente nasce SO no aceite (excecao a D-GRANT-1); tudo o que passa por aqui
  * segue a D-GRANT-1: o pedido nasce PENDENTE e so vale com a aprovacao de OUTRA pessoa, com step-up. Ampliar permissoes e um
  * pedido novo que substitui a concessao ativa na aprovacao; reduzir e revogar sao de uma pessoa. O banco (gatilho da 070)
  * confere de novo autoridade, segunda pessoa, escopo, so-reducao e transicoes. Auditoria em {@code access_events} (15..24).
@@ -29,7 +29,7 @@ public final class ClientAccessService {
     }
 
     public record AutomationGrant(UUID grantId, String status, String basis, UUID clientId, UUID clientMembershipId, UUID workspaceId,
-                                  UUID automationId, UUID workerId, boolean canReadLogs, boolean canDownloadResults, UUID replacesGrantId) {
+                                  UUID automationId, UUID workerId, boolean canViewDashboard, boolean canDownloadResults, UUID replacesGrantId) {
     }
 
     public record Membership(UUID clientMembershipId, UUID clientId, UUID userId, String status) {
@@ -99,7 +99,10 @@ public final class ClientAccessService {
      * substitui quando aprovado. Ja ha pedido pendente do mesmo escopo: 409 {@code pedido_pendente}.
      */
     public AutomationGrant requestGrant(UUID org, ValidSession actor, String token, UUID clientMembership, UUID automation, UUID worker,
-                                        boolean canReadLogs, boolean canDownloadResults) {
+                                        boolean canViewDashboard, boolean canDownloadResults) {
+        if (!canViewDashboard && !canDownloadResults) {
+            throw ApiException.invalid("conteudo");
+        }
         return actions.write(org, j -> {
             authorizeGrants(j, org, actor, token);
             Membership m = membership(j, org, clientMembership, true);
@@ -107,7 +110,7 @@ public final class ClientAccessService {
                 throw refuse(Failure.CONFLICT, "vinculo_indisponivel");
             }
             UUID workspace = InvitationService.requireClientScope(j, org,
-                    new InvitationService.ClientScope(m.clientId(), automation, worker, canReadLogs, canDownloadResults));
+                    new InvitationService.ClientScope(m.clientId(), automation, worker, canViewDashboard, canDownloadResults));
             Optional<AutomationGrant> active = j.sql("SELECT " + GRANT_COLUMNS + " FROM public.client_automation_grants WHERE organization_id = ? "
                             + "AND client_membership_id = ? AND automation_id = ? AND worker_id IS NOT DISTINCT FROM ? AND status IN (1, 2) ORDER BY status FOR UPDATE")
                     .param(org).param(clientMembership).param(automation).param(worker).query(ClientAccessService::grant).list().stream()
@@ -120,7 +123,7 @@ public final class ClientAccessService {
             UUID replaces = null;
             if (active.isPresent()) {
                 AutomationGrant g = active.get();
-                boolean widens = (canReadLogs && !g.canReadLogs()) || (canDownloadResults && !g.canDownloadResults());
+                boolean widens = (canViewDashboard && !g.canViewDashboard()) || (canDownloadResults && !g.canDownloadResults());
                 if (!widens) {
                     throw refuse(Failure.CONFLICT, "concessao_existente");
                 }
@@ -130,10 +133,10 @@ public final class ClientAccessService {
             try {
                 out = j.sql("""
                         INSERT INTO public.client_automation_grants (organization_id, client_id, client_membership_id, workspace_id, automation_id, worker_id,
-                            can_read_logs, can_download_results, status, basis, requested_by_membership_id, replaces_grant_id)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?)
+                            can_read_logs, can_view_dashboard, can_download_results, status, basis, requested_by_membership_id, replaces_grant_id)
+                        VALUES (?, ?, ?, ?, ?, ?, false, ?, ?, 1, 1, ?, ?)
                         RETURNING """ + " " + GRANT_COLUMNS).param(org).param(m.clientId()).param(clientMembership).param(workspace).param(automation)
-                        .param(worker).param(canReadLogs).param(canDownloadResults).param(actor.membershipId()).param(replaces)
+                        .param(worker).param(canViewDashboard).param(canDownloadResults).param(actor.membershipId()).param(replaces)
                         .query(ClientAccessService::grant).single();
             } catch (RuntimeException e) {
                 if ("23505".equals(DbErrors.sqlState(e))) {
@@ -183,21 +186,24 @@ public final class ClientAccessService {
     }
 
     /** Reducao das permissoes de uma concessao ATIVA (so desligar; ligar e outro pedido): uma pessoa, sem step-up. */
-    public AutomationGrant reduceGrant(UUID org, ValidSession actor, String token, UUID grant, boolean canReadLogs, boolean canDownloadResults) {
+    public AutomationGrant reduceGrant(UUID org, ValidSession actor, String token, UUID grant, boolean canViewDashboard, boolean canDownloadResults) {
         return actions.write(org, j -> {
             authorizeGrants(j, org, actor, token);
             AutomationGrant g = lockGrant(j, org, grant);
             if (!"ATIVA".equals(g.status())) {
                 throw refuse(Failure.CONFLICT, "concessao_nao_ativa");
             }
-            if ((canReadLogs && !g.canReadLogs()) || (canDownloadResults && !g.canDownloadResults())) {
+            if ((canViewDashboard && !g.canViewDashboard()) || (canDownloadResults && !g.canDownloadResults())) {
                 throw refuse(Failure.CONFLICT, "ampliacao_exige_pedido");
             }
-            if (canReadLogs == g.canReadLogs() && canDownloadResults == g.canDownloadResults()) {
+            if (!canViewDashboard && !canDownloadResults) {
+                throw ApiException.invalid("conteudo");   // sem conteudo nenhum e revogacao, nao reducao
+            }
+            if (canViewDashboard == g.canViewDashboard() && canDownloadResults == g.canDownloadResults()) {
                 return g;
             }
-            AutomationGrant out = j.sql("UPDATE public.client_automation_grants SET can_read_logs = ?, can_download_results = ? WHERE organization_id = ? "
-                            + "AND grant_id = ? RETURNING " + GRANT_COLUMNS).param(canReadLogs).param(canDownloadResults).param(org).param(grant)
+            AutomationGrant out = j.sql("UPDATE public.client_automation_grants SET can_view_dashboard = ?, can_download_results = ? WHERE organization_id = ? "
+                            + "AND grant_id = ? RETURNING " + GRANT_COLUMNS).param(canViewDashboard).param(canDownloadResults).param(org).param(grant)
                     .query(ClientAccessService::grant).single();
             audit(j, org, actor, AccessEvents.Type.CLIENTE_CONCESSAO_REDUZIDA, out, userOf(j, org, g.clientMembershipId()));
             return out;
@@ -301,7 +307,7 @@ public final class ClientAccessService {
     private void audit(JdbcClient j, UUID org, ValidSession actor, AccessEvents.Type type, AutomationGrant g, UUID targetUser) {
         events.record(j, org, AccessEvents.ClientEvent.of(type, actor.membershipId(), actor.userId(), g.clientId())
                 .target(targetUser, g.clientMembershipId())
-                .scope(g.workspaceId(), g.automationId(), g.workerId(), g.canReadLogs(), g.canDownloadResults()).grant(g.grantId()), AccessActions.correlation());
+                .scope(g.workspaceId(), g.automationId(), g.workerId(), g.canViewDashboard(), g.canDownloadResults()).grant(g.grantId()), AccessActions.correlation());
     }
 
     private static String name(String raw) {
@@ -340,7 +346,7 @@ public final class ClientAccessService {
     }
 
     static final String CLIENT_COLUMNS = "client_id, name, status, created_at, updated_at";
-    static final String GRANT_COLUMNS = "grant_id, status, basis, client_id, client_membership_id, workspace_id, automation_id, worker_id, can_read_logs,"
+    static final String GRANT_COLUMNS = "grant_id, status, basis, client_id, client_membership_id, workspace_id, automation_id, worker_id, can_view_dashboard,"
             + " can_download_results, replaces_grant_id";
 
     private static Client client(java.sql.ResultSet rs, int n) throws java.sql.SQLException {

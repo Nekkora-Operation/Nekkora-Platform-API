@@ -1249,6 +1249,26 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /api/v1/invitations/preview:
+    post:
+      tags: [Entrada geral (identidade)]
+      operationId: invitationPreview
+      x-estado: implementado (PLATFORM-FLUXO-002, 071; InvitationAcceptController)
+      summary: 'Primeiro acesso pelo link do convite: organizacao, nome e e-mail do convite aberto (pre-autenticacao)'
+      description: >
+        071. So com o token do link e a organizacao; convite aberto e no prazo, senao 404 unico. O cadastro usa o nome e o e-mail
+        para nao pedi-los de novo; nao confirma identidade (o e-mail continua confirmado pelo codigo e o aceite exige a identidade com
+        o mesmo e-mail verificado). Nada de conta, escopo ou quem convidou. Chaves nekkora.convites.enabled e
+        nekkora.entrada-geral.enabled: desligada, 404.
+      security: [ { preAuthCookie: [], csrfHeader: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/InvitationAcceptRequest' } } } }
+      responses:
+        '200': { description: 'Convite aberto', content: { application/json: { schema: { $ref: '#/components/schemas/InvitationPreview' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '403': { description: 'Origin/CSRF de pre-autenticacao invalido', content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { error: forbidden } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
   /api/v1/invitations/accept:
     post:
       tags: [Entrada geral (identidade)]
@@ -1852,12 +1872,14 @@ paths:
       tags: [Clientes e acessos]
       operationId: inviteClient
       x-estado: implementado (PLATFORM-FLUXO-002, 070; ClientAccessController; ClientAccessIT)
-      summary: 'Convite de Cliente para acompanhar UMA automacao (excecao a D-GRANT-1; so administradora, com step-up)'
+      summary: 'Compartilha UMA automacao com uma pessoa (nome e e-mail): convite de Cliente (excecao a D-GRANT-1; so administradora, com step-up)'
       description: >
-        Exige org.manage E external_access.manage e step-up. O envio nao concede nada: no aceite (pela identidade global) o
-        servidor reconfere identidade, convite, autoridade de quem convidou e escopo, e so entao cria ou reutiliza a conta e o
-        vinculo de cliente e a concessao (base CONVITE_DE_CLIENTE). Maquina nula = todas as maquinas desta automacao. Registros e
-        resultados sao permissoes explicitas. Auditado com grant_exception. 409: client_invitation_internal_member,
+        Exige org.manage E external_access.manage e step-up. 071: pede nome e e-mail, a automacao, os conteudos (dashboard de
+        execucao e/ou arquivos de retorno; registros tecnicos nao se compartilham: canReadLogs true e 400) e, opcional, a maquina e
+        um cliente cadastrado; sem cliente, o cliente interno e criado ou reutilizado. O envio nao concede nada: no aceite (pela
+        identidade global) o servidor reconfere identidade, convite, autoridade de quem convidou e escopo, e so entao cria ou
+        reutiliza a conta e o vinculo de cliente e a concessao (base CONVITE_DE_CLIENTE). Maquina nula = todas as maquinas desta
+        automacao. Auditado com grant_exception. 409: client_invitation_internal_member,
         client_invitation_legacy_account, client_invitation_other_client, client_grant_exists, client_scope_unavailable; conflict
         sem motivo: convite pendente para o e-mail.
       security: [ { sessionCookie: [], csrfHeader: [] } ]
@@ -1907,13 +1929,97 @@ paths:
       tags: [Clientes e acessos]
       operationId: listClientShareOptions
       x-estado: implementado (PLATFORM-FLUXO-002, 070)
-      summary: 'Automacoes compartilhaveis (ativas, em ambiente ativo) com as maquinas desta automacao (external_access.manage)'
+      summary: 'Automacoes compartilhaveis com as maquinas desta automacao: administradora, todas (mode invite); membro com client_share.request, as dos ambientes dele e os conteudos que ele pode ver (mode request); sem nenhuma, 403'
       security: [ { sessionCookie: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' } ]
       responses:
         '200': { description: 'Opcoes', content: { application/json: { schema: { $ref: '#/components/schemas/ClientShareOptions' } } } }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /api/v1/o/{org}/client-share-requests:
+    post:
+      tags: [Clientes e acessos]
+      operationId: requestClientShare
+      x-estado: implementado (PLATFORM-FLUXO-002, 071; ShareRequestService)
+      summary: 'Pedido de compartilhamento de um membro (client_share.request no ambiente): nao concede nem envia nada ate outra pessoa aprovar'
+      description: >
+        071. Quem tem client_share.request no ambiente da automacao (WORKSPACE_ADMIN) pede o compartilhamento com uma pessoa (nome e
+        e-mail), so com os conteudos que ele mesmo pode ver (dashboard: automation.read; arquivos de retorno: logs.read). Sem
+        step-up. Outra pessoa com org.manage e external_access.manage aprova (com step-up) e o convite sai na aprovacao; a excecao da
+        administradora nao se estende ao pedido. 403 sem a permissao; 409 como no convite de Cliente e client_grant_exists (pedido
+        igual pendente).
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ClientShareRequestBody' } } } }
+      responses:
+        '201': { description: 'Pedido', content: { application/json: { schema: { $ref: '#/components/schemas/ClientShareRequest' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    get:
+      tags: [Clientes e acessos]
+      operationId: listClientShareRequests
+      x-estado: implementado (PLATFORM-FLUXO-002, 071)
+      summary: 'Pedidos de compartilhamento: external_access.manage ve todos; os demais, so os proprios (ate 200, do mais recente)'
+      security: [ { sessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: automationId, in: query, schema: { type: string, format: uuid } }, { name: pendingOnly, in: query, schema: { type: boolean } } ]
+      responses:
+        '200': { description: 'Pedidos', content: { application/json: { schema: { $ref: '#/components/schemas/ClientShareRequestList' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /api/v1/o/{org}/client-share-requests/{request}/approve:
+    post:
+      tags: [Clientes e acessos]
+      operationId: approveClientShare
+      x-estado: implementado (PLATFORM-FLUXO-002, 071)
+      summary: 'Aprova o pedido (outra pessoa com org.manage e external_access.manage, step-up) e emite o convite no mesmo ato'
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: request, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200': { description: 'Aprovado; convite emitido', content: { application/json: { schema: { $ref: '#/components/schemas/ClientShareRequestState' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /api/v1/o/{org}/client-share-requests/{request}/refuse:
+    post:
+      tags: [Clientes e acessos]
+      operationId: refuseClientShare
+      x-estado: implementado (PLATFORM-FLUXO-002, 071)
+      summary: 'Recusa o pedido (outra pessoa com org.manage e external_access.manage); nada e enviado'
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: request, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200': { description: 'Recusado', content: { application/json: { schema: { $ref: '#/components/schemas/ClientShareRequestState' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /api/v1/o/{org}/client-share-requests/{request}/cancel:
+    post:
+      tags: [Clientes e acessos]
+      operationId: cancelClientShare
+      x-estado: implementado (PLATFORM-FLUXO-002, 071)
+      summary: 'Cancela o proprio pedido pendente (so quem pediu)'
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: request, in: path, required: true, schema: { type: string, format: uuid } } ]
+      responses:
+        '200': { description: 'Cancelado', content: { application/json: { schema: { $ref: '#/components/schemas/ClientShareRequestState' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /api/v1/o/{org}/client-automation-grants:
@@ -1959,7 +2065,7 @@ paths:
       tags: [Clientes e acessos]
       operationId: reduceClientAutomationGrant
       x-estado: implementado (PLATFORM-FLUXO-002, 070)
-      summary: 'Desliga registros e/ou resultados de uma concessao ativa (so reduz; ligar: 409 client_grant_widening_requires_request)'
+      summary: 'Desliga o dashboard e/ou os arquivos de retorno de uma concessao ativa (so reduz; ligar: 409 client_grant_widening_requires_request; os dois desligados: 400, use revoke)'
       security: [ { sessionCookie: [], csrfHeader: [] } ]
       parameters: [ { $ref: '#/components/parameters/Org' }, { name: grant, in: path, required: true, schema: { type: string, format: uuid } } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ClientAutomationGrantReduceRequest' } } } }
@@ -3192,14 +3298,30 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
+  /portal/api/v1/o/{org}/shared-automations/{automation}/summary:
+    get:
+      tags: [Area do cliente]
+      operationId: portalSharedSummary
+      summary: 'Dashboard: contagem por estado no periodo (padrao: 30 dias; maximo 400) de uma automacao compartilhada com dashboard'
+      description: 'Area do cliente (070/071): somente GET; sessao de IDENTIDADE (__Host-nekkora_id), conferida a cada chamada junto com a conta e o vinculo de cliente e as concessoes vigentes e o conteudo pedido (dashboard ou arquivos de retorno; registros tecnicos nao existem aqui). 401: sessao invalida; 403: sem vinculo de cliente vigente ou sem aquele conteudo; 404: fora do escopo (igual a inexistente).'
+      security: [ { identitySessionCookie: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: automation, in: path, required: true, schema: { type: string, format: uuid } }, { name: from, in: query, schema: { type: string, format: date-time } }, { name: to, in: query, schema: { type: string, format: date-time } } ]
+      responses:
+        '200': { description: 'Resumo', content: { application/json: { schema: { $ref: '#/components/schemas/PortalSharedSummary' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
   /portal/api/v1/o/{org}/shared-automations/{automation}/executions:
     get:
       tags: [Area do cliente]
       operationId: portalSharedExecutions
-      summary: 'Execucoes de uma automacao compartilhada (so as maquinas concedidas), da mais recente; cursor opaco'
-      description: 'Area do cliente (070): somente GET; sessao de IDENTIDADE (__Host-nekkora_id), conferida a cada chamada junto com a conta e o vinculo de cliente e as concessoes vigentes. 401: sessao invalida; 403: sem vinculo de cliente vigente (ou sem a permissao pedida); 404: fora do escopo (igual a inexistente).'
+      summary: 'Dashboard: execucoes de uma automacao compartilhada com dashboard (so as maquinas concedidas), no periodo, da mais recente; estado em linguagem simples, sem maquina nem detalhe tecnico'
+      description: 'Area do cliente (070/071): somente GET; sessao de IDENTIDADE (__Host-nekkora_id), conferida a cada chamada junto com a conta e o vinculo de cliente e as concessoes vigentes e o conteudo pedido (dashboard ou arquivos de retorno; registros tecnicos nao existem aqui). 401: sessao invalida; 403: sem vinculo de cliente vigente ou sem aquele conteudo; 404: fora do escopo (igual a inexistente).'
       security: [ { identitySessionCookie: [] } ]
-      parameters: [ { $ref: '#/components/parameters/Org' }, { name: automation, in: path, required: true, schema: { type: string, format: uuid } }, { name: cursor, in: query, schema: { type: string } }, { $ref: '#/components/parameters/Limit' } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: automation, in: path, required: true, schema: { type: string, format: uuid } }, { name: from, in: query, schema: { type: string, format: date-time } }, { name: to, in: query, schema: { type: string, format: date-time } }, { name: cursor, in: query, schema: { type: string } }, { $ref: '#/components/parameters/Limit' } ]
       responses:
         '200': { description: 'Pagina', content: { application/json: { schema: { $ref: '#/components/schemas/PortalSharedExecutionPage' } } } }
         '400': { $ref: '#/components/responses/InvalidRequest' }
@@ -3208,60 +3330,30 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
-  /portal/api/v1/o/{org}/shared-executions/{kind}/{id}:
+  /portal/api/v1/o/{org}/shared-files:
     get:
       tags: [Area do cliente]
-      operationId: portalSharedExecution
-      summary: 'Detalhe de uma execucao no escopo; tentativas remotas so nas maquinas concedidas, com as permissoes de cada uma'
-      description: 'Area do cliente (070): somente GET; sessao de IDENTIDADE (__Host-nekkora_id), conferida a cada chamada junto com a conta e o vinculo de cliente e as concessoes vigentes. 401: sessao invalida; 403: sem vinculo de cliente vigente (ou sem a permissao pedida); 404: fora do escopo (igual a inexistente).'
+      operationId: portalSharedFiles
+      summary: 'Arquivos de retorno autorizados (todas as automacoes com arquivos, ou uma), pelo periodo da execucao e busca no nome; da execucao mais recente'
+      description: 'Area do cliente (070/071): somente GET; sessao de IDENTIDADE (__Host-nekkora_id), conferida a cada chamada junto com a conta e o vinculo de cliente e as concessoes vigentes e o conteudo pedido (dashboard ou arquivos de retorno; registros tecnicos nao existem aqui). 401: sessao invalida; 403: sem vinculo de cliente vigente ou sem aquele conteudo; 404: fora do escopo (igual a inexistente).'
       security: [ { identitySessionCookie: [] } ]
-      parameters: [ { $ref: '#/components/parameters/Org' }, { name: kind, in: path, required: true, schema: { $ref: '#/components/schemas/PortalExecutionKind' } }, { name: id, in: path, required: true, schema: { type: string, format: uuid } } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: automationId, in: query, schema: { type: string, format: uuid } }, { name: from, in: query, schema: { type: string, format: date-time } }, { name: to, in: query, schema: { type: string, format: date-time } }, { name: q, in: query, schema: { type: string, maxLength: 100 } }, { name: cursor, in: query, schema: { type: string } }, { $ref: '#/components/parameters/Limit' } ]
       responses:
-        '200': { description: 'Execucao', content: { application/json: { schema: { $ref: '#/components/schemas/PortalSharedExecutionDetail' } } } }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '429': { $ref: '#/components/responses/RateLimited' }
-
-  /portal/api/v1/o/{org}/shared-executions/remote/{id}/attempts/{attempt}/logs:
-    get:
-      tags: [Area do cliente]
-      operationId: portalSharedLogs
-      summary: 'Registros de uma tentativa (so com a permissao de registros)'
-      description: 'Area do cliente (070): somente GET; sessao de IDENTIDADE (__Host-nekkora_id), conferida a cada chamada junto com a conta e o vinculo de cliente e as concessoes vigentes. 401: sessao invalida; 403: sem vinculo de cliente vigente (ou sem a permissao pedida); 404: fora do escopo (igual a inexistente).'
-      security: [ { identitySessionCookie: [] } ]
-      parameters: [ { $ref: '#/components/parameters/Org' }, { name: id, in: path, required: true, schema: { type: string, format: uuid } }, { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }, { name: after, in: query, schema: { type: integer, minimum: 0 } }, { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500 } } ]
-      responses:
-        '200': { description: 'Registros', content: { application/json: { schema: { $ref: '#/components/schemas/PortalSharedLogs' } } } }
+        '200': { description: 'Pagina', content: { application/json: { schema: { $ref: '#/components/schemas/PortalSharedFilePage' } } } }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
-  /portal/api/v1/o/{org}/shared-executions/remote/{id}/attempts/{attempt}/results:
+  /portal/api/v1/o/{org}/shared-files/{attempt}/{number}/content:
     get:
       tags: [Area do cliente]
-      operationId: portalSharedResults
-      summary: 'Arquivos de resultado de uma tentativa (so com a permissao de resultados)'
-      description: 'Area do cliente (070): somente GET; sessao de IDENTIDADE (__Host-nekkora_id), conferida a cada chamada junto com a conta e o vinculo de cliente e as concessoes vigentes. 401: sessao invalida; 403: sem vinculo de cliente vigente (ou sem a permissao pedida); 404: fora do escopo (igual a inexistente).'
+      operationId: portalSharedFileContent
+      summary: 'Bytes de um arquivo de retorno, sempre como anexo (application/octet-stream, nosniff); a tela "Visualizar" mostra o conteudo na propria pagina'
+      description: 'Area do cliente (070/071): somente GET; sessao de IDENTIDADE (__Host-nekkora_id), conferida a cada chamada junto com a conta e o vinculo de cliente e as concessoes vigentes e o conteudo pedido (dashboard ou arquivos de retorno; registros tecnicos nao existem aqui). 401: sessao invalida; 403: sem vinculo de cliente vigente ou sem aquele conteudo; 404: fora do escopo (igual a inexistente).'
       security: [ { identitySessionCookie: [] } ]
-      parameters: [ { $ref: '#/components/parameters/Org' }, { name: id, in: path, required: true, schema: { type: string, format: uuid } }, { name: attempt, in: path, required: true, schema: { type: string, format: uuid } } ]
-      responses:
-        '200': { description: 'Resultados', content: { application/json: { schema: { $ref: '#/components/schemas/PortalSharedResults' } } } }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '429': { $ref: '#/components/responses/RateLimited' }
-
-  /portal/api/v1/o/{org}/shared-executions/remote/{id}/attempts/{attempt}/results/{number}/content:
-    get:
-      tags: [Area do cliente]
-      operationId: portalSharedResultContent
-      summary: 'Bytes de um arquivo de resultado, como anexo (so com a permissao de resultados)'
-      description: 'Area do cliente (070): somente GET; sessao de IDENTIDADE (__Host-nekkora_id), conferida a cada chamada junto com a conta e o vinculo de cliente e as concessoes vigentes. 401: sessao invalida; 403: sem vinculo de cliente vigente (ou sem a permissao pedida); 404: fora do escopo (igual a inexistente).'
-      security: [ { identitySessionCookie: [] } ]
-      parameters: [ { $ref: '#/components/parameters/Org' }, { name: id, in: path, required: true, schema: { type: string, format: uuid } }, { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }, { name: number, in: path, required: true, schema: { type: integer, minimum: 1 } } ]
+      parameters: [ { $ref: '#/components/parameters/Org' }, { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }, { name: number, in: path, required: true, schema: { type: integer, minimum: 1 } } ]
       responses:
         '200': { description: 'Arquivo', content: { application/octet-stream: { schema: { type: string, format: binary } } } }
         '401': { $ref: '#/components/responses/Unauthenticated' }
@@ -4442,10 +4534,10 @@ components:
       required: [error]
       properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, license_already_assigned, automation_already_licensed, license_not_valid, license_automation_archived, license_ended, license_period_overlaps, license_period_already_ended, license_model_unchanged, license_preview_changed, license_required, license_expired, run_not_covered, capacity_pending_limit_reached, license_not_assigned, license_transfer_same_automation, license_transfer_work_in_progress, organization_responsible_not_found, organization_responsible_is_client, previous_agent_session_has_outcome, previous_agent_session_already_reconciled, license_transfer_requester_not_admin, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_machine_unconfirmed, remote_machine_finishing, remote_previous_processes_pending, remote_previous_result_unconfirmed, remote_attempt_not_unconfirmed, remote_attempt_already_reconciled, remote_requirements_not_declared, remote_requirements_conflict, remote_package_not_supported, remote_package_not_registered, remote_python_not_selected, remote_python_not_in_inventory, remote_dependency_check_too_soon, remote_dependency_check_closed, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken, organization_creation_client_profile, organization_creation_requires_request, empty_organization_limit_reached, organization_request_not_available, organization_request_not_pending, organization_request_own, organization_request_approver_without_identity, organization_request_responsible_not_eligible, organization_not_responsible, organization_work_in_progress, organization_blocked_by_nekkora, organization_state_conflict, license_unavailable, activation_worker_not_in_workspace, activation_automation_inactive, activation_without_workers, activation_renewal_not_applicable, client_invitation_internal_member, client_invitation_legacy_account, client_invitation_other_client, client_grant_exists, client_scope_unavailable, client_grant_widening_requires_request], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). Cliente que nao o conhece trata o codigo como sempre' } }
     WorkspacePermissionCode:
-      description: 'Permissoes de workspace (13): podem aparecer em allWorkspaces e em atribuicoes de workspace.'
+      description: 'Permissoes de workspace (14): podem aparecer em allWorkspaces e em atribuicoes de workspace. client_share.request (071): pedir compartilhamento com pessoa externa (WORKSPACE_ADMIN).'
       type: string
       enum: [workspace.configure, role.assign_operator_viewer, automation.read, automation.execute, logs.read,
-             automation.manage, automation.publish,
+             automation.manage, automation.publish, client_share.request,
              workspace_parameter.read, workspace_parameter.manage, workspace_secret.read, workspace_secret.manage,
              automation_schedule.read, automation_schedule.manage]
     OrganizationOnlyPermissionCode:
@@ -4511,42 +4603,94 @@ components:
         createdAt: { type: string, format: date-time }
     ClientInvitationRequest:
       type: object
-      required: [email, clientId, automationId, canReadLogs, canDownloadResults]
+      required: [email, name, automationId, canViewDashboard, canDownloadResults]
       properties:
         email: { type: string, maxLength: 254 }
-        clientId: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 200, description: '071: nome da pessoa (preenche o primeiro acesso)' }
+        clientId: { type: [string, 'null'], format: uuid, description: '071: opcional; sem ele, o cliente interno e criado ou reutilizado' }
         automationId: { type: string, format: uuid }
         workerId: { type: [string, 'null'], format: uuid, description: 'nulo = todas as maquinas desta automacao' }
-        canReadLogs: { type: boolean }
-        canDownloadResults: { type: boolean }
+        canViewDashboard: { type: boolean, description: 'dashboard de execucao (indicadores e estado em linguagem simples)' }
+        canDownloadResults: { type: boolean, description: 'arquivos de retorno (ver e baixar)' }
     ClientInvitationCreated:
       type: object
-      required: [invitationId, email, clientId, workspaceId, automationId, workerId, canReadLogs, canDownloadResults, expiresAt]
+      required: [invitationId, email, recipientName, clientId, workspaceId, automationId, workerId, canViewDashboard, canDownloadResults, shareRequestId, expiresAt]
       properties:
         invitationId: { type: string, format: uuid }
         email: { type: string }
+        recipientName: { type: string }
         clientId: { type: string, format: uuid }
         workspaceId: { type: string, format: uuid }
         automationId: { type: string, format: uuid }
         workerId: { type: [string, 'null'], format: uuid }
-        canReadLogs: { type: boolean }
+        canViewDashboard: { type: boolean }
         canDownloadResults: { type: boolean }
+        shareRequestId: { type: [string, 'null'], format: uuid }
         expiresAt: { type: string, format: date-time }
+    ClientShareRequestBody:
+      type: object
+      required: [email, name, automationId, canViewDashboard, canDownloadResults]
+      properties:
+        email: { type: string, maxLength: 254 }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        automationId: { type: string, format: uuid }
+        workerId: { type: [string, 'null'], format: uuid }
+        canViewDashboard: { type: boolean }
+        canDownloadResults: { type: boolean }
+    ClientShareRequestStatus: { type: string, enum: [PENDENTE, APROVADO, RECUSADO, CANCELADO] }
+    ClientShareRequestState:
+      type: object
+      required: [shareRequestId, status, recipientName, email, workspaceId, automationId, workerId, canViewDashboard, canDownloadResults, requestedByMembershipId, createdAt, decidedAt, invitationId]
+      properties:
+        shareRequestId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/ClientShareRequestStatus' }
+        recipientName: { type: string }
+        email: { type: string }
+        workspaceId: { type: string, format: uuid }
+        automationId: { type: string, format: uuid }
+        workerId: { type: [string, 'null'], format: uuid }
+        canViewDashboard: { type: boolean }
+        canDownloadResults: { type: boolean }
+        requestedByMembershipId: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        decidedAt: { type: [string, 'null'], format: date-time }
+        invitationId: { type: [string, 'null'], format: uuid, description: 'convite emitido na aprovacao' }
+    ClientShareRequest: { $ref: '#/components/schemas/ClientShareRequestState' }
+    ClientShareRequestItem:
+      type: object
+      required: [shareRequestId, status, recipientName, email, automation, workspace, machine, requestedBy, decidedBy, canViewDashboard, canDownloadResults, requestedByMembershipId, createdAt, decidedAt, invitationId]
+      properties:
+        shareRequestId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/ClientShareRequestStatus' }
+        recipientName: { type: string }
+        email: { type: string }
+        automation: { $ref: '#/components/schemas/AutomationRef' }
+        workspace: { $ref: '#/components/schemas/WorkspaceRef' }
+        machine: { oneOf: [ { $ref: '#/components/schemas/MachineRef' }, { type: 'null' } ] }
+        requestedBy: { type: string }
+        decidedBy: { type: [string, 'null'] }
+        canViewDashboard: { type: boolean }
+        canDownloadResults: { type: boolean }
+        requestedByMembershipId: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        decidedAt: { type: [string, 'null'], format: date-time }
+        invitationId: { type: [string, 'null'], format: uuid }
+    ClientShareRequestList: { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/ClientShareRequestItem' } } } }
     ClientCreateRequest: { type: object, required: [name], properties: { name: { type: string, minLength: 1, maxLength: 200 } } }
     ClientUpdateRequest: { type: object, properties: { name: { type: string, minLength: 1, maxLength: 200 }, status: { $ref: '#/components/schemas/ResourceStatus' } } }
     ClientAutomationGrantRequest:
       type: object
-      required: [clientMembershipId, automationId, canReadLogs, canDownloadResults]
+      required: [clientMembershipId, automationId, canViewDashboard, canDownloadResults]
       properties:
         clientMembershipId: { type: string, format: uuid }
         automationId: { type: string, format: uuid }
         workerId: { type: [string, 'null'], format: uuid }
-        canReadLogs: { type: boolean }
+        canViewDashboard: { type: boolean }
         canDownloadResults: { type: boolean }
-    ClientAutomationGrantReduceRequest: { type: object, required: [canReadLogs, canDownloadResults], properties: { canReadLogs: { type: boolean }, canDownloadResults: { type: boolean } } }
+    ClientAutomationGrantReduceRequest: { type: object, required: [canViewDashboard, canDownloadResults], properties: { canViewDashboard: { type: boolean }, canDownloadResults: { type: boolean } } }
     ClientAutomationGrant:
       type: object
-      required: [grantId, status, basis, clientId, clientMembershipId, workspaceId, automationId, workerId, canReadLogs, canDownloadResults, replacesGrantId]
+      required: [grantId, status, basis, clientId, clientMembershipId, workspaceId, automationId, workerId, canViewDashboard, canDownloadResults, replacesGrantId]
       properties:
         grantId: { type: string, format: uuid }
         status: { type: string, enum: [PENDENTE, ATIVA, REVOGADA] }
@@ -4556,7 +4700,7 @@ components:
         workspaceId: { type: string, format: uuid }
         automationId: { type: string, format: uuid }
         workerId: { type: [string, 'null'], format: uuid }
-        canReadLogs: { type: boolean }
+        canViewDashboard: { type: boolean }
         canDownloadResults: { type: boolean }
         replacesGrantId: { type: [string, 'null'], format: uuid }
     ClientMembershipState:
@@ -4571,14 +4715,21 @@ components:
     ShareMachine: { type: object, required: [workerId, name], properties: { workerId: { type: string, format: uuid }, name: { type: string } } }
     ClientShareOption:
       type: object
-      required: [automationId, name, workspaceId, workspaceName, machines]
+      required: [automationId, name, workspaceId, workspaceName, machines, canShareDashboard, canShareFiles]
       properties:
         automationId: { type: string, format: uuid }
         name: { type: string }
         workspaceId: { type: string, format: uuid }
         workspaceName: { type: string }
         machines: { type: array, items: { $ref: '#/components/schemas/ShareMachine' }, description: 'maquinas desta automacao (ativacao), ativas e autorizadas no ambiente' }
-    ClientShareOptions: { type: object, required: [automations], properties: { automations: { type: array, items: { $ref: '#/components/schemas/ClientShareOption' } } } }
+        canShareDashboard: { type: boolean, description: '071: quem consulta pode compartilhar o dashboard desta automacao' }
+        canShareFiles: { type: boolean, description: '071: quem consulta pode compartilhar os arquivos de retorno desta automacao' }
+    ClientShareOptions:
+      type: object
+      required: [automations, mode]
+      properties:
+        automations: { type: array, items: { $ref: '#/components/schemas/ClientShareOption' } }
+        mode: { type: string, enum: [invite, request], description: '071: invite = convite direto (administradora); request = pedido que outra pessoa aprova' }
     AccessPerson:
       type: object
       required: [userId, name, email]
@@ -4591,7 +4742,7 @@ components:
     AccessGrantSituation: { type: string, enum: [pending, active, suspended, revoked] }
     AccessGrant:
       type: object
-      required: [kind, grantId, situation, person, clientMembershipId, membershipStatus, client, workspace, automation, machine, canReadLogs, canDownloadResults, basis, requestedBy, approvedBy, createdAt, approvedAt, revokedAt, revokeReason, replacesGrantId, expiresAt, nextReviewAt]
+      required: [kind, grantId, situation, person, clientMembershipId, membershipStatus, client, workspace, automation, machine, canViewDashboard, canDownloadResults, basis, requestedBy, approvedBy, createdAt, approvedAt, revokedAt, revokeReason, replacesGrantId, expiresAt, nextReviewAt]
       properties:
         kind: { type: string, enum: [automation, workspace], description: 'automation (070) ou workspace (ambiente inteiro, 003)' }
         grantId: { type: string, format: uuid }
@@ -4603,7 +4754,7 @@ components:
         workspace: { $ref: '#/components/schemas/WorkspaceRef' }
         automation: { oneOf: [ { $ref: '#/components/schemas/AutomationRef' }, { type: 'null' } ] }
         machine: { oneOf: [ { $ref: '#/components/schemas/MachineRef' }, { type: 'null' } ] }
-        canReadLogs: { type: boolean }
+        canViewDashboard: { type: boolean, description: 'por ambiente inteiro (modelo anterior): sempre true' }
         canDownloadResults: { type: boolean }
         basis: { type: string, enum: [second_person, client_invitation] }
         requestedBy: { type: [string, 'null'] }
@@ -4616,16 +4767,16 @@ components:
         expiresAt: { type: [string, 'null'], format: date-time }
         nextReviewAt: { type: [string, 'null'], format: date-time }
     AccessGrantPage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/AccessGrant' } }, nextCursor: { type: [string, 'null'] } } }
-    AccessHistoryCategory: { type: string, enum: [invitations, roles, grants, client_links, clients] }
+    AccessHistoryCategory: { type: string, enum: [invitations, roles, grants, client_links, clients, share_requests] }
     AccessHistoryEvent:
       type: object
-      required: [eventId, type, category, createdAt, actor, byInvitee, target, role, previousRole, workspace, client, automation, machine, grant, invitationId, decision, canReadLogs, canDownloadResults, grantException, correlationId]
+      required: [eventId, type, category, createdAt, actor, byInvitee, target, role, previousRole, workspace, client, automation, machine, grant, invitationId, decision, technicalLogs, canViewDashboard, canDownloadResults, shareRequestId, grantException, correlationId]
       properties:
         eventId: { type: string, format: uuid }
-        type: { type: string, enum: [CONVITE_EMITIDO, CONVITE_REVOGADO, CONVITE_REENVIADO, CONVITE_ACEITO, PAPEL_ATRIBUIDO, PAPEL_REVOGADO, PAPEL_ALTERADO, VINCULO_RETIRADO, CONCESSAO_CRIADA, CONCESSAO_APROVADA, CONCESSAO_RENOVADA, CONCESSAO_REVISADA, CONCESSAO_REVOGADA, CONCESSAO_RENOVACAO_SOLICITADA, CLIENTE_CONCESSAO_SOLICITADA, CLIENTE_CONCESSAO_APROVADA, CLIENTE_CONCESSAO_APLICADA_NO_ACEITE, CLIENTE_CONCESSAO_REDUZIDA, CLIENTE_CONCESSAO_REVOGADA, VINCULO_CLIENTE_SUSPENSO, VINCULO_CLIENTE_REATIVADO, VINCULO_CLIENTE_RETIRADO, CLIENTE_CADASTRADO, CLIENTE_ALTERADO] }
+        type: { type: string, enum: [CONVITE_EMITIDO, CONVITE_REVOGADO, CONVITE_REENVIADO, CONVITE_ACEITO, PAPEL_ATRIBUIDO, PAPEL_REVOGADO, PAPEL_ALTERADO, VINCULO_RETIRADO, CONCESSAO_CRIADA, CONCESSAO_APROVADA, CONCESSAO_RENOVADA, CONCESSAO_REVISADA, CONCESSAO_REVOGADA, CONCESSAO_RENOVACAO_SOLICITADA, CLIENTE_CONCESSAO_SOLICITADA, CLIENTE_CONCESSAO_APROVADA, CLIENTE_CONCESSAO_APLICADA_NO_ACEITE, CLIENTE_CONCESSAO_REDUZIDA, CLIENTE_CONCESSAO_REVOGADA, VINCULO_CLIENTE_SUSPENSO, VINCULO_CLIENTE_REATIVADO, VINCULO_CLIENTE_RETIRADO, CLIENTE_CADASTRADO, CLIENTE_ALTERADO, CLIENTE_REGISTROS_TECNICOS_RETIRADOS, COMPARTILHAMENTO_SOLICITADO, COMPARTILHAMENTO_APROVADO, COMPARTILHAMENTO_RECUSADO, COMPARTILHAMENTO_CANCELADO] }
         category: { $ref: '#/components/schemas/AccessHistoryCategory' }
         createdAt: { type: string, format: date-time }
-        actor: { oneOf: [ { $ref: '#/components/schemas/AccessPerson' }, { type: 'null' } ], description: 'responsavel (nulo quando foi a propria pessoa convidada: byInvitee)' }
+        actor: { oneOf: [ { $ref: '#/components/schemas/AccessPerson' }, { type: 'null' } ], description: 'responsavel (nulo quando foi a propria pessoa convidada: byInvitee; ou ato do sistema: CLIENTE_REGISTROS_TECNICOS_RETIRADOS, 071)' }
         byInvitee: { type: boolean }
         target: { oneOf: [ { $ref: '#/components/schemas/AccessPerson' }, { type: 'null' } ] }
         role: { type: [string, 'null'] }
@@ -4637,8 +4788,10 @@ components:
         grant: { oneOf: [ { type: object, required: [kind, grantId], properties: { kind: { type: string, enum: [automation, workspace] }, grantId: { type: string, format: uuid } } }, { type: 'null' } ] }
         invitationId: { type: [string, 'null'], format: uuid }
         decision: { type: [string, 'null'], enum: [KEEP, SUSPEND, REVOKE, null] }
-        canReadLogs: { type: [boolean, 'null'] }
+        technicalLogs: { type: boolean, description: '071: o ato (anterior a 071) envolvia registros tecnicos; o historico continua mostrando' }
+        canViewDashboard: { type: [boolean, 'null'] }
         canDownloadResults: { type: [boolean, 'null'] }
+        shareRequestId: { type: [string, 'null'], format: uuid }
         grantException: { type: boolean, description: 'o ato usou a excecao a D-GRANT-1 do convite de Cliente' }
         correlationId: { type: string, format: uuid }
     AccessHistoryPage:
@@ -4650,7 +4803,7 @@ components:
         scope: { type: string, enum: [all, client_access] }
     ClientGrantSummary:
       type: object
-      required: [kind, grantId, situation, automation, workspace, machine, canReadLogs, canDownloadResults, basis, createdAt]
+      required: [kind, grantId, situation, automation, workspace, machine, canViewDashboard, canDownloadResults, basis, createdAt]
       properties:
         kind: { type: string, enum: [automation, workspace] }
         grantId: { type: string, format: uuid }
@@ -4658,7 +4811,7 @@ components:
         automation: { oneOf: [ { $ref: '#/components/schemas/AutomationRef' }, { type: 'null' } ] }
         workspace: { $ref: '#/components/schemas/WorkspaceRef' }
         machine: { oneOf: [ { $ref: '#/components/schemas/MachineRef' }, { type: 'null' } ] }
-        canReadLogs: { type: boolean }
+        canViewDashboard: { type: boolean }
         canDownloadResults: { type: boolean }
         basis: { type: string, enum: [second_person, client_invitation] }
         createdAt: { type: string, format: date-time }
@@ -4700,7 +4853,7 @@ components:
         grants: { type: array, items: { $ref: '#/components/schemas/AccessGrant' }, description: 'concessoes que ainda contam (pedidos e ativas; por ambiente nao revogadas)' }
     PersonClientScope:
       type: object
-      required: [clientId, clientName, automationId, automationName, workspaceId, workspaceName, workerId, workerName, canReadLogs, canDownloadResults]
+      required: [clientId, clientName, automationId, automationName, workspaceId, workspaceName, workerId, workerName, canViewDashboard, canDownloadResults, recipientName, shareRequestId]
       properties:
         clientId: { type: string, format: uuid }
         clientName: { type: string }
@@ -4710,9 +4863,10 @@ components:
         workspaceName: { type: string }
         workerId: { type: [string, 'null'], format: uuid }
         workerName: { type: [string, 'null'] }
-        canReadLogs: { type: boolean }
+        canViewDashboard: { type: boolean }
         canDownloadResults: { type: boolean }
-    PortalExecutionKind: { type: string, enum: [platform, local_agent, local_request, remote] }
+        recipientName: { type: [string, 'null'], description: '071: nome informado no convite (nulo nos convites anteriores)' }
+        shareRequestId: { type: [string, 'null'], format: uuid, description: '071: pedido de membro aprovado que originou o convite' }
     PortalClientOrganization:
       type: object
       required: [organizationId, organizationName, clientName, sharedAutomations]
@@ -4722,90 +4876,68 @@ components:
         clientName: { type: string }
         sharedAutomations: { type: integer }
     PortalClientOrganizationList: { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/PortalClientOrganization' } } } }
+    PortalSharedDashboard:
+      type: object
+      required: [executionsLast30Days, succeededLast30Days, failedLast30Days, inProgress, lastRequestedAt, lastOutcome]
+      properties:
+        executionsLast30Days: { type: integer }
+        succeededLast30Days: { type: integer }
+        failedLast30Days: { type: integer }
+        inProgress: { type: integer }
+        lastRequestedAt: { type: [string, 'null'], format: date-time }
+        lastOutcome: { oneOf: [ { $ref: '#/components/schemas/PortalOutcome' }, { type: 'null' } ] }
+    PortalOutcome: { type: string, enum: [succeeded, failed, in_progress, cancelled, not_started, unconfirmed, no_error_signaled] }
     PortalSharedAutomation:
       type: object
-      required: [automationId, name, workspaceName, allMachines, machines, canReadLogs, canDownloadResults, executionsLast30Days, lastRequestedAt, lastOutcome, clientName]
+      required: [automationId, name, canViewDashboard, canDownloadResults, dashboard, filesAvailable, clientName]
       properties:
         automationId: { type: string, format: uuid }
         name: { type: string }
-        workspaceName: { type: string }
-        allMachines: { type: boolean }
-        machines: { type: array, items: { $ref: '#/components/schemas/ShareMachine' } }
-        canReadLogs: { type: boolean }
+        canViewDashboard: { type: boolean }
         canDownloadResults: { type: boolean }
-        executionsLast30Days: { type: integer }
-        lastRequestedAt: { type: [string, 'null'], format: date-time }
-        lastOutcome: { type: [string, 'null'] }
+        dashboard: { oneOf: [ { $ref: '#/components/schemas/PortalSharedDashboard' }, { type: 'null' } ], description: 'so com o dashboard compartilhado' }
+        filesAvailable: { type: [integer, 'null'], description: 'so com os arquivos de retorno compartilhados' }
         clientName: { type: string }
     PortalSharedAutomationList: { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/PortalSharedAutomation' } } } }
+    PortalSharedSummary:
+      type: object
+      required: [from, to, total, succeeded, failed, inProgress, notStarted, cancelled, other, lastRequestedAt, lastOutcome]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        total: { type: integer }
+        succeeded: { type: integer }
+        failed: { type: integer }
+        inProgress: { type: integer }
+        notStarted: { type: integer }
+        cancelled: { type: integer }
+        other: { type: integer, description: 'sem confirmacao ou concluida sem sinal de erro' }
+        lastRequestedAt: { type: [string, 'null'], format: date-time }
+        lastOutcome: { oneOf: [ { $ref: '#/components/schemas/PortalOutcome' }, { type: 'null' } ] }
     PortalSharedExecution:
       type: object
-      required: [kind, id, machine, requestedAt, startedAt, endedAt, outcome]
+      required: [id, requestedAt, startedAt, endedAt, outcome, files]
       properties:
-        kind: { $ref: '#/components/schemas/PortalExecutionKind' }
         id: { type: string, format: uuid }
-        machine: { oneOf: [ { $ref: '#/components/schemas/MachineRef' }, { type: 'null' } ] }
         requestedAt: { type: string, format: date-time }
         startedAt: { type: [string, 'null'], format: date-time }
         endedAt: { type: [string, 'null'], format: date-time }
-        outcome: { type: string, enum: [succeeded, failed, in_progress, cancelled, not_started, unconfirmed, no_error_signaled] }
+        outcome: { $ref: '#/components/schemas/PortalOutcome' }
+        files: { type: [integer, 'null'], description: 'arquivos de retorno disponiveis desta execucao (nulo sem os arquivos compartilhados)' }
     PortalSharedExecutionPage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/PortalSharedExecution' } }, nextCursor: { type: [string, 'null'] } } }
-    PortalSharedAttempt:
+    PortalSharedFile:
       type: object
-      required: [attemptId, number, workerId, workerName, startedAt, endedAt, canReadLogs, canDownloadResults]
+      required: [attemptId, number, automation, executionRequestedAt, fileName, sizeBytes, receivedAt, available]
       properties:
-        attemptId: { type: string, format: uuid }
+        attemptId: { type: string, format: uuid, description: 'identificador opaco do arquivo, com number' }
         number: { type: integer }
-        workerId: { type: string, format: uuid }
-        workerName: { type: [string, 'null'] }
-        startedAt: { type: [string, 'null'], format: date-time }
-        endedAt: { type: [string, 'null'], format: date-time }
-        canReadLogs: { type: boolean }
-        canDownloadResults: { type: boolean }
-    PortalSharedExecutionDetail:
-      allOf:
-        - $ref: '#/components/schemas/PortalSharedExecution'
-        - type: object
-          required: [automation, attempts]
-          properties:
-            automation: { $ref: '#/components/schemas/AutomationRef' }
-            attempts: { type: array, items: { $ref: '#/components/schemas/PortalSharedAttempt' } }
-    PortalSharedLogLine:
-      type: object
-      required: [sequence, capturedAt, channel, truncated, message, textRemoved]
-      properties:
-        sequence: { type: integer }
-        capturedAt: { type: string, format: date-time }
-        channel: { type: string, enum: [STDOUT, STDERR, EXECUTOR] }
-        truncated: { type: boolean }
-        message: { type: string }
-        textRemoved: { type: boolean }
-    PortalSharedLogs:
-      type: object
-      required: [items, total, closedAt, droppedLines, nextAfter]
-      properties:
-        items: { type: array, items: { $ref: '#/components/schemas/PortalSharedLogLine' } }
-        total: { type: integer }
-        closedAt: { type: [string, 'null'], format: date-time }
-        droppedLines: { type: [integer, 'null'] }
-        nextAfter: { type: [integer, 'null'] }
-    PortalSharedResultFile:
-      type: object
-      required: [number, fileName, sizeBytes, sha256, receivedAt, available]
-      properties:
-        number: { type: integer }
+        automation: { $ref: '#/components/schemas/AutomationRef' }
+        executionRequestedAt: { type: string, format: date-time }
         fileName: { type: string }
         sizeBytes: { type: integer }
-        sha256: { type: string }
         receivedAt: { type: string, format: date-time }
         available: { type: boolean }
-    PortalSharedResults:
-      type: object
-      required: [items, closedAt, skippedByLimit]
-      properties:
-        items: { type: array, items: { $ref: '#/components/schemas/PortalSharedResultFile' } }
-        closedAt: { type: [string, 'null'], format: date-time }
-        skippedByLimit: { type: [integer, 'null'] }
+    PortalSharedFilePage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/PortalSharedFile' } }, nextCursor: { type: [string, 'null'] } } }
     PersonSituation:
       type: string
       enum: [invitation_pending, invitation_expired, invitation_revoked, invitation_accepted, member_pending, member_active, member_suspended, member_revoked, client_active, client_suspended, client_revoked]
@@ -5566,6 +5698,15 @@ components:
       properties:
         organizationId: { type: string, format: uuid, description: 'UUID canonico; malformado ou ausente -> 400' }
         token: { type: string, description: 'token do link do convite (fragmento #token=); nunca vai a log' }
+    InvitationPreview:
+      type: object
+      required: [organizationId, organizationName, email, recipientName, audience]
+      properties:
+        organizationId: { type: string, format: uuid }
+        organizationName: { type: string }
+        email: { type: string }
+        recipientName: { type: [string, 'null'] }
+        audience: { type: string, enum: [internal, client] }
     InvitationAccepted: { type: object, required: [organizationId, audience], properties: { organizationId: { type: string, format: uuid }, audience: { type: string, enum: [internal, client], description: '070: internal troca para a sessao da organizacao; client entra pela area do cliente (Portal), sem sessao da organizacao' } } }
     RoleRequest:
       type: object

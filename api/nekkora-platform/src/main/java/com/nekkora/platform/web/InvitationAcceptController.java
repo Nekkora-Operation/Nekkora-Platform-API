@@ -25,6 +25,8 @@ import com.nekkora.platform.identity.InvitationAcceptService;
 public class InvitationAcceptController {
 
     public static final String ACCEPT = "/api/v1/invitations/accept";
+    /** 071: nome e e-mail do convite aberto para o primeiro acesso (pre-autenticacao; so com o token). */
+    public static final String PREVIEW = "/api/v1/invitations/preview";
 
     private static final Pattern UUID_CANONICAL = Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 
@@ -46,6 +48,22 @@ public class InvitationAcceptController {
                                       @Value("${nekkora.convites.enabled:false}") boolean invitationsEnabled) {
         this.invitations = invitations;
         this.enabled = entryEnabled && invitationsEnabled;
+    }
+
+    /**
+     * 071: o primeiro acesso pelo link do convite mostra a organizacao e preenche nome e e-mail (que nao sao pedidos de novo). So
+     * convite aberto e no prazo; o resto e 404 unico. Nao confirma a identidade: o cadastro continua confirmando o e-mail pelo codigo,
+     * e o aceite exige a identidade com o mesmo e-mail verificado.
+     */
+    @PostMapping(PREVIEW)
+    public InvitationAcceptService.Preview preview(@RequestBody(required = false) AcceptRequest body, HttpServletRequest req) {
+        if (!enabled) {
+            throw new ApiException(ApiError.NOT_FOUND, "convites_desligados");
+        }
+        if (body == null || body.organizationId() == null || !UUID_CANONICAL.matcher(body.organizationId()).matches() || body.token() == null) {
+            throw ApiException.invalid("corpo");
+        }
+        return invitations.preview(UUID.fromString(body.organizationId()), body.token(), RequestContextFilter.ip(req));
     }
 
     /** 200 com a organizacao: a identidade troca de sessao depois pela rota existente ({@code /api/v1/sessions/organization}). */

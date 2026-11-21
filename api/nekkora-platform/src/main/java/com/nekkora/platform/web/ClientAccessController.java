@@ -30,6 +30,7 @@ import com.nekkora.core.web.ApiException;
 import com.nekkora.platform.access.WorkspaceAccess;
 import com.nekkora.platform.admin.ClientAccessService;
 import com.nekkora.platform.admin.InvitationService;
+import com.nekkora.platform.admin.ShareRequestService;
 import com.nekkora.platform.paging.CursorCodec;
 import com.nekkora.platform.paging.Paging;
 import com.nekkora.platform.session.ValidSession;
@@ -39,6 +40,9 @@ import com.nekkora.platform.session.ValidSession;
  * concessoes por automacao (D-GRANT-1), vinculo de cliente e as leituras de "Acessos e historico". Sessao da organizacao e CSRF
  * dela; conta externa: 403. A autorizacao dos atos e dos servicos, dentro da transacao; a das leituras e conferida aqui, na
  * transacao da leitura.
+ *
+ * <p>071: os conteudos sao dashboard de execucao e arquivos de retorno (registros tecnicos nao se compartilham); o convite pede nome e
+ * e-mail (o cliente interno e opcional); membro com client_share.request pede o compartilhamento e outra pessoa aprova antes do convite.
  *
  * <p>Permissoes: convite de Cliente, org.manage E external_access.manage (com step-up); cadastro de clientes, org.manage OU
  * external_access.manage; concessoes por automacao, external_access.manage (aprovacao com step-up, por outra pessoa); vinculo de
@@ -52,32 +56,39 @@ public class ClientAccessController {
     static final String ROUTE_HISTORY = "listAccessHistory";
     static final String SORT_DESC = "createdAt.desc+id.desc";
 
-    public record ClientInvitationRequest(String email, String clientId, String automationId, String workerId, Boolean canReadLogs,
-                                          Boolean canDownloadResults) {
+    /** 071: nome e e-mail, automacao, maquina opcional e conteudos; cliente interno opcional (sem ele, criado ou reutilizado). */
+    public record ClientInvitationRequest(String email, String name, String clientId, String automationId, String workerId, Boolean canViewDashboard,
+                                          Boolean canDownloadResults, Boolean canReadLogs) {
+    }
+
+    public record ShareRequestBody(String email, String name, String automationId, String workerId, Boolean canViewDashboard,
+                                   Boolean canDownloadResults, Boolean canReadLogs) {
     }
 
     public record ClientRequest(String name, String status) {
     }
 
-    public record AutomationGrantRequest(String clientMembershipId, String automationId, String workerId, Boolean canReadLogs,
-                                         Boolean canDownloadResults) {
+    public record AutomationGrantRequest(String clientMembershipId, String automationId, String workerId, Boolean canViewDashboard,
+                                         Boolean canDownloadResults, Boolean canReadLogs) {
     }
 
-    public record ReduceRequest(Boolean canReadLogs, Boolean canDownloadResults) {
+    public record ReduceRequest(Boolean canViewDashboard, Boolean canDownloadResults, Boolean canReadLogs) {
     }
 
     private final InvitationService invitations;
     private final ClientAccessService clients;
+    private final ShareRequestService shareRequests;
     private final OrgTransactions tx;
     private final WorkspaceAccess access;
     private final CursorCodec cursors;
     private final boolean invitationsEnabled;
 
-    public ClientAccessController(InvitationService invitations, ClientAccessService clients, OrgTransactions tx, WorkspaceAccess access,
-                                  CursorCodec cursors, @Value("${nekkora.entrada-geral.enabled:false}") boolean entryEnabled,
+    public ClientAccessController(InvitationService invitations, ClientAccessService clients, ShareRequestService shareRequests, OrgTransactions tx,
+                                  WorkspaceAccess access, CursorCodec cursors, @Value("${nekkora.entrada-geral.enabled:false}") boolean entryEnabled,
                                   @Value("${nekkora.convites.enabled:false}") boolean invitationsEnabled) {
         this.invitations = invitations;
         this.clients = clients;
+        this.shareRequests = shareRequests;
         this.tx = tx;
         this.access = access;
         this.cursors = cursors;
@@ -92,13 +103,59 @@ public class ClientAccessController {
         if (!invitationsEnabled) {
             throw new ApiException(ApiError.NOT_FOUND, "convites_desligados");
         }
-        if (body == null || body.canReadLogs() == null || body.canDownloadResults() == null) {
+        if (body == null || body.canViewDashboard() == null || body.canDownloadResults() == null) {
             throw ApiException.invalid("corpo");
         }
-        InvitationService.ClientScope scope = new InvitationService.ClientScope(uuid(body.clientId(), "cliente"), uuid(body.automationId(), "automacao"),
-                uuidOrNull(body.workerId(), "maquina"), body.canReadLogs(), body.canDownloadResults());
+        noTechnicalLogs(body.canReadLogs());
+        InvitationService.ClientScope scope = new InvitationService.ClientScope(uuidOrNull(body.clientId(), "cliente"), uuid(body.automationId(), "automacao"),
+                uuidOrNull(body.workerId(), "maquina"), body.canViewDashboard(), body.canDownloadResults());
         return ResponseEntity.status(HttpStatus.CREATED).body(invitations.issueClient(org, SessionFilter.principal(req), SessionFilter.token(req),
-                body.email(), scope));
+                body.email(), body.name(), scope));
+    }
+
+    // === Pedido de compartilhamento (071: membro com client_share.request; outra pessoa aprova antes do convite) ===
+
+    @PostMapping("/api/v1/o/{org}/client-share-requests")
+    public ResponseEntity<ShareRequestService.ShareRequest> requestShare(@PathVariable UUID org, @RequestBody(required = false) ShareRequestBody body,
+                                                                        HttpServletRequest req) {
+        if (!invitationsEnabled) {
+            throw new ApiException(ApiError.NOT_FOUND, "convites_desligados");
+        }
+        if (body == null || body.canViewDashboard() == null || body.canDownloadResults() == null) {
+            throw ApiException.invalid("corpo");
+        }
+        noTechnicalLogs(body.canReadLogs());
+        return ResponseEntity.status(HttpStatus.CREATED).body(shareRequests.create(org, SessionFilter.principal(req), SessionFilter.token(req),
+                body.email(), body.name(), uuid(body.automationId(), "automacao"), uuidOrNull(body.workerId(), "maquina"), body.canViewDashboard(),
+                body.canDownloadResults()));
+    }
+
+    @GetMapping("/api/v1/o/{org}/client-share-requests")
+    public Map<String, Object> listShareRequests(@PathVariable UUID org, @RequestParam(required = false) UUID automationId,
+                                                 @RequestParam(required = false) Boolean pendingOnly, HttpServletRequest req) {
+        internal(req);
+        List<ShareRequestService.ShareRequest> items = shareRequests.list(org, SessionFilter.principal(req), SessionFilter.token(req), automationId,
+                Boolean.TRUE.equals(pendingOnly));
+        List<Map<String, Object>> out = tx.inOrganization(org, Mode.READ_ONLY, j -> ClientAccessReads.shareRequestItems(j, org, items));
+        return Map.of("items", out);
+    }
+
+    @PostMapping("/api/v1/o/{org}/client-share-requests/{request}/approve")
+    public ShareRequestService.ShareRequest approveShare(@PathVariable UUID org, @PathVariable UUID request, HttpServletRequest req) {
+        if (!invitationsEnabled) {
+            throw new ApiException(ApiError.NOT_FOUND, "convites_desligados");
+        }
+        return shareRequests.approve(org, SessionFilter.principal(req), SessionFilter.token(req), request);
+    }
+
+    @PostMapping("/api/v1/o/{org}/client-share-requests/{request}/refuse")
+    public ShareRequestService.ShareRequest refuseShare(@PathVariable UUID org, @PathVariable UUID request, HttpServletRequest req) {
+        return shareRequests.decline(org, SessionFilter.principal(req), SessionFilter.token(req), request);
+    }
+
+    @PostMapping("/api/v1/o/{org}/client-share-requests/{request}/cancel")
+    public ShareRequestService.ShareRequest cancelShare(@PathVariable UUID org, @PathVariable UUID request, HttpServletRequest req) {
+        return shareRequests.cancel(org, SessionFilter.principal(req), SessionFilter.token(req), request);
     }
 
     // === Cadastro de clientes ===
@@ -139,22 +196,32 @@ public class ClientAccessController {
     @GetMapping("/api/v1/o/{org}/client-share-options")
     public Map<String, Object> shareOptions(@PathVariable UUID org, HttpServletRequest req) {
         ValidSession s = internal(req);
+        Map<String, Object> out = new LinkedHashMap<>();
         List<Map<String, Object>> items = tx.inOrganization(org, Mode.READ_ONLY, j -> {
-            access.requireAnyOrganizationPermission(j, org, s.membershipId(), "external_access.manage");
-            return ClientAccessReads.shareOptions(j, org);
+            // administradora: todas, pelo convite direto; membro com client_share.request: as dos ambientes dele, por pedido (071)
+            boolean all = access.hasOrganizationPermission(j, org, s.membershipId(), "org.manage")
+                    && access.hasOrganizationPermission(j, org, s.membershipId(), "external_access.manage");
+            List<Map<String, Object>> r = ClientAccessReads.shareOptions(j, org, s.membershipId(), all);
+            if (!all && r.isEmpty()) {
+                throw ApiException.forbidden("client_share.request");
+            }
+            out.put("mode", all ? "invite" : "request");
+            return r;
         });
-        return Map.of("automations", items);
+        out.put("automations", items);
+        return out;
     }
 
     @PostMapping("/api/v1/o/{org}/client-automation-grants")
     public ResponseEntity<ClientAccessService.AutomationGrant> requestGrant(@PathVariable UUID org, @RequestBody(required = false) AutomationGrantRequest body,
                                                                            HttpServletRequest req) {
-        if (body == null || body.canReadLogs() == null || body.canDownloadResults() == null) {
+        if (body == null || body.canViewDashboard() == null || body.canDownloadResults() == null) {
             throw ApiException.invalid("corpo");
         }
+        noTechnicalLogs(body.canReadLogs());
         return ResponseEntity.status(HttpStatus.CREATED).body(clients.requestGrant(org, SessionFilter.principal(req), SessionFilter.token(req),
                 uuid(body.clientMembershipId(), "vinculo"), uuid(body.automationId(), "automacao"), uuidOrNull(body.workerId(), "maquina"),
-                body.canReadLogs(), body.canDownloadResults()));
+                body.canViewDashboard(), body.canDownloadResults()));
     }
 
     @PostMapping("/api/v1/o/{org}/client-automation-grants/{grant}/approve")
@@ -165,10 +232,11 @@ public class ClientAccessController {
     @PostMapping("/api/v1/o/{org}/client-automation-grants/{grant}/reduce")
     public ClientAccessService.AutomationGrant reduceGrant(@PathVariable UUID org, @PathVariable UUID grant, @RequestBody(required = false) ReduceRequest body,
                                                            HttpServletRequest req) {
-        if (body == null || body.canReadLogs() == null || body.canDownloadResults() == null) {
+        if (body == null || body.canViewDashboard() == null || body.canDownloadResults() == null) {
             throw ApiException.invalid("corpo");
         }
-        return clients.reduceGrant(org, SessionFilter.principal(req), SessionFilter.token(req), grant, body.canReadLogs(), body.canDownloadResults());
+        noTechnicalLogs(body.canReadLogs());
+        return clients.reduceGrant(org, SessionFilter.principal(req), SessionFilter.token(req), grant, body.canViewDashboard(), body.canDownloadResults());
     }
 
     @PostMapping("/api/v1/o/{org}/client-automation-grants/{grant}/revoke")
@@ -269,6 +337,13 @@ public class ClientAccessController {
     }
 
     // === comum ===
+
+    /** 071: registros tecnicos nao se compartilham; pedir explicitamente e 400 (o banco tambem recusa). */
+    private static void noTechnicalLogs(Boolean canReadLogs) {
+        if (Boolean.TRUE.equals(canReadLogs)) {
+            throw ApiException.invalid("registros_tecnicos_nao_compartilhaveis");
+        }
+    }
 
     private static ValidSession internal(HttpServletRequest req) {
         ValidSession s = SessionFilter.principal(req);

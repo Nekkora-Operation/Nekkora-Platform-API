@@ -5,7 +5,10 @@ import java.nio.charset.StandardCharsets;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -27,24 +30,21 @@ import com.nekkora.core.web.ApiError;
 import com.nekkora.core.web.ApiException;
 import com.nekkora.core.web.RequestContext;
 
-import tools.jackson.databind.json.JsonMapper;
-
 /**
- * Area do cliente (PLATFORM-FLUXO-002, 070): leituras pela SESSAO DE IDENTIDADE, so pelas funcoes {@code portal_client_*}. Cada
- * chamada reconfere, no banco, a sessao (lookup da identidade), a conta de cliente ligada, o vinculo, o cliente, a organizacao e
- * as concessoes vigentes por automacao (e maquina): revogar, suspender ou retirar barra a proxima consulta, mesmo com a sessao
- * aberta. Nenhuma sessao de organizacao e usada ou criada. Traducao: NK401 -> 401; NK403 -> 403; NK404 -> 404 (fora do escopo e
- * inexistente respondem igual); 22023 -> 400.
+ * Area do cliente (PLATFORM-FLUXO-002, 070/071): leituras pela SESSAO DE IDENTIDADE, so pelas funcoes {@code portal_client_*}. O
+ * cliente ve so o DASHBOARD de execucao (indicadores e estado em linguagem simples) e os ARQUIVOS DE RETORNO autorizados; registros
+ * tecnicos, maquinas, ambientes e detalhe de tentativa nao existem aqui (o banco nem expoe). Cada chamada reconfere, no banco, a
+ * sessao, a conta de cliente ligada, o vinculo, o cliente, a organizacao e as concessoes vigentes por automacao (e maquina), com o
+ * conteudo pedido: revogar, reduzir, suspender ou retirar barra a proxima consulta, mesmo com a sessao aberta. Traducao: NK401 -> 401;
+ * NK403 -> 403; NK404 -> 404 (fora do escopo e inexistente respondem igual); 22023 -> 400.
  */
 public final class PortalClientService {
 
     private static final Logger LOG = LoggerFactory.getLogger(PortalClientService.class);
-    private static final JsonMapper JSON = JsonMapper.builder().build();
     static final int MAX_PAGE = 100;
     static final int DEFAULT_PAGE = 25;
-    static final int MAX_LOG_PAGE = 500;
-    static final List<String> KINDS = List.of("platform", "local_agent", "local_request", "remote");
-    private static final List<String> LOG_CHANNELS = List.of("STDOUT", "STDERR", "EXECUTOR");
+    static final Duration DEFAULT_PERIOD = Duration.ofDays(30);
+    static final Duration MAX_PERIOD = Duration.ofDays(400);
 
     private final OrgTransactions tx;
     private final JdbcTemplate jdbc;
@@ -57,6 +57,26 @@ public final class PortalClientService {
     }
 
     public record Download(String fileName, String sha256, byte[] bytes) {
+    }
+
+    /** Periodo [de, ate): padrao, os ultimos 30 dias; no maximo 400 dias. */
+    public record Period(OffsetDateTime from, OffsetDateTime to) {
+        static Period of(String rawFrom, String rawTo) {
+            OffsetDateTime to = rawTo == null ? OffsetDateTime.now(ZoneOffset.UTC).plusSeconds(1) : instant(rawTo, "to");
+            OffsetDateTime from = rawFrom == null ? to.minus(DEFAULT_PERIOD) : instant(rawFrom, "from");
+            if (!to.isAfter(from) || Duration.between(from, to).compareTo(MAX_PERIOD) > 0) {
+                throw ApiException.invalid("periodo");
+            }
+            return new Period(from, to);
+        }
+
+        private static OffsetDateTime instant(String raw, String rule) {
+            try {
+                return OffsetDateTime.parse(raw);
+            } catch (DateTimeParseException e) {
+                throw ApiException.invalid(rule);
+            }
+        }
     }
 
     public List<Map<String, Object>> organizations(String token) {
@@ -75,6 +95,7 @@ public final class PortalClientService {
         }));
     }
 
+    /** Cards: o que foi compartilhado de cada automacao e, so com o dashboard, os indicadores dos ultimos 30 dias. */
     public List<Map<String, Object>> automations(UUID org, String token) {
         return call(() -> jdbc.query(con -> {
             PreparedStatement ps = con.prepareStatement("SELECT * FROM public.portal_client_automations(?, ?)");
@@ -86,38 +107,87 @@ public final class PortalClientService {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("automationId", rs.getObject("automation_id", UUID.class).toString());
             m.put("name", rs.getString("automation_name"));
-            m.put("workspaceName", rs.getString("workspace_name"));
-            m.put("allMachines", rs.getBoolean("all_machines"));
-            m.put("machines", JSON.readValue(rs.getString("machines"), Object.class));
-            m.put("canReadLogs", rs.getBoolean("can_read_logs"));
-            m.put("canDownloadResults", rs.getBoolean("can_download_results"));
-            m.put("executionsLast30Days", rs.getLong("executions_30d"));
-            m.put("lastRequestedAt", rs.getObject("last_requested_at", OffsetDateTime.class));
-            m.put("lastOutcome", rs.getString("last_outcome"));
+            boolean dashboard = rs.getBoolean("can_view_dashboard");
+            boolean files = rs.getBoolean("can_download_results");
+            m.put("canViewDashboard", dashboard);
+            m.put("canDownloadResults", files);
+            if (dashboard) {
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("executionsLast30Days", rs.getLong("executions_30d"));
+                d.put("succeededLast30Days", rs.getLong("succeeded_30d"));
+                d.put("failedLast30Days", rs.getLong("failed_30d"));
+                d.put("inProgress", rs.getLong("in_progress"));
+                d.put("lastRequestedAt", rs.getObject("last_requested_at", OffsetDateTime.class));
+                d.put("lastOutcome", rs.getString("last_outcome"));
+                m.put("dashboard", d);
+            } else {
+                m.put("dashboard", null);
+            }
+            m.put("filesAvailable", files ? rs.getLong("files_available") : null);
             m.put("clientName", rs.getString("client_name"));
             return m;
         }));
     }
 
-    public Map<String, Object> executions(UUID org, String token, UUID automation, String cursor, int limit) {
-        if (limit < 1 || limit > MAX_PAGE) {
-            throw ApiException.invalid("limit");
-        }
-        Object[] after = decode(cursor);
-        List<Map<String, Object>> items = call(() -> jdbc.query(con -> {
-            PreparedStatement ps = con.prepareStatement("SELECT * FROM public.portal_client_list_executions(?, ?, ?, ?, ?, ?)");
+    public Map<String, Object> summary(UUID org, String token, UUID automation, Period p) {
+        List<Map<String, Object>> r = call(() -> jdbc.query(con -> {
+            PreparedStatement ps = con.prepareStatement("SELECT * FROM public.portal_client_summary(?, ?, ?, ?, ?)");
             ps.setObject(1, org);
             ps.setString(2, token);
             ps.setObject(3, automation);
-            ps.setObject(4, after == null ? null : after[0]);
-            ps.setObject(5, after == null ? null : after[1]);
-            ps.setInt(6, limit + 1);
+            ps.setObject(4, p.from());
+            ps.setObject(5, p.to());
             return ps;
-        }, (rs, n) -> execution(rs, false)));
+        }, (rs, n) -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("from", p.from());
+            m.put("to", p.to());
+            m.put("total", rs.getLong("total"));
+            m.put("succeeded", rs.getLong("succeeded"));
+            m.put("failed", rs.getLong("failed"));
+            m.put("inProgress", rs.getLong("in_progress"));
+            m.put("notStarted", rs.getLong("not_started"));
+            m.put("cancelled", rs.getLong("cancelled"));
+            m.put("other", rs.getLong("other"));
+            m.put("lastRequestedAt", rs.getObject("last_requested_at", OffsetDateTime.class));
+            m.put("lastOutcome", rs.getString("last_outcome"));
+            return m;
+        }));
+        return r.get(0);
+    }
+
+    /** Execucoes do dashboard (sem maquina, origem ou tentativa), da mais recente, com cursor (instante, id). */
+    public Map<String, Object> executions(UUID org, String token, UUID automation, Period p, String cursor, int limit) {
+        if (limit < 1 || limit > MAX_PAGE) {
+            throw ApiException.invalid("limit");
+        }
+        String[] after = decode(cursor, 2);
+        List<Map<String, Object>> items = call(() -> jdbc.query(con -> {
+            PreparedStatement ps = con.prepareStatement("SELECT * FROM public.portal_client_list_executions(?, ?, ?, ?, ?, ?, ?, ?)");
+            ps.setObject(1, org);
+            ps.setString(2, token);
+            ps.setObject(3, automation);
+            ps.setObject(4, p.from());
+            ps.setObject(5, p.to());
+            ps.setObject(6, after == null ? null : OffsetDateTime.parse(after[0]));
+            ps.setObject(7, after == null ? null : UUID.fromString(after[1]));
+            ps.setInt(8, limit + 1);
+            return ps;
+        }, (rs, n) -> {
+            Map<String, Object> e = new LinkedHashMap<>();
+            e.put("id", rs.getObject("id", UUID.class).toString());
+            e.put("requestedAt", rs.getObject("requested_at", OffsetDateTime.class));
+            e.put("startedAt", rs.getObject("started_at", OffsetDateTime.class));
+            e.put("endedAt", rs.getObject("ended_at", OffsetDateTime.class));
+            e.put("outcome", rs.getString("outcome"));
+            Object files = rs.getObject("files");
+            e.put("files", files == null ? null : ((Number) files).longValue());
+            return e;
+        }));
         String next = null;
         if (items.size() > limit) {
             Map<String, Object> last = items.get(limit - 1);
-            next = encode((OffsetDateTime) last.get("requestedAt"), UUID.fromString((String) last.get("id")));
+            next = encode(last.get("requestedAt").toString(), (String) last.get("id"));
             items = new ArrayList<>(items.subList(0, limit));
         }
         Map<String, Object> r = new LinkedHashMap<>();
@@ -126,107 +196,67 @@ public final class PortalClientService {
         return r;
     }
 
-    public Map<String, Object> execution(UUID org, String token, String kind, UUID id) {
-        if (!KINDS.contains(kind)) {
-            throw new ApiException(ApiError.NOT_FOUND, "execucao");
+    /** Arquivos de retorno no escopo (todas as automacoes com arquivos, ou uma), por periodo da execucao e busca no nome. */
+    public Map<String, Object> files(UUID org, String token, UUID automation, Period p, String query, String cursor, int limit) {
+        if (limit < 1 || limit > MAX_PAGE) {
+            throw ApiException.invalid("limit");
         }
-        List<Map<String, Object>> r = call(() -> jdbc.query(con -> {
-            PreparedStatement ps = con.prepareStatement("SELECT * FROM public.portal_client_get_execution(?, ?, ?, ?)");
-            ps.setObject(1, org);
-            ps.setString(2, token);
-            ps.setString(3, kind);
-            ps.setObject(4, id);
-            return ps;
-        }, (rs, n) -> execution(rs, true)));
-        return r.get(0);
-    }
-
-    public Map<String, Object> logs(UUID org, String token, UUID execution, UUID attempt, int after, int limit) {
-        if (after < 0 || limit < 1 || limit > MAX_LOG_PAGE) {
-            throw ApiException.invalid("pagina");
+        if (query != null && query.length() > 100) {
+            throw ApiException.invalid("q");
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        List<Map<String, Object>> lines = new ArrayList<>();
-        call(() -> { jdbc.query(con -> {
-            PreparedStatement ps = con.prepareStatement("SELECT * FROM public.portal_client_list_logs(?, ?, ?, ?, ?, ?)");
+        String[] after = decode(cursor, 3);
+        List<Map<String, Object>> items = call(() -> jdbc.query(con -> {
+            PreparedStatement ps = con.prepareStatement("SELECT * FROM public.portal_client_list_files(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             ps.setObject(1, org);
             ps.setString(2, token);
-            ps.setObject(3, execution);
-            ps.setObject(4, attempt);
-            ps.setInt(5, after);
-            ps.setInt(6, limit);
-            return ps;
-        }, (ResultSet rs) -> {
-            out.put("total", rs.getInt("total"));
-            out.put("closedAt", rs.getObject("closed_at", OffsetDateTime.class));
-            Object dropped = rs.getObject("dropped_lines");
-            out.put("droppedLines", dropped == null ? null : ((Number) dropped).longValue());
-            int seq = rs.getInt("sequence");
-            if (!rs.wasNull()) {
-                Map<String, Object> l = new LinkedHashMap<>();
-                l.put("sequence", seq);
-                l.put("capturedAt", rs.getObject("captured_at", OffsetDateTime.class));
-                l.put("channel", LOG_CHANNELS.get(rs.getShort("channel") - 1));
-                l.put("truncated", rs.getBoolean("truncated"));
-                l.put("message", rs.getString("message"));
-                l.put("textRemoved", rs.getBoolean("text_removed"));
-                lines.add(l);
+            ps.setObject(3, automation);
+            ps.setObject(4, p.from());
+            ps.setObject(5, p.to());
+            ps.setString(6, query == null || query.isBlank() ? null : query.strip());
+            ps.setObject(7, after == null ? null : OffsetDateTime.parse(after[0]));
+            ps.setObject(8, after == null ? null : UUID.fromString(after[1]));
+            if (after == null) {
+                ps.setNull(9, java.sql.Types.INTEGER);
+            } else {
+                ps.setInt(9, Integer.parseInt(after[2]));
             }
-        }); return null; });
-        out.put("items", lines);
-        int total = out.get("total") == null ? 0 : (Integer) out.get("total");
-        out.put("nextAfter", lines.size() == limit && (Integer) lines.get(lines.size() - 1).get("sequence") < total
-                ? lines.get(lines.size() - 1).get("sequence") : null);
-        return out;
+            ps.setInt(10, limit + 1);
+            return ps;
+        }, (rs, n) -> file(rs)));
+        String next = null;
+        if (items.size() > limit) {
+            Map<String, Object> last = items.get(limit - 1);
+            next = encode(last.get("executionRequestedAt").toString(), (String) last.get("attemptId"), String.valueOf(last.get("number")));
+            items = new ArrayList<>(items.subList(0, limit));
+        }
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("items", items);
+        r.put("nextCursor", next);
+        return r;
     }
 
-    public Map<String, Object> results(UUID org, String token, UUID execution, UUID attempt) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        List<Map<String, Object>> files = new ArrayList<>();
-        call(() -> { jdbc.query(con -> {
-            PreparedStatement ps = con.prepareStatement("SELECT * FROM public.portal_client_list_results(?, ?, ?, ?)");
+    /** Bytes de um arquivo de retorno: escopo e permissao reconferidos no banco (mesma chamada), depois os bytes conferidos pelo SHA-256. */
+    public Download download(UUID org, String token, UUID attempt, int number) {
+        record Row(String fileName, String sha256, boolean available) {
+        }
+        Row file = call(() -> jdbc.query(con -> {
+            PreparedStatement ps = con.prepareStatement("SELECT * FROM public.portal_client_get_file(?, ?, ?, ?)");
             ps.setObject(1, org);
             ps.setString(2, token);
-            ps.setObject(3, execution);
-            ps.setObject(4, attempt);
+            ps.setObject(3, attempt);
+            ps.setInt(4, number);
             return ps;
-        }, (ResultSet rs) -> {
-            out.put("closedAt", rs.getObject("closed_at", OffsetDateTime.class));
-            Object skipped = rs.getObject("skipped_by_limit");
-            out.put("skippedByLimit", skipped == null ? null : ((Number) skipped).intValue());
-            int number = rs.getInt("result_number");
-            if (!rs.wasNull()) {
-                Map<String, Object> f = new LinkedHashMap<>();
-                f.put("number", number);
-                f.put("fileName", rs.getString("file_name"));
-                f.put("sizeBytes", rs.getLong("size_bytes"));
-                f.put("sha256", rs.getString("sha256"));
-                f.put("receivedAt", rs.getObject("received_at", OffsetDateTime.class));
-                f.put("available", rs.getBoolean("available"));
-                files.add(f);
-            }
-        }); return null; });
-        out.put("items", files);
-        return out;
-    }
-
-    /** Bytes de um arquivo de resultado: a permissao e o escopo sao reconferidos pela listagem (mesma chamada), depois os bytes. */
-    public Download download(UUID org, String token, UUID execution, UUID attempt, int number) {
-        Map<String, Object> list = results(org, token, execution, attempt);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> file = ((List<Map<String, Object>>) list.get("items")).stream().filter(f -> ((Integer) f.get("number")) == number)
-                .findFirst().orElseThrow(() -> new ApiException(ApiError.NOT_FOUND, "resultado"));
-        if (!Boolean.TRUE.equals(file.get("available"))) {
+        }, (rs, n) -> new Row(rs.getString("file_name"), rs.getString("sha256"), rs.getBoolean("available")))).get(0);
+        if (!file.available()) {
             throw new ApiException(ApiError.REMOTE_RESULT_UNAVAILABLE, "resultado_removido");
         }
         if (!results.available()) {
             throw new ApiException(ApiError.SERVICE_UNAVAILABLE, "armazenamento_de_resultados");
         }
         try {
-            byte[] bytes = results.get(org, (String) file.get("sha256"))
-                    .orElseThrow(() -> new ApiException(ApiError.REMOTE_RESULT_UNAVAILABLE, "resultado_ausente"));
+            byte[] bytes = results.get(org, file.sha256()).orElseThrow(() -> new ApiException(ApiError.REMOTE_RESULT_UNAVAILABLE, "resultado_ausente"));
             LOG.info("evento=portal.cliente.resultado_baixado tentativa={} numero={} correlacao={}", attempt, number, RequestContext.correlation());
-            return new Download((String) file.get("fileName"), (String) file.get("sha256"), bytes);
+            return new Download(file.fileName(), file.sha256(), bytes);
         } catch (ArtifactStore.Corrupted e) {
             throw new ApiException(ApiError.REMOTE_RESULT_UNAVAILABLE, "resultado_corrompido");
         } catch (IOException e) {
@@ -234,47 +264,43 @@ public final class PortalClientService {
         }
     }
 
-    private static Map<String, Object> execution(ResultSet rs, boolean detail) throws SQLException {
-        Map<String, Object> e = new LinkedHashMap<>();
-        e.put("kind", rs.getString("kind"));
-        e.put("id", rs.getObject("id", UUID.class).toString());
-        if (detail) {
-            Map<String, Object> a = new LinkedHashMap<>();
-            a.put("automationId", rs.getObject("automation_id", UUID.class).toString());
-            a.put("name", rs.getString("automation_name"));
-            e.put("automation", a);
-        }
-        UUID worker = rs.getObject("worker_id", UUID.class);
-        if (worker == null) {
-            e.put("machine", null);
-        } else {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("workerId", worker.toString());
-            m.put("name", rs.getString("worker_name"));
-            e.put("machine", m);
-        }
-        e.put("requestedAt", rs.getObject("requested_at", OffsetDateTime.class));
-        e.put("startedAt", rs.getObject("started_at", OffsetDateTime.class));
-        e.put("endedAt", rs.getObject("ended_at", OffsetDateTime.class));
-        e.put("outcome", rs.getString("outcome"));
-        if (detail) {
-            e.put("attempts", JSON.readValue(rs.getString("attempts"), Object.class));
-        }
-        return e;
+    private static Map<String, Object> file(ResultSet rs) throws SQLException {
+        Map<String, Object> f = new LinkedHashMap<>();
+        f.put("attemptId", rs.getObject("attempt_id", UUID.class).toString());
+        f.put("number", (int) rs.getShort("result_number"));
+        Map<String, Object> a = new LinkedHashMap<>();
+        a.put("automationId", rs.getObject("automation_id", UUID.class).toString());
+        a.put("name", rs.getString("automation_name"));
+        f.put("automation", a);
+        f.put("executionRequestedAt", rs.getObject("execution_requested_at", OffsetDateTime.class));
+        String name = rs.getString("file_name");
+        f.put("fileName", name.substring(name.lastIndexOf('/') + 1));
+        f.put("sizeBytes", rs.getLong("size_bytes"));
+        f.put("receivedAt", rs.getObject("received_at", OffsetDateTime.class));
+        f.put("available", rs.getBoolean("available"));
+        return f;
     }
 
-    private static String encode(OffsetDateTime at, UUID id) {
-        return Base64.getUrlEncoder().withoutPadding().encodeToString((at.toString() + "|" + id).getBytes(StandardCharsets.UTF_8));
+    private static String encode(String... parts) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(String.join("|", parts).getBytes(StandardCharsets.UTF_8));
     }
 
-    /** Cursor opaco "instante|id" (o escopo e reconferido a cada pagina no banco); malformado: 400. */
-    private static Object[] decode(String cursor) {
+    /** Cursor opaco (o escopo e reconferido a cada pagina no banco); malformado: 400. */
+    private static String[] decode(String cursor, int parts) {
         if (cursor == null || cursor.isBlank()) {
             return null;
         }
         try {
-            String[] p = new String(Base64.getUrlDecoder().decode(cursor), StandardCharsets.UTF_8).split("\\|", 2);
-            return new Object[] { OffsetDateTime.parse(p[0]), UUID.fromString(p[1]) };
+            String[] p = new String(Base64.getUrlDecoder().decode(cursor), StandardCharsets.UTF_8).split("\\|", -1);
+            if (p.length != parts) {
+                throw new IllegalArgumentException();
+            }
+            OffsetDateTime.parse(p[0]);
+            UUID.fromString(p[1]);
+            if (parts == 3) {
+                Integer.parseInt(p[2]);
+            }
+            return p;
         } catch (RuntimeException e) {
             throw ApiException.invalid("cursor");
         }

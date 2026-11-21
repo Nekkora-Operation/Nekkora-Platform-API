@@ -8,8 +8,8 @@ import java.util.Set;
 import java.util.TreeSet;
 
 /**
- * Catalogo de permissoes e papeis da API (contrato GAP-02/03/06, §0.1): os 23 codigos de public.permissions (003, 004,
- * 005, 008, 009, 014) com a aplicabilidade definida pelo contrato, porque o banco nao guarda escopo de permissao. Fonte
+ * Catalogo de permissoes e papeis da API (contrato GAP-02/03/06, §0.1): os 24 codigos de public.permissions (003, 004,
+ * 005, 008, 009, 014, 071) com a aplicabilidade definida pelo contrato, porque o banco nao guarda escopo de permissao. Fonte
  * dos enums do OpenAPI. Codigo que o banco devolva e o catalogo nao conheca e inconsistencia (500), nunca omitido; o IT
  * de catalogo compara este mapa com o banco.
  */
@@ -28,7 +28,7 @@ public final class PermissionCatalog {
             p.put(c, Scope.ORGANIZATION);
         }
         for (String c : new String[] {"workspace.configure", "role.assign_operator_viewer", "automation.read", "automation.execute",
-                "logs.read", "automation.manage", "automation.publish", "workspace_parameter.read", "workspace_parameter.manage",
+                "logs.read", "automation.manage", "automation.publish", "workspace_parameter.read", "workspace_parameter.manage", "client_share.request",
                 "workspace_secret.read", "workspace_secret.manage", "automation_schedule.read", "automation_schedule.manage"}) {
             p.put(c, Scope.WORKSPACE);
         }

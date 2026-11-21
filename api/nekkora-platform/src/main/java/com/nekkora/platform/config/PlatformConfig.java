@@ -280,6 +280,13 @@ public class PlatformConfig {
     }
 
     @Bean
+    com.nekkora.platform.admin.ShareRequestService shareRequestService(com.nekkora.platform.admin.AccessActions actions,
+                                                                      com.nekkora.platform.admin.AccessEvents events,
+                                                                      com.nekkora.platform.admin.InvitationService invitations) {
+        return com.nekkora.platform.admin.ShareRequestService.create(actions, events, invitations);
+    }
+
+    @Bean
     com.nekkora.platform.admin.ClientAccessService clientAccessService(com.nekkora.platform.admin.AccessActions actions,
                                                                       com.nekkora.platform.admin.AccessEvents events) {
         return com.nekkora.platform.admin.ClientAccessService.create(actions, events);

@@ -73,6 +73,8 @@ public final class Routes {
             // cadastro web (Missao 1), fora de /o/{org}: routeSuffix devolve o caminho inteiro. Mapeamento explicito; as
             // demais rotas sem organizacao continuam no padrao SESSION (fecham)
             case "/api/v1/signup", "/api/v1/signup/confirm", "/api/v1/signup/confirmation/resend" -> Context.PRE_AUTHENTICATION;
+            // 071: o primeiro acesso pelo convite le nome e e-mail do convite aberto (so com o token), antes de qualquer sessao
+            case "/api/v1/invitations/preview" -> Context.PRE_AUTHENTICATION;
             // entrada geral (Missao 1): senha em pre-autenticacao; MFA no desafio de identidade; logout de identidade
             case "/api/v1/auth/login" -> Context.PRE_AUTHENTICATION;
             // login do aplicativo desktop (AGENT-CLIENT-LOGIN-001): abrir e recusar o pedido, com ou sem sessao, pelo CSRF

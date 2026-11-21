@@ -40,15 +40,18 @@ public final class InvitationService {
     }
 
     /**
-     * Escopo do convite de Cliente (070): cadastro de cliente, automacao (o ambiente e o dela), maquina opcional (nula = todas as
-     * maquinas desta automacao) e as duas permissoes explicitas. Sem papel: so acompanhamento.
+     * Escopo do convite de Cliente (070/071): cliente interno (nulo = criado ou reutilizado pela aplicacao, sem etapa para quem
+     * convida), automacao (o ambiente e o dela), maquina opcional (nula = todas as maquinas desta automacao) e os conteudos:
+     * dashboard de execucao e arquivos de retorno (ao menos um). Sem papel e sem registros tecnicos.
      */
-    public record ClientScope(UUID clientId, UUID automationId, UUID workerId, boolean canReadLogs, boolean canDownloadResults) {
+    public record ClientScope(UUID clientId, UUID automationId, UUID workerId, boolean canViewDashboard, boolean canDownloadResults) {
     }
 
-    public record ClientCreated(UUID invitationId, String email, UUID clientId, UUID workspaceId, UUID automationId, UUID workerId,
-                                boolean canReadLogs, boolean canDownloadResults, OffsetDateTime expiresAt) {
+    public record ClientCreated(UUID invitationId, String email, String recipientName, UUID clientId, UUID workspaceId, UUID automationId,
+                                UUID workerId, boolean canViewDashboard, boolean canDownloadResults, UUID shareRequestId, OffsetDateTime expiresAt) {
     }
+
+    private static final int RECIPIENT_NAME_MAX = 200;
 
     public record Item(UUID invitationId, String email, String role, UUID workspaceId, String state, OffsetDateTime createdAt,
                        OffsetDateTime expiresAt, OffsetDateTime acceptedAt, OffsetDateTime revokedAt, String revokeReason, UUID issuedBy,
@@ -89,31 +92,89 @@ public final class InvitationService {
 
     /**
      * Convite de Cliente (070, excecao a D-GRANT-1 aprovada pela titular em 21/11/2026): so administradora (org.manage e
-     * external_access.manage), com step-up. O envio NAO concede nada: o vinculo e a concessao nascem no aceite, que reconfere
-     * tudo. Recusas: cliente ou escopo indisponivel (409 {@code escopo_indisponivel}); destinataria que e conta interna da
-     * organizacao (409 {@code membro_interno}: o convite nao reduziria os privilegios dela); conta antiga de cliente com o mesmo
-     * e-mail, nunca ligada por coincidencia (409 {@code conta_cliente_antiga}); a mesma automacao e maquina ja compartilhadas
-     * com ela (409 {@code concessao_existente}); convite aberto (409 {@code convite_pendente}).
+     * external_access.manage), com step-up. Pede so nome e e-mail da pessoa, a automacao e os conteudos (071); o cliente interno e
+     * criado ou reutilizado aqui. O envio NAO concede nada: o vinculo e a concessao nascem no aceite, que reconfere tudo. Recusas:
+     * escopo indisponivel (409 {@code escopo_indisponivel}); destinataria que e conta interna da organizacao (409
+     * {@code membro_interno}); conta antiga de cliente com o mesmo e-mail (409 {@code conta_cliente_antiga}); a mesma automacao e
+     * maquina ja compartilhadas com ela (409 {@code concessao_existente}); convite aberto (409 {@code convite_pendente}).
      */
-    public ClientCreated issueClient(UUID org, ValidSession actor, String actorToken, String rawEmail, ClientScope scope) {
+    public ClientCreated issueClient(UUID org, ValidSession actor, String actorToken, String rawEmail, String rawName, ClientScope scope) {
         String email = normalizedEmail(rawEmail);
-        if (scope == null || scope.clientId() == null || scope.automationId() == null) {
-            throw refuseInvalid("escopo");
-        }
+        String name = recipientName(rawName);
+        requireContent(scope);
         return actions.write(org, j -> {
             lockAndAuthorizeClient(j, org, actor, actorToken);
-            UUID workspace = requireClientScope(j, org, scope);
-            closeExpiredOpen(j, org, actor, email);
-            if (open(j, org, email).isPresent()) {
-                throw refuse(Failure.CONFLICT, "convite_pendente");
-            }
-            requireClientRecipient(j, org, email, scope);
-            ClientCreated c = insertClient(j, org, actor, email, scope, workspace, null);
-            events.record(j, org, AccessEvents.ClientEvent.of(AccessEvents.Type.CONVITE_EMITIDO, actor.membershipId(), actor.userId(), scope.clientId())
-                    .scope(workspace, scope.automationId(), scope.workerId(), scope.canReadLogs(), scope.canDownloadResults())
-                    .invitation(c.invitationId(), true), AccessActions.correlation());
-            return c;
+            return issueClientIn(j, org, actor, email, name, scope, null);
         });
+    }
+
+    /**
+     * Emissao dentro de uma transacao ja autorizada (org.manage, external_access.manage, step-up). {@code shareRequest}: pedido de
+     * membro aprovado agora por quem emite (071; nao usa a excecao da administradora).
+     */
+    ClientCreated issueClientIn(JdbcClient j, UUID org, ValidSession actor, String email, String name, ClientScope requested, UUID shareRequest) {
+        UUID workspace = requireAutomationScope(j, org, requested.automationId(), requested.workerId());
+        closeExpiredOpen(j, org, actor, email);
+        if (open(j, org, email).isPresent()) {
+            throw refuse(Failure.CONFLICT, "convite_pendente");
+        }
+        UUID client = requested.clientId() != null ? requested.clientId() : existingClient(j, org, email).orElse(null);
+        ClientScope scope = new ClientScope(client, requested.automationId(), requested.workerId(), requested.canViewDashboard(),
+                requested.canDownloadResults());
+        requireClientRecipient(j, org, email, scope);
+        if (client == null) {
+            client = createClient(j, org, actor, name);
+            scope = new ClientScope(client, scope.automationId(), scope.workerId(), scope.canViewDashboard(), scope.canDownloadResults());
+        }
+        requireClientScope(j, org, scope);
+        ClientCreated c = insertClient(j, org, actor, email, name, scope, workspace, null, shareRequest);
+        events.record(j, org, AccessEvents.ClientEvent.of(AccessEvents.Type.CONVITE_EMITIDO, actor.membershipId(), actor.userId(), scope.clientId())
+                .scope(workspace, scope.automationId(), scope.workerId(), scope.canViewDashboard(), scope.canDownloadResults()).shareRequest(shareRequest)
+                .invitation(c.invitationId(), shareRequest == null), AccessActions.correlation());
+        return c;
+    }
+
+    /**
+     * Cliente interno da pessoa, sem etapa para quem convida: o do vinculo de cliente que ela ja tem na organizacao ou o do ultimo
+     * convite de cliente para o mesmo e-mail (cliente ativo). Nunca liga conta por e-mail: a escolha so evita cadastros repetidos;
+     * o aceite reconfere a identidade.
+     */
+    private static Optional<UUID> existingClient(JdbcClient j, UUID org, String email) {
+        Optional<UUID> linked = j.sql("SELECT m.client_id FROM public.users u JOIN public.client_memberships m ON m.organization_id = u.organization_id "
+                        + "AND m.user_id = u.user_id WHERE u.organization_id = ? AND u.email_normalized = ? AND u.account_type = 2")
+                .param(org).param(email).query(UUID.class).optional();
+        if (linked.isPresent()) {
+            return linked;
+        }
+        return j.sql("SELECT i.client_id FROM public.identity_invitations i JOIN public.clients c ON c.organization_id = i.organization_id "
+                        + "AND c.client_id = i.client_id AND c.status = 1 WHERE i.organization_id = ? AND i.email_normalized = ? AND i.invited_account_type = 2 "
+                        + "ORDER BY i.created_at DESC, i.invitation_id DESC LIMIT 1")
+                .param(org).param(email).query(UUID.class).optional();
+    }
+
+    private UUID createClient(JdbcClient j, UUID org, ValidSession actor, String name) {
+        UUID client = j.sql("INSERT INTO public.clients (organization_id, name, status) VALUES (?, ?, 1) RETURNING client_id").param(org).param(name)
+                .query(UUID.class).single();
+        events.record(j, org, AccessEvents.ClientEvent.of(AccessEvents.Type.CLIENTE_CADASTRADO, actor.membershipId(), actor.userId(), client),
+                AccessActions.correlation());
+        return client;
+    }
+
+    static String recipientName(String raw) {
+        String n = raw == null ? "" : raw.strip();
+        if (n.isEmpty() || n.length() > RECIPIENT_NAME_MAX || n.chars().anyMatch(Character::isISOControl)) {
+            throw refuseInvalid("nome");
+        }
+        return n;
+    }
+
+    static void requireContent(ClientScope scope) {
+        if (scope == null || scope.automationId() == null) {
+            throw refuseInvalid("escopo");
+        }
+        if (!scope.canViewDashboard() && !scope.canDownloadResults()) {
+            throw refuseInvalid("conteudo");
+        }
     }
 
     /** Reenvio: o convite aberto (no prazo ou vencido) e revogado com motivo REENVIADO e um novo, com token e prazo novos, o substitui. */
@@ -152,10 +213,15 @@ public final class InvitationService {
         UUID workspace = requireClientScope(j, org, scope);
         close(j, org, actor, row.invitationId(), REENVIADO);
         requireClientRecipient(j, org, row.email(), scope);
-        ClientCreated c = insertClient(j, org, actor, row.email(), scope, workspace, row.invitationId());
+        // o vinculo com o pedido aprovado so segue com quem o aprovou; outra administradora reenvia pela propria excecao (auditada)
+        UUID request = row.shareRequest() != null && actor.membershipId().equals(approverOf(j, org, row.shareRequest())) ? row.shareRequest() : null;
+        String name = row.recipientName() != null ? row.recipientName()
+                : j.sql("SELECT name FROM public.clients WHERE organization_id = ? AND client_id = ?").param(org).param(scope.clientId())
+                        .query(String.class).single();
+        ClientCreated c = insertClient(j, org, actor, row.email(), name, scope, workspace, row.invitationId(), request);
         events.record(j, org, AccessEvents.ClientEvent.of(AccessEvents.Type.CONVITE_REENVIADO, actor.membershipId(), actor.userId(), scope.clientId())
-                .scope(workspace, scope.automationId(), scope.workerId(), scope.canReadLogs(), scope.canDownloadResults())
-                .invitation(c.invitationId(), true), AccessActions.correlation());
+                .scope(workspace, scope.automationId(), scope.workerId(), scope.canViewDashboard(), scope.canDownloadResults()).shareRequest(request)
+                .invitation(c.invitationId(), request == null), AccessActions.correlation());
         return new Created(c.invitationId(), c.email(), null, null, c.expiresAt());
     }
 
@@ -167,16 +233,29 @@ public final class InvitationService {
         actions.requireStepUp(j, actor);
     }
 
+    private static UUID approverOf(JdbcClient j, UUID org, UUID request) {
+        return j.sql("SELECT decided_by_membership_id FROM public.client_share_requests WHERE organization_id = ? AND share_request_id = ? AND status = 2")
+                .param(org).param(request).query(UUID.class).optional().orElse(null);
+    }
+
     /** Cliente ativo, automacao ativa num ambiente ativo, maquina ativa e autorizada nesse ambiente. Devolve o ambiente. */
     static UUID requireClientScope(JdbcClient j, UUID org, ClientScope scope) {
         boolean client = j.sql("SELECT EXISTS (SELECT 1 FROM public.clients WHERE organization_id = ? AND client_id = ? AND status = 1)")
                 .param(org).param(scope.clientId()).query(Boolean.class).single();
-        UUID workspace = j.sql("SELECT public.access_automation_shareable(?, ?)").param(org).param(scope.automationId()).query(UUID.class)
-                .optional().orElse(null);
-        if (!client || workspace == null) {
+        if (!client) {
             throw refuse(Failure.CONFLICT, "escopo_indisponivel");
         }
-        if (scope.workerId() != null && !j.sql("SELECT public.access_worker_in_workspace(?, ?, ?)").param(org).param(scope.workerId()).param(workspace)
+        return requireAutomationScope(j, org, scope.automationId(), scope.workerId());
+    }
+
+    /** Automacao ativa num ambiente ativo e maquina (se houver) ativa e autorizada nesse ambiente. Devolve o ambiente. */
+    static UUID requireAutomationScope(JdbcClient j, UUID org, UUID automation, UUID worker) {
+        UUID workspace = j.sql("SELECT public.access_automation_shareable(?, ?)").param(org).param(automation).query(UUID.class)
+                .optional().orElse(null);
+        if (workspace == null) {
+            throw refuse(Failure.CONFLICT, "escopo_indisponivel");
+        }
+        if (worker != null && !j.sql("SELECT public.access_worker_in_workspace(?, ?, ?)").param(org).param(worker).param(workspace)
                 .query(Boolean.class).single()) {
             throw refuse(Failure.CONFLICT, "escopo_indisponivel");
         }
@@ -188,7 +267,7 @@ public final class InvitationService {
      * ligada a uma identidade; se ja e cliente (conta ligada), tem de ser do MESMO cliente e sem esta automacao/maquina ativa ou
      * pedida.
      */
-    private static void requireClientRecipient(JdbcClient j, UUID org, String email, ClientScope scope) {
+    static void requireClientRecipient(JdbcClient j, UUID org, String email, ClientScope scope) {
         record Account(UUID user, short type, boolean linked) {
         }
         Optional<Account> a = j.sql("SELECT user_id, account_type, public.identity_account_is_linked(u.organization_id, u.user_id) "
@@ -208,7 +287,7 @@ public final class InvitationService {
         Membership m = j.sql("SELECT client_membership_id, client_id FROM public.client_memberships WHERE organization_id = ? AND user_id = ?")
                 .param(org).param(a.get().user()).query((rs, n) -> new Membership(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class)))
                 .optional().orElseThrow(() -> refuse(Failure.CONFLICT, "conta_indisponivel"));
-        if (!m.client().equals(scope.clientId())) {
+        if (scope.clientId() != null && !m.client().equals(scope.clientId())) {
             throw refuse(Failure.CONFLICT, "cliente_diferente");
         }
         boolean exists = j.sql("SELECT EXISTS (SELECT 1 FROM public.client_automation_grants WHERE organization_id = ? AND client_membership_id = ? "
@@ -219,16 +298,18 @@ public final class InvitationService {
         }
     }
 
-    private ClientCreated insertClient(JdbcClient j, UUID org, ValidSession actor, String email, ClientScope scope, UUID workspace, UUID replaces) {
+    private ClientCreated insertClient(JdbcClient j, UUID org, ValidSession actor, String email, String name, ClientScope scope, UUID workspace,
+                                       UUID replaces, UUID shareRequest) {
         String token = Tokens.newToken();
         ClientCreated c = j.sql("INSERT INTO public.identity_invitations (organization_id, invited_account_type, client_id, email_normalized, issued_by, "
                         + "token_hash, expires_at, issued_by_membership_id, replaces_invitation_id, automation_id, worker_id, can_read_logs, "
-                        + "can_download_results) VALUES (?, 2, ?, ?, ?, ?, now() + ?::interval, ?, ?, ?, ?, ?, ?) RETURNING invitation_id, expires_at")
+                        + "can_view_dashboard, can_download_results, recipient_name, share_request_id) "
+                        + "VALUES (?, 2, ?, ?, ?, ?, now() + ?::interval, ?, ?, ?, ?, false, ?, ?, ?, ?) RETURNING invitation_id, expires_at")
                 .param(org).param(scope.clientId()).param(email).param(actor.userId()).param(Tokens.sha256Hex(token)).param(VALIDITY)
-                .param(actor.membershipId()).param(replaces).param(scope.automationId()).param(scope.workerId()).param(scope.canReadLogs())
-                .param(scope.canDownloadResults())
-                .query((rs, n) -> new ClientCreated(rs.getObject(1, UUID.class), email, scope.clientId(), workspace, scope.automationId(), scope.workerId(),
-                        scope.canReadLogs(), scope.canDownloadResults(), rs.getObject(2, OffsetDateTime.class)))
+                .param(actor.membershipId()).param(replaces).param(scope.automationId()).param(scope.workerId()).param(scope.canViewDashboard())
+                .param(scope.canDownloadResults()).param(name).param(shareRequest)
+                .query((rs, n) -> new ClientCreated(rs.getObject(1, UUID.class), email, name, scope.clientId(), workspace, scope.automationId(),
+                        scope.workerId(), scope.canViewDashboard(), scope.canDownloadResults(), shareRequest, rs.getObject(2, OffsetDateTime.class)))
                 .single();
         // intencao NA transacao do ato (021), chave = o convite; o aceite e o mesmo link do convite interno
         mail.record(j, new MailIntents.Intent(MailSender.Kind.ORG_INVITATION, org, email, token, "convite:" + c.invitationId()));
@@ -250,7 +331,8 @@ public final class InvitationService {
                 if (row.client() != null) {
                     ClientScope sc = row.client();
                     events.record(j, org, AccessEvents.ClientEvent.of(AccessEvents.Type.CONVITE_REVOGADO, actor.membershipId(), actor.userId(), sc.clientId())
-                            .scope(null, sc.automationId(), sc.workerId(), sc.canReadLogs(), sc.canDownloadResults()).invitation(row.invitationId(), false),
+                            .scope(null, sc.automationId(), sc.workerId(), sc.canViewDashboard(), sc.canDownloadResults()).shareRequest(row.shareRequest())
+                            .invitation(row.invitationId(), false),
                             AccessActions.correlation());
                 } else {
                     events.record(j, org, AccessEvents.Event.of(AccessEvents.Type.CONVITE_REVOGADO, actor.membershipId(), actor.userId())
@@ -357,20 +439,20 @@ public final class InvitationService {
 
     /** {@code client}: o escopo do convite de Cliente (070); nulo no convite interno. */
     private record Row(UUID invitationId, String email, String role, UUID workspace, OffsetDateTime acceptedAt, OffsetDateTime revokedAt,
-                       ClientScope client) {
+                       ClientScope client, String recipientName, UUID shareRequest) {
     }
 
     private static Optional<Row> row(JdbcClient j, UUID org, UUID invitation, boolean lock) {
         return j.sql("""
                 SELECT i.invitation_id, i.email_normalized, r.code, i.workspace_id, i.accepted_at, i.revoked_at, i.invited_account_type, i.client_id,
-                       i.automation_id, i.worker_id, i.can_read_logs, i.can_download_results
+                       i.automation_id, i.worker_id, i.can_view_dashboard, i.can_download_results, i.recipient_name, i.share_request_id
                   FROM public.identity_invitations i LEFT JOIN public.roles r ON r.role_id = i.role_id
                  WHERE i.organization_id = ? AND i.invitation_id = ? AND (i.invited_account_type = 1 OR i.automation_id IS NOT NULL)
                 """ + (lock ? " FOR UPDATE OF i" : "")).param(org).param(invitation)
                 .query((rs, n) -> new Row(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getObject(4, UUID.class),
                         rs.getObject(5, OffsetDateTime.class), rs.getObject(6, OffsetDateTime.class),
                         rs.getShort(7) == 2 ? new ClientScope(rs.getObject(8, UUID.class), rs.getObject(9, UUID.class), rs.getObject(10, UUID.class),
-                                rs.getBoolean(11), rs.getBoolean(12)) : null))
+                                rs.getBoolean(11), rs.getBoolean(12)) : null, rs.getString(13), rs.getObject(14, UUID.class)))
                 .optional();
     }
 

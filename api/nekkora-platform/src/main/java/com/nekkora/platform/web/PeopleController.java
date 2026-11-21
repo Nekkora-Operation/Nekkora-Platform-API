@@ -281,7 +281,7 @@ public class PeopleController {
                 SELECT i.invitation_id, i.email_normalized, r.code, i.workspace_id, w.name AS workspace_name, i.created_at, i.expires_at,
                        i.accepted_at, i.revoked_at, i.revoke_reason, i.accepted_user_id, i.invited_account_type, i.client_id, c.name AS client_name,
                        i.automation_id, a.name AS automation_name, a.workspace_id AS automation_workspace_id, aw.name AS automation_workspace_name,
-                       i.worker_id, k.name AS worker_name, i.can_read_logs, i.can_download_results,
+                       i.worker_id, k.name AS worker_name, i.can_view_dashboard, i.can_download_results, i.recipient_name, i.share_request_id,
                        CASE WHEN i.accepted_at IS NOT NULL THEN 'ACEITO' WHEN i.revoked_at IS NOT NULL THEN 'REVOGADO'
                             WHEN i.expires_at <= clock_timestamp() THEN 'EXPIRADO' ELSE 'PENDENTE' END AS state
                   FROM public.identity_invitations i
@@ -326,8 +326,11 @@ public class PeopleController {
                         UUID wk = rs.getObject("worker_id", UUID.class);
                         sc.put("workerId", wk == null ? null : wk.toString());
                         sc.put("workerName", rs.getString("worker_name"));
-                        sc.put("canReadLogs", rs.getBoolean("can_read_logs"));
+                        sc.put("canViewDashboard", rs.getBoolean("can_view_dashboard"));
                         sc.put("canDownloadResults", rs.getBoolean("can_download_results"));
+                        sc.put("recipientName", rs.getString("recipient_name"));
+                        UUID sr = rs.getObject("share_request_id", UUID.class);
+                        sc.put("shareRequestId", sr == null ? null : sr.toString());
                         v.put("clientScope", sc);
                     } else {
                         v.put("clientScope", null);

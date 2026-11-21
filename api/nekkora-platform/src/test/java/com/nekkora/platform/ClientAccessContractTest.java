@@ -21,7 +21,7 @@ import org.yaml.snakeyaml.Yaml;
 import com.nekkora.platform.web.ClientAccessController;
 
 /**
- * PLATFORM-FLUXO-002 (070): as rotas de "Clientes e acessos" mapeadas pelo controller sao EXATAMENTE as publicadas com a tag
+ * PLATFORM-FLUXO-002 (070/071): as rotas de "Clientes e acessos" mapeadas pelo controller sao EXATAMENTE as publicadas com a tag
  * propria; escritas com CSRF, leituras so com a sessao; os motivos novos de conflito publicados; a area do cliente publicada so com
  * GET e a sessao de identidade.
  */
@@ -71,7 +71,7 @@ class ClientAccessContractTest {
                 }
             }
         }
-        assertThat(mapped).as("controller = publicadas (tag Clientes e acessos)").isEqualTo(tagged(paths, "Clientes e acessos")).hasSize(14);
+        assertThat(mapped).as("controller = publicadas (tag Clientes e acessos)").isEqualTo(tagged(paths, "Clientes e acessos")).hasSize(19);
         for (String rota : mapped) {
             String[] mp = rota.split(" ", 2);
             Map<String, Object> o = (Map<String, Object>) ((Map<String, Object>) paths.get(mp[1])).get(mp[0]);
@@ -97,11 +97,12 @@ class ClientAccessContractTest {
         assertThat(portal).containsExactlyInAnyOrder(
                 "get /portal/api/v1/me/client-organizations",
                 "get /portal/api/v1/o/{org}/shared-automations",
+                "get /portal/api/v1/o/{org}/shared-automations/{automation}/summary",
                 "get /portal/api/v1/o/{org}/shared-automations/{automation}/executions",
-                "get /portal/api/v1/o/{org}/shared-executions/{kind}/{id}",
-                "get /portal/api/v1/o/{org}/shared-executions/remote/{id}/attempts/{attempt}/logs",
-                "get /portal/api/v1/o/{org}/shared-executions/remote/{id}/attempts/{attempt}/results",
-                "get /portal/api/v1/o/{org}/shared-executions/remote/{id}/attempts/{attempt}/results/{number}/content");
+                "get /portal/api/v1/o/{org}/shared-files",
+                "get /portal/api/v1/o/{org}/shared-files/{attempt}/{number}/content");
+        // 071: nada de registros tecnicos nem detalhe de tentativa na area do cliente
+        assertThat(portal).noneMatch(r -> r.contains("logs") || r.contains("attempts") || r.contains("shared-executions"));
         for (String rota : portal) {
             String[] mp = rota.split(" ", 2);
             Map<String, Object> o = (Map<String, Object>) ((Map<String, Object>) paths.get(mp[1])).get(mp[0]);

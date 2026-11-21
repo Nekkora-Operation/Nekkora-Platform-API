@@ -83,6 +83,21 @@ public final class InvitationAcceptService {
         return "OK".equals(result) ? "internal" : "client";
     }
 
+    /** 071: o que o primeiro acesso mostra e preenche. {@code audience}: internal ou client. */
+    public record Preview(String organizationId, String organizationName, String email, String recipientName, String audience) {
+    }
+
+    /** Convite aberto e no prazo pelo token, dentro da organizacao; qualquer outro caso: 404 unico (o motivo nao e revelado). */
+    public Preview preview(UUID organizationId, String invitationToken, String ip) {
+        limits.identityRoutes(ip);
+        Optional<Preview> p = Tokens.isValidFormat(invitationToken)
+                ? tx.preAuthentication(Mode.READ_ONLY, j -> j.sql("SELECT * FROM public.identity_invitation_preview(?, ?)").param(invitationToken)
+                        .param(organizationId).query((rs, n) -> new Preview(organizationId.toString(), rs.getString("organization_name"), rs.getString("email"),
+                                rs.getString("recipient_name"), rs.getString("audience"))).optional())
+                : Optional.empty();
+        return p.orElseThrow(() -> new ApiException(ApiError.NOT_FOUND, "convite"));
+    }
+
     private static String accept(JdbcClient j, String sessionToken, String invitationToken, UUID organizationId) {
         return j.sql("SELECT public.identity_accept_invitation(?, ?, ?)").param(sessionToken).param(invitationToken).param(organizationId)
                 .query(String.class).single();
