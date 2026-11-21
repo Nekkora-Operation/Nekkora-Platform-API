@@ -28,9 +28,29 @@ public class SignupController {
     public static final String SIGNUP = "/api/v1/signup";
     public static final String CONFIRM = "/api/v1/signup/confirm";
     public static final String RESEND = "/api/v1/signup/confirmation/resend";
+    /** 071: o que a confirmacao ja sabe pelo token do link (e-mail e o nome vindo do convite, se houver). */
+    public static final String PREVIEW = "/api/v1/signup/preview";
 
-    /** {@code password} e {@code displayName} existem aqui so para serem RECUSADOS: pertencem a confirmacao. */
-    public record SignupRequest(String email, char[] password, String displayName) {
+    /**
+     * {@code password} e {@code displayName} existem aqui so para serem RECUSADOS: pertencem a confirmacao. {@code invitation}
+     * (071, opcional): o convite aberto de onde a pessoa veio; se ele for para o mesmo e-mail, o nome informado no convite vira o
+     * nome provisorio da identidade pendente (a confirmacao continua exigindo o link do e-mail e a senha).
+     */
+    public record SignupRequest(String email, char[] password, String displayName, InvitationRef invitation) {
+    }
+
+    public record InvitationRef(String organizationId, String token) {
+        @Override
+        public String toString() {
+            return "InvitationRef[organizationId=" + organizationId + "]";
+        }
+    }
+
+    public record PreviewRequest(String token) {
+        @Override
+        public String toString() {
+            return "PreviewRequest[]";
+        }
     }
 
     public record ResendRequest(String email) {
@@ -61,12 +81,30 @@ public class SignupController {
             if (password != null || (body != null && body.displayName() != null)) {
                 throw ApiException.invalid("campo_da_confirmacao");
             }
-            signups.signup(body == null ? null : body.email(), RequestContextFilter.ip(req));
+            signups.signup(body == null ? null : body.email(), RequestContextFilter.ip(req), invitation(body == null ? null : body.invitation()));
             return ResponseEntity.accepted().build();
         } finally {
             if (password != null) {
                 Arrays.fill(password, '\0');
             }
+        }
+    }
+
+    /** 071: 200 {email, displayName} (nome nulo quando ainda e o provisorio); token invalido, vencido ou usado: 400. */
+    @PostMapping(PREVIEW)
+    public SignupService.Preview preview(@RequestBody(required = false) PreviewRequest body, HttpServletRequest req) {
+        requireEnabled();
+        return signups.preview(body == null ? null : body.token(), RequestContextFilter.ip(req));
+    }
+
+    private static SignupService.Invite invitation(InvitationRef ref) {
+        if (ref == null) {
+            return null;
+        }
+        try {
+            return ref.organizationId() == null || ref.token() == null ? null : new SignupService.Invite(java.util.UUID.fromString(ref.organizationId()), ref.token());
+        } catch (IllegalArgumentException e) {
+            return null;   // convite ilegivel: o cadastro segue igual, sem o nome
         }
     }
 

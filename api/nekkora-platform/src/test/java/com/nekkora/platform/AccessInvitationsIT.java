@@ -114,7 +114,7 @@ class AccessInvitationsIT extends IdentityTestBase {
         identityStepUp(f);
         BrowserClient.Response ok = accept(f, a.org().id(), token);
         assertThat(ok.status()).as(ok.body()).isEqualTo(200);
-        assertThat(ok.body()).isEqualTo("{\"organizationId\":\"" + a.org().id() + "\"}");
+        assertThat(ok.body()).isEqualTo("{\"organizationId\":\"" + a.org().id() + "\",\"audience\":\"internal\"}");
 
         String conta = value("SELECT u.user_id FROM users u JOIN identity_users iu ON iu.user_id = u.user_id WHERE iu.identity_id = '" + f.identity()
                 + "' AND u.organization_id = '" + a.org().id() + "' AND iu.link_channel = 'convite'");

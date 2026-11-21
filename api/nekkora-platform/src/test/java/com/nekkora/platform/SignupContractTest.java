@@ -51,7 +51,7 @@ class SignupContractTest {
             }
         }
         assertThat(mapeadas).as("rotas do controller = rotas publicadas").isEqualTo(publicadas)
-                .containsExactlyInAnyOrder(SignupController.SIGNUP, SignupController.CONFIRM, SignupController.RESEND);
+                .containsExactlyInAnyOrder(SignupController.SIGNUP, SignupController.CONFIRM, SignupController.RESEND, SignupController.PREVIEW);   // 071: + a previa da confirmacao
         Map<String, Set<String>> exercitados = Map.of(
                 SignupController.SIGNUP, Set.of("202", "400", "403", "404"),
                 SignupController.CONFIRM, Set.of("204", "400", "403", "404"),
