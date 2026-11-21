@@ -4533,9 +4533,17 @@ components:
       allOf:
         - $ref: '#/components/schemas/Execution'
         - type: object
-          required: [retryOfExecutionId, requestedBy]
+          required: [retryOfExecutionId, requestedBy, machine]
           description: 'errorSummary retirado ate a sanitizacao ser comprovada (decisao DC-10: adiado).'
           properties:
+            machine:
+              type: [object, 'null']
+              required: [workerId, name, computerName]
+              description: 'PLATFORM-FLUXO-002: a maquina (Worker) em que a execucao foi registrada; nula quando a execucao nao tem maquina registrada (nada e inferido)'
+              properties:
+                workerId: { type: string, format: uuid }
+                name: { type: [string, 'null'] }
+                computerName: { type: [string, 'null'], description: 'Computador vinculado hoje a maquina (informado na vinculacao)' }
             retryOfExecutionId: { type: [string, 'null'], format: uuid }
             requestedBy:
               oneOf:
