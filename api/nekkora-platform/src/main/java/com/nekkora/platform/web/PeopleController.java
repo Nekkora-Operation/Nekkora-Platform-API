@@ -46,9 +46,9 @@ public class PeopleController {
     static final String SORT = "group.asc+at.desc+id.desc";
     /** Situacoes do filtro: convite (pelo estado calculado) e membro (pelo vinculo). */
     static final List<String> SITUATIONS = List.of("invitation_pending", "invitation_expired", "invitation_revoked", "invitation_accepted",
-            "member_pending", "member_active", "member_suspended", "member_revoked");
+            "member_pending", "member_active", "member_suspended", "member_revoked", "client_active", "client_suspended", "client_revoked");
     static final Set<String> DEFAULT_SITUATIONS = new LinkedHashSet<>(List.of("invitation_pending", "member_pending", "member_active",
-            "member_suspended", "member_revoked"));
+            "member_suspended", "member_revoked", "client_active", "client_suspended", "client_revoked"));
 
     private final OrgTransactions tx;
     private final WorkspaceAccess access;
@@ -71,7 +71,7 @@ public class PeopleController {
                         WHEN i.expires_at <= clock_timestamp() THEN 'invitation_expired' ELSE 'invitation_pending' END AS situation,
                    i.created_at AS at, i.email_normalized AS email, NULL::text AS display_name
               FROM public.identity_invitations i
-             WHERE i.organization_id = :org AND i.invited_account_type = 1 AND :invitations
+             WHERE i.organization_id = :org AND (i.invited_account_type = 1 OR i.automation_id IS NOT NULL) AND :invitations
             UNION ALL
             SELECT 'member', om.membership_id,
                    CASE om.status WHEN 1 THEN 'member_pending' WHEN 2 THEN 'member_active' WHEN 3 THEN 'member_suspended' ELSE 'member_revoked' END,
@@ -79,6 +79,13 @@ public class PeopleController {
               FROM public.organization_memberships om
               JOIN public.users u ON u.organization_id = om.organization_id AND u.user_id = om.user_id
              WHERE om.organization_id = :org
+            UNION ALL
+            SELECT 'client', cm.client_membership_id,
+                   CASE cm.status WHEN 2 THEN 'client_active' WHEN 3 THEN 'client_suspended' WHEN 4 THEN 'client_revoked' ELSE 'client_suspended' END,
+                   cm.created_at, u.email, u.display_name
+              FROM public.client_memberships cm
+              JOIN public.users u ON u.organization_id = cm.organization_id AND u.user_id = cm.user_id
+             WHERE cm.organization_id = :org
             """;
 
     @GetMapping("/api/v1/o/{org}/people")
@@ -101,7 +108,7 @@ public class PeopleController {
         List<Map<String, Object>> rows = tx.inOrganization(org, Mode.READ_ONLY, j -> {
             access.requireAnyOrganizationPermission(j, org, s.membershipId(), "org.manage");
             StringBuilder sql = new StringBuilder("SELECT u.* FROM (SELECT x.*, CASE WHEN x.situation = 'invitation_pending' THEN 0 "
-                    + "WHEN x.kind = 'member' THEN 1 ELSE 2 END AS grp FROM (" + UNIFIED + ") x) u WHERE u.situation IN (:situations)");
+                    + "WHEN x.kind IN ('member', 'client') THEN 1 ELSE 2 END AS grp FROM (" + UNIFIED + ") x) u WHERE u.situation IN (:situations)");
             if (search != null) {
                 sql.append(" AND (lower(u.email) LIKE :q ESCAPE '\\' OR lower(coalesce(u.display_name, '')) LIKE :q ESCAPE '\\')");
             }
@@ -128,7 +135,11 @@ public class PeopleController {
             }).list();
             List<Map<String, Object>> items = new ArrayList<>();
             for (Map<String, Object> k : keys) {
-                Map<String, Object> item = "member".equals(k.get("kind")) ? member(j, org, (UUID) k.get("id")) : invitation(j, org, (UUID) k.get("id"));
+                Map<String, Object> item = switch ((String) k.get("kind")) {
+                    case "member" -> member(j, org, (UUID) k.get("id"));
+                    case "client" -> client(j, org, (UUID) k.get("id"));
+                    default -> invitation(j, org, (UUID) k.get("id"));
+                };
                 item.put("\u0000grp", k.get("grp"));
                 items.add(item);
             }
@@ -148,7 +159,11 @@ public class PeopleController {
     }
 
     private String cursorOf(CursorCodec.Scope scope, Map<String, Object> last) {
-        Object at = "member".equals(last.get("kind")) ? ((Map<?, ?>) last.get("member")).get("joinedAt") : ((Map<?, ?>) last.get("invitation")).get("createdAt");
+        Object at = switch ((String) last.get("kind")) {
+            case "member" -> ((Map<?, ?>) last.get("member")).get("joinedAt");
+            case "client" -> ((Map<?, ?>) last.get("client")).get("joinedAt");
+            default -> ((Map<?, ?>) last.get("invitation")).get("createdAt");
+        };
         return cursors.encode(scope, List.of(((Number) last.get("\u0000grp")).longValue(), at, last.get("id")));
     }
 
@@ -195,8 +210,47 @@ public class PeopleController {
                     m.put("roles", roles(j, org, membership));
                     item.put("member", m);
                     item.put("invitation", null);
+                    item.put("client", null);
                     return item;
                 }).single();
+    }
+
+    /**
+     * Pessoa de cliente (070): a conta de cliente desta organizacao, o cadastro de cliente e as concessoes que ainda contam (ativas e
+     * pedidos pendentes, por automacao; as por ambiente inteiro da 003 entram como {@code kind = workspace}). {@code linkedToIdentity}:
+     * falso nas contas de cliente antigas (entrada propria, sem identidade).
+     */
+    private static Map<String, Object> client(JdbcClient j, UUID org, UUID clientMembership) {
+        Map<String, Object> item = j.sql("""
+                SELECT cm.client_membership_id, cm.user_id, u.display_name, u.email, cm.status, cm.created_at, c.client_id, c.name AS client_name,
+                       public.identity_account_is_linked(cm.organization_id, cm.user_id) AS linked
+                  FROM public.client_memberships cm
+                  JOIN public.users u ON u.organization_id = cm.organization_id AND u.user_id = cm.user_id
+                  JOIN public.clients c ON c.organization_id = cm.organization_id AND c.client_id = cm.client_id
+                 WHERE cm.organization_id = :org AND cm.client_membership_id = :m
+                """).param("org", org).param("m", clientMembership).query((rs, n) -> {
+                    Map<String, Object> it = new LinkedHashMap<>();
+                    it.put("kind", "client");
+                    it.put("id", clientMembership.toString());
+                    it.put("member", null);
+                    it.put("invitation", null);
+                    Map<String, Object> c = new LinkedHashMap<>();
+                    c.put("clientMembershipId", clientMembership.toString());
+                    c.put("userId", rs.getObject("user_id", UUID.class).toString());
+                    c.put("displayName", rs.getString("display_name"));
+                    c.put("email", rs.getString("email"));
+                    c.put("status", com.nekkora.platform.admin.ClientAccessService.membershipStatus(rs.getShort("status")));
+                    c.put("joinedAt", rs.getObject("created_at", OffsetDateTime.class));
+                    c.put("clientId", rs.getObject("client_id", UUID.class).toString());
+                    c.put("clientName", rs.getString("client_name"));
+                    c.put("linkedToIdentity", rs.getBoolean("linked"));
+                    it.put("client", c);
+                    return it;
+                }).single();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> c = (Map<String, Object>) item.get("client");
+        c.put("grants", ClientAccessReads.openGrants(j, org, clientMembership));
+        return item;
     }
 
     /** Papeis ATIVOS do membro: os da organizacao e os de ambiente (com o ambiente), pelo codigo. */
@@ -225,18 +279,25 @@ public class PeopleController {
     private static Map<String, Object> invitation(JdbcClient j, UUID org, UUID invitation) {
         return j.sql("""
                 SELECT i.invitation_id, i.email_normalized, r.code, i.workspace_id, w.name AS workspace_name, i.created_at, i.expires_at,
-                       i.accepted_at, i.revoked_at, i.revoke_reason, i.accepted_user_id,
+                       i.accepted_at, i.revoked_at, i.revoke_reason, i.accepted_user_id, i.invited_account_type, i.client_id, c.name AS client_name,
+                       i.automation_id, a.name AS automation_name, a.workspace_id AS automation_workspace_id, aw.name AS automation_workspace_name,
+                       i.worker_id, k.name AS worker_name, i.can_read_logs, i.can_download_results,
                        CASE WHEN i.accepted_at IS NOT NULL THEN 'ACEITO' WHEN i.revoked_at IS NOT NULL THEN 'REVOGADO'
                             WHEN i.expires_at <= clock_timestamp() THEN 'EXPIRADO' ELSE 'PENDENTE' END AS state
                   FROM public.identity_invitations i
                   LEFT JOIN public.roles r ON r.role_id = i.role_id
                   LEFT JOIN public.workspaces w ON w.organization_id = i.organization_id AND w.workspace_id = i.workspace_id
+                  LEFT JOIN public.clients c ON c.organization_id = i.organization_id AND c.client_id = i.client_id
+                  LEFT JOIN public.automations a ON a.organization_id = i.organization_id AND a.automation_id = i.automation_id
+                  LEFT JOIN public.workspaces aw ON aw.organization_id = a.organization_id AND aw.workspace_id = a.workspace_id
+                  LEFT JOIN public.workers k ON k.organization_id = i.organization_id AND k.worker_id = i.worker_id
                  WHERE i.organization_id = :org AND i.invitation_id = :i
                 """).param("org", org).param("i", invitation).query((rs, n) -> {
                     Map<String, Object> item = new LinkedHashMap<>();
                     item.put("kind", "invitation");
                     item.put("id", invitation.toString());
                     item.put("member", null);
+                    item.put("client", null);
                     Map<String, Object> v = new LinkedHashMap<>();
                     v.put("invitationId", invitation.toString());
                     v.put("email", rs.getString("email_normalized"));
@@ -252,6 +313,25 @@ public class PeopleController {
                     v.put("revokeReason", reason(rs.getObject("revoke_reason", Short.class)));
                     UUID accepted = rs.getObject("accepted_user_id", UUID.class);
                     v.put("acceptedUserId", accepted == null ? null : accepted.toString());
+                    boolean client = rs.getShort("invited_account_type") == 2;
+                    v.put("audience", client ? "client" : "internal");
+                    if (client) {
+                        Map<String, Object> sc = new LinkedHashMap<>();
+                        sc.put("clientId", rs.getObject("client_id", UUID.class).toString());
+                        sc.put("clientName", rs.getString("client_name"));
+                        sc.put("automationId", rs.getObject("automation_id", UUID.class).toString());
+                        sc.put("automationName", rs.getString("automation_name"));
+                        sc.put("workspaceId", rs.getObject("automation_workspace_id", UUID.class).toString());
+                        sc.put("workspaceName", rs.getString("automation_workspace_name"));
+                        UUID wk = rs.getObject("worker_id", UUID.class);
+                        sc.put("workerId", wk == null ? null : wk.toString());
+                        sc.put("workerName", rs.getString("worker_name"));
+                        sc.put("canReadLogs", rs.getBoolean("can_read_logs"));
+                        sc.put("canDownloadResults", rs.getBoolean("can_download_results"));
+                        v.put("clientScope", sc);
+                    } else {
+                        v.put("clientScope", null);
+                    }
                     item.put("invitation", v);
                     return item;
                 }).single();

@@ -35,7 +35,8 @@ public class InvitationAcceptController {
         }
     }
 
-    public record Accepted(String organizationId) {
+    /** {@code audience}: internal (troca para a sessao da organizacao) ou client (070: area do cliente, pela identidade). */
+    public record Accepted(String organizationId, String audience) {
     }
 
     private final InvitationAcceptService invitations;
@@ -57,7 +58,7 @@ public class InvitationAcceptController {
             throw ApiException.invalid("corpo");
         }
         UUID org = UUID.fromString(body.organizationId());
-        invitations.accept(IdentityFilter.principalOrNull(req), IdentityFilter.token(req), org, body.token(), RequestContextFilter.ip(req));
-        return new Accepted(org.toString());
+        String audience = invitations.accept(IdentityFilter.principalOrNull(req), IdentityFilter.token(req), org, body.token(), RequestContextFilter.ip(req));
+        return new Accepted(org.toString(), audience);
     }
 }

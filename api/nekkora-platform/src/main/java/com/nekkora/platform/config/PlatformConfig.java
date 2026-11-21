@@ -279,6 +279,12 @@ public class PlatformConfig {
         return com.nekkora.platform.admin.GrantAdminService.create(actions, events);
     }
 
+    @Bean
+    com.nekkora.platform.admin.ClientAccessService clientAccessService(com.nekkora.platform.admin.AccessActions actions,
+                                                                      com.nekkora.platform.admin.AccessEvents events) {
+        return com.nekkora.platform.admin.ClientAccessService.create(actions, events);
+    }
+
     /** Canal do Agent (025), lado das pessoas: codigos, revogacao, Worker no workspace, autorizacao de execucao local. */
     @Bean
     com.nekkora.platform.admin.AgentAdminService agentAdminService(com.nekkora.platform.admin.AccessActions actions,

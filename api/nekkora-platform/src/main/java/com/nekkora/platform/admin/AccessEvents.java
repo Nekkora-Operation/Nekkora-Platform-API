@@ -14,7 +14,11 @@ public final class AccessEvents {
     public enum Type {
         CONVITE_EMITIDO(1), CONVITE_REVOGADO(2), CONVITE_REENVIADO(3), CONVITE_ACEITO(4), PAPEL_ATRIBUIDO(5), PAPEL_REVOGADO(6),
         PAPEL_ALTERADO(7), VINCULO_RETIRADO(8), CONCESSAO_CRIADA(9), CONCESSAO_APROVADA(10), CONCESSAO_RENOVADA(11),
-        CONCESSAO_REVISADA(12), CONCESSAO_REVOGADA(13), CONCESSAO_RENOVACAO_SOLICITADA(14);
+        CONCESSAO_REVISADA(12), CONCESSAO_REVOGADA(13), CONCESSAO_RENOVACAO_SOLICITADA(14),
+        // 070: concessao por automacao, vinculo de cliente e cadastro de clientes
+        CLIENTE_CONCESSAO_SOLICITADA(15), CLIENTE_CONCESSAO_APROVADA(16), CLIENTE_CONCESSAO_APLICADA_NO_ACEITE(17), CLIENTE_CONCESSAO_REDUZIDA(18),
+        CLIENTE_CONCESSAO_REVOGADA(19), VINCULO_CLIENTE_SUSPENSO(20), VINCULO_CLIENTE_REATIVADO(21), VINCULO_CLIENTE_RETIRADO(22),
+        CLIENTE_CADASTRADO(23), CLIENTE_ALTERADO(24);
 
         private final short code;
 
@@ -63,6 +67,50 @@ public final class AccessEvents {
         public Event grant(UUID g, Short d) {
             return new Event(type, actorMembership, actorUser, targetUser, targetMembership, role, previousRole, workspace, invitation, assignment, g, d);
         }
+    }
+
+    /**
+     * Ato sobre cliente (070): o escopo vai em colunas proprias (cliente, vinculo de cliente, automacao, maquina, concessao por
+     * automacao, permissoes). {@code exception}: o ato usou a excecao a D-GRANT-1 do convite de Cliente.
+     */
+    public record ClientEvent(Type type, UUID actorMembership, UUID actorUser, UUID targetUser, UUID workspace, UUID invitation, UUID client,
+                              UUID clientMembership, UUID automation, UUID worker, UUID automationGrant, Boolean canReadLogs,
+                              Boolean canDownloadResults, boolean exception) {
+
+        public static ClientEvent of(Type type, UUID actorMembership, UUID actorUser, UUID client) {
+            return new ClientEvent(type, actorMembership, actorUser, null, null, null, client, null, null, null, null, null, null, false);
+        }
+
+        public ClientEvent target(UUID user, UUID clientMembership) {
+            return new ClientEvent(type, actorMembership, actorUser, user, workspace, invitation, client, clientMembership, automation, worker,
+                    automationGrant, canReadLogs, canDownloadResults, exception);
+        }
+
+        public ClientEvent scope(UUID ws, UUID a, UUID w, Boolean logs, Boolean results) {
+            return new ClientEvent(type, actorMembership, actorUser, targetUser, ws, invitation, client, clientMembership, a, w, automationGrant, logs,
+                    results, exception);
+        }
+
+        public ClientEvent invitation(UUID i, boolean usesException) {
+            return new ClientEvent(type, actorMembership, actorUser, targetUser, workspace, i, client, clientMembership, automation, worker,
+                    automationGrant, canReadLogs, canDownloadResults, usesException);
+        }
+
+        public ClientEvent grant(UUID g) {
+            return new ClientEvent(type, actorMembership, actorUser, targetUser, workspace, invitation, client, clientMembership, automation, worker, g,
+                    canReadLogs, canDownloadResults, exception);
+        }
+    }
+
+    public void record(JdbcClient j, UUID org, ClientEvent e, UUID correlation) {
+        j.sql("""
+                INSERT INTO public.access_events (organization_id, event_type, actor_membership_id, actor_user_id, target_user_id, workspace_id,
+                    invitation_id, client_id, client_membership_id, automation_id, worker_id, automation_grant_id, can_read_logs,
+                    can_download_results, grant_exception, correlation_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """).param(org).param(e.type().code()).param(e.actorMembership()).param(e.actorUser()).param(e.targetUser()).param(e.workspace())
+                .param(e.invitation()).param(e.client()).param(e.clientMembership()).param(e.automation()).param(e.worker()).param(e.automationGrant())
+                .param(e.canReadLogs()).param(e.canDownloadResults()).param(e.exception()).param(correlation).update();
     }
 
     public void record(JdbcClient j, UUID org, Event e, UUID correlation) {

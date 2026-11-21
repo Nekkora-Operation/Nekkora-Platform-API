@@ -181,6 +181,18 @@ public enum ApiError {
     ACTIVATION_WITHOUT_WORKERS(HttpStatus.CONFLICT, "conflict", "activation_without_workers"),
     /** PLATFORM-FLUXO-002: renovar autorizacoes so existe no modelo por licenca (no anterior, a validade e a informada). */
     ACTIVATION_RENEWAL_NOT_APPLICABLE(HttpStatus.CONFLICT, "conflict", "activation_renewal_not_applicable"),
+    /** 070: a destinataria do convite de Cliente e conta interna da organizacao; o convite nao reduziria os privilegios dela. */
+    CLIENT_INVITATION_INTERNAL_MEMBER(HttpStatus.CONFLICT, "conflict", "client_invitation_internal_member"),
+    /** 070: ha conta de cliente antiga (sem identidade) com o e-mail; nunca e ligada por coincidencia de e-mail. */
+    CLIENT_INVITATION_LEGACY_ACCOUNT(HttpStatus.CONFLICT, "conflict", "client_invitation_legacy_account"),
+    /** 070: a pessoa ja e cliente desta organizacao por OUTRO cadastro de cliente (uma conta, um cliente). */
+    CLIENT_INVITATION_OTHER_CLIENT(HttpStatus.CONFLICT, "conflict", "client_invitation_other_client"),
+    /** 070: a mesma automacao (e maquina) ja esta compartilhada com a pessoa, ou ha pedido pendente. */
+    CLIENT_GRANT_EXISTS(HttpStatus.CONFLICT, "conflict", "client_grant_exists"),
+    /** 070: cliente, automacao, ambiente ou maquina deixou de estar disponivel; nada foi aplicado. */
+    CLIENT_SCOPE_UNAVAILABLE(HttpStatus.CONFLICT, "conflict", "client_scope_unavailable"),
+    /** 070: ampliar permissoes de uma concessao exige outro pedido, aprovado por outra pessoa. */
+    CLIENT_GRANT_WIDENING_REQUIRES_REQUEST(HttpStatus.CONFLICT, "conflict", "client_grant_widening_requires_request"),
     /** 064 (conferencia nos fluxos): a organizacao exige licenca e a automacao nao tem licenca vinculada; nada foi iniciado. */
     LICENSE_REQUIRED(HttpStatus.CONFLICT, "conflict", "license_required"),
     /** 064: a licenca vinculada a automacao esta fora de periodo (vencida, a espera de renovacao); nada foi iniciado. */

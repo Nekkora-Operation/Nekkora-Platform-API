@@ -46,7 +46,8 @@ public final class InvitationAcceptService {
         this.limits = limits;
     }
 
-    public void accept(IdentityPrincipal who, String sessionToken, UUID organizationId, String invitationToken, String ip) {
+    /** Devolve {@code internal} (membro da organizacao) ou {@code client} (070: cliente; entra pela area do cliente, sem sessao da organizacao). */
+    public String accept(IdentityPrincipal who, String sessionToken, UUID organizationId, String invitationToken, String ip) {
         limits.identityRoutes(ip);
         if (who == null || !Tokens.isValidFormat(sessionToken)) {
             throw ApiException.unauthenticated("sessao_identidade");
@@ -63,17 +64,23 @@ public final class InvitationAcceptService {
         String result = Tokens.isValidFormat(invitationToken)
                 ? tx.preAuthentication(Mode.READ_WRITE, j -> accept(j, sessionToken, invitationToken, organizationId))
                 : "INVALIDO";
-        if (!"OK".equals(result)) {
+        if (!"OK".equals(result) && !"OK_CLIENTE".equals(result)) {
             LOG.info("evento=convite.aceite_negado org={} identidade={} ip={} regra={}", organizationId, identity, ClientIpResolver.truncated(ip), result);
             throw switch (result) {
                 case "JA_MEMBRO" -> new ApiException(ApiError.ALREADY_MEMBER, "ja_membro");
                 case "CONTA_EXISTENTE" -> new ApiException(ApiError.ACCOUNT_EXISTS, "conta_existente");
                 case "CONTA_INDISPONIVEL" -> new ApiException(ApiError.ACCOUNT_UNAVAILABLE, "conta_indisponivel");
+                // 070: convite de Cliente
+                case "MEMBRO_INTERNO" -> new ApiException(ApiError.CLIENT_INVITATION_INTERNAL_MEMBER, "membro_interno");
+                case "CLIENTE_DIFERENTE" -> new ApiException(ApiError.CLIENT_INVITATION_OTHER_CLIENT, "cliente_diferente");
+                case "CONCESSAO_EXISTENTE" -> new ApiException(ApiError.CLIENT_GRANT_EXISTS, "concessao_existente");
+                case "ESCOPO_INDISPONIVEL" -> new ApiException(ApiError.CLIENT_SCOPE_UNAVAILABLE, "escopo_indisponivel");
                 default -> new ApiException(ApiError.NOT_FOUND, "convite");
             };
         }
-        LOG.info("evento=convite.aceito org={} identidade={} ip={} correlacao={}", organizationId, identity, ClientIpResolver.truncated(ip),
-                RequestContext.correlation());
+        LOG.info("evento=convite.aceito org={} identidade={} ip={} tipo={} correlacao={}", organizationId, identity, ClientIpResolver.truncated(ip),
+                result, RequestContext.correlation());
+        return "OK".equals(result) ? "internal" : "client";
     }
 
     private static String accept(JdbcClient j, String sessionToken, String invitationToken, UUID organizationId) {
