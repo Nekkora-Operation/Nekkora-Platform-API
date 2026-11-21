@@ -150,6 +150,7 @@ class RemoteMachinesIT extends PlatformTestBase {
         }
         BrowserClient admin = browser();
         firstLogin(admin, o.id(), new TestUser(o.adminId(), o.adminEmail(), PASSWORD.toCharArray()));
+        assertThat(admin.get("/api/v1/o/" + o.id() + "/me").body()).as("ligada nesta Platform").contains("\"remoteExecutionAvailable\":true");
         String base = "/api/v1/o/" + o.id() + "/agent-enrollments";
         String marked = "{\"workerName\":\"Estacao remota\",\"agentName\":\"Maquina 1\",\"expiresInMinutes\":15,\"remoteExecution\":true}";
         assertThat(admin.post(base, marked).status()).as("sem confirmacao reforcada").isEqualTo(403);

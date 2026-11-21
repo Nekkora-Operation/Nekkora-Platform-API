@@ -5841,6 +5841,7 @@ components:
         organizationActivationState: { $ref: '#/components/schemas/OrganizationActivationState' }
         organizationLicenseModel: { $ref: '#/components/schemas/OrganizationLicenseModel' }
         stepUpMethod: { $ref: '#/components/schemas/StepUpMethod' }
+        remoteExecutionAvailable: { type: boolean, description: 'RELEASE-2.2: se esta Platform aceita execucao remota (chave nekkora.remote-execution.enabled; padrao false). So indicacao para a tela; cada rota continua recusando com 409 remote_execution_unavailable. Ausente (API anterior): tratar como indisponivel.' }
     OrganizationLicenseModel:
       type: string
       enum: [legacy, licensed]
