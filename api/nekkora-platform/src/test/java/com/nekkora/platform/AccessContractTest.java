@@ -56,7 +56,7 @@ class AccessContractTest {
         Map<String, Object> paths = (Map<String, Object>) spec().get("paths");
         Set<String> publicadas = new TreeSet<>();
         for (Map.Entry<String, Object> e : paths.entrySet()) {
-            boolean acesso = e.getKey().equals(InvitationAcceptController.ACCEPT) || e.getKey().matches("/api/v1/o/\\{org}/(invitations|role-assignments).*")
+            boolean acesso = e.getKey().equals(InvitationAcceptController.ACCEPT) || e.getKey().equals(InvitationAcceptController.PREVIEW) || e.getKey().matches("/api/v1/o/\\{org}/(invitations|role-assignments).*")
                     || e.getKey().matches("/api/v1/o/\\{org}/users/\\{user}/(roles|membership/revoke)")
                     || e.getKey().matches("/api/v1/o/\\{org}/client-grants(/\\{grant}/(approve|renew|renew/approve|review))?");
             if (!acesso) {
@@ -68,7 +68,7 @@ class AccessContractTest {
                 }
             }
         }
-        assertThat(mapeadas).as("rotas dos controllers = rotas publicadas").isEqualTo(publicadas).hasSize(15);
+        assertThat(mapeadas).as("rotas dos controllers = rotas publicadas").isEqualTo(publicadas).hasSize(16);   // 071: + a previa do convite (primeiro acesso)
 
         Map<String, Set<String>> exercitados = Map.ofEntries(
                 Map.entry("post /api/v1/o/{org}/invitations", Set.of("201", "400", "403", "404", "409")),
