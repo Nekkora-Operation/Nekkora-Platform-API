@@ -94,7 +94,8 @@ class IdentityOrganizationJourneysIT extends IdentityTestBase {
         assertThat(value("SELECT string_agg(c || ':' || l.limit_mode || '/' || coalesce(l.limit_value::text, '-'), ' ' ORDER BY c) FROM generate_series(1, 5) c,"
                 + " LATERAL get_effective_resource_limit('" + org + "', c) l")).isEqualTo("1:1/0 2:1/0 3:1/0 4:2/- 5:2/-");
         BrowserClient s = sessaoDaOrganizacao(f, org);
-        assertThat(s.get("/api/v1/o/" + org + "/me").body()).contains("\"organizationActivationState\":\"AGUARDANDO_ATIVACAO\"");
+        assertThat(s.get("/api/v1/o/" + org + "/me").body()).contains("\"organizationActivationState\":\"AGUARDANDO_ATIVACAO\"")
+                .as("execucao remota desligada por padrao").contains("\"remoteExecutionAvailable\":false");
         DB.asSuperuser("SET session_replication_role = replica",
                 "UPDATE ops_activation.organization_states SET state = 2, activated_at = clock_timestamp(), activation_event_id = gen_random_uuid()"
                         + " WHERE organization_id = '" + org + "'",
