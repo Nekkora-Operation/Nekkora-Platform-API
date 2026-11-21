@@ -15,7 +15,7 @@ import com.nekkora.core.testsupport.BrowserClient;
 import com.nekkora.platform.mail.MailSender;
 
 /**
- * PLATFORM-SENHA-001: a mesma politica (12 a 20 pontos de codigo, maiuscula, minuscula, numero e simbolo) em TODAS as rotas
+ * PLATFORM-SENHA-001: a mesma politica (12 a 128 pontos de codigo, maiuscula, minuscula, numero e simbolo) em TODAS as rotas
  * que definem senha, chamadas diretamente: cadastro (que tambem e o primeiro acesso pelo convite de cliente), troca e
  * recuperacao. A recusa nao consome o token (o link continua valendo), nada e cortado nem aparado, a senha nao entra em log e
  * a senha EXISTENTE — criada antes, fora da regra — continua abrindo a sessao.
@@ -26,7 +26,7 @@ class PasswordPolicyIT extends IdentityTestBase {
     /** Uma senha recusada por requisito (rotulo -> senha). */
     private static final List<String[]> FORA_DA_REGRA = List.of(
             new String[] {"curta", "Nk#2026ok"},
-            new String[] {"longa (21)", "Nekkora#2026ok-maisum"},
+            new String[] {"longa (129)", "Nekkora#2026ok" + "x".repeat(115)},
             new String[] {"sem maiuscula", "nekkora#2026ok"},
             new String[] {"sem minuscula", "NEKKORA#2026OK"},
             new String[] {"sem numero", "Nekkora#Teste!"},
@@ -77,7 +77,7 @@ class PasswordPolicyIT extends IdentityTestBase {
         assertThat(DB.serverLog()).doesNotContain(VALIDA);
     }
 
-    /** Nada e aparado nem cortado: espacos nas pontas fazem parte da senha; 21 pontos de codigo sao recusados, nao truncados. */
+    /** Nada e aparado nem cortado: espacos nas pontas fazem parte da senha; 129 pontos de codigo sao recusados, nao truncados. */
     @Test
     void semCorteNemAparo() throws Exception {
         String email = email();
@@ -88,10 +88,10 @@ class PasswordPolicyIT extends IdentityTestBase {
 
         String outro = email();
         String t2 = tokenDoCadastro(outro);
-        String longa = VALIDA + "12345"; // 21
+        String longa = VALIDA + "x".repeat(113); // 129
         assertThat(confirmarCadastro(t2, longa).status()).isEqualTo(400);
-        assertThat(confirmarCadastro(t2, longa.substring(0, 20)).status()).as("os 20 primeiros, enviados de fato, valem").isEqualTo(204);
-        assertThat(login(client(), outro, longa).status()).as("a de 21 nunca foi gravada cortada").isEqualTo(401);
+        assertThat(confirmarCadastro(t2, longa.substring(0, 128)).status()).as("os 128 primeiros, enviados de fato, valem").isEqualTo(204);
+        assertThat(login(client(), outro, longa).status()).as("a de 129 nunca foi gravada cortada").isEqualTo(401);
     }
 
     /** Senha existente fora da regra (criada antes): continua entrando; trocar exige a regra so na NOVA; a atual antiga serve. */

@@ -5,7 +5,7 @@ import java.util.EnumSet;
 import java.util.Set;
 
 /**
- * Senha nova (contrato, §1; PLATFORM-SENHA-001): de 12 a 20 PONTOS DE CODIGO Unicode, com ao menos uma letra maiuscula, uma
+ * Senha nova (contrato, §1; PLATFORM-SENHA-001): de 12 a 128 PONTOS DE CODIGO Unicode, com ao menos uma letra maiuscula, uma
  * minuscula, um numero e um simbolo. Vale onde uma senha e CRIADA OU SUBSTITUIDA (cadastro, inclusive o primeiro acesso pelo
  * convite de cliente; troca; recuperacao) — em todas as rotas, pois todas passam por aqui. O login NAO aplica esta regra: as
  * senhas existentes continuam valendo como foram criadas.
@@ -18,7 +18,7 @@ import java.util.Set;
 public final class PasswordPolicy {
 
     public static final int MIN_LENGTH = 12;
-    public static final int MAX_LENGTH = 20;
+    public static final int MAX_LENGTH = 128;
 
     /** Requisito da senha nova, na ordem em que a tela os mostra. */
     public enum Requirement {

@@ -5532,9 +5532,9 @@ components:
     PasswordConfirmRequest: { type: object, required: [password], properties: { password: { type: string, format: password } } }
     MfaActivated: { type: object, required: [recoveryCodes, csrfToken, restricted], properties: { recoveryCodes: { type: array, items: { type: string }, description: 'Mostrados uma unica vez' }, csrfToken: { type: string, description: 'CSRF da sessao NOVA (com MFA)' }, restricted: { type: boolean, enum: [false] } } }
     EnrollmentConfirmation: { type: object, required: [recoveryCodes, csrfToken], properties: { recoveryCodes: { type: array, items: { type: string } }, csrfToken: { type: string } } }
-    PasswordChange: { type: object, required: [currentPassword, newPassword], properties: { currentPassword: { type: string, format: password }, newPassword: { type: string, format: password, description: 'politica de senha nova (PLATFORM-SENHA-001): 12 a 20 pontos de codigo Unicode com ao menos uma maiuscula (Lu), uma minuscula (Ll), um numero (Nd) e um simbolo (pontuacao P ou simbolo S; espaco nao conta); sem normalizacao (nada e cortado nem aparado). Fora dela: 400 invalid_request, sem consumir o token. O login nao aplica a politica: senhas existentes continuam valendo.' } } }
+    PasswordChange: { type: object, required: [currentPassword, newPassword], properties: { currentPassword: { type: string, format: password }, newPassword: { type: string, format: password, description: 'politica de senha nova (PLATFORM-SENHA-001): 12 a 128 pontos de codigo Unicode com ao menos uma maiuscula (Lu), uma minuscula (Ll), um numero (Nd) e um simbolo (pontuacao P ou simbolo S; espaco nao conta); sem normalizacao (nada e cortado nem aparado). Fora dela: 400 invalid_request, sem consumir o token. O login nao aplica a politica: senhas existentes continuam valendo.' } } }
     RecoveryRequest: { type: object, required: [email], properties: { email: { type: string } } }
-    RecoveryConfirmation: { type: object, required: [token, newPassword], properties: { token: { type: string }, newPassword: { type: string, format: password, description: 'politica de senha nova (PLATFORM-SENHA-001): 12 a 20 pontos de codigo Unicode com ao menos uma maiuscula (Lu), uma minuscula (Ll), um numero (Nd) e um simbolo (pontuacao P ou simbolo S; espaco nao conta); sem normalizacao (nada e cortado nem aparado). Fora dela: 400 invalid_request, sem consumir o token. O login nao aplica a politica: senhas existentes continuam valendo.' } } }
+    RecoveryConfirmation: { type: object, required: [token, newPassword], properties: { token: { type: string }, newPassword: { type: string, format: password, description: 'politica de senha nova (PLATFORM-SENHA-001): 12 a 128 pontos de codigo Unicode com ao menos uma maiuscula (Lu), uma minuscula (Ll), um numero (Nd) e um simbolo (pontuacao P ou simbolo S; espaco nao conta); sem normalizacao (nada e cortado nem aparado). Fora dela: 400 invalid_request, sem consumir o token. O login nao aplica a politica: senhas existentes continuam valendo.' } } }
     TokenBody: { type: object, required: [token], properties: { token: { type: string } } }
     SignupRequest:
       type: object
@@ -5555,7 +5555,7 @@ components:
         displayName: { type: [string, 'null'], description: 'nome vindo do convite; nulo = a pessoa escolhe' }
     SignupConfirmation:
       type: object
-      description: 'Conclusao do cadastro pela titular do e-mail: token recebido, senha pela politica de senha nova (PLATFORM-SENHA-001) (12 a 20 pontos de codigo com maiuscula, minuscula, numero e simbolo; ver PasswordChange.newPassword) e nome (ate 120 pontos de codigo, nao em branco, sem caracteres de controle).'
+      description: 'Conclusao do cadastro pela titular do e-mail: token recebido, senha pela politica de senha nova (PLATFORM-SENHA-001) (12 a 128 pontos de codigo com maiuscula, minuscula, numero e simbolo; ver PasswordChange.newPassword) e nome (ate 120 pontos de codigo, nao em branco, sem caracteres de controle).'
       required: [token, password, displayName]
       properties:
         token: { type: string }

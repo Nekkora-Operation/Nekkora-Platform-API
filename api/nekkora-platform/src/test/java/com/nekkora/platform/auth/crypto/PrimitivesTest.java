@@ -99,8 +99,8 @@ class PrimitivesTest {
         PasswordPolicy.enforce("Ab1!Ab1!Ab1!".toCharArray());
         PasswordPolicy.enforce("Ab1!😀😀😀😀😀😀😀😀".toCharArray());
         assertThat("Ab1!😀😀😀😀😀😀😀😀".length()).isEqualTo(20);
-        PasswordPolicy.enforce(("Ab1!" + "😀".repeat(16)).toCharArray());
-        assertThatThrownBy(() -> PasswordPolicy.enforce(("Ab1!" + "😀".repeat(17)).toCharArray())).isInstanceOf(ApiException.class);
+        PasswordPolicy.enforce(("Ab1!" + "😀".repeat(124)).toCharArray());
+        assertThatThrownBy(() -> PasswordPolicy.enforce(("Ab1!" + "😀".repeat(125)).toCharArray())).isInstanceOf(ApiException.class);
     }
 
     @Test

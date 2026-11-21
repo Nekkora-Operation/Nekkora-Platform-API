@@ -35,12 +35,12 @@ class PasswordPolicyTest {
     @Test
     void eachMissingRequirementIsReportedAlone() {
         assertThat(missing("Nk#2")).containsExactly(LENGTH);
-        assertThat(missing("Nekkora#2026ok-mais-longa")).containsExactly(LENGTH);
+        assertThat(missing("Nekkora#2026ok" + "x".repeat(115))).containsExactly(LENGTH);
         assertThat(missing("nekkora#2026ok")).containsExactly(UPPERCASE);
         assertThat(missing("NEKKORA#2026OK")).containsExactly(LOWERCASE);
         assertThat(missing("Nekkora#Teste!")).containsExactly(DIGIT);
         assertThat(missing("Nekkora2026ok7")).containsExactly(SYMBOL);
-        for (String s : new String[] {"Nk#2", "Nekkora#2026ok-mais-longa", "nekkora#2026ok", "NEKKORA#2026OK", "Nekkora#Teste!", "Nekkora2026ok7"}) {
+        for (String s : new String[] {"Nk#2", "Nekkora#2026ok" + "x".repeat(115), "nekkora#2026ok", "NEKKORA#2026OK", "Nekkora#Teste!", "Nekkora2026ok7"}) {
             refused(s);
         }
     }
@@ -56,9 +56,10 @@ class PasswordPolicyTest {
     void boundsAreInclusiveAndCountCodePoints() {
         assertThat(missing("Ab1!Ab1!Ab1")).containsExactly(LENGTH);        // 11
         assertThat(missing("Ab1!Ab1!Ab1!")).isEmpty();                     // 12
-        assertThat(missing("Ab1!Ab1!Ab1!Ab1!Ab1!")).isEmpty();             // 20
-        assertThat(missing("Ab1!Ab1!Ab1!Ab1!Ab1!A")).containsExactly(LENGTH); // 21
-        assertThat(missing("Ab1!" + "😀".repeat(16))).isEmpty();           // 20 pontos de codigo, 36 unidades UTF-16
+        assertThat(missing("Ab1!".repeat(32))).isEmpty(); // 128
+        assertThat(missing("Ab1!".repeat(32) + "A")).containsExactly(LENGTH); // 129
+        assertThat(missing("Ab1!" + "😀".repeat(124))).isEmpty(); // 128 pontos de codigo, 252 unidades UTF-16
+        assertThat(missing("Ab1!" + "😀".repeat(125))).containsExactly(LENGTH);
     }
 
     @Test
@@ -66,7 +67,7 @@ class PasswordPolicyTest {
         assertThat(missing("Nekkora 2026 ok")).containsExactly(SYMBOL);
         assertThat(missing(" Nekkora#2026 ")).isEmpty();
         assertThat(missing("  Ab1!Ab1!Ab1!    ")).isEmpty(); // 18: os espacos das pontas contam (nada e aparado)
-        assertThat(missing("Ab1!Ab1!Ab1!         ")).containsExactly(LENGTH); // 21 com os espacos: nao e cortada
+        assertThat(missing("Ab1!Ab1!Ab1!" + " ".repeat(117))).containsExactly(LENGTH); // 129 com os espacos: nao e cortada
     }
 
     @Test
