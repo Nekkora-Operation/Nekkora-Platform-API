@@ -148,7 +148,8 @@ public final class PortalClientService {
             m.put("inProgress", rs.getLong("in_progress"));
             m.put("notStarted", rs.getLong("not_started"));
             m.put("cancelled", rs.getLong("cancelled"));
-            m.put("other", rs.getLong("other"));
+            m.put("unconfirmed", rs.getLong("unconfirmed"));
+            m.put("noErrorSignaled", rs.getLong("no_error_signaled"));
             m.put("lastRequestedAt", rs.getObject("last_requested_at", OffsetDateTime.class));
             m.put("lastOutcome", rs.getString("last_outcome"));
             return m;

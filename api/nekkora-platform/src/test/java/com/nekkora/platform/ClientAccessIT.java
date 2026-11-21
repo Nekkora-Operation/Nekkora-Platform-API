@@ -150,7 +150,8 @@ class ClientAccessIT extends IdentityTestBase {
     }
 
     private static P summary(UUID org, ComFator f, UUID automation) {
-        return portal("SELECT total::text, succeeded::text FROM public.portal_client_summary(?, ?, ?, " + FROM + ", " + TO + ")", org, idToken(f), automation);
+        return portal("SELECT total::text, succeeded::text, unconfirmed::text, no_error_signaled::text FROM public.portal_client_summary(?, ?, ?, " + FROM + ", "
+                + TO + ")", org, idToken(f), automation);
     }
 
     private static P files(UUID org, ComFator f, UUID automation, String query) {
@@ -206,7 +207,7 @@ class ClientAccessIT extends IdentityTestBase {
                 + "' + interval '15 minutes', 7, repeat('c', 64), TIMESTAMPTZ '" + at + "' + interval '1 minute')";
     }
 
-    private record World(UUID ws, UUID a1, UUID a2, UUID w1, UUID w2, UUID e1, UUID e2, UUID e3, UUID r1, UUID att1, UUID r2, UUID att2) {
+    private record World(UUID ws, UUID a1, UUID a2, UUID w1, UUID w2, UUID e1, UUID e2, UUID e3, UUID r1, UUID att1, UUID r2, UUID att2, UUID v1) {
     }
 
     /**
@@ -228,7 +229,7 @@ class ClientAccessIT extends IdentityTestBase {
                     + o.id() + "', '" + w + "', '" + ws + "', 1, '" + m + "')");
         }
         World x = new World(ws, a1, a2, w1, w2, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                UUID.randomUUID(), UUID.randomUUID());
+                UUID.randomUUID(), UUID.randomUUID(), v1);
         mass(platformExecution(x.e1(), o.id(), ws, a1, v1, m, w1, "2026-03-05T08:00:00Z"),
                 platformExecution(x.e2(), o.id(), ws, a1, v1, m, w2, "2026-03-06T08:00:00Z"),
                 platformExecution(x.e3(), o.id(), ws, a2, v2, m, w1, "2026-03-07T08:00:00Z"),
@@ -328,7 +329,21 @@ class ClientAccessIT extends IdentityTestBase {
         assertThat(executions(org, f, x.a1()).col(0)).containsExactlyInAnyOrder(x.e1().toString(), x.r1().toString());
         assertThat(executions(org, f, x.a1()).col(2)).containsOnlyNulls();
         // totais do dashboard: so as execucoes de a1 em w1 (e1, r1), nunca as de w2 nem as de a2
-        assertThat(summary(org, f, x.a1()).rows()).containsExactly(List.of("2", "2"));
+        assertThat(summary(org, f, x.a1()).rows()).containsExactly(List.of("2", "2", "0", "0"));
+        // resultado desconhecido (tentativa remota encerrada sem confirmacao) e "terminou sem sinal de erro" (Python externo com codigo 0,
+        // AGT-EXT-001) continuam distinguiveis e NUNCA contam como concluidas
+        UUID r3 = UUID.randomUUID();
+        UUID att3 = UUID.randomUUID();
+        mass(remote(r3, org, x.ws(), x.a1(), x.v1(), a.org().adminMembership(), "2026-03-10T08:00:00Z"),
+                attempt(att3, org, r3, x.w1(), a.org().adminMembership(), "2026-03-10T08:00:00Z").replace(", 7, repeat('c', 64)", ", 13, repeat('c', 64)"),
+                "INSERT INTO agent_runs (organization_id, workspace_id, automation_id, automation_version_id, authorization_id, agent_id, worker_id, "
+                        + "worker_agent_assignment_id, agent_execution_id, package_fingerprint, authorization_state_at_registration, supervisor_state, "
+                        + "supervisor_code, registered_at, agent_started_at, agent_ended_at) VALUES ('" + org + "', '" + x.ws() + "', '" + x.a1() + "', '"
+                        + x.v1() + "', gen_random_uuid(), gen_random_uuid(), '" + x.w1() + "', gen_random_uuid(), 'ex-' || md5(random()::text), "
+                        + "repeat('a', 64), 1, 4, 'AGT-EXT-001', TIMESTAMPTZ '2026-03-11T08:00:00Z', TIMESTAMPTZ '2026-03-11T08:00:00Z', "
+                        + "TIMESTAMPTZ '2026-03-11T08:01:00Z')");
+        assertThat(summary(org, f, x.a1()).rows()).containsExactly(List.of("4", "2", "1", "1"));
+        assertThat(executions(org, f, x.a1()).col(1)).contains("unconfirmed", "no_error_signaled");
         // a outra automacao da MESMA maquina e do MESMO ambiente continua inacessivel
         assertThat(executions(org, f, x.a2()).state()).isEqualTo("NK404");
         assertThat(summary(org, f, x.a2()).state()).isEqualTo("NK404");

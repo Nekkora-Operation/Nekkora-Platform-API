@@ -4920,7 +4920,7 @@ components:
     PortalSharedAutomationList: { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/PortalSharedAutomation' } } } }
     PortalSharedSummary:
       type: object
-      required: [from, to, total, succeeded, failed, inProgress, notStarted, cancelled, other, lastRequestedAt, lastOutcome]
+      required: [from, to, total, succeeded, failed, inProgress, notStarted, cancelled, unconfirmed, noErrorSignaled, lastRequestedAt, lastOutcome]
       properties:
         from: { type: string, format: date-time }
         to: { type: string, format: date-time }
@@ -4930,7 +4930,8 @@ components:
         inProgress: { type: integer }
         notStarted: { type: integer }
         cancelled: { type: integer }
-        other: { type: integer, description: 'sem confirmacao ou concluida sem sinal de erro' }
+        unconfirmed: { type: integer, description: 'resultado desconhecido (nao se sabe como terminou)' }
+        noErrorSignaled: { type: integer, description: 'terminou com codigo 0 sem confirmacao de sucesso (nunca conta como concluida)' }
         lastRequestedAt: { type: [string, 'null'], format: date-time }
         lastOutcome: { oneOf: [ { $ref: '#/components/schemas/PortalOutcome' }, { type: 'null' } ] }
     PortalSharedExecution:
