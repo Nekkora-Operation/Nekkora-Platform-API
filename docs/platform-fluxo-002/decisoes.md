@@ -58,3 +58,49 @@ Partida: `dev` integrada (API `4f518bcd2e887f64f7ffc46b46791017d4379c4b`, Web `e
   contato, com o último contato), LINK_SUSPENDED, INACTIVE.
 - Cadastrar ou conectar uma máquina não consome licença; a licença continua vinculada à automação.
 
+
+## Clientes e acessos (decisões da titular, 21/11/2026; migration 070)
+
+**D-EXT (fechada).** O cliente entra com a **identidade Nekkora** (o mesmo e-mail verificado do convite, com o MFA previsto). Quem
+ainda não tem identidade faz o cadastro normal; não existe senha implícita. O aceite cria ou reutiliza a conta de cliente
+(`users.account_type = 2`) e o vínculo de cliente (`client_memberships`) **só naquela organização**, ligados à identidade
+(`identity_users`, canal `convite`). A identidade é global; os acessos são de cada organização. Recusas no aceite: identidade que
+já é membro interno da organização (`MEMBRO_INTERNO`, o convite não reduziria privilégios), conta da organização com o mesmo
+e-mail e não ligada (as contas de cliente antigas, `CONTA_EXISTENTE`; nunca ligadas por coincidência de e-mail), outro cadastro
+de cliente (`CLIENTE_DIFERENTE`), a mesma automação já compartilhada (`CONCESSAO_EXISTENTE`) e escopo que deixou de existir
+(`ESCOPO_INDISPONIVEL`). Ser membro interno de outra organização não impede. Retirar ou suspender o vínculo afeta só aquela
+organização.
+
+**D-GRANT-1 (exceção).** O convite de Cliente restrito ao acompanhamento de **uma automação** é aprovado por quem convida:
+administradora da organização (`org.manage` e `external_access.manage`), com a confirmação reforçada (step-up). A confirmação
+mostra cliente, automação, ambiente de trabalho, máquinas e permissões de registros e resultados. O acesso só começa no aceite,
+que reconfere identidade, convite, autoridade de quem convidou e escopo; a concessão nasce ativa com `basis = 2`
+(CONVITE_DE_CLIENTE) **somente pela função de aceite** (o gatilho recusa a Platform e qualquer rota direta). Reenviar não amplia
+o escopo. Qualquer outra concessão — inclusive compartilhar outra automação depois, ou ligar registros/resultados de uma
+existente — é um pedido PENDENTE aprovado por **outra pessoa** (D-GRANT-1). Permissões de uma concessão só diminuem. O uso da
+exceção fica em `access_events.grant_exception` (convite emitido, reenviado e concessão aplicada no aceite). Concessões antigas
+pendentes não são aprovadas.
+
+**Escopo por automação.** A concessão (`client_automation_grants`) aponta uma automação de qualquer ambiente de trabalho ativo da
+organização, sem exigir que o ambiente pertença ao cliente, com a restrição opcional a uma máquina (nula = todas as máquinas
+desta automação). Não dá acesso ao ambiente, às outras automações nem às outras atividades da máquina. As concessões por ambiente
+inteiro (`client_workspace_grants`) continuam com a regra de pertencimento ao cliente e com as decisões de antes.
+
+**Área do cliente pelo Portal (8.2 preservado).** As funções `portal_client_*` (dono `nekkora_portal_owner`, SECURITY DEFINER)
+autenticam pela sessão de identidade (`identity_session_lookup`) e, em cada chamada, reconferem conta, vínculo, cliente,
+organização e as concessões vigentes; listas, contadores, detalhes, registros e downloads usam o mesmo escopo. Nenhuma sessão de
+organização é emitida para a conta de cliente: as rotas da Platform continuam fechadas para ela. A execução remota vale pela
+máquina da última tentativa; os registros e resultados aparecem só das tentativas nas máquinas concedidas.
+
+**Impacto da 070 nos vínculos existentes.** Nenhuma linha existente muda: contas de cliente antigas, vínculos, concessões por
+ambiente (inclusive as pendentes) e convites internos ficam como estão; as funções do Portal antigo (013) continuam para as contas
+antigas. A 070 cria funções de outros donos e exige a janela de SUPERUSER do migrador (incluída em `aplicar_como_migrador.sh`,
+como a 067); não está em `ops/homologacao/implantacao/elevacao.txt` — homologação e produção dependem de autorização própria.
+Implantação fora do laboratório: o Portal precisa ler a pasta de resultados (`NEKKORA_RESULTADOS_DIR`, somente leitura) para o
+download do cliente, e o proxy precisa encaminhar `/portal/api/v1/` ao Portal (já presente nas configurações de e2e e de
+homologação).
+
+**Limitações declaradas.** Não há prazo nem revisão periódica nas concessões por automação (a suspensão é do vínculo); o download
+do cliente fica no log do Portal, não em `automation_admin_events`; a permissão própria de auditoria vale como recorte
+(`org.manage` vê tudo; só `external_access.manage` vê os atos de cliente), mas no catálogo atual só ORG_ADMIN tem
+`external_access.manage`.
