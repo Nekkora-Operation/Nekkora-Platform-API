@@ -47,24 +47,24 @@ public final class ExecutionSummaryReads {
     public static final List<String> OUTCOMES = List.of("succeeded", "failed", "in_progress", "cancelled", "not_started", "unconfirmed");
     public static final List<String> SOURCES = List.of("platform", "local_agent", "remote");
 
-    private static final String VISIBLE = "(SELECT w.workspace_id FROM public.workspaces w WHERE " + WorkspaceAccess.VISIBLE_WORKSPACE_CONDITION + ")";
+    static final String VISIBLE = "(SELECT w.workspace_id FROM public.workspaces w WHERE " + WorkspaceAccess.VISIBLE_WORKSPACE_CONDITION + ")";
 
     /** executions: 5=FAILED com motivo START_FAILED (2) nao iniciou; 6=CANCELLED com motivo QUEUE_DEADLINE_EXCEEDED (6) nao iniciou. */
-    private static final String PLATFORM_OUTCOME = """
+    static final String PLATFORM_OUTCOME = """
             CASE WHEN e.status IN (1, 2, 3) THEN 'in_progress' WHEN e.status = 4 THEN 'succeeded'
                  WHEN e.status = 5 AND e.status_reason = 3 THEN 'failed' WHEN e.status = 5 THEN 'not_started'
                  WHEN e.status = 6 AND e.status_reason = 6 THEN 'not_started' ELSE 'cancelled' END""";
     /** agent_runs.supervisor_state: 7=TIMED_OUT e erro; 8=BLOCKED nao iniciou; 9=OUTCOME_UNKNOWN nao confirmado. */
-    private static final String RUN_OUTCOME = """
+    static final String RUN_OUTCOME = """
             CASE WHEN r.supervisor_state IN (1, 2, 3) THEN 'in_progress' WHEN r.supervisor_state = 4 THEN 'succeeded'
                  WHEN r.supervisor_state IN (5, 7) THEN 'failed' WHEN r.supervisor_state = 6 THEN 'cancelled'
                  WHEN r.supervisor_state = 8 THEN 'not_started' ELSE 'unconfirmed' END""";
     /** run_requests sem execucao: 8=REVOKED cancelado; 4, 5, 7 (e o pedido vencido ainda nao marcado) nao iniciou. */
-    private static final String REQUEST_OUTCOME = """
+    static final String REQUEST_OUTCOME = """
             CASE WHEN q.state = 8 THEN 'cancelled' WHEN q.state IN (4, 5, 7) THEN 'not_started'
                  WHEN q.state IN (1, 2) AND q.valid_until <= clock_timestamp() THEN 'not_started' ELSE 'in_progress' END""";
     /** remote_attempts da ULTIMA tentativa: oferta vencida vale EXPIRED (como na leitura); 10=TIMED_OUT e erro; 13 nao confirmado. */
-    private static final String REMOTE_OUTCOME = """
+    static final String REMOTE_OUTCOME = """
             CASE WHEN t.state IS NULL THEN 'in_progress'
                  WHEN t.state IN (1, 2) AND t.offer_valid_until <= clock_timestamp() THEN 'not_started'
                  WHEN t.state BETWEEN 1 AND 6 THEN 'in_progress' WHEN t.state = 7 THEN 'succeeded'

@@ -265,11 +265,16 @@ public final class ProductReads {
     public Map<String, Object> getExecution(JdbcClient j, UUID org, UUID membership, UUID execution) {
         access.requireExecution(j, org, membership, execution, READ);
         return j.sql(EXECUTION_COLUMNS + """
-                       , e.retry_of_execution_id, e.requested_by_membership_id, ru.display_name AS requester_name
+                       , e.retry_of_execution_id, e.requested_by_membership_id, ru.display_name AS requester_name,
+                       e.worker_id, k.name AS worker_name, ag.name AS computer_name
                 """ + EXECUTION_FROM + """
                   LEFT JOIN public.organization_memberships rm ON rm.organization_id = e.organization_id
                                                               AND rm.membership_id = e.requested_by_membership_id
                   LEFT JOIN public.users ru ON ru.organization_id = rm.organization_id AND ru.user_id = rm.user_id
+                  -- PLATFORM-FLUXO-002: a maquina (Worker) da execucao e o computador vinculado hoje a ela, como na lista unificada
+                  LEFT JOIN public.workers k ON k.organization_id = e.organization_id AND k.worker_id = e.worker_id
+                  LEFT JOIN public.worker_agent_assignments wa ON wa.organization_id = e.organization_id AND wa.worker_id = e.worker_id AND wa.status = 1
+                  LEFT JOIN public.agents ag ON ag.organization_id = e.organization_id AND ag.agent_id = wa.agent_id
                  WHERE e.organization_id = :org AND e.execution_id = :execution
                 """).param("org", org).param("execution", execution).query((rs, n) -> {
                     Map<String, Object> m = execution(rs);
@@ -279,6 +284,16 @@ public final class ProductReads {
                     // DC-09: solicitante da execucao manual; nulo na agendada (009: requested_by nulo <=> origin = 2)
                     m.put("requestedBy", requester == null ? null : Map.of("membershipId", requester.toString(), "displayName",
                             rs.getString("requester_name")));
+                    // nula quando a execucao nao tem maquina registrada: nada e inferido
+                    UUID worker = rs.getObject("worker_id", UUID.class);
+                    Map<String, Object> machine = null;
+                    if (worker != null) {
+                        machine = new LinkedHashMap<>();
+                        machine.put("workerId", worker.toString());
+                        machine.put("name", rs.getString("worker_name"));
+                        machine.put("computerName", rs.getString("computer_name"));
+                    }
+                    m.put("machine", machine);
                     return m;
                 }).single();
     }
