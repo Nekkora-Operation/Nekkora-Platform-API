@@ -4566,7 +4566,7 @@ components:
              worker.manage, agent.manage, agent_credential.manage, worker_agent.assign, worker_workspace.authorize,
              identity.mfa.reset]
     PermissionCode:
-      description: 'Catalogo completo de public.permissions (migrations 003, 004, 005, 008, 009, 014): 23 codigos.'
+      description: 'Catalogo completo de public.permissions (migrations 003, 004, 005, 008, 009, 014, 071): 24 codigos.'
       anyOf:
         - $ref: '#/components/schemas/WorkspacePermissionCode'
         - $ref: '#/components/schemas/OrganizationOnlyPermissionCode'
@@ -4590,13 +4590,13 @@ components:
           required: [roles, permissions]
           properties:
             roles: { type: array, uniqueItems: true, items: { $ref: '#/components/schemas/OrganizationRoleCode' } }
-            permissions: { type: array, uniqueItems: true, maxItems: 23, items: { $ref: '#/components/schemas/PermissionCode' } }
+            permissions: { type: array, uniqueItems: true, maxItems: 24, items: { $ref: '#/components/schemas/PermissionCode' } }
         allWorkspaces:
           type: object
           required: [permissions]
           x-decisoes: DC-01
           properties:
-            permissions: { type: array, uniqueItems: true, maxItems: 13, items: { $ref: '#/components/schemas/WorkspacePermissionCode' } }
+            permissions: { type: array, uniqueItems: true, maxItems: 14, items: { $ref: '#/components/schemas/WorkspacePermissionCode' } }
         hasWorkspaceAssignments: { type: boolean, description: 'existe ao menos uma atribuicao de workspace ativa (consultar /me/permissions/workspaces)' }
     WorkspacePermissions:
       type: object
@@ -4604,7 +4604,7 @@ components:
       properties:
         workspaceId: { type: string, format: uuid }
         roles: { type: array, uniqueItems: true, minItems: 1, items: { $ref: '#/components/schemas/WorkspaceRoleCode' } }
-        permissions: { type: array, uniqueItems: true, maxItems: 13, items: { $ref: '#/components/schemas/WorkspacePermissionCode' } }
+        permissions: { type: array, uniqueItems: true, maxItems: 14, items: { $ref: '#/components/schemas/WorkspacePermissionCode' } }
     WorkspacePermissionsPage: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: '#/components/schemas/WorkspacePermissions' } }, nextCursor: { type: [string, 'null'] } } }
     Member:
       type: object
