@@ -65,7 +65,7 @@ class AgentChannelE2E {
     static final String FINGERPRINT = "5664f1a56556e8137dc6e62c435485469e18501d853a8f51268cb377ce1c0b3d";
     static final UUID ADMIN = UUID.randomUUID();
     static final String EMAIL = "adm-agente-" + ADMIN.toString().substring(0, 8) + "@o.test";
-    static final String SENHA = "senha-agente-e2e-" + UUID.randomUUID().toString().substring(0, 8);
+    static final String SENHA = "Agente#E2e-" + UUID.randomUUID().toString().substring(0, 8);
     static final List<String> SEGREDOS = new ArrayList<>();
     static final Map<String, byte[]> FATORES = new HashMap<>();
     static final Map<String, Long> ULTIMO = new HashMap<>();

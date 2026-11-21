@@ -48,7 +48,8 @@ public class AgentController {
     static final List<String> STATE_NAMES = List.of("READY", "STARTING", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED", "TIMED_OUT", "BLOCKED",
             "OUTCOME_UNKNOWN");
 
-    public record PairingRequest(String workerId, String workerName, String agentName, Integer expiresInMinutes) {
+    /** {@code remoteExecution} (opcional, T01a da execucao remota): o codigo nasce marcado para habilitar a maquina. */
+    public record PairingRequest(String workerId, String workerName, String agentName, Integer expiresInMinutes, Boolean remoteExecution) {
     }
 
     /** T07: Worker sem Agent. */
@@ -90,7 +91,7 @@ public class AgentController {
         }
         return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore())
                 .body(admin.createPairing(org, SessionFilter.principal(req), SessionFilter.token(req), uuidOrNull(body.workerId(), "worker"),
-                        body.workerName(), body.agentName(), body.expiresInMinutes()));
+                        body.workerName(), body.agentName(), body.expiresInMinutes(), Boolean.TRUE.equals(body.remoteExecution())));
     }
 
     @PostMapping("/api/v1/o/{org}/agent-enrollments/{enrollment}/cancel")
@@ -131,6 +132,19 @@ public class AgentController {
     @GetMapping("/api/v1/o/{org}/workers")
     public Map<String, List<AgentAdminService.WorkerView>> workers(@PathVariable UUID org, HttpServletRequest req) {
         return Map.of("items", admin.listWorkers(org, SessionFilter.principal(req), SessionFilter.token(req)));
+    }
+
+    /** T01a da execucao remota: maquinas habilitadas, do ambiente, com o estado indicativo. Exige automation.execute no ambiente. */
+    @GetMapping("/api/v1/o/{org}/workspaces/{workspace}/remote-machines")
+    public Map<String, List<AgentAdminService.RemoteMachine>> remoteMachines(@PathVariable UUID org, @PathVariable UUID workspace, HttpServletRequest req) {
+        return Map.of("items", admin.listRemoteMachines(org, SessionFilter.principal(req), SessionFilter.token(req), workspace));
+    }
+
+    /** T01c: o inventario de Python que uma maquina habilitada publicou. Exige automation.execute no ambiente. */
+    @GetMapping("/api/v1/o/{org}/workspaces/{workspace}/remote-machines/{agent}/python-environments")
+    public Map<String, List<AgentAdminService.PythonEnvironment>> pythonEnvironments(@PathVariable UUID org, @PathVariable UUID workspace,
+                                                                                      @PathVariable UUID agent, HttpServletRequest req) {
+        return Map.of("items", admin.listPythonEnvironments(org, SessionFilter.principal(req), SessionFilter.token(req), workspace, agent));
     }
 
     // ------------------------------------------------------------------ Worker no workspace e autorizacao local

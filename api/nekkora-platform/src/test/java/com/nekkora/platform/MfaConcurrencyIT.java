@@ -134,7 +134,7 @@ class MfaConcurrencyIT extends PlatformTestBase {
             firstLogin(owner, org.id(), u);
             BrowserClient pending = pendingChallenge(u);
             String code = code(u.id());
-            String newPassword = "senha-trocada-na-corrida-" + i;
+            String newPassword = "Corrida#Troca-" + i;
             int[] s = race(i, 900, verifyCode(pending, "{\"code\":\"" + code + "\"}"),
                     () -> owner.post(base() + "/auth/password", "{\"currentPassword\":\"" + PASSWORD + "\",\"newPassword\":\"" + newPassword + "\"}").status());
             outcomes.merge("verify=" + s[0] + " troca=" + s[1], 1, Integer::sum);

@@ -37,7 +37,7 @@ class PermissionCatalogIT extends PlatformTestBase {
     /** §0.1, transcrita: papel -> permissoes (oraculo independente do catalogo da aplicacao). */
     private static final Map<String, Set<String>> MATRIX = Map.of(
             "ORG_ADMIN", new TreeSet<>(MyPermissionsRouteIT.ALL_23),
-            "WORKSPACE_ADMIN", new TreeSet<>(MyPermissionsRouteIT.WORKSPACE_13),
+            "WORKSPACE_ADMIN", new TreeSet<>(MyPermissionsRouteIT.WORKSPACE_ADMIN_14),
             "OPERATOR", new TreeSet<>(MyPermissionsRouteIT.OPERATOR),
             "VIEWER", new TreeSet<>(MyPermissionsRouteIT.VIEWER));
 
@@ -84,9 +84,9 @@ class PermissionCatalogIT extends PlatformTestBase {
                 dbPermissions.add(rs.getString(1));
             }
         }
-        assertThat(dbPermissions).as("23 codigos, os mesmos do catalogo da aplicacao").hasSize(23).isEqualTo(PermissionCatalog.permissions());
+        assertThat(dbPermissions).as("24 codigos (071: client_share.request), os mesmos do catalogo da aplicacao").hasSize(24).isEqualTo(PermissionCatalog.permissions());
         assertThat(PermissionCatalog.permissions(PermissionCatalog.Scope.ORGANIZATION)).hasSize(10);
-        assertThat(PermissionCatalog.permissions(PermissionCatalog.Scope.WORKSPACE)).hasSize(13).isEqualTo(MATRIX.get("WORKSPACE_ADMIN"));
+        assertThat(PermissionCatalog.permissions(PermissionCatalog.Scope.WORKSPACE)).hasSize(14).isEqualTo(MATRIX.get("WORKSPACE_ADMIN"));
 
         for (CatalogRow r : roleRows()) {
             if (!AccessFixtures.ROLES_CREATED_BY_TESTS.contains(r.roleId())) {

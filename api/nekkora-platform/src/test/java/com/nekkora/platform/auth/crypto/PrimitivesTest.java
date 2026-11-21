@@ -95,13 +95,12 @@ class PrimitivesTest {
 
     @Test
     void passwordPolicyCountsCodePoints() {
-        PasswordPolicy.enforce("123456789012".toCharArray());
-        assertThatThrownBy(() -> PasswordPolicy.enforce("12345678901".toCharArray())).isInstanceOf(ApiException.class);
-        String emojis = "😀".repeat(12);
-        assertThat(emojis.length()).isEqualTo(24);
-        PasswordPolicy.enforce(emojis.toCharArray());
-        assertThatThrownBy(() -> PasswordPolicy.enforce("a".repeat(129).toCharArray())).isInstanceOf(ApiException.class);
-        PasswordPolicy.enforce("😀".repeat(128).toCharArray());
+        // 12 e 20 PONTOS DE CODIGO (o emoji conta 1, embora ocupe 2 unidades UTF-16)
+        PasswordPolicy.enforce("Ab1!Ab1!Ab1!".toCharArray());
+        PasswordPolicy.enforce("Ab1!😀😀😀😀😀😀😀😀".toCharArray());
+        assertThat("Ab1!😀😀😀😀😀😀😀😀".length()).isEqualTo(20);
+        PasswordPolicy.enforce(("Ab1!" + "😀".repeat(124)).toCharArray());
+        assertThatThrownBy(() -> PasswordPolicy.enforce(("Ab1!" + "😀".repeat(125)).toCharArray())).isInstanceOf(ApiException.class);
     }
 
     @Test

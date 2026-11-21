@@ -26,7 +26,7 @@ abstract class IdentityTestBase extends PlatformTestBase {
     SignupMailer mailer;
 
     protected static final String UNAUTH = "{\"error\":\"unauthenticated\"}";
-    protected static final String SENHA = "senha-da-identidade-1";
+    protected static final String SENHA = "Senha#Identidade1";
 
     // ------------------------------------------------------------------ apoio
 

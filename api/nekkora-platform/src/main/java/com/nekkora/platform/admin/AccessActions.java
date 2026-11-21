@@ -85,12 +85,17 @@ public final class AccessActions {
                 case TARGET_NOT_FOUND -> new ApiException(ApiError.NOT_FOUND, "alvo");
                 // T01: so depois de sessao, organizacao e permissao conferidas; diz a Web que falta a confirmacao
                 case STEP_UP -> new ApiException(ApiError.STEP_UP_REQUIRED, r.failure.name());
-                case CONFLICT -> new ApiException(ApiError.CONFLICT, r.rule);
+                case CONFLICT -> new ApiException(conflict(r.rule), r.rule);
                 case INVALID -> ApiException.invalid(r.rule);
                 default -> ApiException.forbidden(r.failure.name());
             };
         } catch (RuntimeException e) {
             String state = DbErrors.sqlState(e);
+            if ("23514".equals(state)) {
+                // 070: o banco recusou o escopo ou a transicao (a aplicacao confere antes; aqui so o que mudou no meio)
+                LOG.info("evento=acesso.negado regra=restricao_070 correlacao={}", RequestContext.correlation());
+                throw new ApiException(ApiError.CLIENT_SCOPE_UNAVAILABLE, "escopo_indisponivel");
+            }
             if ("P0001".equals(state) || "42501".equals(state)) {
                 // P0001: a 003 recusou deixar a organizacao sem ORG_ADMIN efetivo; 42501: a 023 recusou a autoridade
                 LOG.info("evento=acesso.negado regra={} correlacao={}", "P0001".equals(state) ? "invariante_003" : "autoridade_023",
@@ -99,6 +104,19 @@ public final class AccessActions {
             }
             throw e;
         }
+    }
+
+    /** 070: regras de conflito com motivo proprio na resposta; as demais continuam como "conflict" sem motivo. */
+    private static ApiError conflict(String rule) {
+        return switch (rule == null ? "" : rule) {
+            case "membro_interno" -> ApiError.CLIENT_INVITATION_INTERNAL_MEMBER;
+            case "conta_cliente_antiga" -> ApiError.CLIENT_INVITATION_LEGACY_ACCOUNT;
+            case "cliente_diferente" -> ApiError.CLIENT_INVITATION_OTHER_CLIENT;
+            case "concessao_existente", "pedido_pendente" -> ApiError.CLIENT_GRANT_EXISTS;
+            case "escopo_indisponivel", "vinculo_indisponivel" -> ApiError.CLIENT_SCOPE_UNAVAILABLE;
+            case "ampliacao_exige_pedido" -> ApiError.CLIENT_GRANT_WIDENING_REQUIRES_REQUEST;
+            default -> ApiError.CONFLICT;
+        };
     }
 
     /** Ator: sessao ainda valida (reavaliada aqui, sem travar a sessao) e conta interna. */

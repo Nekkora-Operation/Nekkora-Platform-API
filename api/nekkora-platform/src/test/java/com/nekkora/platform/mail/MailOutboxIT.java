@@ -162,7 +162,7 @@ class MailOutboxIT {
         assertThat(sql("SELECT state || '|' || (payload_ciphertext IS NULL) FROM mail_outbox WHERE recipient_hmac = '" + hash + "'")).isEqualTo("3|true");
         assertThat(sql("SELECT count(*) FROM identity_events e JOIN identities i ON i.identity_id = e.identity_id WHERE i.email = '" + email
                 + "' AND e.event_type = 1")).as("o ato nao se repete").isEqualTo("1");
-        assertThat(browser().post("/api/v1/signup/confirm", "{\"token\":\"" + token + "\",\"password\":\"senha-pela-fila-de-email-1\",\"displayName\":\"Pessoa\"}")
+        assertThat(browser().post("/api/v1/signup/confirm", "{\"token\":\"" + token + "\",\"password\":\"Fila#Email-2026\",\"displayName\":\"Pessoa\"}")
                 .status()).as("o token do e-mail conclui o cadastro").isEqualTo(204);
         assertThat(out.getAll()).doesNotContain(email).doesNotContain(token);
     }
@@ -203,6 +203,15 @@ class MailOutboxIT {
     void trabalhoNaoComecaDepoisDePerderAPosse() throws Exception {
         UUID job = enqueue();
         MailDispatcher instantaneo = new MailDispatcher(tx, cipher, transport, templates, 1000, Duration.ofMillis(1), (n, o) -> { });
+        // a posse de 1 ms tem de ESTAR vencida quando o despachante a confere. Sem esta espera o teste dependia de a maquina
+        // levar mais de 1 ms entre a reivindicacao e a conferencia: numa maquina rapida a posse ainda valia e o envio saia
+        instantaneo.testHooks(() -> {
+            try {
+                Thread.sleep(25);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }, () -> { });
         int antes = FAKE.sends();
         Thread.sleep(5);
         assertThat(instantaneo.dispatchPending()).isZero();

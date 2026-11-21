@@ -49,7 +49,7 @@ class RedisUnavailableIT extends PlatformTestBase {
         assertThat(login.headers().firstValue("Retry-After")).isPresent();
         assertThat(browser().get("/api/v1/csrf").status()).as("CSRF pre-autenticacao depende do Redis").isEqualTo(503);
         assertThat(n.get("/api/v1/o/" + org.id() + "/me").status()).as("leitura autenticada segue").isEqualTo(200);
-        assertThat(n.post("/api/v1/o/" + org.id() + "/auth/password", "{\"currentPassword\":\"" + PASSWORD + "\",\"newPassword\":\"nova-senha-longa-77\"}").status())
+        assertThat(n.post("/api/v1/o/" + org.id() + "/auth/password", "{\"currentPassword\":\"" + PASSWORD + "\",\"newPassword\":\"Nk#novasenhalong9\"}").status())
                 .as("escrita autenticada: 503").isEqualTo(503);
         assertThat(n.post("/api/v1/o/" + org.id() + "/auth/sessions/revoke-all", null).status()).as("revoke-all segue sem limitador").isEqualTo(204);
         assertThat(n.get("/api/v1/o/" + org.id() + "/me").status()).isEqualTo(401);

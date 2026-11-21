@@ -47,8 +47,8 @@ class SignupIT extends PlatformTestBase {
     @Autowired
     SignupMailer mailer;
 
-    private static final String SENHA_TITULAR = "senha-da-titular-longa-1";
-    private static final String SENHA_OUTRA = "senha-de-outra-pessoa-2";
+    private static final String SENHA_TITULAR = "Titular#Longa-1";
+    private static final String SENHA_OUTRA = "Outra#Pessoa-2";
 
     private static final String INVALID = "{\"error\":\"invalid_request\"}";
     private static final long FLOOR_MS = 300;

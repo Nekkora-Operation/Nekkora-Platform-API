@@ -102,6 +102,8 @@ public final class RunRequestService {
             if (!g.active()) {
                 throw AccessActions.refuse(Failure.CONFLICT, "autorizacao_inativa");
             }
+            // 064: pedido novo e trabalho novo - no modelo por licenca exige licenca vigente da automacao
+            com.nekkora.core.license.LicenseGate.requireForNewWork(j, org, g.automationId());
             Boolean agentOk = j.sql("""
                     SELECT g.status = 2 FROM public.worker_agent_assignments a JOIN public.agents g ON g.organization_id = a.organization_id AND g.agent_id = a.agent_id
                      WHERE a.organization_id = ? AND a.worker_id = ? AND a.agent_id = ? AND a.status = 1
@@ -112,11 +114,19 @@ public final class RunRequestService {
             if (!agentOk) {
                 throw AccessActions.refuse(Failure.CONFLICT, "agent_inativo");
             }
+            // a maquina que ja se apresentou sem RUN_REQUEST_1_0 (o Nekkora Agent Client) nunca le este pedido: recusar em vez de
+            // registrar um pedido que so expiraria. Sem apresentacao ainda (nenhum contato), vale a regra de sempre.
+            if (Boolean.FALSE.equals(j.sql("SELECT p.capabilities @> ARRAY['RUN_REQUEST_1_0']::text[] FROM public.agent_presence p "
+                    + "WHERE p.organization_id = ? AND p.agent_id = ?").param(org).param(agentId).query(Boolean.class).optional().orElse(null))) {
+                throw AccessActions.refuse(Failure.CONFLICT, "agent_nao_atende_pedido_de_execucao");
+            }
             if (!Boolean.TRUE.equals(j.sql("SELECT a.status = 1 AND w.status = 1 FROM public.automations a JOIN public.workspaces w "
                     + "ON w.organization_id = a.organization_id AND w.workspace_id = a.workspace_id WHERE a.organization_id = ? AND a.automation_id = ?")
                     .param(org).param(g.automationId()).query(Boolean.class).optional().orElse(false))) {
                 throw AccessActions.refuse(Failure.CONFLICT, "automacao_ou_workspace_inativo");
             }
+            // 066: pedido novo entra na fila da organizacao (limite tecnico de pendentes, no modelo por licenca)
+            com.nekkora.core.license.Capacity.requireRoomInQueue(j, org);
             UUID id = j.sql("""
                     INSERT INTO public.run_requests (organization_id, workspace_id, automation_id, automation_version_id, authorization_id, worker_id, agent_id,
                         source_kind, package_fingerprint, package_fingerprint_rule, request_key, requested_by_membership_id, valid_until)

@@ -48,8 +48,18 @@ public final class IdentityRepository {
      * CHECK da RLS). Duplicidade: 23505.
      */
     public void insertPending(JdbcClient j, UUID identity, String email) {
+        insertPending(j, identity, email, null);
+    }
+
+    /** 071: {@code invitedName} = nome informado no convite aberto para este e-mail (so sugestao; a confirmacao o confirma). */
+    public void insertPending(JdbcClient j, UUID identity, String email, String invitedName) {
         j.sql("INSERT INTO public.identities (identity_id, email, display_name, status) VALUES (?, ?, ?, ?)")
-                .param(identity).param(email).param(email).param(PENDING).update();
+                .param(identity).param(email).param(invitedName == null ? email : invitedName).param(PENDING).update();
+    }
+
+    /** 071: troca o nome provisorio da identidade PENDENTE pelo do convite (so enquanto pendente). */
+    public void provisionalName(JdbcClient j, UUID identity, String name) {
+        j.sql("UPDATE public.identities SET display_name = ? WHERE identity_id = ? AND status = ?").param(name).param(identity).param(PENDING).update();
     }
 
     /** Credencial da identidade: so na confirmacao, na transacao que consome o token. Ja existente: 23505. */

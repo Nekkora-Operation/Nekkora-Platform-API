@@ -87,7 +87,7 @@ class OrganizationCreationIT extends IdentityTestBase {
 
         BrowserClient.Response lista = f.browser().get(LISTA);
         assertThat(lista.status()).isEqualTo(200);
-        assertThat(lista.body()).isEqualTo("{\"organizations\":[{\"organizationId\":\"" + org + "\",\"name\":\"Clínica Ágata\",\"roles\":[\"ORG_ADMIN\"],\"activationState\":\"AGUARDANDO_ATIVACAO\",\"handle\":\"" + value("SELECT handle FROM organization_handles WHERE organization_id = '" + org + "'") + "\"}],"
+        assertThat(lista.body()).isEqualTo("{\"organizations\":[{\"organizationId\":\"" + org + "\",\"name\":\"Clínica Ágata\",\"roles\":[\"ORG_ADMIN\"],\"activationState\":\"AGUARDANDO_ATIVACAO\",\"handle\":\"" + value("SELECT handle FROM organization_handles WHERE organization_id = '" + org + "'") + "\",\"licenseModel\":\"legacy\"}],"
                 + "\"canCreateOrganization\":true}");
         BrowserClient.Response troca = f.browser().post("/api/v1/sessions/organization", "{\"organizationId\":\"" + org + "\"}");
         assertThat(troca.status()).isEqualTo(200);
@@ -112,30 +112,34 @@ class OrganizationCreationIT extends IdentityTestBase {
     }
 
     /**
-     * Teto total de 10 DENTRO da funcao, sob o lock da identidade: com 9 organizacoes do cadastro, dois pedidos simultaneos
-     * com step-up passam pelo R11 (3 por dia) e chegam a funcao; exatamente um cria (201) e o outro e recusado (403).
-     * canCreateOrganization, verdadeiro com 9, fica falso com 10. A reserva do recusado e devolvida.
+     * PLATFORM-LICENCIAMENTO-001 (067, decisao da titular): NAO ha teto fixo de organizacoes criadas. Com dez organizacoes do
+     * cadastro (nenhuma vazia: cada uma ganha uma automacao), a indicacao continua verdadeira e a decima primeira e a decima
+     * segunda nascem. O que segura e o limite CONFIGURAVEL de vazias, com o motivo proprio - e nada mais.
      */
     @Test
-    void tetoDeDezDentroDaFuncaoSobConcorrencia() throws Exception {
+    void semTetoFixoDeOrganizacoesCriadasSoOLimiteDeVaziasSegura() throws Exception {
         ComFator f = comFator();
         String token = f.browser().cookies().get("__Host-nekkora_id");
         stepUpDireto(f.browser());
-        for (int i = 1; i <= 9; i++) {
-            assertThat(value("SELECT identity_create_organization('" + token + "', 'Previa " + i + "', NULL)")).as("preparacao " + i).isNotNull();
+        for (int i = 1; i <= 10; i++) {
+            String org = value("SELECT identity_create_organization('" + token + "', 'Previa " + i + "', NULL)");
+            assertThat(org).as("preparacao " + i).isNotNull();
+            ProductFixtures.automation(UUID.fromString(org), AccessFixtures.namedWorkspace(UUID.fromString(org), "Fiscal", 1), null, "Notas",
+                    UUID.fromString(value("SELECT membership_id FROM organization_memberships WHERE organization_id = '" + org + "'")));
         }
-        assertThat(f.browser().get(LISTA).body()).as("9: ainda pode").endsWith("\"canCreateOrganization\":true}");
-
-        List<BrowserClient.Response> rs = simultaneos(f.browser(), 2, "Disputa");
-        assertThat(rs.stream().map(BrowserClient.Response::status).sorted().toList()).as("um cria, o outro bate no teto").containsExactly(201, 403);
         assertThat(count("SELECT count(*) FROM identity_users WHERE identity_id = '" + f.identity() + "' AND link_channel = 'cadastro_web'")).isEqualTo(10);
-        assertThat(count("SELECT count(*) FROM organizations WHERE name = 'Disputa' AND organization_id IN (SELECT target_organization_id FROM identity_events WHERE identity_id = '"
-                + f.identity() + "' AND event_type = 6)")).isEqualTo(1);
-        assertThat(eventos6(f.identity())).isEqualTo(10);
-        assertThat(reservasR11(f.identity())).as("so a criacao conta; a recusa devolveu a reserva").isEqualTo(1);
-        assertThat(f.browser().get(LISTA).body()).as("10: indicacao falsa").endsWith("\"canCreateOrganization\":false}");
-        BrowserClient.Response mais = criar(f.browser(), "Onze", null);
-        assertThat(mais.status()).as("a indicacao nao autoriza nem recusa: a funcao recusa").isEqualTo(403);
+        assertThat(f.browser().get(LISTA).body()).as("com dez criadas a indicacao continua verdadeira").endsWith("\"canCreateOrganization\":true}");
+        // a decima primeira, pela rota real
+        BrowserClient.Response onze = criar(f.browser(), "Onze", null);
+        assertThat(onze.status()).as(onze.body()).isEqualTo(201);
+        // e mais duas pela funcao (a rota tem o limite de frequencia R11, de tres por dia, que e outra coisa): 13 no total
+        assertThat(value("SELECT identity_create_organization('" + token + "', 'Doze', NULL)")).isNotNull();
+        assertThat(value("SELECT identity_create_organization('" + token + "', 'Treze', NULL)")).isNotNull();
+        assertThat(count("SELECT count(*) FROM identity_users WHERE identity_id = '" + f.identity() + "' AND link_channel = 'cadastro_web'")).isEqualTo(13);
+        // agora sao TRES vazias (Onze, Doze, Treze): a seguinte e recusada pelo limite de vazias, e so por ele
+        assertThat(value("SELECT identity_create_organization('" + token + "', 'Catorze', NULL)")).as("o banco recusa pelo limite de vazias").isNull();
+        assertThat(value("SELECT public.identity_org_limit_reason('" + f.identity() + "')")).isEqualTo("EMPTY_LIMIT");
+        assertThat(count("SELECT count(*) FROM organizations WHERE name = 'Catorze'")).isZero();
     }
 
     // ------------------------------------------------------------------ R11

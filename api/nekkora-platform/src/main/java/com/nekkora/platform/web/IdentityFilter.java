@@ -37,7 +37,11 @@ public final class IdentityFilter extends OncePerRequestFilter {
             IdentityAuthController.ME_SESSION, IdentityAuthController.PASSWORD, IdentityAuthController.RECOVERY_CODES, InvitationAcceptController.ACCEPT,
             IdentityAuthController.PASSWORD_CONFIRM, IdentityAuthController.ACTIVATE_START, IdentityAuthController.ACTIVATE_CONFIRM,
             // login do aplicativo desktop: ver o pedido e aprova-lo exigem a sessao de identidade
-            DesktopLoginController.AUTHORIZATION, DesktopLoginController.APPROVE);
+            DesktopLoginController.AUTHORIZATION, DesktopLoginController.APPROVE,
+            // 067: perfil e limites de quem cria, pedido de criacao, desativar e reativar
+            IdentityOrganizationsController.MY_ORGANIZATION_CREATION, IdentityOrganizationsController.ORGANIZATION_REQUESTS,
+            IdentityOrganizationsController.MY_ORGANIZATION_REQUESTS, IdentityOrganizationsController.DEACTIVATIONS,
+            IdentityOrganizationsController.REACTIVATIONS);
 
     private final IdentitySessionResolver resolver;
 

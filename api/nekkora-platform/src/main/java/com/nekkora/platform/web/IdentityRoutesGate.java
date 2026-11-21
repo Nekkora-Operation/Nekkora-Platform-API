@@ -37,16 +37,20 @@ import com.nekkora.core.web.ErrorResponses;
  */
 public final class IdentityRoutesGate extends OncePerRequestFilter {
 
-    static final Set<String> SIGNUP_ROUTES = Set.of(SignupController.SIGNUP, SignupController.CONFIRM, SignupController.RESEND);
+    static final Set<String> SIGNUP_ROUTES = Set.of(SignupController.SIGNUP, SignupController.CONFIRM, SignupController.RESEND, SignupController.PREVIEW);
     static final Set<String> ENTRY_ROUTES = Set.of(IdentityAuthController.LOGIN, IdentityAuthController.ENROLL_START,
             IdentityAuthController.ENROLL_CONFIRM, IdentityAuthController.VERIFY, IdentityAuthController.STEP_UP,
             IdentityOrganizationsController.MY_ORGANIZATIONS, IdentityOrganizationsController.ORG_SESSION, IdentityAuthController.ME_SESSION,
             IdentityAuthController.PASSWORD, IdentityAuthController.RECOVERY_CODES, IdentityAuthController.PASSWORD_CONFIRM,
             IdentityAuthController.ACTIVATE_START, IdentityAuthController.ACTIVATE_CONFIRM);
-    static final Set<String> CREATION_ROUTES = Set.of(IdentityOrganizationsController.ORGANIZATIONS);
+    static final Set<String> CREATION_ROUTES = Set.of(IdentityOrganizationsController.ORGANIZATIONS,
+            // 067: tudo o que decorre da criacao (perfil, pedido, desativar e reativar) abre e fecha com a mesma chave
+            IdentityOrganizationsController.MY_ORGANIZATION_CREATION, IdentityOrganizationsController.ORGANIZATION_REQUESTS,
+            IdentityOrganizationsController.MY_ORGANIZATION_REQUESTS, IdentityOrganizationsController.DEACTIVATIONS,
+            IdentityOrganizationsController.REACTIVATIONS);
     static final Set<String> LINK_ROUTES = Set.of(AccountLinkController.START, AccountLinkController.CONFIRM);
     static final Set<String> RECOVERY_ROUTES = Set.of(IdentityAuthController.PASSWORD_RESET_REQUEST, IdentityAuthController.PASSWORD_RESET_CONFIRM);
-    static final Set<String> INVITATION_ROUTES = Set.of(InvitationAcceptController.ACCEPT);
+    static final Set<String> INVITATION_ROUTES = Set.of(InvitationAcceptController.ACCEPT, InvitationAcceptController.PREVIEW);
     /** Login do aplicativo desktop: so abre com a entrada geral tambem ligada. O encerramento (REVOKE) nao tem chave. */
     static final Set<String> DESKTOP_ROUTES = Set.of(DesktopLoginController.AUTHORIZATIONS, DesktopLoginController.AUTHORIZATION,
             DesktopLoginController.APPROVE, DesktopLoginController.DENY, DesktopLoginController.TOKEN, DesktopLoginController.SESSION);

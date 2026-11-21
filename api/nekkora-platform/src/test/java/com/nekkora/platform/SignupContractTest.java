@@ -51,7 +51,7 @@ class SignupContractTest {
             }
         }
         assertThat(mapeadas).as("rotas do controller = rotas publicadas").isEqualTo(publicadas)
-                .containsExactlyInAnyOrder(SignupController.SIGNUP, SignupController.CONFIRM, SignupController.RESEND);
+                .containsExactlyInAnyOrder(SignupController.SIGNUP, SignupController.CONFIRM, SignupController.RESEND, SignupController.PREVIEW);   // 071: + a previa da confirmacao
         Map<String, Set<String>> exercitados = Map.of(
                 SignupController.SIGNUP, Set.of("202", "400", "403", "404"),
                 SignupController.CONFIRM, Set.of("204", "400", "403", "404"),
@@ -177,8 +177,12 @@ class SignupContractTest {
                 Arrays.stream(p.value()).forEach(v -> mapeadas.put(v, "post"));
             }
         }
+        // PLATFORM-LICENCIAMENTO-001 (067): perfil de quem cria, pedido de criacao, desativar e reativar
         assertThat(mapeadas).containsExactlyInAnyOrderEntriesOf(Map.of(IdentityOrganizationsController.MY_ORGANIZATIONS, "get",
-                IdentityOrganizationsController.ORG_SESSION, "post", IdentityOrganizationsController.ORGANIZATIONS, "post"));
+                IdentityOrganizationsController.ORG_SESSION, "post", IdentityOrganizationsController.ORGANIZATIONS, "post",
+                IdentityOrganizationsController.MY_ORGANIZATION_CREATION, "get", IdentityOrganizationsController.ORGANIZATION_REQUESTS, "post",
+                IdentityOrganizationsController.MY_ORGANIZATION_REQUESTS, "get", IdentityOrganizationsController.DEACTIVATIONS, "post",
+                IdentityOrganizationsController.REACTIVATIONS, "post"));
         Map<String, Object> spec;
         try (Reader r = Files.newBufferedReader(Path.of("../openapi/nekkora-api-v1.yaml"))) {
             spec = new Yaml().load(r);
@@ -187,7 +191,12 @@ class SignupContractTest {
         Map<String, List<String>> exercitados = Map.of(
                 IdentityOrganizationsController.MY_ORGANIZATIONS, List.of("200", "401", "403", "404", "429", "503", "identitySessionCookie"),
                 IdentityOrganizationsController.ORG_SESSION, List.of("200", "400", "401", "403", "404", "429", "503", "identitySessionCookie", "csrfHeader"),
-                IdentityOrganizationsController.ORGANIZATIONS, List.of("201", "400", "401", "403", "404", "429", "503", "identitySessionCookie", "csrfHeader"));
+                IdentityOrganizationsController.ORGANIZATIONS, List.of("201", "400", "401", "403", "404", "409", "429", "503", "identitySessionCookie", "csrfHeader"),
+                IdentityOrganizationsController.MY_ORGANIZATION_CREATION, List.of("200", "401", "403", "404", "429", "503", "identitySessionCookie"),
+                IdentityOrganizationsController.ORGANIZATION_REQUESTS, List.of("201", "400", "401", "403", "404", "409", "429", "503", "identitySessionCookie", "csrfHeader"),
+                IdentityOrganizationsController.MY_ORGANIZATION_REQUESTS, List.of("200", "401", "403", "404", "429", "503", "identitySessionCookie"),
+                IdentityOrganizationsController.DEACTIVATIONS, List.of("204", "400", "401", "403", "404", "409", "429", "503", "identitySessionCookie", "csrfHeader"),
+                IdentityOrganizationsController.REACTIVATIONS, List.of("204", "400", "401", "403", "404", "409", "429", "503", "identitySessionCookie", "csrfHeader"));
         for (Map.Entry<String, List<String>> e : exercitados.entrySet()) {
             Map<String, Object> item = (Map<String, Object>) paths.get(e.getKey());
             assertThat(item).as(e.getKey() + " publicada").isNotNull();

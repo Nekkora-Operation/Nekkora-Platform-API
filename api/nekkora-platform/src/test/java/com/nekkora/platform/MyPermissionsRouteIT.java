@@ -42,6 +42,11 @@ class MyPermissionsRouteIT extends PlatformTestBase {
             "automation.execute", "logs.read", "automation.manage", "automation.publish", "workspace_parameter.read",
             "workspace_parameter.manage", "workspace_secret.read", "workspace_secret.manage", "automation_schedule.read",
             "automation_schedule.manage");
+    /** 071: o WORKSPACE_ADMIN tem tambem client_share.request (so dele; a ORG_ADMIN nao recebe). */
+    static final List<String> WORKSPACE_ADMIN_14 = sorted("workspace.configure", "role.assign_operator_viewer", "automation.read",
+            "automation.execute", "logs.read", "automation.manage", "automation.publish", "workspace_parameter.read",
+            "workspace_parameter.manage", "workspace_secret.read", "workspace_secret.manage", "automation_schedule.read",
+            "automation_schedule.manage", "client_share.request");
     static final List<String> OPERATOR = sorted("automation.read", "automation.execute", "logs.read");
     static final List<String> VIEWER = List.of("automation.read");
 
@@ -163,7 +168,7 @@ class MyPermissionsRouteIT extends PlatformTestBase {
         assignWorkspaceRole(o.id(), mb, w2, "VIEWER", o.adminMembership());
         assignWorkspaceRole(o.id(), mb, w2, "OPERATOR", o.adminMembership());
 
-        for (Object[] c : new Object[][] {{wsAdmin, w1, List.of("WORKSPACE_ADMIN"), WORKSPACE_13}, {operator, w1, List.of("OPERATOR"), OPERATOR},
+        for (Object[] c : new Object[][] {{wsAdmin, w1, List.of("WORKSPACE_ADMIN"), WORKSPACE_ADMIN_14}, {operator, w1, List.of("OPERATOR"), OPERATOR},
                 {viewer, w2, List.of("VIEWER"), VIEWER}}) {
             BrowserClient n = login(o, (TestUser) c[0]);
             Got g = get(n, p01(o.id()));

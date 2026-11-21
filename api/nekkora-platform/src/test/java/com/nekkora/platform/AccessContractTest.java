@@ -56,7 +56,7 @@ class AccessContractTest {
         Map<String, Object> paths = (Map<String, Object>) spec().get("paths");
         Set<String> publicadas = new TreeSet<>();
         for (Map.Entry<String, Object> e : paths.entrySet()) {
-            boolean acesso = e.getKey().equals(InvitationAcceptController.ACCEPT) || e.getKey().matches("/api/v1/o/\\{org}/(invitations|role-assignments).*")
+            boolean acesso = e.getKey().equals(InvitationAcceptController.ACCEPT) || e.getKey().equals(InvitationAcceptController.PREVIEW) || e.getKey().matches("/api/v1/o/\\{org}/(invitations|role-assignments).*")
                     || e.getKey().matches("/api/v1/o/\\{org}/users/\\{user}/(roles|membership/revoke)")
                     || e.getKey().matches("/api/v1/o/\\{org}/client-grants(/\\{grant}/(approve|renew|renew/approve|review))?");
             if (!acesso) {
@@ -68,7 +68,7 @@ class AccessContractTest {
                 }
             }
         }
-        assertThat(mapeadas).as("rotas dos controllers = rotas publicadas").isEqualTo(publicadas).hasSize(15);
+        assertThat(mapeadas).as("rotas dos controllers = rotas publicadas").isEqualTo(publicadas).hasSize(16);   // 071: + a previa do convite (primeiro acesso)
 
         Map<String, Set<String>> exercitados = Map.ofEntries(
                 Map.entry("post /api/v1/o/{org}/invitations", Set.of("201", "400", "403", "404", "409")),
@@ -113,10 +113,21 @@ class AccessContractTest {
         assertThat(faltando).as("referencias sem destino").isEmpty();
         Map<String, Object> error = (Map<String, Object>) ((Map<String, Object>) components.get("schemas")).get("Error");
         String codigos = error.get("properties").toString();
-        // motivos do canal do Agent (T06 e T13) sao publicados no contrato da maquina (GatewayContractTest), nao neste
+        // motivos do canal do Agent (T06, T13 e execucao remota T01a) sao publicados no contrato da maquina (GatewayContractTest), nao neste
         Set<com.nekkora.core.web.ApiError> soDaMaquina = Set.of(com.nekkora.core.web.ApiError.PAIRING_CODE_FOR_ROTATION,
                 com.nekkora.core.web.ApiError.ROTATION_CODE_FOR_PAIRING, com.nekkora.core.web.ApiError.LINK_ENDED_BY_MACHINE,
-                com.nekkora.core.web.ApiError.LINK_ENDED_BY_ADMINISTRATION);
+                com.nekkora.core.web.ApiError.LINK_ENDED_BY_ADMINISTRATION,
+                // PLATFORM-CLIENT-EXECUCAO-REMOTA-001 T01a: recusas do resgate e do recebimento, so no canal da maquina
+                com.nekkora.core.web.ApiError.REMOTE_CODE_WITHOUT_ENABLEMENT, com.nekkora.core.web.ApiError.CODE_NOT_FOR_REMOTE_EXECUTION,
+                com.nekkora.core.web.ApiError.REMOTE_EXECUTION_NOT_ENABLED, com.nekkora.core.web.ApiError.CREDENTIAL_RENEWAL_NOT_DUE,
+                // T02: o token ou a epoca da atribuicao e a transicao de estado sao do canal da maquina
+                com.nekkora.core.web.ApiError.REMOTE_ATTEMPT_STALE, com.nekkora.core.web.ApiError.REMOTE_ATTEMPT_TRANSITION,
+                // T03: o pacote da tentativa, baixado so pela maquina
+                com.nekkora.core.web.ApiError.REMOTE_PACKAGE_UNAVAILABLE,
+                // T03b: o envio de resultados e so da maquina (a leitura pelas pessoas usa remote_result_unavailable, publicado)
+                com.nekkora.core.web.ApiError.REMOTE_RESULT_CONFLICT, com.nekkora.core.web.ApiError.REMOTE_RESULT_LIMIT,
+                // T05: os registros sao enviados so pelo canal da maquina
+                com.nekkora.core.web.ApiError.REMOTE_LOG_CONFLICT, com.nekkora.core.web.ApiError.REMOTE_LOG_LIMIT);
         for (com.nekkora.core.web.ApiError e : com.nekkora.core.web.ApiError.values()) {
             assertThat(codigos).as("codigo de erro publicado: " + e.code()).contains(e.code());
             if (e.reason() != null && !soDaMaquina.contains(e)) {

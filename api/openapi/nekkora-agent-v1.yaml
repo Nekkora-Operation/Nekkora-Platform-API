@@ -44,6 +44,15 @@ paths:
         pairing_code_for_rotation (codigo de pareamento enviado como renovacao) ou rotation_code_for_pairing (codigo de renovacao
         enviado como pareamento). Sem o cabecalho (Agent anterior), o comportamento e o de antes, exceto codigo de pareamento com
         Authorization: 409 conflict (Worker indisponivel), em vez de criar outro Agent.
+      x-execucao-remota: >
+        PLATFORM-CLIENT-EXECUCAO-REMOTA-001 (T01a): pair-remote e a confirmacao, feita NA MAQUINA, de que ela passa a receber
+        execucoes solicitadas pela Platform. So vale com um codigo de pareamento MARCADO para isso por quem administra o vinculo
+        e o Worker; o resgate cria o vinculo e a habilitacao na mesma transacao e a resposta traz remoteExecution true. Codigo e
+        intencao precisam casar, e a recusa vem DEPOIS de conferidos o codigo, o prazo e a organizacao, sem consumir o codigo:
+        codigo marcado sem pair-remote (pair, ou sem cabecalho) -> 409 conflict + reason remote_code_without_enablement; codigo
+        comum com pair-remote -> 409 + code_not_for_remote_execution; codigo de rotacao com pair-remote -> 409 +
+        rotation_code_for_pairing; recurso desligado no servidor -> 409 + remote_execution_unavailable. Entrar no aplicativo
+        com a conta de uma pessoa nao habilita a maquina; nenhuma rota habilita uma maquina ja pareada.
       responses:
         '200': { description: 'Maquina pareada (ou credencial rotacionada); Cache-Control no-store', content: { application/json: { schema: { $ref: '#/components/schemas/Redeemed' } } } }
         '400': { $ref: '#/components/responses/InvalidRequest' }
@@ -60,12 +69,499 @@ paths:
       description: >
         Atualiza o ultimo contato e a versao informada e grava as capacidades (lista fechada). Recomendado a cada 60 s. A
         AUSENCIA de heartbeat nunca encerra execucao, nunca muda estado e nunca libera Worker.
+        PLATFORM-CLIENT-EXECUCAO-REMOTA-001 (T01a, aditivo): a maquina habilitada pode enviar "remote" (ocupada, pouco espaco
+        em disco), que vale ate o proximo batimento (sem "remote": falso), e recebe "remote.receiving", a referencia do
+        recebimento de novos trabalhos. Maquina nao habilitada e Agent anterior: pedido e resposta de sempre.
       parameters: [ { $ref: '#/components/parameters/Contract' } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/HeartbeatRequest' } } } }
       responses:
         '200': { description: 'Presenca registrada', content: { application/json: { schema: { $ref: '#/components/schemas/Presence' } } } }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/receiving:
+    post:
+      tags: [Maquina]
+      operationId: setRemoteReceiving
+      summary: 'A maquina pausa ou retoma o recebimento de novos trabalhos (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01a)'
+      description: >
+        So a propria maquina, pela credencial, pausa (PAUSED) ou retoma (ENABLED) o recebimento de execucoes solicitadas pela
+        Platform. Pausar nao cancela o que estiver em andamento e nao encerra o vinculo. Idempotente: repetir o mesmo valor
+        devolve 200 sem novo registro de auditoria. Maquina pareada mas nao habilitada: 409 conflict + reason
+        remote_execution_not_enabled. Nao ha Worker, Agent nem organizacao no corpo: a autoridade vem so da credencial.
+      parameters: [ { $ref: '#/components/parameters/Contract' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RemoteReceiving' } } } }
+      responses:
+        '200': { description: 'Recebimento atual', content: { application/json: { schema: { $ref: '#/components/schemas/RemoteReceiving' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/next:
+    get:
+      tags: [Maquina]
+      operationId: nextRemoteWork
+      summary: 'A maquina pergunta o que ha para ela (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T02)'
+      description: >
+        Entrega no maximo UMA coisa. attempt: a tentativa que e desta maquina e ela ainda nao recebeu, com o token e a epoca da
+        atribuicao (o token aparece SO aqui) e o prazo da comunicacao. cancel: a tentativa que ela ja recebeu e cuja
+        solicitacao teve o cancelamento pedido (a maquina para e informa CANCELLED). Nada a fazer: objeto vazio. Antes de
+        entregar, o servidor REVALIDA as condicoes da solicitacao (Worker autorizado no ambiente, maquina habilitada e
+        compativel, autorizacao vigente da versao para este Worker): se algo deixou de valer, a tentativa fica REFUSED com o
+        motivo e nada e entregue. Maquina pausada: nada e entregue (a tentativa espera ate o prazo da oferta e entao expira).
+        Organizacao do modelo por licenca sem VAGA de execucao (066: limite tecnico de simultaneas, um so para a organizacao,
+        compartilhado pelos fluxos de execucao): a tentativa ainda nao entregue NAO e entregue e nao e recusada - continua na
+        fila, e a resposta e o objeto vazio, ate haver vaga ou vencer o prazo da oferta. A vaga e reservada nesta entrega.
+        Perguntar de novo antes de confirmar o recebimento entrega a MESMA tentativa com token e epoca novos: os anteriores
+        deixam de valer. Maquina nao habilitada: 409 + remote_execution_not_enabled. Entregar nao prova recebimento.
+        dependencyCheck (054): alem disso, e sem depender disso, um pedido de verificacao de dependencias a responder em
+        /remote/dependency-checks/{check}/answer.
+      parameters: [ { $ref: '#/components/parameters/Contract' } ]
+      responses:
+        '200': { description: 'O que ha para a maquina', content: { application/json: { schema: { $ref: '#/components/schemas/RemoteNext' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/dependency-checks/pending:
+    get:
+      tags: [Maquina]
+      operationId: pendingRemoteDependencyCheck
+      summary: 'O pedido de verificacao de dependencias pendente desta maquina (054)'
+      description: >
+        Para quando a maquina nao esta perguntando por trabalho (tem uma tentativa em andamento). Devolve o pedido mais antigo
+        ainda sem resposta e dentro do prazo, ou objeto vazio. Nao depende de a maquina estar recebendo, pausada ou ocupada:
+        conferir nao e executar. Nenhum efeito sobre tentativas.
+      parameters: [ { $ref: '#/components/parameters/Contract' } ]
+      responses:
+        '200': { description: 'O pedido pendente, se houver', content: { application/json: { schema: { type: object, properties: { dependencyCheck: { $ref: '#/components/schemas/RemoteDependencyCheckRequest' } } } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/dependency-checks/{check}/answer:
+    post:
+      tags: [Maquina]
+      operationId: answerRemoteDependencyCheck
+      summary: 'A maquina responde a verificacao de dependencias (054)'
+      description: >
+        Uma vez, dentro do prazo. SATISFIED: todas presentes na versao exata. MISSING: faltam (ou estao em outra versao) as de
+        missing, que so pode conter itens do que foi perguntado. ENVIRONMENT_GONE: o ambiente escolhido nao existe mais na
+        maquina. NOT_VERIFIED: a maquina nao conseguiu conferir. So o pedido desta maquina (de outra, ou inexistente: 404).
+        Repetir a mesma resposta devolve o que esta gravado; outra resposta, ou depois do prazo: 409 +
+        remote_dependency_check_closed. Nada do que esta instalado vai junto: so o que falta do que foi perguntado.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: check, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [outcome]
+              properties:
+                outcome: { type: string, enum: [SATISFIED, MISSING, ENVIRONMENT_GONE, NOT_VERIFIED] }
+                missing: { type: array, minItems: 1, maxItems: 400, items: { type: string, maxLength: 200 }, description: 'So com MISSING' }
+      responses:
+        '200': { description: 'Resposta gravada', content: { application/json: { schema: { type: object, required: [checkId, outcome], properties: { checkId: { type: string, format: uuid }, outcome: { type: string }, missing: { type: array, items: { type: string } } } } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/attempts/{attempt}/ack:
+    post:
+      tags: [Maquina]
+      operationId: ackRemoteAttempt
+      summary: 'A maquina confirma que recebeu a tentativa (T02)'
+      description: >
+        Depois de gravar a tentativa no proprio diario. OFFERED vira RECEIVED. Idempotente com o mesmo token e epoca. Token ou
+        epoca que nao sao os vigentes: 409 conflict + reason remote_attempt_stale, e nada e alterado. Tentativa de outra maquina
+        ou inexistente: 404. Tentativa ja encerrada pelo servidor (cancelada, recusada, expirada): 200 com proceed false.
+        Receber nao prova inicio.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RemoteAttemptWrite' } } } }
+      responses:
+        '200': { description: 'Situacao da tentativa', content: { application/json: { schema: { $ref: '#/components/schemas/RemoteAttemptStatus' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/attempts/{attempt}/state:
+    post:
+      tags: [Maquina]
+      operationId: reportRemoteAttemptState
+      summary: 'A maquina informa o estado da tentativa e renova o prazo (T02)'
+      description: >
+        Estados que a maquina informa: PREPARING, STARTING, RUNNING, SUCCEEDED, FAILED, CANCELLED, TIMED_OUT, REFUSED (com
+        refusalReason da lista da maquina) e ENDED_UNKNOWN (a maquina voltou, o processo nao esta mais rodando e nao ha prova do
+        resultado). exitCode so em SUCCEEDED, FAILED e TIMED_OUT. Repetir o estado atual so renova o prazo. Transicao nao
+        permitida: 409 + remote_attempt_transition. Token ou epoca que nao sao os vigentes: 409 + remote_attempt_stale; nada e
+        alterado. ANTES DE INICIAR (STARTING) o servidor revalida: cancelamento pedido -> a tentativa fica CANCELLED;
+        autorizacao revogada ou vencida, Worker fora do ambiente ou maquina desabilitada -> fica REFUSED com o motivo. Nos dois
+        casos a resposta traz proceed false e a maquina NAO inicia. cancelRequested true: a pessoa pediu o cancelamento; a
+        maquina para e informa CANCELLED. O prazo vencido quer dizer comunicacao perdida; vencido ha mais que a espera configurada
+        (padrao 120 min), o servidor encerra a tentativa recebida sem inventar desfecho: REFUSED com COMMUNICATION_LOST se nunca
+        autorizou o inicio, senao ENDED_UNKNOWN (closureCause COMMUNICATION_LOST). A maquina que volta depois recebe proceed false;
+        o desfecho que ela informar e guardado como relato tardio, uma vez, sem mudar o estado. Registros e resultados continuam
+        aceitos. Vinculo encerrado (pela maquina ou por quem administra): a tentativa e encerrada na mesma transacao.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RemoteAttemptStateWrite' } } } }
+      responses:
+        '200': { description: 'Situacao da tentativa', content: { application/json: { schema: { $ref: '#/components/schemas/RemoteAttemptStatus' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/attempts/{attempt}/results/{number}:
+    put:
+      tags: [Maquina]
+      operationId: uploadRemoteAttemptResult
+      summary: 'A maquina envia um arquivo de resultado da tentativa (T03)'
+      description: >
+        Um arquivo que a automacao gravou na pasta de saida, enviado depois que a execucao iniciou (em geral, depois do termino).
+        Corpo: os bytes do arquivo (Content-Length obrigatorio, ate 20 MiB). Cabecalhos: Nekkora-Attempt-Token e
+        Nekkora-Attempt-Epoch (continuam valendo depois do termino), Nekkora-Result-Name (o nome RELATIVO a pasta de saida, com /
+        como separador, em UTF-8 com escape de URL; sem .., sem barra invertida, sem caminho absoluto, ate 200 caracteres) e
+        Nekkora-Result-Sha256. number: 1 a 50. O servidor confere o SHA-256 contra os bytes que chegaram; divergencia, nome ou
+        numero fora do formato: 400 e nada e gravado. Tentativa que nao iniciou: 409 + remote_attempt_transition. Repetir o MESMO
+        arquivo no mesmo numero (resposta perdida) responde created false e nao muda nada; outro arquivo no mesmo numero, nome
+        repetido, ou envio depois do fechamento: 409 + remote_result_conflict. Passar de 50 MiB no total: 409 +
+        remote_result_limit, e nada e gravado. Armazenamento fora: 503. Enviar resultado NAO muda o estado da tentativa.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: number, in: path, required: true, schema: { type: integer, minimum: 1, maximum: 50 } }
+        - { name: Nekkora-Attempt-Token, in: header, required: true, schema: { type: string } }
+        - { name: Nekkora-Attempt-Epoch, in: header, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: Nekkora-Result-Name, in: header, required: true, schema: { type: string } }
+        - { name: Nekkora-Result-Sha256, in: header, required: true, schema: { type: string, pattern: '^[0-9a-f]{64}$' } }
+      requestBody: { required: true, content: { application/octet-stream: { schema: { type: string, format: binary } } } }
+      responses:
+        '200':
+          description: 'Arquivo guardado (ou ja guardado)'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [number, fileName, sizeBytes, sha256, created]
+                properties:
+                  number: { type: integer }
+                  fileName: { type: string }
+                  sizeBytes: { type: integer }
+                  sha256: { type: string }
+                  created: { type: boolean }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/attempts/{attempt}/results/complete:
+    post:
+      tags: [Maquina]
+      operationId: completeRemoteAttemptResults
+      summary: 'A maquina fecha o envio de resultados da tentativa (T03)'
+      description: >
+        Depois que a tentativa que iniciou TERMINOU (antes: 409 + remote_attempt_transition). sent: quantos arquivos a maquina
+        enviou - tem de ser o que o servidor recebeu (um envio perdido aparece aqui: 409 + remote_result_conflict).
+        skippedByLimit: quantos ela deixou de enviar por limite (de quantidade, de tamanho por arquivo ou do total). Repetir o
+        mesmo fechamento nao muda nada; outro: 409 + remote_result_conflict. Depois do fechamento nenhum arquivo e aceito.
+        Fechar NAO muda o estado da tentativa.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token, epoch, sent, skippedByLimit]
+              properties:
+                token: { type: string }
+                epoch: { type: integer, minimum: 1 }
+                sent: { type: integer, minimum: 0, maximum: 50 }
+                skippedByLimit: { type: integer, minimum: 0 }
+      responses:
+        '200':
+          description: 'Envio fechado'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [sent, skippedByLimit]
+                properties:
+                  sent: { type: integer }
+                  skippedByLimit: { type: integer }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/attempts/{attempt}/logs:
+    post:
+      tags: [Maquina]
+      operationId: sendRemoteAttemptLogs
+      summary: 'A maquina envia um lote de linhas da saida do processo da tentativa (T05)'
+      description: >
+        Linhas que o processo da automacao escreveu na saida padrao (STDOUT) e na saida de erro (STDERR), e avisos do proprio
+        aplicativo (EXECUTOR), na ordem em que a maquina as capturou. So de tentativa que INICIOU (antes: 409 +
+        remote_attempt_transition) e ate o fechamento do envio. Lote: 1 a 200 linhas, ate 256 KiB de texto; linha: ate 8 KiB em
+        UTF-8, sem quebra de linha nem caractere de controle (tabulacao pode); truncated diz que a maquina cortou a linha no
+        limite. sequence: 1 em diante, continua dentro do lote; o lote comeca, no maximo, na linha seguinte a ultima guardada
+        (buraco: 409 + remote_log_conflict). Linha ja guardada com o mesmo conteudo e ignorada (lote repetido depois de resposta
+        perdida); com outro conteudo: 409 + remote_log_conflict. Passar de 50.000 linhas ou de 20 MiB por tentativa: 409 +
+        remote_log_limit, nada do lote e gravado e a maquina conta o excedente como descartado no fechamento. STDERR e um canal,
+        nao um nivel: nenhuma linha e classificada pelo texto. Antes de gravar, o servidor remove credencial de maquina, codigo de
+        pareamento, cabecalho de autorizacao e o token da atribuicao. Com a tentativa em andamento, o lote renova o prazo da
+        comunicacao. Enviar registro NAO muda o estado da tentativa. So existe registro de tentativa remota: execucao iniciada no
+        proprio computador nao tem rota aqui.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token, epoch, lines]
+              properties:
+                token: { type: string }
+                epoch: { type: integer, minimum: 1 }
+                lines:
+                  type: array
+                  minItems: 1
+                  maxItems: 200
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [sequence, capturedAt, channel, message]
+                    properties:
+                      sequence: { type: integer, minimum: 1 }
+                      capturedAt: { type: string, format: date-time }
+                      channel: { type: string, enum: [STDOUT, STDERR, EXECUTOR] }
+                      truncated: { type: boolean }
+                      message: { type: string }
+      responses:
+        '200':
+          description: 'Lote guardado (ou ja guardado)'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [received, stored, lastSequence]
+                properties:
+                  received: { type: integer, description: 'Linhas do lote' }
+                  stored: { type: integer, description: 'Linhas novas gravadas (as repetidas nao contam)' }
+                  lastSequence: { type: integer, description: 'A ultima linha que a Platform tem desta tentativa' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/attempts/{attempt}/logs/complete:
+    post:
+      tags: [Maquina]
+      operationId: completeRemoteAttemptLogs
+      summary: 'A maquina fecha o envio dos registros da tentativa (T05)'
+      description: >
+        Depois que a tentativa que iniciou TERMINOU (antes: 409 + remote_attempt_transition). lines: quantas linhas a maquina
+        enviou - tem de ser o que o servidor recebeu (um lote perdido aparece aqui: 409 + remote_log_conflict). droppedLines:
+        quantas linhas ela DESCARTOU por limite (a captura nao para: o excedente e lido e contado, nao guardado). Repetir o mesmo
+        fechamento nao muda nada; outro: 409 + remote_log_conflict. Depois do fechamento nenhuma linha e aceita. Fechar NAO muda
+        o estado da tentativa.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token, epoch, lines, droppedLines]
+              properties:
+                token: { type: string }
+                epoch: { type: integer, minimum: 1 }
+                lines: { type: integer, minimum: 0, maximum: 50000 }
+                droppedLines: { type: integer, minimum: 0 }
+      responses:
+        '200':
+          description: 'Envio fechado'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [lines, droppedLines]
+                properties:
+                  lines: { type: integer }
+                  droppedLines: { type: integer }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/attempts/{attempt}/retention-loss:
+    post:
+      tags: [Maquina]
+      operationId: reportRemoteAttemptRetentionLoss
+      summary: 'A maquina avisa que removeu, pelo prazo de guarda local, registros ou resultados nao confirmados'
+      description: >
+        O aplicativo da maquina guarda por um prazo a fila de registros e a pasta de saida cujo recebimento a Platform nao
+        confirmou. Vencido o prazo, ele remove e avisa aqui, quando consegue. kind: LOGS (a fila de registros) ou RESULTS (a pasta
+        de saida). localCount: quanto havia na maquina - linhas capturadas, ou arquivos na pasta; NAO e quanto se perdeu (a
+        Platform sabe o que tem). So de tentativa que iniciou e TERMINOU (antes: 409 + remote_attempt_transition), com o token e
+        a epoca da atribuicao. Um aviso por tentativa e por tipo: repetir devolve o que ja estava gravado, mesmo com outro
+        numero. Nao muda o estado da tentativa, as linhas, os arquivos nem o fechamento.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token, epoch, kind, localCount]
+              properties:
+                token: { type: string }
+                epoch: { type: integer, minimum: 1 }
+                kind: { type: string, enum: [LOGS, RESULTS] }
+                localCount: { type: integer, minimum: 0, maximum: 1000000 }
+      responses:
+        '200':
+          description: 'Aviso gravado (ou o que ja estava gravado)'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [kind, localCount, reportedAt]
+                properties:
+                  kind: { type: string, enum: [LOGS, RESULTS] }
+                  localCount: { type: integer }
+                  reportedAt: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/attempts/{attempt}/package:
+    get:
+      tags: [Maquina]
+      operationId: downloadRemoteAttemptPackage
+      summary: 'A maquina baixa o pacote da tentativa que recebeu (T03)'
+      description: >
+        Os bytes do ZIP da versao FIXADA na solicitacao (a impressao congelada nela), so para a maquina da tentativa, com o token
+        e a epoca vigentes nos cabecalhos Nekkora-Attempt-Token e Nekkora-Attempt-Epoch (nunca na URL), e so entre o recebimento e
+        o inicio (estado RECEIVED ou PREPARING; fora disso 409 + remote_attempt_transition). Token ou epoca que nao sao os
+        vigentes: 409 + remote_attempt_stale. O servidor rele e confere os bytes pelo SHA-256 a cada download; ausentes ou
+        corrompidos: 409 + remote_package_unavailable (a maquina recusa a tentativa com PACKAGE_INVALID). Armazenamento fora: 503.
+        A resposta traz Nekkora-Package-Sha256; a maquina confere o tamanho, o SHA-256 e a impressao ANTES de usar - download
+        parcial nunca e executavel. Baixar renova o prazo da comunicacao. Nenhuma outra versao, pacote ou tentativa e alcancavel:
+        alem das conferencias acima, o BANCO so mostra ao canal da maquina o pacote fixado na tentativa da propria maquina
+        (a que a credencial autenticou), e so enquanto a tentativa esta em RECEIVED ou PREPARING.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: Nekkora-Attempt-Token, in: header, required: true, schema: { type: string } }
+        - { name: Nekkora-Attempt-Epoch, in: header, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: 'Bytes do pacote'
+          headers:
+            Nekkora-Package-Sha256: { schema: { type: string, pattern: '^[0-9a-f]{64}$' }, description: 'SHA-256 dos bytes' }
+          content: { application/zip: { schema: { type: string, format: binary } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/python-environments:
+    put:
+      tags: [Maquina]
+      operationId: publishPythonInventory
+      summary: 'A maquina habilitada publica o inventario de Python (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01c)'
+      description: >
+        Substitui, numa transacao, o retrato do Python que a maquina disse ter. Por ambiente: um identificador OPACO derivado na
+        maquina (43 caracteres base64url, estavel para o mesmo ambiente na mesma maquina), a versao, o tipo e o instante da
+        observacao. NENHUM caminho, nome de usuario, lista de pacotes ou outro campo e aceito: campo a mais, valor fora do
+        formato, identificador repetido ou mais de 32 ambientes -> 400 e nada muda. Lista vazia e valida (a maquina nao achou
+        Python). Maquina vinculada mas nao habilitada: 409 conflict + reason remote_execution_not_enabled. Limite: 6 publicacoes
+        por minuto por maquina (429 com Retry-After). Publicar nao escolhe ambiente nem autoriza execucao.
+      parameters: [ { $ref: '#/components/parameters/Contract' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PythonInventory' } } } }
+      responses:
+        '200': { description: 'Retrato gravado', content: { application/json: { schema: { $ref: '#/components/schemas/PythonInventoryPublished' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/credential/renew:
+    post:
+      tags: [Maquina]
+      operationId: renewMachineCredential
+      summary: 'A maquina habilitada renova a propria credencial (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01b)'
+      description: >
+        Sem pessoa e sem codigo: a maquina prova a posse da credencial ATUAL (Authorization) e envia o segredo novo, gerado
+        nela (credentialSecret, mesmo formato do resgate). Numa transacao: a anterior e revogada (motivo MACHINE_RENEWAL,
+        autoria da maquina) e a nova e emitida com o mesmo prazo e o mesmo emissor da anterior; o vinculo, o Worker e a
+        habilitacao nao mudam. A credencial nova e nka1.<organizationId>.<credentialId>.<segredo novo>. So dentro da janela
+        (por padrao, 30 dias antes do vencimento): antes disso, 409 conflict + reason credential_renewal_not_due. Credencial
+        VENCIDA ou revogada: 401 - nunca volta a valer; a saida e habilitar a maquina de novo. Resposta perdida: repetir com a
+        credencial ANTERIOR e o MESMO segredo novo devolve a mesma credencial nova (unica situacao em que uma credencial
+        revogada e aceita, e so para repetir a troca que a revogou); com outro segredo: 401. Maquina vinculada mas nao
+        habilitada para execucao remota: 409 + remote_execution_not_enabled (o Agent anterior continua usando o codigo de
+        rotacao). Recurso desligado: 409 + remote_execution_unavailable. O token de uma pessoa nunca e aceito aqui.
+      parameters: [ { $ref: '#/components/parameters/Contract' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RenewCredentialRequest' } } } }
+      responses:
+        '200': { description: 'Credencial nova (inclusive na repeticao); Cache-Control no-store', content: { application/json: { schema: { $ref: '#/components/schemas/RenewedCredential' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
@@ -170,6 +666,14 @@ paths:
         enviado com as regras do relatorio; o mesmo agentExecutionId com outra autorizacao ou outro pacote: 409. Autorizacao
         revogada ou vencida no momento do registro: o fato e ACEITO e marcado (authorizationStateAtRegistration). Pacote sem
         versao publicada nao e registravel (nao ha autorizacao para ele).
+        PLATFORM-LICENCIAMENTO-001 (064, D8) - SO na organizacao do modelo por licenca: o registro NOVO e aceito quando a
+        autorizacao (a do servidor) valia no inicio informado (started, ou created; sem nenhum, o instante do servidor) e
+        (a) a automacao tinha licenca vigente naquele inicio - inclusive quando os dados chegam depois do vencimento - ou
+        (b) a autorizacao foi emitida antes de a organizacao passar ao modelo por licenca (transicao, limitada a validade ja
+        emitida). Fora disso: 403 forbidden com reason run_not_covered (a autorizacao nao valia no inicio), license_required
+        ou license_expired, e nada e gravado. O instante do inicio e limitado pelo servidor ao intervalo entre a emissao da
+        autorizacao e agora; o relogio da maquina desconectada nao e comprovavel. Eventos, relatorio do supervisor e lacunas
+        de uma execucao ja registrada nao reconferem licenca.
       parameters: [ { $ref: '#/components/parameters/Contract' } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RegisterRequest' } } } }
       responses:
@@ -190,6 +694,8 @@ paths:
       description: >
         REQUESTED/DELIVERED no prazo e ACCEPTED (para a maquina reconciliar). A primeira leitura marca DELIVERED; cada leitura conta
         uma entrega. Os vencidos sem decisao passam a EXPIRED aqui (instante do servidor). Entregar NAO e iniciar. Ate 50 itens.
+        Organizacao do modelo por licenca sem VAGA de execucao (066): o pedido ainda nao entregue fica FORA desta lista e
+        continua pendente ate haver vaga ou vencer; a vaga e reservada na entrega. Os ja entregues e aceitos continuam vindo.
       parameters: [ { $ref: '#/components/parameters/Contract' } ]
       responses:
         '200': { description: 'Pedidos', content: { application/json: { schema: { $ref: '#/components/schemas/RunRequestList' } } } }
@@ -275,7 +781,7 @@ components:
       scheme: bearer
       bearerFormat: 'nka1.<organization_id>.<credential_id>.<segredo base64url de 32 bytes>'
   parameters:
-    Intent: { name: Nekkora-Agent-Intent, in: header, required: false, schema: { type: string, enum: [pair, rotate] }, description: 'T06: intencao do resgate (pair = Parear com a Platform; rotate = Renovar credencial). Ausente: Agent anterior. Outro valor: 400' }
+    Intent: { name: Nekkora-Agent-Intent, in: header, required: false, schema: { type: string, enum: [pair, rotate, pair-remote] }, description: 'T06: intencao do resgate (pair = Parear com a Platform; rotate = Renovar credencial). EXECUCAO-REMOTA-001 T01a: pair-remote = parear E habilitar esta maquina para execucao remota (so com codigo marcado). Ausente: Agent anterior. Outro valor: 400' }
     Contract: { name: Nekkora-Agent-Contract, in: header, required: true, schema: { type: string, pattern: '^1\.[0-9]{1,3}$' }, description: 'versao do contrato (maior 1)' }
     AgentExecutionId: { name: agentExecutionId, in: path, required: true, schema: { type: string, pattern: '^ex-[0-9a-f]{32}$' } }
   responses:
@@ -293,7 +799,7 @@ components:
       required: [error]
       properties:
         error: { type: string, enum: [invalid_request, unsupported_contract, unauthenticated, forbidden, not_found, conflict, rate_limited, internal_error, service_unavailable] }
-        reason: { type: string, enum: [pairing_code_for_rotation, rotation_code_for_pairing, link_ended_by_machine, link_ended_by_administration], description: 'Motivo opcional de um codigo conhecido (conflict): T06 (codigos de pareamento/rotacao) e T13 (vinculo ja encerrado). Cliente que nao o conhece trata o codigo como sempre' }
+        reason: { type: string, enum: [license_required, license_expired, run_not_covered, pairing_code_for_rotation, rotation_code_for_pairing, link_ended_by_machine, link_ended_by_administration, remote_execution_unavailable, remote_code_without_enablement, code_not_for_remote_execution, remote_execution_not_enabled, credential_renewal_not_due, remote_attempt_stale, remote_attempt_transition, remote_package_unavailable, remote_result_conflict, remote_result_limit, remote_log_conflict, remote_log_limit, remote_dependency_check_closed], description: 'Motivo opcional de um codigo conhecido (conflict): T06 (codigos de pareamento/rotacao), T13 (vinculo ja encerrado) e EXECUCAO-REMOTA-001 T01a (habilitacao). Cliente que nao o conhece trata o codigo como sempre' }
     UnlinkRequest:
       type: object
       required: [operationId, agentId, launchedRunRequests]
@@ -330,19 +836,141 @@ components:
         credentialId: { type: string, format: uuid }
         credentialExpiresAt: { type: string, format: date-time }
         contractVersion: { type: string }
+        remoteExecution: { type: boolean, enum: [true], description: 'Presente (true) so quando o resgate habilitou a maquina para execucao remota; ausente nos demais' }
+    RemoteNext:
+      type: object
+      description: 'No maximo um dos campos. Nenhum: nada a fazer'
+      properties:
+        attempt:
+          type: object
+          required: [attemptId, remoteExecutionId, attemptNumber, automationId, automationVersionId, packageFingerprint, workspaceId, packageFingerprintRule, dependencies, pythonEnvironmentId, token, epoch, leaseSeconds]
+          properties:
+            attemptId: { type: string, format: uuid }
+            remoteExecutionId: { type: string, format: uuid }
+            attemptNumber: { type: integer, minimum: 1 }
+            automationId: { type: string, format: uuid }
+            automationVersionId: { type: string, format: uuid }
+            packageFingerprint: { type: string, pattern: '^[0-9a-f]{64}$' }
+            packageFingerprintRule: { type: string }
+            dependencies: { type: array, items: { type: string }, description: 'O efetivo congelado na solicitacao (nome==versao)' }
+            workspaceId: { type: string, format: uuid, description: 'O ambiente da solicitacao' }
+            pythonEnvironmentId: { type: [string, 'null'], pattern: '^[A-Za-z0-9_-]{43}$', description: 'O ambiente Python escolhido para a automacao NESTA maquina: o identificador opaco que ela mesma publicou no inventario. A Platform nunca envia um caminho. A maquina confere o ambiente antes de iniciar; se ele nao existir mais, recusa com ENVIRONMENT_GONE, sem escolher outro. Nulo so em tentativas anteriores a escolha do Python.' }
+            token: { type: string, description: 'Token da atribuicao; aparece so aqui' }
+            epoch: { type: integer, minimum: 1 }
+            leaseSeconds: { type: integer }
+        cancel:
+          type: object
+          required: [attemptId]
+          properties:
+            attemptId: { type: string, format: uuid }
+        dependencyCheck: { $ref: '#/components/schemas/RemoteDependencyCheckRequest' }
+    RemoteDependencyCheckRequest:
+      type: object
+      description: 'O que conferir: SO estas dependencias, SO no ambiente Python deste identificador opaco. Nada e instalado.'
+      required: [checkId, pythonEnvironmentId, dependencies]
+      properties:
+        checkId: { type: string, format: uuid }
+        pythonEnvironmentId: { type: string }
+        dependencies: { type: array, items: { type: string }, description: 'nome==versao' }
+    RemoteAttemptWrite:
+      type: object
+      additionalProperties: false
+      required: [token, epoch]
+      properties:
+        token: { type: string }
+        epoch: { type: integer, minimum: 1 }
+    RemoteAttemptStateWrite:
+      type: object
+      additionalProperties: false
+      required: [token, epoch, state]
+      properties:
+        token: { type: string }
+        epoch: { type: integer, minimum: 1 }
+        state: { type: string, enum: [PREPARING, STARTING, RUNNING, SUCCEEDED, FAILED, CANCELLED, TIMED_OUT, REFUSED, ENDED_UNKNOWN] }
+        refusalReason: { type: string, enum: [BUSY, PAUSED, PACKAGE_INVALID, ENVIRONMENT_GONE, ENVIRONMENT_INCOMPATIBLE, DEPENDENCIES_MISSING, DISK_PRESSURE, CLIENT_INCOMPATIBLE, SESSION_UNAVAILABLE], description: 'So com REFUSED' }
+        exitCode: { type: integer, description: 'So com SUCCEEDED, FAILED ou TIMED_OUT' }
+        processTree: { type: string, enum: [ABSENT, ACTIVE, UNCERTAIN], description: '058, 060: junto de um estado final, o que a maquina sabe dos PROCESSOS da tentativa (o lancado e os descendentes). ABSENT: tem prova de que nenhum continua - so isto libera a maquina e a repeticao. ACTIVE: o processo principal terminou e ha processo vivo (finalizando). UNCERTAIN: nao tem como saber. A maquina repete o mesmo relato quando o que sabe muda. Ausente (aplicativo antigo): numa execucao normal nada muda; numa tentativa nao confirmada, vale como UNCERTAIN' }
+        processAbsent: { type: boolean, description: '058: junto de um estado final, a maquina afirma que CONFERIU que nada desta tentativa continua em execucao nela - o processo lancado E os processos filhos dele. Ausente ou false: resta algo vivo ou ela nao sabe. Numa tentativa que o servidor ja encerrou como nao confirmada, so esta afirmacao a reconcilia pela maquina (informar o desfecho do processo principal nao basta); o mesmo relato pode ser repetido depois, ja com ela. Repetir RUNNING fica registrado como "ainda executa"' }
+    RemoteAttemptStatus:
+      type: object
+      required: [attemptId, state, proceed, cancelRequested, leaseSeconds]
+      properties:
+        attemptId: { type: string, format: uuid }
+        state: { type: string, enum: [QUEUED, OFFERED, RECEIVED, PREPARING, STARTING, RUNNING, SUCCEEDED, FAILED, CANCELLED, TIMED_OUT, REFUSED, EXPIRED, ENDED_UNKNOWN] }
+        proceed: { type: boolean, description: 'false: a maquina NAO deve seguir (inicio recusado pelo servidor, ou tentativa ja terminada)' }
+        refusalReason: { type: string, description: 'So em REFUSED; inclui os motivos do servidor (AUTHORIZATION_REVOKED, AUTHORIZATION_EXPIRED, AUTHORIZATION_MISSING, WORKER_NOT_AUTHORIZED, MACHINE_NOT_LINKED, MACHINE_NOT_ENABLED, MACHINE_INCOMPATIBLE, COMMUNICATION_LOST; 064, no modelo por licenca: LICENSE_REQUIRED, LICENSE_EXPIRED)' }
+        cancelRequested: { type: boolean }
+        leaseSeconds: { type: integer }
+        closureCause: { type: string, enum: [MACHINE_UNLINKED, MACHINE_REVOKED, COMMUNICATION_LOST], description: 'So quando o SERVIDOR encerrou a tentativa' }
+    PythonInventory:
+      type: object
+      additionalProperties: false
+      required: [environments]
+      properties:
+        environments:
+          type: array
+          maxItems: 32
+          items:
+            type: object
+            additionalProperties: false
+            required: [environmentId, pythonVersion, kind, observedAt]
+            properties:
+              environmentId: { type: string, pattern: '^[A-Za-z0-9_-]{43}$', description: 'Opaco; derivado na maquina; nunca um caminho' }
+              pythonVersion: { type: string, pattern: '^3\.[0-9]{1,2}\.[0-9]{1,3}([abc]|rc)?[0-9]{0,2}$' }
+              kind: { type: string, enum: [INSTALLATION, VIRTUAL_ENVIRONMENT] }
+              observedAt: { type: string, format: date-time, description: 'Quando a maquina sondou o ambiente; ate 5 minutos a frente do servidor' }
+    PythonInventoryPublished:
+      type: object
+      required: [count, reportedAt]
+      properties:
+        count: { type: integer, minimum: 0, maximum: 32 }
+        reportedAt: { type: string, format: date-time }
+    RenewCredentialRequest:
+      type: object
+      additionalProperties: false
+      required: [credentialSecret]
+      properties:
+        credentialSecret: { type: string, pattern: '^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$', description: 'Segredo NOVO, gerado pela maquina; viaja uma vez' }
+    RenewedCredential:
+      type: object
+      required: [credentialId, credentialExpiresAt]
+      properties:
+        credentialId: { type: string, format: uuid }
+        credentialExpiresAt: { type: string, format: date-time }
+    RemoteReceiving:
+      type: object
+      additionalProperties: false
+      required: [receiving]
+      properties:
+        receiving: { type: string, enum: [ENABLED, PAUSED] }
     HeartbeatRequest:
       type: object
       required: [agentVersion, contractVersion, capabilities]
       properties:
         agentVersion: { type: string, pattern: '^[0-9A-Za-z.+-]{1,40}$' }
         contractVersion: { type: string, pattern: '^1\.[0-9]{1,3}$' }
-        capabilities: { type: array, maxItems: 8, items: { type: string, enum: [RUN_LOCAL, OBS_1_0, SUPERVISOR_REPORT_1_0, EXTERNAL_PYTHON_1_0, RUN_REQUEST_1_0] } }
+        capabilities: { type: array, maxItems: 12, items: { type: string, enum: [RUN_LOCAL, OBS_1_0, SUPERVISOR_REPORT_1_0, EXTERNAL_PYTHON_1_0, RUN_REQUEST_1_0, REMOTE_RUN_1_0, REMOTE_LOGS_1_0, REMOTE_RESULTS_1_0, PY_INVENTORY_1_0] } }
+        remote:
+          type: object
+          additionalProperties: false
+          required: [busy, diskPressure]
+          description: 'Opcional (T01a da execucao remota): sinais da maquina habilitada, validos ate o proximo batimento'
+          properties:
+            busy: { type: boolean, description: 'Ha uma execucao em andamento nesta maquina' }
+            diskPressure: { type: boolean, description: 'Espaco em disco abaixo do minimo para preparar uma execucao' }
     Presence:
       type: object
       properties:
         serverTime: { type: string, format: date-time }
         credentialExpiresAt: { type: string, format: date-time }
         contractVersion: { type: string }
+        remote:
+          type: object
+          description: 'So para a maquina habilitada para execucao remota'
+          properties:
+            receiving: { type: string, enum: [ENABLED, PAUSED] }
+            changedAt: { type: string, format: date-time }
+            workerName: { type: string, description: 'O nome atual, na Platform, do Worker a que esta maquina esta associada' }
     AuthorizationList:
       type: object
       properties:
