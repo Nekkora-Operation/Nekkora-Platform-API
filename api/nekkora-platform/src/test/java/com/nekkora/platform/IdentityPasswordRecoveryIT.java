@@ -29,7 +29,7 @@ class IdentityPasswordRecoveryIT extends IdentityTestBase {
 
     private static final String REQUEST = "/api/v1/auth/password-reset/request";
     private static final String CONFIRM = "/api/v1/auth/password-reset/confirm";
-    private static final String NOVA = "senha-recuperada-da-identidade-3";
+    private static final String NOVA = "Recuperada#Ident3";
 
     @DynamicPropertySource
     static void ownContext(DynamicPropertyRegistry r) {
@@ -68,7 +68,7 @@ class IdentityPasswordRecoveryIT extends IdentityTestBase {
         assertThat(mails(f.email()).stream().filter(m -> m.kind() == MailSender.Kind.NOTICE_PASSWORD_CHANGED).count()).isEqualTo(1);
         assertThat(mfa(f.identity())).as("MFA intocado").isEqualTo(mfaAntes);
 
-        assertThat(client().post(CONFIRM, "{\"token\":" + q(token) + ",\"newPassword\":\"outra-senha-qualquer-44\"}").status()).as("uso unico").isEqualTo(400);
+        assertThat(client().post(CONFIRM, "{\"token\":" + q(token) + ",\"newPassword\":\"Nk#outrasenhaqua9\"}").status()).as("uso unico").isEqualTo(400);
         assertThat(login(client(), f.email(), SENHA).status()).as("senha antiga").isEqualTo(401);
         BrowserClient n = client();
         assertThat(login(n, f.email(), NOVA).field("status")).as("MFA exigido na entrada seguinte").isEqualTo("mfa_required");
@@ -191,7 +191,7 @@ class IdentityPasswordRecoveryIT extends IdentityTestBase {
         ExecutorService ex = Executors.newFixedThreadPool(2);
         try {
             Future<BrowserClient.Response> a = ex.submit(() -> client().post(CONFIRM, "{\"token\":" + q(token) + ",\"newPassword\":" + q(NOVA) + "}"));
-            Future<BrowserClient.Response> b = ex.submit(() -> client().post(CONFIRM, "{\"token\":" + q(token) + ",\"newPassword\":\"outra-senha-concorrente-55\"}"));
+            Future<BrowserClient.Response> b = ex.submit(() -> client().post(CONFIRM, "{\"token\":" + q(token) + ",\"newPassword\":\"Nk#outrasenhacon9\"}"));
             assertThat(List.of(a.get(30, TimeUnit.SECONDS).status(), b.get(30, TimeUnit.SECONDS).status())).containsExactlyInAnyOrder(204, 400);
         } finally {
             ex.shutdownNow();

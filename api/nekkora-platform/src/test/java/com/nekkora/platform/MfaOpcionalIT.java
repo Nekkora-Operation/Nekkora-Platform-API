@@ -248,7 +248,7 @@ class MfaOpcionalIT extends IdentityTestBase {
         assertThat(pre.post("/api/v1/auth/password-reset/request", "{\"email\":" + q(p.email()) + "}").status()).isEqualTo(202);
         idle();
         String token = mails(p.email()).stream().filter(m -> m.kind() == MailSender.Kind.PASSWORD_RECOVERY).reduce((x, y) -> y).map(SentMessage::token).orElseThrow();
-        String nova = "senha-nova-da-identidade-2";
+        String nova = "Nova#Identidade-2";
         assertThat(client().post("/api/v1/auth/password-reset/confirm", "{\"token\":" + q(token) + ",\"newPassword\":" + q(nova) + "}").status()).isEqualTo(204);
         assertThat(value("SELECT factor_id || '|' || (confirmed_at IS NOT NULL) || '|' || (disabled_at IS NULL) FROM identity_mfa_factors WHERE identity_id = '"
                 + p.identity() + "' AND confirmed_at IS NOT NULL")).as("fator intocado").isEqualTo(fatorAntes);

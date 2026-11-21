@@ -56,7 +56,7 @@ class IdentityCredentialsE2E {
     static final String BASE = System.getenv("E2E_BASE");
     static final UUID IDENTIDADE = UUID.randomUUID();
     static final String EMAIL = "cred-" + IDENTIDADE.toString().substring(0, 8) + "@o.test";
-    static final String SENHA = "senha-credenciais-e2e-" + UUID.randomUUID().toString().substring(0, 8);
+    static final String SENHA = "Cred#E2e-" + UUID.randomUUID().toString().substring(0, 8);
     static final List<String> SEGREDOS = new ArrayList<>();
     static final Map<String, byte[]> FATORES = new HashMap<>();
     static final Map<String, Long> ULTIMO = new HashMap<>();

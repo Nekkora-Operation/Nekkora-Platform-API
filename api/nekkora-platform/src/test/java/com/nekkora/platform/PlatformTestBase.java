@@ -96,7 +96,7 @@ public abstract class PlatformTestBase {
     public record TestUser(UUID id, String email, char[] password) {
     }
 
-    protected static final String PASSWORD = "senha-de-teste-longa-1";
+    protected static final String PASSWORD = "Senha#Teste-Longa1";
 
     /** Organizacao nova com um ORG_ADMIN (bootstrap pelo nekkora_provisioning). */
     protected static Org newOrganization() {
