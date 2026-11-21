@@ -58,8 +58,8 @@ class AccessInvitationsE2E {
     static final UUID CONVIDADA = UUID.randomUUID();
     static final String EMAIL_ADMIN = "adm-" + ADMIN.toString().substring(0, 8) + "@o.test";
     static final String EMAIL_CONVIDADA = "conv-" + CONVIDADA.toString().substring(0, 8) + "@o.test";
-    static final String SENHA_ADMIN = "senha-admin-e2e-" + UUID.randomUUID().toString().substring(0, 8);
-    static final String SENHA_CONVIDADA = "senha-conv-e2e-" + UUID.randomUUID().toString().substring(0, 8);
+    static final String SENHA_ADMIN = "Admin#E2e-" + UUID.randomUUID().toString().substring(0, 8);
+    static final String SENHA_CONVIDADA = "Conv#E2e-" + UUID.randomUUID().toString().substring(0, 8);
     static final List<String> SEGREDOS = new ArrayList<>();
     static final Map<String, byte[]> FATORES = new HashMap<>();
     static final Map<String, Long> ULTIMO = new HashMap<>();

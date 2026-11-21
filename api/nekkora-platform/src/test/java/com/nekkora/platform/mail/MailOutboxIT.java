@@ -162,7 +162,7 @@ class MailOutboxIT {
         assertThat(sql("SELECT state || '|' || (payload_ciphertext IS NULL) FROM mail_outbox WHERE recipient_hmac = '" + hash + "'")).isEqualTo("3|true");
         assertThat(sql("SELECT count(*) FROM identity_events e JOIN identities i ON i.identity_id = e.identity_id WHERE i.email = '" + email
                 + "' AND e.event_type = 1")).as("o ato nao se repete").isEqualTo("1");
-        assertThat(browser().post("/api/v1/signup/confirm", "{\"token\":\"" + token + "\",\"password\":\"senha-pela-fila-de-email-1\",\"displayName\":\"Pessoa\"}")
+        assertThat(browser().post("/api/v1/signup/confirm", "{\"token\":\"" + token + "\",\"password\":\"Fila#Email-2026\",\"displayName\":\"Pessoa\"}")
                 .status()).as("o token do e-mail conclui o cadastro").isEqualTo(204);
         assertThat(out.getAll()).doesNotContain(email).doesNotContain(token);
     }

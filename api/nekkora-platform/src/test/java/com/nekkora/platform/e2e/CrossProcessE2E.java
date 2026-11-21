@@ -56,7 +56,7 @@ class CrossProcessE2E {
     static final UUID WS_OTHER = UUID.randomUUID();
     static final UUID EXT = UUID.randomUUID();
     static final String EMAIL = "ext-" + EXT.toString().substring(0, 8) + "@cliente.test";
-    static final String PASSWORD = "senha-e2e-longa-" + UUID.randomUUID().toString().substring(0, 8);
+    static final String PASSWORD = "Senha#E2e-" + UUID.randomUUID().toString().substring(0, 8);
     static final List<UUID> EXECS = new ArrayList<>();
     static UUID execOther;
 

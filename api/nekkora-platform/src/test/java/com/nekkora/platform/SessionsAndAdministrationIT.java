@@ -84,18 +84,18 @@ class SessionsAndAdministrationIT extends PlatformTestBase {
         assertThat(fullLogin(c, org.id(), u).status()).isEqualTo(200);
 
         BrowserClient.Response change = a.post("/api/v1/o/" + org.id() + "/auth/password",
-                "{\"currentPassword\":\"" + PASSWORD + "\",\"newPassword\":\"nova-senha-bem-longa-2\"}");
+                "{\"currentPassword\":\"" + PASSWORD + "\",\"newPassword\":\"Nk#novasenhabeml9\"}");
         assertThat(change.status()).isEqualTo(204);
         assertThat(me(a)).as("troca de senha: a sessao atual continua").isEqualTo("200");
         assertThat(me(b)).as("troca de senha: as outras sao revogadas").isEqualTo("401");
         assertThat(me(c)).isEqualTo("401");
-        TestUser updatedUser = new TestUser(u.id(), u.email(), "nova-senha-bem-longa-2".toCharArray());
+        TestUser updatedUser = new TestUser(u.id(), u.email(), "Nk#novasenhabeml9".toCharArray());
         BrowserClient d = browser();
         assertThat(passwordLogin(d, org.id(), new TestUser(u.id(), u.email(), PASSWORD.toCharArray())).status()).as("senha antiga").isEqualTo(401);
         assertThat(fullLogin(d, org.id(), updatedUser).status()).isEqualTo(200);
-        assertThat(a.post("/api/v1/o/" + org.id() + "/auth/password", "{\"currentPassword\":\"errada-errada-1\",\"newPassword\":\"outra-senha-longa-3\"}").status())
+        assertThat(a.post("/api/v1/o/" + org.id() + "/auth/password", "{\"currentPassword\":\"errada-errada-1\",\"newPassword\":\"Nk#outrasenhalon9\"}").status())
                 .isEqualTo(401);
-        assertThat(a.post("/api/v1/o/" + org.id() + "/auth/password", "{\"currentPassword\":\"nova-senha-bem-longa-2\",\"newPassword\":\"curta\"}").status())
+        assertThat(a.post("/api/v1/o/" + org.id() + "/auth/password", "{\"currentPassword\":\"Nk#novasenhabeml9\",\"newPassword\":\"curta\"}").status())
                 .as("politica: minimo 12 pontos de codigo").isEqualTo(400);
 
         assertThat(a.post("/api/v1/o/" + org.id() + "/auth/logout", null).status()).isEqualTo(204);
@@ -133,15 +133,15 @@ class SessionsAndAdministrationIT extends PlatformTestBase {
 
         BrowserClient r = browser();
         fetchPreAuthCsrf(r);
-        assertThat(r.post("/api/v1/o/" + org.id() + "/auth/password-reset/confirm", "{\"token\":\"" + token + "\",\"newPassword\":\"senha-recuperada-44\"}").status())
+        assertThat(r.post("/api/v1/o/" + org.id() + "/auth/password-reset/confirm", "{\"token\":\"" + token + "\",\"newPassword\":\"Nk#senharecupera9\"}").status())
                 .isEqualTo(204);
         assertThat(me(s)).as("recuperacao revoga todas as sessoes").isEqualTo("401");
         BrowserClient r2 = browser();
         fetchPreAuthCsrf(r2);
-        assertThat(r2.post("/api/v1/o/" + org.id() + "/auth/password-reset/confirm", "{\"token\":\"" + token + "\",\"newPassword\":\"outra-coisa-longa-5\"}").status())
+        assertThat(r2.post("/api/v1/o/" + org.id() + "/auth/password-reset/confirm", "{\"token\":\"" + token + "\",\"newPassword\":\"Nk#outracoisalon9\"}").status())
                 .as("token de uso unico").isEqualTo(400);
         BrowserClient l = browser();
-        BrowserClient.Response step1 = passwordLogin(l, org.id(), new TestUser(u.id(), u.email(), "senha-recuperada-44".toCharArray()));
+        BrowserClient.Response step1 = passwordLogin(l, org.id(), new TestUser(u.id(), u.email(), "Nk#senharecupera9".toCharArray()));
         assertThat(step1.field("status")).as("a recuperacao de senha nao dispensa o MFA").isEqualTo("mfa_required");
     }
 
