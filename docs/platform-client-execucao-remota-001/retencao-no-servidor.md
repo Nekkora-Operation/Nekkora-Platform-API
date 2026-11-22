@@ -121,6 +121,23 @@ Operacionalmente, o processo da Platform precisa poder **remover arquivos** em `
 aplicado, o fim da entrega e como, e quantos itens havia. As linhas continuam vindo, com `textRemoved = true`; os arquivos, com
 `available = false`. O download de um arquivo removido responde 409 `remote_result_unavailable`.
 
+**Disponibilidade antes do vencimento (LICENCIAMENTO-002, 22/11).** `GET …/logs` e `GET …/results` trazem também
+`availability`, calculada a partir do fim da entrega que o **banco** calcula (`remote_attempt_delivery_ended_at`) e do prazo em
+vigor no ambiente:
+
+| `state` | Quando | `startsAt` | `availableUntil` |
+|---|---|---|---|
+| `WAITING_DELIVERY` | a tentativa não terminou | nulo: o prazo começa quando a entrega terminar | nulo |
+| `SCHEDULED` | a entrega terminou: `CLOSED`, `LOSS_NOTICE` ou `LINK_ENDED` | o fim da entrega | `startsAt` + prazo (30 dias) |
+| `INCOMPLETE_DELIVERY` | a tentativa terminou e a máquina não fechou o envio | o último progresso (fim da tentativa ou último item recebido) | `startsAt` + teto sem progresso; um item novo adia a data |
+| `UNCERTAIN` | resultado não confirmado sem reconciliação | nulo | nulo: não vence enquanto for incerta |
+| `EXPIRED` | venceu (`expiration` preenchido) | o fim da entrega registrado | `startsAt` + prazo aplicado |
+| `NO_RETENTION` | a retenção não está ligada neste ambiente | nulo | nulo: nada é removido automaticamente |
+
+`availableUntil` é a data a partir da qual o conteúdo **pode** ser removido: a remoção acontece no primeiro ciclo depois dela
+(o ciclo roda a cada `NEKKORA_EXECUCAO_REMOTA_RETENCAO_CICLO_MINUTOS`, padrão 60). A política lida é a mesma do ciclo:
+retenção ativa = `NEKKORA_EXECUCAO_REMOTA` **e** `NEKKORA_EXECUCAO_REMOTA_RETENCAO` ligadas.
+
 ## 8. Limites declarados
 
 - **Execução incerta não vence.** Resultado não confirmado sem reconciliação mantém o conteúdo sem prazo, até a reconciliação

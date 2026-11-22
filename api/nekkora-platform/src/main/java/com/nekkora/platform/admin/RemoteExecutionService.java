@@ -749,7 +749,68 @@ public class RemoteExecutionService {
                         rs.getObject(4, OffsetDateTime.class), DELIVERY_ENDS.get(rs.getShort(5) - 1), rs.getInt(6))).optional().orElse(null);
     }
 
-    public record Results(UUID attemptId, List<ResultFile> items, ResultsClosure closure, RetentionLoss retentionLoss, ContentExpiration expiration) {
+    public record Results(UUID attemptId, List<ResultFile> items, ResultsClosure closure, RetentionLoss retentionLoss, ContentExpiration expiration,
+                          Availability availability) {
+    }
+
+    // ------------------------------------------------------------------ disponibilidade do conteudo (LICENCIAMENTO-002)
+
+    private boolean retentionActive;
+    private int retentionDays = 30;
+    private int retentionStalledDays = 30;
+
+    /**
+     * A politica de retencao em vigor, para a leitura dizer ATE QUANDO o conteudo fica disponivel. {@code active}: o ciclo da
+     * retencao roda neste ambiente (execucao remota E retencao ligadas). Os prazos sao os mesmos de {@link RemoteRetention}.
+     */
+    public RemoteExecutionService retentionPolicy(boolean active, int days, int stalledDays) {
+        this.retentionActive = active;
+        this.retentionDays = Math.max(1, Math.min(days, 3650));
+        this.retentionStalledDays = Math.max(1, Math.min(stalledDays, 3650));
+        return this;
+    }
+
+    /**
+     * Ate quando o conteudo de uma tentativa (registros ou resultados) fica disponivel na Platform. Calculado a partir do fim da
+     * entrega que o PROPRIO BANCO calcula ({@code remote_attempt_delivery_ended_at}, 057/059), com o prazo em vigor:
+     *
+     * <ul>
+     * <li>{@code EXPIRED}: venceu ({@code expiration} traz o registro); {@code availableUntil} = fim da entrega + prazo aplicado;</li>
+     * <li>{@code SCHEDULED}: a entrega terminou (CLOSED, LOSS_NOTICE ou LINK_ENDED): o prazo ja corre e {@code availableUntil} e a
+     * data a partir da qual o conteudo pode ser removido (o ciclo roda periodicamente);</li>
+     * <li>{@code INCOMPLETE_DELIVERY}: a tentativa terminou, mas a maquina nao fechou o envio. Se nada mais chegar, vence no teto
+     * sem progresso ({@code availableUntil}); um novo item recebido adia a data;</li>
+     * <li>{@code WAITING_DELIVERY}: a tentativa nao terminou; o prazo comeca quando a entrega terminar;</li>
+     * <li>{@code UNCERTAIN}: resultado nao confirmado e sem reconciliacao: nao vence enquanto for incerta;</li>
+     * <li>{@code NO_RETENTION}: a retencao nao esta ligada neste ambiente: nada e removido automaticamente.</li>
+     * </ul>
+     * {@code startsAt}: o inicio da contagem (nulo quando ainda nao comecou). {@code days}: o prazo que vale para este caso.
+     */
+    public record Availability(String state, int days, OffsetDateTime startsAt, String deliveryEnd, OffsetDateTime availableUntil) {
+    }
+
+    private Availability availability(JdbcClient j, UUID org, UUID attemptId, int kind, ContentExpiration expired) {
+        if (expired != null) {
+            return new Availability("EXPIRED", expired.retentionDays(), expired.deliveryEndedAt(), expired.deliveryEnd(),
+                    expired.deliveryEndedAt().plusDays(expired.retentionDays()));
+        }
+        if (!retentionActive) {
+            return new Availability("NO_RETENTION", retentionDays, null, null, null);
+        }
+        record End(OffsetDateTime at, Short how) {
+        }
+        End e = j.sql("SELECT ended_at, how FROM public.remote_attempt_delivery_ended_at(?, ?, ?::smallint)").param(org).param(attemptId).param((short) kind)
+                .query((rs, n) -> new End(rs.getObject(1, OffsetDateTime.class), rs.getObject(2) == null ? null : rs.getShort(2))).optional()
+                .orElse(new End(null, null));
+        if (e.at() == null || e.how() == null) {
+            boolean uncertain = j.sql("SELECT a.state = 13 AND NOT EXISTS (SELECT 1 FROM public.remote_attempt_process_reports p WHERE p.attempt_id = a.attempt_id "
+                    + "AND p.kind IN (1, 2)) FROM public.remote_attempts a WHERE a.organization_id = ? AND a.attempt_id = ?").param(org).param(attemptId)
+                    .query(Boolean.class).optional().orElse(false);
+            return new Availability(uncertain ? "UNCERTAIN" : "WAITING_DELIVERY", retentionDays, null, null, null);
+        }
+        boolean stalled = e.how() == 4;
+        int d = stalled ? retentionStalledDays : retentionDays;
+        return new Availability(stalled ? "INCOMPLETE_DELIVERY" : "SCHEDULED", d, e.at(), DELIVERY_ENDS.get(e.how() - 1), e.at().plusDays(d));
     }
 
     public record ResultsClosure(int sent, int skippedByLimit, OffsetDateTime closedAt) {
@@ -774,7 +835,7 @@ public class RemoteExecutionService {
      * avisos do proprio aplicativo da maquina (EXECUTOR), que ocupam lugar no limite mas nao sao saida da automacao.
      */
     public record Logs(UUID attemptId, List<LogLine> items, int total, int automationLines, int systemLines, Integer nextAfter, LogsClosure closure,
-                       RetentionLoss retentionLoss, ContentExpiration expiration) {
+                       RetentionLoss retentionLoss, ContentExpiration expiration, Availability availability) {
     }
 
     private static final List<String> LOG_CHANNELS = List.of("STDOUT", "STDERR", "EXECUTOR");
@@ -805,8 +866,9 @@ public class RemoteExecutionService {
                             + "AND attempt_id = ?").param(org).param(attemptId)
                     .query((rs, n) -> new LogsClosure(rs.getInt(1), rs.getLong(2), rs.getObject(3, OffsetDateTime.class))).optional().orElse(null);
             Integer next = items.size() == page && items.get(items.size() - 1).sequence() < total ? items.get(items.size() - 1).sequence() : null;
-            return new Logs(attemptId, items, total, total - counts[1], counts[1], next, closure, retentionLoss(j, org, attemptId, 1),
-                    expiration(j, org, attemptId, 1));
+            ContentExpiration expired = expiration(j, org, attemptId, 1);
+            return new Logs(attemptId, items, total, total - counts[1], counts[1], next, closure, retentionLoss(j, org, attemptId, 1), expired,
+                    availability(j, org, attemptId, 1, expired));
         });
     }
 
@@ -822,7 +884,8 @@ public class RemoteExecutionService {
             ResultsClosure closure = j.sql("SELECT sent, skipped_by_limit, closed_at FROM public.remote_attempt_result_closures WHERE organization_id = ? "
                             + "AND attempt_id = ?").param(org).param(attemptId)
                     .query((rs, n) -> new ResultsClosure(rs.getInt(1), rs.getInt(2), rs.getObject(3, OffsetDateTime.class))).optional().orElse(null);
-            return new Results(attemptId, items, closure, retentionLoss(j, org, attemptId, 2), expiration(j, org, attemptId, 2));
+            ContentExpiration expired = expiration(j, org, attemptId, 2);
+            return new Results(attemptId, items, closure, retentionLoss(j, org, attemptId, 2), expired, availability(j, org, attemptId, 2, expired));
         });
     }
 

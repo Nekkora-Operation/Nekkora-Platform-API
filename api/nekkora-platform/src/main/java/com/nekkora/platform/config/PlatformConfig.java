@@ -361,11 +361,16 @@ public class PlatformConfig {
             @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.lost-minutes:120}") int lostMinutes,
             @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.dependency-check.interval-seconds:60}") int checkInterval,
             @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.dependency-check.answer-seconds:120}") int checkAnswer,
+            @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.retention.enabled:false}") boolean retention,
+            @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.retention.days:30}") int retentionDays,
+            @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.retention.stalled-days:30}") int stalledDays,
             org.springframework.core.env.Environment env) throws java.io.IOException {
         // os resultados das execucoes remotas: a Platform so LE (quem grava e o canal da maquina); pasta propria
         return new com.nekkora.platform.admin.RemoteExecutionService(actions, access, remoteExecution, offerMinutes, lostMinutes,
                 com.nekkora.core.artifact.ResultStore.at(env.getProperty("NEKKORA_RESULTADOS_DIR", env.getProperty("nekkora.resultados.dir", ""))))
-                .dependencyCheckLimits(checkInterval, checkAnswer);
+                .dependencyCheckLimits(checkInterval, checkAnswer)
+                // a leitura diz ate quando o conteudo fica disponivel: a mesma condicao do ciclo (remoteRetentionScheduler)
+                .retentionPolicy(remoteExecution && retention, retentionDays, stalledDays);
     }
 
     /** Reconciliacao periodica das tentativas de execucao remota (055): as regras da 053, sem depender de leitura nem da maquina. */
