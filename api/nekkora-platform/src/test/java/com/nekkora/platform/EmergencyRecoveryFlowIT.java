@@ -39,7 +39,7 @@ class EmergencyRecoveryFlowIT {
     static final OpsBanco DB = OpsBanco.compartilhado();
     static final Cenarios C = new Cenarios(DB);
     static final PasswordHasher HASHER = new PasswordHasher(new PasswordHasher.Parameters(65536, 3, 1), 4, 8, 5000);
-    static final String SENHA = "senha-de-teste-longa-1";
+    static final String SENHA = "Senha#Teste-Longa1";
     private static final SecureRandom RANDOM = new SecureRandom();
 
     @LocalServerPort

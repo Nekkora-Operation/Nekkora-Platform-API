@@ -102,6 +102,9 @@ class ReconciliacaoEAtomicidadeIT {
                 ExecutorAtos exe = new ExecutorAtos(() -> n.getAndIncrement() > 0 ? DB.conectar(cred)
                         : ProxyTcp.comGanchoNoCommit(viaProxy(proxy, cred), proxy::cortarCliente), log);
                 ExecutorAtos.Resultado r = exe.executar(s);
+                // a premissa do cenario, conferida antes do resultado: o COMMIT nao chegou ao servidor (a transacao orfa
+                // continua aberta). Se chegasse, o cenario seria outro (o do teste anterior) e o resultado, OK
+                assertThat(C.resets(s)).as("o COMMIT cortado nao pode ter chegado ao servidor").isZero();
                 assertThat(r.classe()).isEqualTo(Classe.DESCONHECIDO);
                 assertThat(r.motivo()).isEqualTo("TRAVA_NAO_OBTIDA");
                 assertThat(log.alertas()).hasSize(1);

@@ -112,8 +112,12 @@ class ProductReadRoutesIT extends ReadRoutesSupport {
         Got d = get(n, path(o.id(), "executions/" + done, null));
         assertOk(d, "L07");
         assertThat(keys(d.body())).containsExactly("executionId", "workspaceId", "automation", "automationVersion", "origin", "status", "statusReason",
-                "createdAt", "startedAt", "finishedAt", "durationMs", "cancelRequestedAt", "retryOfExecutionId", "requestedBy");
+                "createdAt", "startedAt", "finishedAt", "durationMs", "cancelRequestedAt", "retryOfExecutionId", "requestedBy", "machine");
         assertNoForbiddenKeys(d.body(), "L07");
+        // PLATFORM-FLUXO-002: a execucao despachada traz a maquina (Worker) em que rodou; a cancelada antes do despacho nao tem
+        // maquina registrada: nula, nada e inferido
+        assertThat(d.body().get("machine").get("workerId").asString()).isEqualTo(rt.worker().toString());
+        assertThat(get(n, path(o.id(), "executions/" + cancelled, null)).body().get("machine").isNull()).as("sem maquina registrada").isTrue();
         assertThat(d.body().get("origin").asString()).isEqualTo("manual");
         assertThat(d.body().get("status").asString()).isEqualTo("succeeded");
         assertThat(d.body().get("statusReason").asString()).isEqualTo("process_completed");
@@ -133,6 +137,18 @@ class ProductReadRoutesIT extends ReadRoutesSupport {
         }
         assertThat(get(n, path(o.id(), "executions/" + cancelled, null)).body().get("statusReason").asString()).isEqualTo("cancelled_before_dispatch");
         assertThat(get(n, path(o.id(), "executions/" + running, null)).body().get("startedAt").isString()).isTrue();
+        // PLATFORM-FLUXO-002: com maquina registrada, o detalhe traz a maquina e o computador vinculado hoje a ela
+        UUID worker = UUID.randomUUID(), agent = UUID.randomUUID();
+        DB.asSuperuser("SET session_replication_role = replica",
+                "INSERT INTO workers (worker_id, organization_id, name, status) VALUES ('" + worker + "', '" + o.id() + "', 'Estacao fiscal', 1)",
+                "INSERT INTO agents (agent_id, organization_id, name, agent_version, status) VALUES ('" + agent + "', '" + o.id() + "', 'NOTE-01', '0.1.0', 2)",
+                "INSERT INTO worker_agent_assignments (organization_id, worker_id, agent_id, status, assigned_by_membership_id) VALUES ('" + o.id() + "', '"
+                        + worker + "', '" + agent + "', 1, '" + m + "')",
+                "UPDATE executions SET worker_id = '" + worker + "' WHERE execution_id = '" + running + "'");
+        JsonNode machine = get(n, path(o.id(), "executions/" + running, null)).body().get("machine");
+        assertThat(machine.get("workerId").asString()).isEqualTo(worker.toString());
+        assertThat(machine.get("name").asString()).isEqualTo("Estacao fiscal");
+        assertThat(machine.get("computerName").asString()).isEqualTo("NOTE-01");
         // L06: item sem os campos do detalhe nem os excluidos
         for (JsonNode x : get(n, path(o.id(), "executions", null)).body().get("items")) {
             assertThat(keys(x)).containsExactly("executionId", "workspaceId", "automation", "automationVersion", "origin", "status", "statusReason",

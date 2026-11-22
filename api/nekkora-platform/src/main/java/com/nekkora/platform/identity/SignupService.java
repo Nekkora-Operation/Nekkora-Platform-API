@@ -76,8 +76,28 @@ public final class SignupService {
         this.responseFloor = responseFloor;
     }
 
-    /** POST /api/v1/signup. E-mail malformado: 400. Qualquer outro desfecho: retorno normal (202 no controller). */
+    /** 071: convite de onde a pessoa veio (organizacao e token do link). */
+    public record Invite(UUID organizationId, String token) {
+        @Override
+        public String toString() {
+            return "Invite[organizationId=" + organizationId + "]";
+        }
+    }
+
+    /** 071: o que a confirmacao ja sabe. {@code displayName} nulo = ainda o nome provisorio (o proprio e-mail). */
+    public record Preview(String email, String displayName) {
+    }
+
     public void signup(String email, String ip) {
+        signup(email, ip, null);
+    }
+
+    /**
+     * POST /api/v1/signup. E-mail malformado: 400. Qualquer outro desfecho: retorno normal (202 no controller). 071: com um
+     * convite ABERTO para o mesmo e-mail, o nome informado no convite vira o nome provisorio da identidade pendente; convite
+     * invalido ou de outro e-mail e ignorado (a resposta nao muda).
+     */
+    public void signup(String email, String ip, Invite invite) {
         long start = System.nanoTime();
         try {
             limits.identityRoutes(ip);
@@ -88,12 +108,13 @@ public final class SignupService {
                 return;
             }
             String normalized = IdentityHmac.normalize(email);
+            String invitedName = invitedName(invite, normalized);
             Optional<IdentityRepository.State> current = tx.inIdentity(new EmailCadastro(normalized), Mode.READ_ONLY,
                     (id, j) -> identities.state(j, id.identityId()).orElse(null));
             if (current.isEmpty()) {
-                create(email);
+                create(email, invitedName);
             } else if (current.get().status() == IdentityRepository.PENDING) {
-                reissue(normalized, ip);
+                reissue(normalized, ip, invitedName);
             } else if (current.get().status() == IdentityRepository.ACTIVE) {
                 if (limits.signupMailAllowed(hmac.global(normalized), ip)) {
                     // sem ato de negocio a acompanhar: a intencao vai sozinha (chave = este pedido, gerado pelo servidor)
@@ -114,7 +135,7 @@ public final class SignupService {
             if (!validEmail(email)) {
                 return;
             }
-            reissue(IdentityHmac.normalize(email), ip);
+            reissue(IdentityHmac.normalize(email), ip, null);
         } finally {
             floor(start);
         }
@@ -163,11 +184,36 @@ public final class SignupService {
         }
     }
 
-    private void create(String email) {
+    /** Nome do convite aberto para este e-mail (so se valer como nome de identidade); senao nulo. */
+    private String invitedName(Invite invite, String normalized) {
+        if (invite == null || !Tokens.isValidFormat(invite.token())) {
+            return null;
+        }
+        String name = tx.preAuthentication(Mode.READ_ONLY, j -> j.sql("SELECT email, recipient_name FROM public.identity_invitation_preview(?, ?)")
+                .param(invite.token()).param(invite.organizationId())
+                .query((rs, n) -> normalized.equals(rs.getString(1)) ? rs.getString(2) : null).optional().orElse(null));
+        return name != null && validDisplayName(name) ? name.strip() : null;
+    }
+
+    /** 071: e-mail e nome ja conhecidos pela identidade pendente do link (sem consumir o token). */
+    public Preview preview(String token, String ip) {
+        limits.identityRoutes(ip);
+        if (!Tokens.isValidFormat(token)) {
+            throw ApiException.invalid("token");
+        }
+        return tx.inIdentity(new TokenEmail(token), Mode.READ_ONLY, (id, j) -> j.sql(
+                        "SELECT email, display_name FROM public.identities WHERE identity_id = ? AND status = ?").param(id.identityId())
+                        .param(IdentityRepository.PENDING)
+                        .query((rs, n) -> new Preview(rs.getString(1), rs.getString(2).equals(rs.getString(1)) ? null : rs.getString(2))).optional()
+                        .orElse(null))
+                .orElseThrow(() -> ApiException.invalid("token"));
+    }
+
+    private void create(String email, String invitedName) {
         String token = Tokens.newToken();
         try {
             tx.inIdentity(new NovaIdentidade(), Mode.READ_WRITE, (id, j) -> {
-                identities.insertPending(j, id.identityId(), email);
+                identities.insertPending(j, id.identityId(), email, invitedName);
                 identities.insertToken(j, id.identityId(), email, Tokens.sha256Hex(token), tokenValidity);
                 identities.event(j, id.identityId(), IdentityRepository.SIGNUP_REQUESTED, correlation());
                 // e-mail com o token NA transacao que o emite; chave = hash do token
@@ -181,7 +227,7 @@ public final class SignupService {
     }
 
     /** Reemissao para identidade PENDING: R9b, lock da identidade, revogacao do token vivo, token novo e e-mail. */
-    private void reissue(String normalized, String ip) {
+    private void reissue(String normalized, String ip, String invitedName) {
         if (!limits.signupMailAllowed(hmac.global(normalized), ip)) {
             return;
         }
@@ -192,6 +238,9 @@ public final class SignupService {
                 return null;
             }
             identities.revokeLiveTokens(j, id.identityId());
+            if (invitedName != null) {
+                identities.provisionalName(j, id.identityId(), invitedName);
+            }
             identities.insertToken(j, id.identityId(), s.get().email(), Tokens.sha256Hex(token), tokenValidity);
             identities.event(j, id.identityId(), IdentityRepository.SIGNUP_REQUESTED, correlation());
             mail.record(j, new MailIntents.Intent(MailSender.Kind.IDENTITY_SIGNUP_CONFIRMATION, null, s.get().email(), token,

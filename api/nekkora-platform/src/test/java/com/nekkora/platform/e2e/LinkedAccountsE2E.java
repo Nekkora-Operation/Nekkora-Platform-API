@@ -55,8 +55,8 @@ class LinkedAccountsE2E {
     static final UUID CONTA = UUID.randomUUID();
     static final UUID IDENTIDADE = UUID.randomUUID();
     static final String EMAIL = "vinc-" + CONTA.toString().substring(0, 8) + "@o.test";
-    static final String SENHA_LOCAL = "senha-local-e2e-" + UUID.randomUUID().toString().substring(0, 8);
-    static final String SENHA_IDENTIDADE = "senha-identidade-e2e-" + UUID.randomUUID().toString().substring(0, 8);
+    static final String SENHA_LOCAL = "Local#E2e-" + UUID.randomUUID().toString().substring(0, 8);
+    static final String SENHA_IDENTIDADE = "Ident#E2e-" + UUID.randomUUID().toString().substring(0, 8);
     static final List<String> SEGREDOS = new ArrayList<>();
     static final Map<String, byte[]> FATORES = new HashMap<>();
     static final Map<String, Long> ULTIMO = new HashMap<>();

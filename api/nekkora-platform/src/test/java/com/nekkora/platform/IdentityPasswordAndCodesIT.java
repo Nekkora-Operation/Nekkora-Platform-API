@@ -33,7 +33,7 @@ class IdentityPasswordAndCodesIT extends IdentityTestBase {
 
     private static final String PASSWORD = "/api/v1/auth/password";
     private static final String CODES = "/api/v1/auth/mfa/recovery-codes";
-    private static final String NOVA = "senha-nova-da-identidade-2";
+    private static final String NOVA = "Nova#Identidade-2";
 
     @DynamicPropertySource
     static void ownContext(DynamicPropertyRegistry r) {

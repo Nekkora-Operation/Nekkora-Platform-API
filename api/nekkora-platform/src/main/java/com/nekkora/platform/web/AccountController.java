@@ -29,11 +29,14 @@ public class AccountController {
     private final OrgTransactions tx;
     private final AdminService admin;
     private final GrantAdminService grants;
+    private final boolean remoteExecution;
 
-    public AccountController(OrgTransactions tx, AdminService admin, GrantAdminService grants) {
+    public AccountController(OrgTransactions tx, AdminService admin, GrantAdminService grants,
+                             @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.enabled:false}") boolean remoteExecution) {
         this.tx = tx;
         this.admin = admin;
         this.grants = grants;
+        this.remoteExecution = remoteExecution;
     }
 
     /**
@@ -52,8 +55,13 @@ public class AccountController {
             Map<String, Object> r = new LinkedHashMap<>(conta);
             r.put("organizationActivationState", IdentityOrgRepository.activationStates(j, List.of(org))
                     .getOrDefault(org, IdentityOrgRepository.AGUARDANDO_ATIVACAO));
+            // PLATFORM-LICENCIAMENTO-001: no modelo por licenca a capacidade nao depende da ativacao; a tela escolhe o texto por ele
+            r.put("organizationLicenseModel", IdentityOrgRepository.licenseModel(j, org));
             // 029: como esta sessao prova a pessoa nas acoes sensiveis (totp | password)
             r.put("stepUpMethod", s.stepUpMethod());
+            // RELEASE-2.2: se esta Platform aceita execucao remota (chave nekkora.remote-execution.enabled). So indicacao para a tela
+            // nao oferecer o que a API recusaria; quem decide continua sendo cada rota (409 remote_execution_unavailable)
+            r.put("remoteExecutionAvailable", remoteExecution);
             return r;
         });
     }

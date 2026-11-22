@@ -17,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -52,11 +53,14 @@ public class GatewayController {
 
     private final GatewayService service;
     private final MachineCatalog catalog;
+    private final RemoteDelivery delivery;
     private final EventIngestion ingestion;
     private final RedisLimiter limiter;
     private final GatewayProperties.Limits limits;
 
-    public GatewayController(GatewayService service, MachineCatalog catalog, EventIngestion ingestion, RedisLimiter limiter, GatewayProperties properties) {
+    public GatewayController(GatewayService service, MachineCatalog catalog, RemoteDelivery delivery, EventIngestion ingestion, RedisLimiter limiter,
+                             GatewayProperties properties) {
+        this.delivery = delivery;
         this.service = service;
         this.catalog = catalog;
         this.ingestion = ingestion;
@@ -128,11 +132,296 @@ public class GatewayController {
         JsonNode n = parse(body);
         List<String> caps = new ArrayList<>();
         JsonNode c = n.get("capabilities");
-        if (c == null || !c.isArray() || c.size() > 8) {
+        if (c == null || !c.isArray() || c.size() > GatewayService.MAX_CAPABILITIES) {
             throw ApiException.invalid("capacidades");
         }
         c.forEach(x -> caps.add(x.isString() ? x.asString() : "?"));
-        return authenticated(req, () -> service.heartbeat(t, text(n, "agentVersion"), text(n, "contractVersion"), caps));
+        GatewayService.RemoteSignals signals = remoteSignals(n.get("remote"));
+        return authenticated(req, () -> service.heartbeat(t, text(n, "agentVersion"), text(n, "contractVersion"), caps, signals));
+    }
+
+    /** {@code remote} do batimento: ausente = sem sinais; presente = objeto com {@code busy} e {@code diskPressure} booleanos. */
+    private static GatewayService.RemoteSignals remoteSignals(JsonNode remote) {
+        if (remote == null || remote.isNull()) {
+            return GatewayService.RemoteSignals.NONE;
+        }
+        JsonNode busy = remote.get("busy");
+        JsonNode disk = remote.get("diskPressure");
+        if (!remote.isObject() || busy == null || !busy.isBoolean() || disk == null || !disk.isBoolean()) {
+            throw ApiException.invalid("sinais_remotos");
+        }
+        return new GatewayService.RemoteSignals(busy.asBoolean(), disk.asBoolean());
+    }
+
+    // ------------------------------------------------------------------ execucao remota (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01a)
+
+    /** A maquina pausa ou retoma o recebimento de novos trabalhos remotos. Corpo: {@code {"receiving": "ENABLED" | "PAUSED"}}. */
+    @PostMapping("/agent/api/v1/remote/receiving")
+    public ResponseEntity<GatewayService.Receiving> receiving(@RequestBody(required = false) String body, HttpServletRequest req) {
+        MachineToken t = machine(req);
+        JsonNode n = parse(body);
+        GatewayService.Receiving r = authenticated(req, () -> service.setReceiving(t, text(n, "receiving")));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
+    }
+
+    /**
+     * T01b: a maquina habilitada troca a propria credencial. Corpo: {@code {"credentialSecret": "<segredo novo>"}}. A
+     * credencial do cabecalho e a ATUAL (ou, so na repeticao da mesma troca, a que esta troca revogou).
+     */
+    @PostMapping("/agent/api/v1/remote/credential/renew")
+    public ResponseEntity<GatewayService.Renewed> renewCredential(@RequestBody(required = false) String body, HttpServletRequest req) {
+        MachineToken t = machine(req);
+        guardFailures(RequestContextFilter.ip(req));
+        JsonNode n = parse(body);
+        GatewayService.Renewed r = authenticated(req, () -> service.renewCredential(t, text(n, "credentialSecret")));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
+    }
+
+    // ------------------------------------------------------------------ entrega da tentativa (T02)
+
+    /** O que ha para esta maquina: no maximo uma tentativa a receber, ou o aviso de cancelamento da que ela ja recebeu. */
+    @GetMapping("/agent/api/v1/remote/next")
+    public ResponseEntity<RemoteDelivery.Next> remoteNext(HttpServletRequest req) {
+        MachineToken t = machine(req);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(authenticated(req, () -> delivery.next(t)));
+    }
+
+    /** 054: o pedido de verificacao de dependencias pendente desta maquina, para quando ela nao esta perguntando por trabalho. */
+    @GetMapping("/agent/api/v1/remote/dependency-checks/pending")
+    public ResponseEntity<RemoteDelivery.PendingCheck> remotePendingCheck(HttpServletRequest req) {
+        MachineToken t = machine(req);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(authenticated(req, () -> delivery.pendingCheck(t)));
+    }
+
+    /** 054: a maquina responde a verificacao. Corpo: {@code {"outcome", "missing": [...]}} ({@code missing} so com MISSING). */
+    @PostMapping("/agent/api/v1/remote/dependency-checks/{check}/answer")
+    public ResponseEntity<RemoteDelivery.CheckAnswer> remoteAnswerCheck(@PathVariable String check, @RequestBody(required = false) String body,
+                                                                        HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(check);
+        JsonNode n = parse(body);
+        List<String> missing = null;
+        if (n != null && n.has("missing") && !n.get("missing").isNull()) {
+            if (!n.get("missing").isArray()) {
+                throw ApiException.invalid("verificacao");
+            }
+            missing = new java.util.ArrayList<>();
+            for (JsonNode x : n.get("missing")) {
+                if (!x.isString()) {
+                    throw ApiException.invalid("verificacao");
+                }
+                missing.add(x.asString());
+            }
+        }
+        List<String> items = missing;
+        RemoteDelivery.CheckAnswer a = authenticated(req, () -> delivery.answerCheck(t, id, text(n, "outcome"), items));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(a);
+    }
+
+    /** A maquina confirma o recebimento. Corpo: {@code {"token", "epoch"}}. */
+    @PostMapping("/agent/api/v1/remote/attempts/{attempt}/ack")
+    public ResponseEntity<RemoteDelivery.Status> remoteAck(@PathVariable String attempt, @RequestBody(required = false) String body, HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(attempt);
+        JsonNode n = parse(body);
+        RemoteDelivery.Status s = authenticated(req, () -> delivery.ack(t, id, text(n, "token"), integer(n, "epoch")));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(s);
+    }
+
+    /** A maquina informa o estado e renova o prazo. Corpo: {@code {"token", "epoch", "state", "refusalReason"?, "exitCode"?}}. */
+    /** O que a maquina diz dos processos da tentativa: ABSENT, ACTIVE ou UNCERTAIN; nulo quando nao diz (aplicativo antigo). */
+    private static String processTree(JsonNode n) {
+        if (n == null) {
+            return null;
+        }
+        String t = n.path("processTree").isTextual() ? n.path("processTree").asText() : null;
+        if (t != null && !java.util.Set.of("ABSENT", "ACTIVE", "UNCERTAIN").contains(t)) {
+            throw com.nekkora.core.web.ApiException.invalid("processTree");
+        }
+        return t != null ? t : n.path("processAbsent").asBoolean(false) ? "ABSENT" : null;
+    }
+
+    @PostMapping("/agent/api/v1/remote/attempts/{attempt}/state")
+    public ResponseEntity<RemoteDelivery.Status> remoteState(@PathVariable String attempt, @RequestBody(required = false) String body,
+                                                             HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(attempt);
+        JsonNode n = parse(body);
+        RemoteDelivery.Status s = authenticated(req, () -> delivery.state(t, id, text(n, "token"), integer(n, "epoch"), text(n, "state"),
+                text(n, "refusalReason"), integer(n, "exitCode"), processTree(n)));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(s);
+    }
+
+    /** O token e a epoca da atribuicao num GET: em cabecalhos, nunca na URL. */
+    static final String ATTEMPT_TOKEN_HEADER = "Nekkora-Attempt-Token";
+    static final String ATTEMPT_EPOCH_HEADER = "Nekkora-Attempt-Epoch";
+
+    static final String RESULT_NAME_HEADER = "Nekkora-Result-Name";
+    static final String RESULT_SHA_HEADER = "Nekkora-Result-Sha256";
+
+    private static Integer epochHeader(HttpServletRequest req) {
+        try {
+            return req.getHeader(ATTEMPT_EPOCH_HEADER) == null ? null : Integer.valueOf(req.getHeader(ATTEMPT_EPOCH_HEADER));
+        } catch (NumberFormatException e) {
+            throw ApiException.invalid("epoca");
+        }
+    }
+
+    /** T03b: um arquivo de resultado da tentativa. O nome vai no cabecalho, em UTF-8 com escape de URL; os bytes, no corpo. */
+    @org.springframework.web.bind.annotation.PutMapping("/agent/api/v1/remote/attempts/{attempt}/results/{number}")
+    public ResponseEntity<RemoteDelivery.StoredResult> remoteResult(@PathVariable String attempt, @PathVariable String number,
+                                                                    @RequestBody(required = false) byte[] body, HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(attempt);
+        int n;
+        String name;
+        try {
+            n = Integer.parseInt(number);
+            name = req.getHeader(RESULT_NAME_HEADER) == null ? null
+                    : java.net.URLDecoder.decode(req.getHeader(RESULT_NAME_HEADER).replace("+", "%2B"), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            throw ApiException.invalid("resultado");
+        }
+        Integer epoch = epochHeader(req);
+        byte[] data = body == null ? new byte[0] : body;
+        RemoteDelivery.StoredResult r = authenticated(req, () -> delivery.storeResult(t, id, req.getHeader(ATTEMPT_TOKEN_HEADER), epoch, n, name,
+                req.getHeader(RESULT_SHA_HEADER), data));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
+    }
+
+    /** T03b: fecha o envio de resultados. Corpo: {@code {"token", "epoch", "sent", "skippedByLimit"}}. */
+    @PostMapping("/agent/api/v1/remote/attempts/{attempt}/results/complete")
+    public ResponseEntity<RemoteDelivery.ResultsClosure> remoteResultsComplete(@PathVariable String attempt, @RequestBody(required = false) String body,
+                                                                               HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(attempt);
+        JsonNode n = parse(body);
+        RemoteDelivery.ResultsClosure c = authenticated(req, () -> delivery.closeResults(t, id, text(n, "token"), integer(n, "epoch"), integer(n, "sent"),
+                integer(n, "skippedByLimit")));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(c);
+    }
+
+    /**
+     * T05: um lote de linhas da saida do processo. Corpo: {@code {"token", "epoch", "lines": [{"sequence", "capturedAt",
+     * "channel", "truncated", "message"}]}}.
+     */
+    @PostMapping("/agent/api/v1/remote/attempts/{attempt}/logs")
+    public ResponseEntity<RemoteDelivery.LogsAccepted> remoteLogs(@PathVariable String attempt, @RequestBody(required = false) String body,
+                                                                  HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(attempt);
+        JsonNode n = parse(body);
+        JsonNode array = n.get("lines");
+        if (array == null || !array.isArray() || array.size() > RemoteDelivery.MAX_LOG_BATCH_LINES) {
+            throw ApiException.invalid("lote");
+        }
+        java.util.List<RemoteDelivery.LogLine> lines = new java.util.ArrayList<>();
+        for (JsonNode l : array) {
+            Integer sequence = l.isObject() ? integer(l, "sequence") : null;
+            JsonNode truncated = l.isObject() ? l.get("truncated") : null;
+            if (sequence == null || (truncated != null && !truncated.isBoolean())) {
+                throw ApiException.invalid("linha");
+            }
+            lines.add(new RemoteDelivery.LogLine(sequence, text(l, "capturedAt"), text(l, "channel"), truncated != null && truncated.asBoolean(),
+                    text(l, "message")));
+        }
+        RemoteDelivery.LogsAccepted r = authenticated(req, () -> delivery.storeLogs(t, id, text(n, "token"), integer(n, "epoch"), lines));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
+    }
+
+    /** T05: fecha o envio dos registros. Corpo: {@code {"token", "epoch", "lines", "droppedLines"}}. */
+    @PostMapping("/agent/api/v1/remote/attempts/{attempt}/logs/complete")
+    public ResponseEntity<RemoteDelivery.LogsClosure> remoteLogsComplete(@PathVariable String attempt, @RequestBody(required = false) String body,
+                                                                         HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(attempt);
+        JsonNode n = parse(body);
+        JsonNode dropped = n.get("droppedLines");
+        if (dropped == null || !dropped.isIntegralNumber() || !dropped.canConvertToLong()) {
+            throw ApiException.invalid("droppedLines");
+        }
+        RemoteDelivery.LogsClosure c = authenticated(req, () -> delivery.closeLogs(t, id, text(n, "token"), integer(n, "epoch"), integer(n, "lines"),
+                dropped.asLong()));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(c);
+    }
+
+    /**
+     * A maquina avisa que removeu, pelo prazo de guarda local, registros ou resultados nao confirmados. Corpo:
+     * {@code {"token", "epoch", "kind": "LOGS" | "RESULTS", "localCount"}}.
+     */
+    @PostMapping("/agent/api/v1/remote/attempts/{attempt}/retention-loss")
+    public ResponseEntity<RemoteDelivery.RetentionLoss> remoteRetentionLoss(@PathVariable String attempt, @RequestBody(required = false) String body,
+                                                                            HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(attempt);
+        JsonNode n = parse(body);
+        RemoteDelivery.RetentionLoss r = authenticated(req, () -> delivery.reportRetentionLoss(t, id, text(n, "token"), integer(n, "epoch"), text(n, "kind"),
+                integer(n, "localCount")));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
+    }
+
+    /** T03: o pacote da versao fixada na tentativa, so para a maquina que a recebeu e so antes do inicio. */
+    @GetMapping("/agent/api/v1/remote/attempts/{attempt}/package")
+    public ResponseEntity<byte[]> remotePackage(@PathVariable String attempt, HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(attempt);
+        Integer epoch;
+        try {
+            epoch = req.getHeader(ATTEMPT_EPOCH_HEADER) == null ? null : Integer.valueOf(req.getHeader(ATTEMPT_EPOCH_HEADER));
+        } catch (NumberFormatException e) {
+            throw ApiException.invalid("epoca");
+        }
+        RemoteDelivery.Pack p = authenticated(req, () -> delivery.pack(t, id, req.getHeader(ATTEMPT_TOKEN_HEADER), epoch));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).contentType(org.springframework.http.MediaType.parseMediaType("application/zip"))
+                .header("Nekkora-Package-Sha256", p.sha256()).body(p.bytes());
+    }
+
+    private static Integer integer(JsonNode n, String field) {
+        JsonNode v = n.get(field);
+        if (v == null || v.isNull()) {
+            return null;
+        }
+        if (!v.isIntegralNumber() || !v.canConvertToInt()) {
+            throw ApiException.invalid(field);
+        }
+        return v.intValue();
+    }
+
+    /**
+     * T01c: a maquina habilitada publica o retrato do Python que tem. Corpo: {@code {"environments": [{environmentId,
+     * pythonVersion, kind, observedAt}]}}, no maximo 32; campos alem desses recusam o pedido (nenhum caminho entra).
+     */
+    @PutMapping("/agent/api/v1/remote/python-environments")
+    public ResponseEntity<GatewayService.InventoryPublished> publishPythonInventory(@RequestBody(required = false) String body, HttpServletRequest req) {
+        MachineToken t = machine(req);
+        JsonNode n = parse(body);
+        JsonNode list = n.get("environments");
+        if (list == null || !list.isArray() || list.size() > GatewayService.MAX_ENVIRONMENTS || n.size() != 1) {
+            throw ApiException.invalid("ambientes");
+        }
+        List<GatewayService.PythonEnvironment> environments = new ArrayList<>(list.size());
+        for (JsonNode e : list) {
+            if (!e.isObject() || e.size() != 4) {
+                throw ApiException.invalid("ambiente");
+            }
+            java.time.OffsetDateTime observed;
+            try {
+                observed = java.time.OffsetDateTime.parse(String.valueOf(text(e, "observedAt")));
+            } catch (java.time.DateTimeException x) {
+                throw ApiException.invalid("observacao");
+            }
+            environments.add(new GatewayService.PythonEnvironment(text(e, "environmentId"), text(e, "pythonVersion"), text(e, "kind"), observed));
+        }
+        GatewayService.InventoryPublished r = authenticated(req, () -> service.publishPythonInventory(t, environments, this::inventoryQuota));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
+    }
+
+    /** Publicacoes do inventario por maquina: 6 por minuto (balde; Retry-After). */
+    private void inventoryQuota(MachineAuth.Machine m) {
+        long wait = limiter.consume("agent:inventario:" + m.agentId(), 6, 6 / 60.0);
+        if (wait > 0) {
+            throw new ApiException(ApiError.RATE_LIMITED, "inventario_por_maquina", Math.max(1, (wait + 999) / 1000));
+        }
     }
 
     @GetMapping("/agent/api/v1/authorizations")

@@ -73,6 +73,38 @@ nekkora:
   # nao tem chave (encerrar sessao nunca depende de configuracao)
   entrada-geral:
     enabled: ${NEKKORA_ENTRADA_GERAL:false}
+  # execucao remota (PLATFORM-CLIENT-EXECUCAO-REMOTA-001): DESLIGADA por padrao. Ligada, um codigo de pareamento pode ser
+  # criado marcado para habilitar a maquina a receber execucoes solicitadas pela Platform. Tem de ter o mesmo valor no
+  # agent-gateway.
+  # licencas por organizacao (PLATFORM-LICENCIAMENTO-001): a organizacao interna da Nekkora, de onde os operadores de licenca agem.
+  # VAZIA por padrao: as rotas do operador respondem 404 e ninguem concede licenca nem liga a exigencia
+  licensing:
+    operator-organization: ${NEKKORA_LICENCAS_ORGANIZACAO_OPERADORA:}
+  remote-execution:
+    enabled: ${NEKKORA_EXECUCAO_REMOTA:false}
+    # T02: quanto tempo a tentativa espera a maquina receber antes de expirar (ponto de partida de laboratorio)
+    offer-minutes: ${NEKKORA_EXECUCAO_REMOTA_OFERTA_MINUTOS:15}
+    # 053: depois de o prazo da comunicacao vencer, quanto esperar antes de encerrar a tentativa recebida como sem
+    # confirmacao. Tem de ter o mesmo valor no agent-gateway
+    lost-minutes: ${NEKKORA_EXECUCAO_REMOTA_SEM_COMUNICACAO_MINUTOS:120}
+    # 055: de quanto em quanto tempo a Platform confere, sozinha, as tentativas que nao tem mais quem as conclua (segundos;
+    # 0 desliga o ciclo). O encerramento nao depende de alguem abrir a tela
+    reconcile-seconds: ${NEKKORA_EXECUCAO_REMOTA_RECONCILIACAO_SEGUNDOS:60}
+    # 054/056: verificacao de dependencias sob demanda - parametros iniciais. Intervalo minimo entre pedidos para a MESMA maquina
+    # e automacao (10 a 3600 s) e prazo da resposta (30 a 600 s; vencido, a tela diz "nao foi possivel verificar")
+    dependency-check:
+      interval-seconds: ${NEKKORA_EXECUCAO_REMOTA_VERIFICACAO_INTERVALO_SEGUNDOS:60}
+      answer-seconds: ${NEKKORA_EXECUCAO_REMOTA_VERIFICACAO_RESPOSTA_SEGUNDOS:120}
+    # 057: retencao, no servidor, dos registros e dos arquivos de resultado. DESLIGADA por padrao: ligar e decisao operacional de
+    # cada ambiente. Prazo em dias (1 a 3650), contado do fim da entrega de cada tentativa; entrega aberta nao vence. O historico
+    # da execucao e a auditoria nao sao removidos. O processo da Platform precisa poder REMOVER arquivos em NEKKORA_RESULTADOS_DIR
+    retention:
+      enabled: ${NEKKORA_EXECUCAO_REMOTA_RETENCAO:false}
+      days: ${NEKKORA_EXECUCAO_REMOTA_RETENCAO_DIAS:30}
+      # 059: teto da entrega que nao se conclui - dias SEM PROGRESSO de entrega, so para tentativa terminada e nao incerta. A
+      # presenca da maquina nao renova. Vencido: entrega incompleta, e a retencao se aplica
+      stalled-days: ${NEKKORA_EXECUCAO_REMOTA_RETENCAO_SEM_PROGRESSO_DIAS:30}
+      cycle-minutes: ${NEKKORA_EXECUCAO_REMOTA_RETENCAO_CICLO_MINUTOS:60}
   # login do aplicativo desktop pelo navegador (AGENT-CLIENT-LOGIN-001, contrato desktop-login/1): DESLIGADO por padrao; so
   # abre com a entrada geral tambem ligada. Prazos: pedido no navegador, codigo de autorizacao e sessao do aplicativo
   # (sem renovacao). Nenhum prazo das sessoes existentes muda.

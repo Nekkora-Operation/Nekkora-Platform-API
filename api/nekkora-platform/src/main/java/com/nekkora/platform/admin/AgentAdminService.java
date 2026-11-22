@@ -11,6 +11,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 import com.nekkora.core.db.DbErrors;
 import com.nekkora.core.token.Tokens;
+import com.nekkora.core.license.LicenseGate;
 import com.nekkora.core.web.ApiError;
 import com.nekkora.core.web.ApiException;
 import com.nekkora.core.web.RequestContext;
@@ -46,14 +47,29 @@ public final class AgentAdminService {
 
     private final AccessActions actions;
     private final WorkspaceAccess access;
+    /** NEKKORA_EXECUCAO_REMOTA: desligado, nenhum codigo de pareamento e criado marcado para execucao remota. */
+    private final boolean remoteExecution;
 
     public AgentAdminService(AccessActions actions, WorkspaceAccess access) {
-        this.actions = actions;
-        this.access = access;
+        this(actions, access, false);
     }
 
-    /** Codigo emitido: o valor {@code code} so aparece nesta resposta. */
-    public record CodeIssued(UUID enrollmentId, String code, OffsetDateTime expiresAt, UUID workerId, UUID agentId) {
+    public AgentAdminService(AccessActions actions, WorkspaceAccess access, boolean remoteExecution) {
+        this.actions = actions;
+        this.access = access;
+        this.remoteExecution = remoteExecution;
+    }
+
+    /**
+     * Codigo emitido: o valor {@code code} so aparece nesta resposta. {@code remoteExecution}: {@code true} no codigo de
+     * pareamento marcado para execucao remota; ausente nos demais (a resposta de sempre, campo por campo).
+     */
+    public record CodeIssued(UUID enrollmentId, String code, OffsetDateTime expiresAt, UUID workerId, UUID agentId,
+                             @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                             Boolean remoteExecution) {
+        public CodeIssued(UUID enrollmentId, String code, OffsetDateTime expiresAt, UUID workerId, UUID agentId) {
+            this(enrollmentId, code, expiresAt, workerId, agentId, null);
+        }
     }
 
     // ------------------------------------------------------------------ pareamento e rotacao
@@ -94,9 +110,24 @@ public final class AgentAdminService {
     }
 
     public CodeIssued createPairing(UUID org, ValidSession actor, String token, UUID workerId, String workerName, String agentName, Integer minutes) {
+        return createPairing(org, actor, token, workerId, workerName, agentName, minutes, false);
+    }
+
+    /**
+     * {@code remote} (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01a): o codigo nasce MARCADO para execucao remota. E o ato de
+     * autoridade da habilitacao: as mesmas permissoes de administrar o vinculo e o Worker e a mesma confirmacao reforcada do
+     * pareamento comum, conferidas aqui e de novo pelo gatilho do banco; quem cria o codigo fica gravado como quem habilitou
+     * a maquina. O codigo sozinho nao habilita nada: a maquina so fica habilitada quando a pessoa confirma NELA e o resgata.
+     * Com o recurso desligado: 409 remote_execution_unavailable, sem criar nada (nem o Worker).
+     */
+    public CodeIssued createPairing(UUID org, ValidSession actor, String token, UUID workerId, String workerName, String agentName, Integer minutes,
+                                    boolean remote) {
         int ttl = ttl(minutes);
         if ((workerId == null) == (workerName == null) || !validName(agentName) || workerName != null && !validName(workerName)) {
             throw ApiException.invalid("pareamento");
+        }
+        if (remote && !remoteExecution) {
+            throw new ApiException(ApiError.REMOTE_EXECUTION_UNAVAILABLE, "execucao_remota_desligada");
         }
         return actions.write(org, j -> {
             actions.requireActor(j, org, actor, token);
@@ -111,8 +142,17 @@ public final class AgentAdminService {
             UUID worker = workerId;
             if (worker == null) {
                 // a 010 trava a organizacao e confere WORKERS_REGISTERED (zero ate a ativacao da 022)
-                worker = j.sql("INSERT INTO public.workers (organization_id, name, status) VALUES (?, ?, 1) RETURNING worker_id")
-                        .param(org).param(workerName).query(UUID.class).single();
+                try {
+                    worker = j.sql("INSERT INTO public.workers (organization_id, name, status) VALUES (?, ?, 1) RETURNING worker_id")
+                            .param(org).param(workerName).query(UUID.class).single();
+                } catch (RuntimeException e) {
+                    // o mesmo motivo do cadastro direto de Worker: limite atingido (tecnico, no modelo por licenca) ou sem ativacao
+                    if (DbErrors.workerCapacityRefused(e)) {
+                        LOG.info("evento=worker.limite_atingido correlacao={}", RequestContext.correlation());
+                        throw new ApiException(ApiError.WORKER_LIMIT_REACHED, "limite_workers");
+                    }
+                    throw e;
+                }
                 audit(j, org, 7, actor.membershipId(), null, worker, null, null, null);
             } else {
                 Short status = j.sql("SELECT status FROM public.workers WHERE organization_id = ? AND worker_id = ?").param(org).param(worker)
@@ -125,9 +165,9 @@ public final class AgentAdminService {
                     .param(org).param(worker).query(Boolean.class).single()) {
                 throw AccessActions.refuse(Failure.CONFLICT, "worker_com_agent_ativo");
             }
-            CodeIssued c = issue(j, org, actor, (short) 1, worker, null, agentName, ttl);
+            CodeIssued c = issue(j, org, actor, (short) 1, worker, null, agentName, ttl, remote);
             audit(j, org, 1, actor.membershipId(), null, worker, null, c.enrollmentId(), null);
-            LOG.info("evento=agente.codigo_pareamento worker={} correlacao={}", worker, RequestContext.correlation());
+            LOG.info("evento=agente.codigo_pareamento worker={} execucao_remota={} correlacao={}", worker, remote, RequestContext.correlation());
             return c;
         });
     }
@@ -152,15 +192,99 @@ public final class AgentAdminService {
     }
 
     private static CodeIssued issue(JdbcClient j, UUID org, ValidSession actor, short purpose, UUID worker, UUID agent, String agentName, int ttl) {
+        return issue(j, org, actor, purpose, worker, agent, agentName, ttl, false);
+    }
+
+    private static CodeIssued issue(JdbcClient j, UUID org, ValidSession actor, short purpose, UUID worker, UUID agent, String agentName, int ttl,
+                                    boolean remote) {
         UUID enrollment = UUID.randomUUID();
         String code = "nkp1." + org + "." + enrollment + "." + Tokens.newToken();
         OffsetDateTime expires = j.sql("""
                 INSERT INTO public.agent_enrollments (enrollment_id, organization_id, purpose, worker_id, agent_id, agent_name, code_hash,
-                    created_by_membership_id, expires_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, clock_timestamp() + make_interval(mins => ?)) RETURNING expires_at
+                    created_by_membership_id, expires_at, remote_execution)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, clock_timestamp() + make_interval(mins => ?), ?) RETURNING expires_at
                 """).param(enrollment).param(org).param(purpose).param(worker).param(agent).param(agentName).param(Tokens.sha256Hex(code))
-                .param(actor.membershipId()).param(ttl).query(OffsetDateTime.class).single();
-        return new CodeIssued(enrollment, code, expires, worker, agent);
+                .param(actor.membershipId()).param(ttl).param(remote).query(OffsetDateTime.class).single();
+        return new CodeIssued(enrollment, code, expires, worker, agent, remote ? Boolean.TRUE : null);
+    }
+
+    // ------------------------------------------------------------------ inventario de Python da maquina (T01c, parte 1)
+
+    /** O que a maquina disse ter de Python. {@code environmentId} e opaco: nunca um caminho. */
+    public record PythonEnvironment(String environmentId, String pythonVersion, String kind, OffsetDateTime observedAt, OffsetDateTime reportedAt) {
+    }
+
+    /**
+     * O inventario de Python de UMA maquina habilitada, visto por quem pode executar no ambiente. Mesma regra da lista de
+     * maquinas: automation.execute no ambiente, Agent ativo, associado e com o Worker autorizado NESTE ambiente; qualquer
+     * outra situacao e 404 (a maquina nao existe para quem consulta). Lista vazia: a maquina ainda nao publicou, ou nao
+     * achou Python. E o que a maquina DISSE; nao escolhe ambiente nem prova que uma automacao roda nele.
+     */
+    public List<PythonEnvironment> listPythonEnvironments(UUID org, ValidSession actor, String token, UUID workspaceId, UUID agentId) {
+        return actions.read(org, j -> {
+            actions.requireActor(j, org, actor, token);
+            access.requireWorkspace(j, org, actor.membershipId(), workspaceId, "automation.execute");
+            boolean visible = j.sql("SELECT count(*) FROM public.agent_remote_enablements r "
+                    + "JOIN public.agents a ON a.organization_id = r.organization_id AND a.agent_id = r.agent_id AND a.status = 2 "
+                    + "JOIN public.worker_agent_assignments wa ON wa.organization_id = a.organization_id AND wa.agent_id = a.agent_id AND wa.status = 1 "
+                    + "JOIN public.workers w ON w.organization_id = wa.organization_id AND w.worker_id = wa.worker_id AND w.status = 1 "
+                    + "JOIN public.worker_workspace_assignments x ON x.organization_id = w.organization_id AND x.worker_id = w.worker_id "
+                    + "AND x.workspace_id = ? AND x.status = 1 WHERE r.organization_id = ? AND r.agent_id = ?")
+                    .param(workspaceId).param(org).param(agentId).query(Long.class).single() > 0;
+            if (!visible) {
+                throw new ApiException(ApiError.NOT_FOUND, "maquina");
+            }
+            return j.sql("SELECT environment_id, python_version, kind, observed_at, reported_at FROM public.agent_python_environments "
+                    + "WHERE organization_id = ? AND agent_id = ? ORDER BY python_version DESC, environment_id")
+                    .param(org).param(agentId)
+                    .query((rs, n) -> new PythonEnvironment(rs.getString(1), rs.getString(2), rs.getShort(3) == 1 ? "INSTALLATION" : "VIRTUAL_ENVIRONMENT",
+                            rs.getObject(4, OffsetDateTime.class), rs.getObject(5, OffsetDateTime.class))).list();
+        });
+    }
+
+    // ------------------------------------------------------------------ maquinas para execucao remota (PLATFORM-CLIENT-EXECUCAO-REMOTA-001, T01a)
+
+    /**
+     * Uma maquina habilitada para execucao remota, vista por quem pode executar no ambiente. {@code state}: OFFLINE (sem
+     * contato autenticado nos ultimos 180 s), INCOMPATIBLE (o aplicativo nao declara REMOTE_RUN_1_0), PAUSED (a maquina
+     * pausou o recebimento), NO_DISK_SPACE e BUSY (o que a maquina disse no ultimo batimento) ou AVAILABLE. Nesta ordem: o
+     * primeiro que valer. E INDICATIVO: a reserva de uma execucao e decidida, de forma atomica, quando ela e solicitada.
+     * Nao traz credencial, instalacao nem nada da maquina alem do nome e da versao do aplicativo.
+     */
+    public record RemoteMachine(UUID workerId, String workerName, UUID agentId, String agentName, String agentVersion, String state,
+                                String receiving, OffsetDateTime lastHeartbeatAt, OffsetDateTime enabledAt) {
+    }
+
+    /**
+     * As maquinas habilitadas para execucao remota cujo Worker esta autorizado NESTE ambiente. Exige automation.execute no
+     * ambiente (ambiente de outro escopo: o mesmo 404 das demais leituras). So entram Agents ativos e associados; um Agent
+     * revogado ou desvinculado deixa de aparecer, sem que a habilitacao precise ser apagada.
+     */
+    public List<RemoteMachine> listRemoteMachines(UUID org, ValidSession actor, String token, UUID workspaceId) {
+        return actions.read(org, j -> {
+            actions.requireActor(j, org, actor, token);
+            access.requireWorkspace(j, org, actor.membershipId(), workspaceId, "automation.execute");
+            return j.sql("""
+                    SELECT w.worker_id, w.name, a.agent_id, a.name, a.agent_version, r.receiving, a.last_heartbeat_at, r.enabled_at,
+                           a.last_heartbeat_at IS NOT NULL AND a.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?),
+                           coalesce(p.capabilities @> ARRAY['REMOTE_RUN_1_0']::text[], false), coalesce(p.remote_busy, false),
+                           coalesce(p.disk_pressure, false)
+                      FROM public.agent_remote_enablements r
+                      JOIN public.agents a ON a.organization_id = r.organization_id AND a.agent_id = r.agent_id AND a.status = 2
+                      JOIN public.worker_agent_assignments wa ON wa.organization_id = a.organization_id AND wa.agent_id = a.agent_id AND wa.status = 1
+                      JOIN public.workers w ON w.organization_id = wa.organization_id AND w.worker_id = wa.worker_id AND w.status = 1
+                      JOIN public.worker_workspace_assignments x ON x.organization_id = w.organization_id AND x.worker_id = w.worker_id
+                                                                 AND x.workspace_id = ? AND x.status = 1
+                      LEFT JOIN public.agent_presence p ON p.agent_id = a.agent_id
+                     WHERE r.organization_id = ? ORDER BY w.name, w.worker_id
+                    """).param(CONNECTED_SECONDS).param(workspaceId).param(org).query((rs, n) -> {
+                boolean paused = rs.getShort(6) == 2;
+                String state = !rs.getBoolean(9) ? "OFFLINE" : !rs.getBoolean(10) ? "INCOMPATIBLE" : paused ? "PAUSED"
+                        : rs.getBoolean(12) ? "NO_DISK_SPACE" : rs.getBoolean(11) ? "BUSY" : "AVAILABLE";
+                return new RemoteMachine(rs.getObject(1, UUID.class), rs.getString(2), rs.getObject(3, UUID.class), rs.getString(4), rs.getString(5),
+                        state, paused ? "PAUSED" : "ENABLED", rs.getObject(7, OffsetDateTime.class), rs.getObject(8, OffsetDateTime.class));
+            }).list();
+        });
     }
 
     public void cancelCode(UUID org, ValidSession actor, String token, UUID enrollmentId) {
@@ -211,6 +335,13 @@ public final class AgentAdminService {
                             + "WHERE organization_id = ? AND agent_id = ? AND consumed_at IS NULL AND cancelled_at IS NULL")
                     .param(actor.membershipId()).param(org).param(agentId).update();
             j.sql("UPDATE public.agents SET status = 4 WHERE organization_id = ? AND agent_id = ?").param(org).param(agentId).update();
+            // 053: a tentativa de execucao remota desta maquina nao fica aberta. O que o servidor nunca autorizou a iniciar fica
+            // "nao iniciou"; o que podia estar em execucao fica "sem confirmacao" - a maquina nao tem mais como informar
+            int attempts = com.nekkora.core.remote.AttemptClosure.linkEnded(j, org, agentId, com.nekkora.core.remote.AttemptClosure.MACHINE_REVOKED);
+            if (attempts > 0) {
+                LOG.info("evento=execucao_remota.encerrada_pelo_servidor causa=MACHINE_REVOKED agente={} tentativas={} correlacao={}", agentId, attempts,
+                        RequestContext.correlation());
+            }
             audit(j, org, 6, actor.membershipId(), agentId, worker, null, null, credentials.isEmpty() ? null : credentials.get(0),
                     code == 3 ? "COMPROMISED" : "ADMINISTRATIVE");
             LOG.info("evento=agente.revogado agente={} correlacao={}", agentId, RequestContext.correlation());
@@ -292,6 +423,19 @@ public final class AgentAdminService {
             access.requireWorkspace(j, org, actor.membershipId(), workspaceId, "automation.execute");
             actions.requireStepUp(j, actor);
             actions.lockOrganizationAndActor(j, org, actor.userId());
+            return grantVersion(j, org, actor.membershipId(), workspaceId, workerId, versionId, validUntil);
+        });
+    }
+
+    /**
+     * O ato de autorizar a versao no Worker, dentro da transacao de quem chama (sessao, permissao automation.execute no
+     * ambiente, confirmacao reforcada e travas JA conferidas). Usado pela rota propria e pela solicitacao de execucao remota
+     * que traz o aceite explicito da versao (S2). No modelo por licenca: exige licenca vigente e limita a validade ao fim da
+     * cobertura sem lacuna (D3); {@code validUntil} nulo so e aceito nesse modelo (vale ate o fim da cobertura).
+     */
+    static LocalAuthorization grantVersion(JdbcClient j, UUID org, UUID membership, UUID workspaceId, UUID workerId, UUID versionId,
+                                           OffsetDateTime validUntil) {
+        {
             // a impressao do pacote declarada na versao, com a regra (contrato, sec. 6.4); nunca o sha256 dos bytes do artefato
             // a regra declarada na versao decide a origem: /1 = pacote Studio, external-python-fingerprint/1 = pacote externo (030)
             Version v = j.sql("SELECT automation_id, status, command_json -> 'agent_package' ->> 'fingerprint_rule', "
@@ -313,16 +457,39 @@ public final class AgentAdminService {
             UUID assignment = j.sql("SELECT assignment_id FROM public.worker_workspace_assignments WHERE organization_id = ? AND worker_id = ? "
                             + "AND workspace_id = ? AND status = 1").param(org).param(workerId).param(workspaceId).query(UUID.class).optional()
                     .orElseThrow(() -> AccessActions.refuse(Failure.CONFLICT, "worker_nao_autorizado_no_workspace"));
+            OffsetDateTime until = licensedValidity(j, org, v.automationId(), validUntil);
             LocalAuthorization a = oneValid(() -> j.sql("""
                     INSERT INTO public.local_run_authorizations (organization_id, workspace_id, worker_id, worker_workspace_assignment_id, automation_id,
                         automation_version_id, package_fingerprint, package_fingerprint_rule, source_kind, granted_by_membership_id, valid_until)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     RETURNING """ + " " + AUTHORIZATION_COLUMNS).param(org).param(workspaceId).param(workerId).param(assignment).param(v.automationId()).param(versionId)
-                    .param(v.packageFingerprint()).param(v.rule()).param(kind).param(actor.membershipId()).param(validUntil)
+                    .param(v.packageFingerprint()).param(v.rule()).param(kind).param(membership).param(until)
                     .query((rs, n) -> authorization(rs)).single());
-            audit(j, org, 10, actor.membershipId(), null, workerId, workspaceId, null, null, a.authorizationId(), null);
+            audit(j, org, 10, membership, null, workerId, workspaceId, null, null, a.authorizationId(), null);
             return a;
-        });
+        }
+    }
+
+    /**
+     * D3: no modelo por licenca a autorizacao so nasce com licenca vigente e a validade NUNCA passa do fim da cobertura sem
+     * lacuna (uma renovacao que comeca depois de um intervalo nao a estende), nem dos 366 dias da 025. No modelo anterior a
+     * validade pedida e a que vale. O gatilho da 064 reconfere.
+     */
+    private static OffsetDateTime licensedValidity(JdbcClient j, UUID org, UUID automation, OffsetDateTime requested) {
+        LicenseGate.requireForNewWork(j, org, automation);
+        if (!LicenseGate.licensedModel(j, org)) {
+            if (requested == null) {
+                throw ApiException.invalid("validade");
+            }
+            return requested;
+        }
+        OffsetDateTime end = LicenseGate.coverageEnd(j, org, automation);
+        if (end == null) {
+            throw new ApiException(ApiError.LICENSE_EXPIRED, "licenca_sem_cobertura");
+        }
+        OffsetDateTime ceiling = OffsetDateTime.now().plusDays(366).minusMinutes(5);
+        OffsetDateTime until = requested == null || requested.isAfter(end) ? end : requested;
+        return until.isAfter(ceiling) ? ceiling : until;
     }
 
     /**
@@ -340,26 +507,70 @@ public final class AgentAdminService {
             access.requireWorkspace(j, org, actor.membershipId(), workspaceId, "automation.execute");
             actions.requireStepUp(j, actor);
             actions.lockOrganizationAndActor(j, org, actor.userId());
-            Boolean active = j.sql("SELECT a.status = 1 AND w.status = 1 FROM public.automations a JOIN public.workspaces w "
-                            + "ON w.organization_id = a.organization_id AND w.workspace_id = a.workspace_id "
-                            + "WHERE a.organization_id = ? AND a.workspace_id = ? AND a.automation_id = ?")
-                    .param(org).param(workspaceId).param(automationId).query(Boolean.class).optional()
-                    .orElseThrow(() -> AccessActions.refuse(Failure.TARGET_NOT_FOUND, "automacao"));
-            if (!active) {
-                throw AccessActions.refuse(Failure.CONFLICT, "automacao_ou_workspace_inativo");
-            }
-            UUID assignment = j.sql("SELECT assignment_id FROM public.worker_workspace_assignments WHERE organization_id = ? AND worker_id = ? "
-                            + "AND workspace_id = ? AND status = 1").param(org).param(workerId).param(workspaceId).query(UUID.class).optional()
-                    .orElseThrow(() -> AccessActions.refuse(Failure.CONFLICT, "worker_nao_autorizado_no_workspace"));
-            LocalAuthorization a = oneValid(() -> j.sql("""
-                    INSERT INTO public.local_run_authorizations (organization_id, workspace_id, worker_id, worker_workspace_assignment_id, automation_id,
-                        automation_version_id, package_fingerprint, package_fingerprint_rule, source_kind, granted_by_membership_id, valid_until)
-                    VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, 3, ?, ?)
-                    RETURNING """ + " " + AUTHORIZATION_COLUMNS).param(org).param(workspaceId).param(workerId).param(assignment).param(automationId)
-                    .param(actor.membershipId()).param(validUntil).query((rs, n) -> authorization(rs)).single());
-            audit(j, org, 10, actor.membershipId(), null, workerId, workspaceId, null, null, a.authorizationId(), null);
-            return a;
+            return grantMonitoring(j, org, actor.membershipId(), workspaceId, workerId, automationId, validUntil);
         });
+    }
+
+    /**
+     * O ato de autorizar o MONITORAMENTO da automacao no Worker (source_kind 3), dentro da transacao de quem chama (sessao,
+     * permissao, confirmacao e travas JA conferidas). Usado pela rota propria e pela ativacao da automacao (PLATFORM-FLUXO-002).
+     */
+    static LocalAuthorization grantMonitoring(JdbcClient j, UUID org, UUID membership, UUID workspaceId, UUID workerId, UUID automationId,
+                                              OffsetDateTime validUntil) {
+        Boolean active = j.sql("SELECT a.status = 1 AND w.status = 1 FROM public.automations a JOIN public.workspaces w "
+                    + "ON w.organization_id = a.organization_id AND w.workspace_id = a.workspace_id "
+                    + "WHERE a.organization_id = ? AND a.workspace_id = ? AND a.automation_id = ?")
+                .param(org).param(workspaceId).param(automationId).query(Boolean.class).optional()
+                .orElseThrow(() -> AccessActions.refuse(Failure.TARGET_NOT_FOUND, "automacao"));
+        if (!active) {
+            throw AccessActions.refuse(Failure.CONFLICT, "automacao_ou_workspace_inativo");
+        }
+        UUID assignment = j.sql("SELECT assignment_id FROM public.worker_workspace_assignments WHERE organization_id = ? AND worker_id = ? "
+                    + "AND workspace_id = ? AND status = 1").param(org).param(workerId).param(workspaceId).query(UUID.class).optional()
+                .orElseThrow(() -> AccessActions.refuse(Failure.CONFLICT, "worker_nao_autorizado_no_workspace"));
+        OffsetDateTime until = licensedValidity(j, org, automationId, validUntil);
+        LocalAuthorization a = oneValid(() -> j.sql("""
+                INSERT INTO public.local_run_authorizations (organization_id, workspace_id, worker_id, worker_workspace_assignment_id, automation_id,
+                automation_version_id, package_fingerprint, package_fingerprint_rule, source_kind, granted_by_membership_id, valid_until)
+                VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, 3, ?, ?)
+                RETURNING """ + " " + AUTHORIZATION_COLUMNS).param(org).param(workspaceId).param(workerId).param(assignment).param(automationId)
+                .param(membership).param(until).query((rs, n) -> authorization(rs)).single());
+        audit(j, org, 10, membership, null, workerId, workspaceId, null, null, a.authorizationId(), null);
+        return a;
+    }
+
+    /**
+     * PLATFORM-FLUXO-002 (069): RENOVA a autorizacao {@code previous} depois de a licenca ser renovada. Emite uma autorizacao
+     * NOVA do MESMO escopo (Worker no workspace, automacao, versao, origem e pacote), valida ate o fim da cobertura atual (D3),
+     * apontando para a anterior; se a anterior ainda vigora, ela e revogada antes, NA MESMA TRANSACAO, com o motivo 2
+     * (substituida). Nada e estendido. A anterior revogada por uma pessoa nunca e renovada (o banco recusa). Dentro da
+     * transacao de quem chama (sessao, permissao, confirmacao e travas JA conferidas).
+     */
+    static LocalAuthorization renewAuthorization(JdbcClient j, UUID org, UUID membership, LocalAuthorization previous) {
+        OffsetDateTime until = licensedValidity(j, org, previous.automationId(), null);
+        if (!until.isAfter(previous.validUntil())) {
+            throw AccessActions.refuse(Failure.CONFLICT, "renovacao_sem_cobertura_nova");
+        }
+        if (previous.revokedAt() == null && previous.validUntil().isAfter(OffsetDateTime.now())) {
+            int n = j.sql("UPDATE public.local_run_authorizations SET revoked_at = clock_timestamp(), revoked_by_membership_id = ?, revocation_reason = 2 "
+                            + "WHERE organization_id = ? AND authorization_id = ? AND revoked_at IS NULL")
+                    .param(membership).param(org).param(previous.authorizationId()).update();
+            if (n == 0) {
+                throw AccessActions.refuse(Failure.CONFLICT, "autorizacao_alterada");
+            }
+            audit(j, org, 11, membership, null, previous.workerId(), previous.workspaceId(), null, null, previous.authorizationId(), null);
+        }
+        LocalAuthorization a = oneValid(() -> j.sql("""
+                INSERT INTO public.local_run_authorizations (organization_id, workspace_id, worker_id, worker_workspace_assignment_id, automation_id,
+                    automation_version_id, package_fingerprint, package_fingerprint_rule, source_kind, granted_by_membership_id, valid_until,
+                    renewal_of_authorization_id)
+                SELECT organization_id, workspace_id, worker_id, worker_workspace_assignment_id, automation_id, automation_version_id, package_fingerprint,
+                       package_fingerprint_rule, source_kind, ?, ?, authorization_id
+                  FROM public.local_run_authorizations WHERE organization_id = ? AND authorization_id = ?
+                RETURNING """ + " " + AUTHORIZATION_COLUMNS).param(membership).param(until).param(org).param(previous.authorizationId())
+                .query((rs, n) -> authorization(rs)).single());
+        audit(j, org, 10, membership, null, a.workerId(), a.workspaceId(), null, null, a.authorizationId(), null);
+        return a;
     }
 
     /** Nome da recusa do gatilho da 033 (uma autorizacao local vigente por escopo; SQLSTATE 23505 com este nome). */
@@ -466,8 +677,26 @@ public final class AgentAdminService {
      */
     public record WorkerView(UUID workerId, String name, String status, UUID agentId, List<UUID> workspaceIds, String agentName,
                              String agentStatus, String agentVersion, UUID installationId, OffsetDateTime lastHeartbeatAt, String connectivity,
-                             OffsetDateTime credentialExpiresAt, OffsetDateTime createdAt) {
+                             OffsetDateTime credentialExpiresAt, OffsetDateTime createdAt, String machineState) {
     }
+
+    /**
+     * PLATFORM-FLUXO-002 - o estado da MAQUINA (o Worker com o computador vinculado a ele), para a tela dizer sem ambiguidade:
+     * REGISTERED (cadastrada, sem computador vinculado), AWAITING_CONNECTION (codigo de pareamento ainda valido, ou computador
+     * vinculado que ainda nao fez contato), CONNECTED (contato autenticado nos ultimos 180 s), NO_CONTACT (vinculada, sem
+     * contato recente), LINK_SUSPENDED (vinculo do computador suspenso) e INACTIVE (maquina desativada). Expressao SQL sobre
+     * {@code w} (workers) e {@code a} (agents do vinculo ATIVO, LEFT JOIN); o parametro e o prazo de conexao em segundos.
+     */
+    static final String MACHINE_STATE_SQL = """
+            CASE WHEN w.status <> 1 THEN 'INACTIVE'
+                 WHEN a.agent_id IS NOT NULL AND a.status = 3 THEN 'LINK_SUSPENDED'
+                 WHEN a.agent_id IS NOT NULL AND a.status = 2 AND a.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?) THEN 'CONNECTED'
+                 WHEN a.agent_id IS NOT NULL AND a.status = 2 AND a.last_heartbeat_at IS NOT NULL THEN 'NO_CONTACT'
+                 WHEN a.agent_id IS NOT NULL AND a.status IN (1, 2) THEN 'AWAITING_CONNECTION'
+                 WHEN EXISTS (SELECT 1 FROM public.agent_enrollments e WHERE e.organization_id = w.organization_id AND e.worker_id = w.worker_id
+                                 AND e.purpose = 1 AND e.consumed_at IS NULL AND e.cancelled_at IS NULL AND e.expires_at > clock_timestamp())
+                      THEN 'AWAITING_CONNECTION'
+                 ELSE 'REGISTERED' END""";
 
     public List<WorkerView> listWorkers(UUID org, ValidSession actor, String token) {
         return actions.read(org, j -> {
@@ -478,13 +707,15 @@ public final class AgentAdminService {
                            coalesce((SELECT array_agg(x.workspace_id ORDER BY x.workspace_id) FROM public.worker_workspace_assignments x
                                       WHERE x.organization_id = w.organization_id AND x.worker_id = w.worker_id AND x.status = 1), '{}'),
                            a.name, a.status, a.agent_version, a.installation_id, a.last_heartbeat_at,
-                           a.status = 2 AND a.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?), c.expires_at, w.created_at
+                           a.status = 2 AND a.last_heartbeat_at > clock_timestamp() - make_interval(secs => ?), c.expires_at, w.created_at,
+                           """ + MACHINE_STATE_SQL + """
+
                       FROM public.workers w
                       LEFT JOIN public.worker_agent_assignments wa ON wa.organization_id = w.organization_id AND wa.worker_id = w.worker_id AND wa.status = 1
                       LEFT JOIN public.agents a ON a.organization_id = wa.organization_id AND a.agent_id = wa.agent_id
                       LEFT JOIN public.agent_credentials c ON c.organization_id = a.organization_id AND c.agent_id = a.agent_id AND c.revoked_at IS NULL
                      WHERE w.organization_id = ? ORDER BY w.created_at, w.worker_id
-                    """).param(CONNECTED_SECONDS).param(org).query((rs, n) -> {
+                    """).param(CONNECTED_SECONDS).param(CONNECTED_SECONDS).param(org).query((rs, n) -> {
                 UUID agent = rs.getObject(4, UUID.class);
                 return new WorkerView(rs.getObject(1, UUID.class), rs.getString(2),
                         switch (rs.getShort(3)) { case 1 -> "ACTIVE"; case 2 -> "SUSPENDED"; default -> "RETIRED"; }, agent,
@@ -492,7 +723,7 @@ public final class AgentAdminService {
                         agent == null ? null : switch (rs.getShort(7)) { case 1 -> "PENDING"; case 2 -> "ACTIVE"; case 3 -> "SUSPENDED"; default -> "REVOKED"; },
                         rs.getString(8), rs.getObject(9, UUID.class), rs.getObject(10, OffsetDateTime.class),
                         agent == null ? null : Boolean.TRUE.equals(rs.getObject(11, Boolean.class)) ? "CONNECTED" : "DISCONNECTED", rs.getObject(12, OffsetDateTime.class),
-                        rs.getObject(13, OffsetDateTime.class));
+                        rs.getObject(13, OffsetDateTime.class), rs.getString(14));
             }).list();
         });
     }

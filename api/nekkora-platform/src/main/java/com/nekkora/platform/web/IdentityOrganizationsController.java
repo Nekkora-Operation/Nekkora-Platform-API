@@ -47,6 +47,17 @@ public class IdentityOrganizationsController {
     public record CreateRequest(String name, String legalName) {
     }
 
+    public record OrganizationRequest(String organizationId, String name, String legalName) {
+    }
+
+    public static final String ORGANIZATION_REQUESTS = "/api/v1/organization-requests";
+    public static final String MY_ORGANIZATION_REQUESTS = "/api/v1/me/organization-requests";
+    public static final String DEACTIVATIONS = "/api/v1/organization-deactivations";
+    public static final String REACTIVATIONS = "/api/v1/organization-reactivations";
+
+    public record OrganizationRef(String organizationId) {
+    }
+
     private final IdentityOrganizationsService organizations;
     private final OrgSessionExchange exchange;
     private final boolean enabled;
@@ -79,12 +90,122 @@ public class IdentityOrganizationsController {
             m.put("roles", List.copyOf(o.roles()));
             m.put("activationState", o.activationState());
             m.put("handle", o.handle());
+            m.put("licenseModel", o.licenseModel() == null ? "legacy" : o.licenseModel());
             return m;
         }).toList();
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("organizations", items);
         r.put("canCreateOrganization", l.canCreateOrganization());
         return r;
+    }
+
+    public static final String MY_ORGANIZATION_CREATION = "/api/v1/me/organization-creation";
+
+    /**
+     * 067: o perfil de quem cria (FIRST, ADMIN, MEMBER, CLIENT), os limites e as organizacoes de que a pessoa e responsavel.
+     * So indicacao para a interface: o servidor decide em cada ato.
+     */
+    @GetMapping(MY_ORGANIZATION_CREATION)
+    public Map<String, Object> creation(HttpServletRequest req) {
+        requireCreation();
+        IdentityOrganizationsService.Creation l = organizations.creation(IdentityFilter.principalOrNull(req), IdentityFilter.token(req),
+                RequestContextFilter.ip(req));
+        var c = l.state();
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("profile", c.profile());
+        r.put("canCreate", IdentityOrganizationsService.creationReason(c) == null);
+        r.put("cannotCreateReason", IdentityOrganizationsService.creationReason(c));
+        r.put("canRequest", "MEMBER".equals(c.profile()) && c.pendingRequests() < 3);
+        Map<String, Object> empty = usage(c.emptyOrganizations().size(), c.emptyLimit());
+        empty.put("organizationIds", c.emptyOrganizations());
+        r.put("emptyOrganizations", empty);
+        r.put("pendingRequests", usage(c.pendingRequests(), 3));
+        // D7: o modelo em que a organizacao criada AGORA nasceria. No modelo por licenca nao ha ativacao a esperar.
+        r.put("newOrganizationLicenseModel", l.newOrganizationsLicensed() ? "licensed" : "legacy");
+        r.put("responsibleFor", l.responsibleFor().stream().map(o -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("organizationId", o.organizationId());
+            m.put("name", o.name());
+            m.put("state", o.state());
+            m.put("empty", o.empty());
+            m.put("deactivatedAt", o.deactivatedAt());
+            m.put("canReactivate", o.canReactivate());
+            return m;
+        }).toList());
+        return r;
+    }
+
+    private static Map<String, Object> usage(long used, long limit) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("used", used);
+        m.put("limit", limit);
+        return m;
+    }
+
+    private void requireCreation() {
+        if (!enabled || !creationEnabled) {
+            throw new ApiException(ApiError.NOT_FOUND, "criacao_organizacao_desligada", null);
+        }
+    }
+
+    private static UUID uuid(String raw, String what) {
+        if (raw == null || !UUID_CANONICAL.matcher(raw).matches()) {
+            throw ApiException.invalid(what);
+        }
+        return UUID.fromString(raw);
+    }
+
+    /** 067: o membro pede a criacao ao administrador da organizacao {@code organizationId}, em que e membro. */
+    @PostMapping(ORGANIZATION_REQUESTS)
+    @ResponseStatus(HttpStatus.CREATED)
+    public Map<String, String> request(@RequestBody(required = false) OrganizationRequest body, HttpServletRequest req) {
+        requireCreation();
+        if (body == null || !validName(body.name()) || (body.legalName() != null && !validName(body.legalName()))) {
+            throw ApiException.invalid("nome");
+        }
+        UUID id = organizations.request(IdentityFilter.principalOrNull(req), IdentityFilter.token(req), uuid(body.organizationId(), "organizacao"),
+                body.name(), body.legalName() == null ? body.name() : body.legalName(), RequestContextFilter.ip(req));
+        return Map.of("requestId", id.toString());
+    }
+
+    @GetMapping(MY_ORGANIZATION_REQUESTS)
+    public Map<String, Object> requests(HttpServletRequest req) {
+        requireCreation();
+        List<Map<String, Object>> items = organizations.requests(IdentityFilter.principalOrNull(req), IdentityFilter.token(req), RequestContextFilter.ip(req))
+                .stream().map(q -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("requestId", q.requestId());
+                    m.put("organizationId", q.organizationId());
+                    m.put("organizationName", q.organizationName());
+                    m.put("name", q.name());
+                    m.put("legalName", q.legalName());
+                    m.put("state", q.state());
+                    m.put("requestedAt", q.requestedAt());
+                    m.put("decidedAt", q.decidedAt());
+                    m.put("responsible", q.responsible());
+                    m.put("refusalReason", q.refusalReason());
+                    m.put("createdOrganizationId", q.createdOrganizationId());
+                    return m;
+                }).toList();
+        return Map.of("items", items);
+    }
+
+    /** 067 (D13): o responsavel desativa a organizacao. Nada e apagado nem liberado. */
+    @PostMapping(DEACTIVATIONS)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deactivate(@RequestBody(required = false) OrganizationRef body, HttpServletRequest req) {
+        requireCreation();
+        organizations.setActive(IdentityFilter.principalOrNull(req), IdentityFilter.token(req), uuid(body == null ? null : body.organizationId(), "organizacao"),
+                false, RequestContextFilter.ip(req));
+    }
+
+    /** 067 (D13): o responsavel reativa a organizacao que ele desativou; o limite de vazias e reconferido. */
+    @PostMapping(REACTIVATIONS)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void reactivate(@RequestBody(required = false) OrganizationRef body, HttpServletRequest req) {
+        requireCreation();
+        organizations.setActive(IdentityFilter.principalOrNull(req), IdentityFilter.token(req), uuid(body == null ? null : body.organizationId(), "organizacao"),
+                true, RequestContextFilter.ip(req));
     }
 
     @PostMapping(ORGANIZATIONS)

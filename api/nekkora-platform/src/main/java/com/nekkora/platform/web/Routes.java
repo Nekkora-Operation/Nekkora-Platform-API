@@ -72,7 +72,9 @@ public final class Routes {
                  "/auth/mfa-emergencia/aviso/confirmar", "/auth/mfa-emergencia/aviso/contestar" -> Context.PRE_AUTHENTICATION;
             // cadastro web (Missao 1), fora de /o/{org}: routeSuffix devolve o caminho inteiro. Mapeamento explicito; as
             // demais rotas sem organizacao continuam no padrao SESSION (fecham)
-            case "/api/v1/signup", "/api/v1/signup/confirm", "/api/v1/signup/confirmation/resend" -> Context.PRE_AUTHENTICATION;
+            case "/api/v1/signup", "/api/v1/signup/confirm", "/api/v1/signup/confirmation/resend", "/api/v1/signup/preview" -> Context.PRE_AUTHENTICATION;
+            // 071: o primeiro acesso pelo convite le nome e e-mail do convite aberto (so com o token), antes de qualquer sessao
+            case "/api/v1/invitations/preview" -> Context.PRE_AUTHENTICATION;
             // entrada geral (Missao 1): senha em pre-autenticacao; MFA no desafio de identidade; logout de identidade
             case "/api/v1/auth/login" -> Context.PRE_AUTHENTICATION;
             // login do aplicativo desktop (AGENT-CLIENT-LOGIN-001): abrir e recusar o pedido, com ou sem sessao, pelo CSRF
@@ -96,6 +98,8 @@ public final class Routes {
             // aceite de convite (023): com a sessao de identidade
             case "/api/v1/sessions/organization", "/api/v1/auth/step-up", "/api/v1/organizations",
                  "/api/v1/links/start", "/api/v1/links/confirm", "/api/v1/invitations/accept" -> Context.IDENTITY_SESSION;
+            // 067: pedido de criacao de organizacao, desativar e reativar, com a sessao de identidade
+            case "/api/v1/organization-requests", "/api/v1/organization-deactivations", "/api/v1/organization-reactivations" -> Context.IDENTITY_SESSION;
             // credenciais da identidade (missao 002): troca de senha e regeneracao dos codigos, com a sessao de identidade
             case "/api/v1/auth/password", "/api/v1/auth/mfa/recovery-codes" -> Context.IDENTITY_SESSION;
             // 029: reconfirmacao da senha e ativacao voluntaria do MFA, com a sessao de identidade

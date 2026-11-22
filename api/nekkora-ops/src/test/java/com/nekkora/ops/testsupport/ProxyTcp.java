@@ -15,8 +15,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /**
  * Proxy TCP de teste entre a CLI e o PostgreSQL (o TLS passa inteiro; o proxy nao le nada). Simula as perdas do
  * contrato 7: {@link #engolirRespostas()} descarta o que o servidor envia (o COMMIT chega e e confirmado, a resposta
- * nao volta); {@link #cortarCliente()} fecha so o lado do cliente e MANTEM o do servidor aberto (a sessao do servidor
- * continua viva, em transacao, segurando os locks); {@link #recusarNovas()} derruba o acesso ao banco.
+ * nao volta); {@link #cortarCliente()} fecha so o lado do cliente, DESCARTA o que o cliente enviar dali em diante e MANTEM
+ * o lado do servidor aberto (a sessao do servidor continua viva, em transacao, segurando os locks; o COMMIT enviado depois
+ * do corte nunca chega); {@link #recusarNovas()} derruba o acesso ao banco.
  */
 public final class ProxyTcp implements AutoCloseable {
 
@@ -88,6 +89,12 @@ public final class ProxyTcp implements AutoCloseable {
             try {
                 int n;
                 while ((n = in.read(b)) >= 0) {
+                    if (!doServidor && clienteCortado) {
+                        // Cortado: NADA mais do cliente chega ao servidor. Fechar o soquete nao basta para garantir isso: a
+                        // leitura ja em curso pode devolver bytes que chegaram junto com o fechamento (o COMMIT, enviado logo
+                        // depois do corte), e eles seriam repassados. A decisao e pela marca, nao pelo instante do fechamento.
+                        break;
+                    }
                     if (doServidor && engolir) {
                         continue;
                     }

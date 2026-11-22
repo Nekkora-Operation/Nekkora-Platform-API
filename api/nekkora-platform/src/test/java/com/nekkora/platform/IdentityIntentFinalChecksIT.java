@@ -114,7 +114,7 @@ class IdentityIntentFinalChecksIT extends IdentityTestBase {
         String hash = value("SELECT password_hash FROM identity_credentials WHERE identity_id = '" + id + "'");
 
         BrowserClient.Response t = comFilaBloqueada(4500,
-                () -> b.post("/api/v1/auth/password", "{\"currentPassword\":" + q(SENHA) + ",\"newPassword\":\"senha-nova-bloqueada-9\"}"));
+                () -> b.post("/api/v1/auth/password", "{\"currentPassword\":" + q(SENHA) + ",\"newPassword\":\"Nk#senhanovabloq9\"}"));
         assertThat(t.status()).as(t.body()).isEqualTo(403);
         assertThat(value("SELECT password_hash FROM identity_credentials WHERE identity_id = '" + id + "'")).isEqualTo(hash);
         assertThat(count("SELECT count(*) FROM identity_events WHERE identity_id = '" + id + "' AND event_type = 12")).isZero();

@@ -116,7 +116,7 @@ class AccountLinkIT extends IdentityTestBase {
         assertThat(org.get("/api/v1/o/" + c.org() + "/me").status()).as("a entrada geral serve a conta").isEqualTo(200);
         assertThat(org.post("/api/v1/o/" + c.org() + "/auth/mfa/step-up", "{\"code\":\"" + code(c.identity()) + "\"}").status())
                 .as("step-up por organizacao (P4) com o fator da identidade").isEqualTo(204);
-        assertThat(org.post("/api/v1/o/" + c.org() + "/auth/password", "{\"currentPassword\":\"" + PASSWORD + "\",\"newPassword\":\"outra-senha-bem-longa-2\"}").status())
+        assertThat(org.post("/api/v1/o/" + c.org() + "/auth/password", "{\"currentPassword\":\"" + PASSWORD + "\",\"newPassword\":\"Nk#outrasenhabem9\"}").status())
                 .as("a senha local nao muda mais").isEqualTo(403);
         assertThat(count("SELECT count(*) FROM identity_mfa_factors WHERE identity_id = '" + c.identity() + "' AND disabled_at IS NULL")).as("fator da identidade intacto")
                 .isEqualTo(1);
@@ -342,7 +342,7 @@ class AccountLinkIT extends IdentityTestBase {
         Cenario c = cenario();
         assertThat(start(c.id(), c.org(), PASSWORD, code(c.conta().id()), null).status()).isEqualTo(204);
         assertThat(c.legada().post("/api/v1/o/" + c.org() + "/auth/password",
-                "{\"currentPassword\":\"" + PASSWORD + "\",\"newPassword\":\"senha-nova-bem-longa-3\"}").status()).isEqualTo(204);
+                "{\"currentPassword\":\"" + PASSWORD + "\",\"newPassword\":\"Nk#senhanovabeml9\"}").status()).isEqualTo(204);
         assertThat(stepUpIdentidade(c)).isEqualTo(204);
         assertThat(confirm(c.id(), c.org()).status()).isEqualTo(403);
         assertThat(count("SELECT count(*) FROM identity_users WHERE user_id = '" + c.conta().id() + "'")).isZero();
