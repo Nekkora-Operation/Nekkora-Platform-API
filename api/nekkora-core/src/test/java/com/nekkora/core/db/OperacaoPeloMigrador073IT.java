@@ -150,7 +150,7 @@ class OperacaoPeloMigrador073IT {
         assertThatThrownBy(() -> migrador(OUTRA, designar(OUTRA))).as("uma vigente por vez").hasMessageContaining("ux_nekkora_internal_organization_current");
         assertThatThrownBy(() -> migrador(INTERNA, "UPDATE nekkora_internal_organization_designations SET organization_id = '" + OUTRA + "'"))
                 .hasMessageContaining("so a retirada");
-        assertThatThrownBy(() -> migrador(INTERNA, "DELETE FROM nekkora_internal_organization_designations")).isInstanceOf(SQLException.class);
+        assertThat(migrador(INTERNA, "WITH d AS (DELETE FROM nekkora_internal_organization_designations RETURNING 1) SELECT count(*) FROM d")).as("sem politica de DELETE: o migrador nao apaga nada").isEqualTo("0");
     }
 
     @Test
@@ -175,7 +175,7 @@ class OperacaoPeloMigrador073IT {
         assertThat(one("SELECT count(*) || ' ' || count(*) FILTER (WHERE revoked_at IS NOT NULL) FROM license_operators WHERE operator_user_id = '"
                 + operadora + "'")).isEqualTo("2 1");
         assertThat(one("SELECT public.license_op_is_operator('" + operadora + "')")).isEqualTo("t");
-        assertThatThrownBy(() -> migrador(INTERNA, "DELETE FROM license_operators")).isInstanceOf(SQLException.class);
+        assertThat(migrador(INTERNA, "WITH d AS (DELETE FROM license_operators RETURNING 1) SELECT count(*) FROM d")).as("sem politica de DELETE: o migrador nao apaga nada").isEqualTo("0");
         migrador(INTERNA, revogar(operadora));
         migrador(INTERNA, "UPDATE nekkora_internal_organization_designations SET withdrawn_at = now(), withdrawn_by = 'titular (teste 073)', "
                 + "withdrawal_ticket = 'LAB-073-4', withdrawal_reason = 'retirada da designacao no teste'");
@@ -202,7 +202,7 @@ class OperacaoPeloMigrador073IT {
                 + "WHERE organization_id = '" + OUTRA + "'");
         assertThatThrownBy(() -> migrador(null, "UPDATE organization_nekkora_holds SET lifted_by = 'outra pessoa' WHERE organization_id = '" + OUTRA + "'"))
                 .hasMessageContaining("so o levantamento");
-        assertThatThrownBy(() -> migrador(null, "DELETE FROM organization_nekkora_holds")).isInstanceOf(SQLException.class);
+        assertThat(migrador(null, "WITH d AS (DELETE FROM organization_nekkora_holds RETURNING 1) SELECT count(*) FROM d")).as("sem politica de DELETE: o migrador nao apaga nada").isEqualTo("0");
         assertThat(one("SELECT rolsuper || ' ' || rolcreaterole || ' ' || rolbypassrls FROM pg_roles WHERE rolname = 'migrador_nekkora'"))
                 .isEqualTo("false false false");
     }

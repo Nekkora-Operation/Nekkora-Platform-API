@@ -122,4 +122,10 @@ colunas** `organization_id` e `lifted_at`, sem motivo nem autor, e só da organi
 - Ajustes: `LicenseOperatorIT` (designação + cadastro com chamado e justificativa, revogação com quem e motivo) e
   `OrganizationProfilesIT` (levantamento com motivo).
 - `licenciamento-002/operador/teste/teste.sh` contra 001–073 (procedimento real como o migrador).
-- Os números de cada rodada estão no PR.
+- **Resultado (22/11):**
+  - `OperacaoPeloMigrador073IT`: 6/6;
+  - `LicenseOperatorIT`: 4/4;
+  - `OrganizationProfilesIT`: 5/5;
+  - `teste/teste.sh`: 88 passam, 0 falham. A 073 foi aplicada `elevada=nao` e o migrador terminou `0|0|0`.
+- **Achado:** um `DELETE` do migrador não dá erro. Por não haver política de DELETE, a RLS filtra e 0 linhas saem. Os testes
+  conferem as 0 linhas.
