@@ -37,6 +37,31 @@ class LicenseOperatorIT extends ReadRoutesSupport {
         return nekkora;
     }
 
+    private static boolean designated;
+
+    /** 073: o cadastro so vale na organizacao interna DESIGNADA (procedimento administrativo, aqui como superusuario). */
+    private static synchronized void designate(Org n) {
+        if (!designated) {
+            DB.asSuperuser("INSERT INTO nekkora_internal_organization_designations (organization_id, designated_by, designation_ticket, designation_reason) "
+                    + "VALUES ('" + n.id() + "', 'procedimento de ensaio do teste', 'TESTE-073', 'organizacao interna do ensaio do teste')");
+            designated = true;
+        }
+    }
+
+    /** 073: cadastro com chamado e justificativa. */
+    private static void register(Org n, Object user) {
+        designate(n);
+        DB.asSuperuser("INSERT INTO license_operators (operator_user_id, organization_id, registered_by, registration_ticket, registration_justification) "
+                + "VALUES ('" + user + "', '" + n.id() + "', 'procedimento de ensaio do teste', 'TESTE-073', 'operador do ensaio do teste')");
+    }
+
+    /** 073: revogacao com quem, chamado e motivo, uma vez. */
+    private static void revoke(Object user) {
+        DB.asSuperuser("UPDATE license_operators SET revoked_at = clock_timestamp(), revoked_by = 'procedimento de ensaio do teste', "
+                + "revocation_ticket = 'TESTE-073', revocation_reason = 'revogacao do ensaio do teste' WHERE operator_user_id = '" + user
+                + "' AND revoked_at IS NULL");
+    }
+
     @DynamicPropertySource
     static void operatorOrganization(DynamicPropertyRegistry registry) {
         registry.add("nekkora.licensing.operator-organization", () -> nekkora().id().toString());
@@ -94,8 +119,7 @@ class LicenseOperatorIT extends ReadRoutesSupport {
         assertThat(one("SELECT count(*) FROM organization_licenses WHERE organization_id = '" + client.id() + "'")).isEqualTo("0");
 
         // ---- inclusao no cadastro (procedimento administrativo) e, a partir dai, os atos pela aplicacao - sem elevacao por ato
-        DB.asSuperuser("INSERT INTO license_operators (operator_user_id, organization_id, registered_by) VALUES ('" + n.adminId() + "', '" + n.id()
-                + "', 'procedimento de ensaio do teste')");
+        register(n, n.adminId());
         assertThat(staff.post(ops(n.id(), "/licenses"), grant).status()).as("a organizacao interna nao e alvo de si mesma").isEqualTo(404);
         assertThat(staff.post(ops(UUID.randomUUID(), "/licenses"), grant).status()).as("organizacao inexistente").isEqualTo(404);
         assertThat(staff.post(ops(client.id(), "/licenses"), grant.replace(justification, "curta")).status()).as("justificativa obrigatoria").isEqualTo(400);
@@ -212,14 +236,13 @@ class LicenseOperatorIT extends ReadRoutesSupport {
 
         // ---- sem confirmacao reforcada recente o ato e recusado; operador revogado deixa de operar
         TestUser secondOperator = internalUser(n, true, 2);
-        DB.asSuperuser("INSERT INTO license_operators (operator_user_id, organization_id, registered_by) VALUES ('" + secondOperator.id() + "', '" + n.id()
-                + "', 'procedimento de ensaio do teste')");
+        register(n, secondOperator.id());
         BrowserClient fresh = login(n, secondOperator);
         assertThat(fresh.get(ops(client.id(), "/enforcement-preview")).status()).as("operador no cadastro le a previa").isEqualTo(200);
         assertThat(fresh.post(ops(client.id(), "/licenses"), grant).status()).as("no cadastro, mas sem confirmacao reforcada recente").isEqualTo(403);
         stepUp(fresh, n.id(), secondOperator.id());
         assertThat(fresh.post(ops(client.id(), "/licenses"), grant.replace("\"count\":2", "\"count\":1")).status()).as("com a confirmacao, concede").isEqualTo(200);
-        DB.asSuperuser("UPDATE license_operators SET revoked_at = clock_timestamp() WHERE operator_user_id = '" + n.adminId() + "'");
+        revoke(n.adminId());
         assertThat(staff.post(ops(client.id(), "/licenses"), grant).status()).as("operador revogado").isEqualTo(403);
         assertThat(one("SELECT count(*) FROM organization_licenses WHERE organization_id = '" + client.id() + "'")).as("2 da primeira concessao + 1 do segundo operador; nada depois da revogacao").isEqualTo("3");
 
@@ -287,8 +310,7 @@ class LicenseOperatorIT extends ReadRoutesSupport {
         UUID foreign = ProductFixtures.automation(stranger.id(), AccessFixtures.namedWorkspace(stranger.id(), "Outra", 1), null, "De outra organizacao",
                 stranger.adminMembership());
         TestUser operator = internalUser(n, true, 2);
-        DB.asSuperuser("INSERT INTO license_operators (operator_user_id, organization_id, registered_by) VALUES ('" + operator.id() + "', '" + n.id()
-                + "', 'procedimento de ensaio do teste')");
+        register(n, operator.id());
         BrowserClient staff = login(n, operator);
         stepUp(staff, n.id(), operator.id());
         String justification = "pedido do cliente: a automacao foi substituida";
@@ -503,8 +525,7 @@ class LicenseOperatorIT extends ReadRoutesSupport {
 
     private TestUser operator(Org n) {
         TestUser operator = internalUser(n, true, 2);
-        DB.asSuperuser("INSERT INTO license_operators (operator_user_id, organization_id, registered_by) VALUES ('" + operator.id() + "', '" + n.id()
-                + "', 'procedimento de ensaio do teste')");
+        register(n, operator.id());
         return operator;
     }
 

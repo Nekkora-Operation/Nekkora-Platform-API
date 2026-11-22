@@ -461,7 +461,8 @@ class OrganizationProfilesIT extends IdentityTestBase {
         conflict(f.browser().post(reactivate, ref), "organization_blocked_by_nekkora");
         assertThat(creation(f).get("responsibleFor").toString()).contains("\"state\":\"BLOCKED\"").contains("\"canReactivate\":false");
         assertThat(value("SELECT status FROM organizations WHERE organization_id = '" + org + "'")).isEqualTo("3");
-        DB.asSuperuser("UPDATE organization_nekkora_holds SET lifted_at = clock_timestamp(), lifted_by = 'procedimento de ensaio do teste' WHERE organization_id = '"
+        DB.asSuperuser("UPDATE organization_nekkora_holds SET lifted_at = clock_timestamp(), lifted_by = 'procedimento de ensaio do teste', "
+                + "lift_reason = 'levantamento de ensaio do teste' WHERE organization_id = '"
                 + org + "'");
         assertThat(f.browser().post(reactivate, ref).status()).as("bloqueio levantado pela Nekkora: a reativacao volta a valer").isEqualTo(204);
 
