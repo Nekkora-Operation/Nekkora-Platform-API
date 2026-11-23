@@ -18,6 +18,10 @@ aplicado em homologação ou produção. Procedimento do host: `licenciamento-00
 
 ## 2. O que NÃO está na 073, e por quê (decisões pendentes)
 
+> **Atualização de 23/11:** as duas decisões foram tomadas pela titular e implementadas em laboratório: a **074** (com
+> elevação só na aplicação) e a **075** (leitura mínima, sem elevação). Ver `074-075-organizacao-interna-e-bloqueio.md`. O texto
+> abaixo fica como registro da análise que levou a elas.
+
 ### 2.1 Organização interna fora do limite de vazias: exige elevação
 
 A contagem é feita por `identity_empty_organizations(uuid)`, uma função do dono `nekkora_identity_owner` (067). Ela é usada
