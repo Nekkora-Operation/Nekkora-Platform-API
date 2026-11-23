@@ -724,4 +724,52 @@ class AgentGatewayIT {
         Paired neighbour = paired(other);
         assertThat(neighbour.m().register(newExecution(), neighbour.authorization().toString(), AgentFixture.REAL_FINGERPRINT, running()).status()).isEqualTo(201);
     }
+
+    /**
+     * 075 (LICENCIAMENTO-002): organizacao BLOQUEADA PELA NEKKORA, pelo canal das maquinas. Pareamento novo e recusado mesmo com
+     * codigo emitido antes do bloqueio (403 organization_held, nada consumido); a maquina ja pareada continua se comunicando; a
+     * execucao do Agent anterior ja registrada continua entregando eventos; o registro de uma execucao feita com autorizacao ja
+     * emitida (inclusive sem conexao) e aceito - o servidor nao impede na hora o que a autorizacao local ja permite (limite
+     * documentado); nenhuma autorizacao nova nasce. Levantado o bloqueio, o pareamento volta.
+     */
+    @Test
+    void organizacaoBloqueadaPelaNekkoraNaoPareiaMasOQueJaComecouEntrega() throws Exception {
+        AgentFixture f = new AgentFixture(DB);
+        Paired p = paired(f);
+        String ex = executionOf("a1-sucesso");
+        MachineClient.Response started = p.m().register(ex, p.authorization().toString(), AgentFixture.REAL_FINGERPRINT, runningAt(java.time.Instant.now()));
+        assertThat(started.status()).isEqualTo(201);
+        java.time.Instant beforeHold = java.time.Instant.now();
+        UUID worker = f.worker("W-" + UUID.randomUUID().toString().substring(0, 6));
+        String code = f.pairingCode(worker, "Estacao depois do bloqueio", "15 minutes");
+        Thread.sleep(20);
+
+        DB.asSuperuser("SET ROLE migrador_nekkora", "INSERT INTO organization_nekkora_holds (organization_id, reason, registered_by) VALUES ('" + f.org
+                + "', 'bloqueio do teste da 075 no canal das maquinas', 'suporte (teste 075)')", "RESET ROLE");
+
+        // ---- pareamento novo: recusado com o motivo, nada consumido
+        MachineClient.Response redeem = client().redeem(code, Tokens.newToken());
+        assertThat(redeem.status()).isEqualTo(403);
+        assertThat(redeem.body().get("reason").asString()).isEqualTo("organization_held");
+        assertThat(f.count("SELECT count(*) FROM agent_enrollments WHERE organization_id = '" + f.org + "' AND worker_id = '" + worker + "' AND consumed_at IS NULL"))
+                .as("o codigo nao foi consumido").isEqualTo(1);
+        // ---- a maquina ja pareada continua se comunicando e entregando
+        assertThat(p.m().heartbeat().status()).isEqualTo(200);
+        List<String> all = envelopes("a1-sucesso");
+        MachineClient.Response events = p.m().events(ex, all.subList(0, 50), null);
+        assertThat(events.status()).as("entrega do que ja comecou").isEqualTo(200);
+        assertThat(p.m().supervisor(ex, supervisorFromEstado("a1-sucesso")).status()).isEqualTo(200);
+        // ---- execucao feita com a autorizacao ja emitida (sem conexao, antes do bloqueio): registro aceito
+        MachineClient.Response late = p.m().register(newExecution(), p.authorization().toString(), AgentFixture.REAL_FINGERPRINT, runningAt(beforeHold));
+        assertThat(late.status()).as("entrega tardia de trabalho autorizado").isEqualTo(201);
+        // ---- nenhuma autorizacao nova nasce (o banco recusa ate a massa do superusuario)
+        UUID w2 = f.worker("W-" + UUID.randomUUID().toString().substring(0, 6));
+        UUID wwa = f.authorizeWorker(w2);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> f.localRun(w2, wwa)).rootCause().hasMessageContaining("ORGANIZATION_HELD");
+
+        // ---- levantado pelo suporte, o mesmo codigo pareia
+        DB.asSuperuser("SET ROLE migrador_nekkora", "UPDATE organization_nekkora_holds SET lifted_at = clock_timestamp(), lifted_by = 'suporte (teste 075)', "
+                + "lift_reason = 'resolvido no teste da 075 do canal' WHERE organization_id = '" + f.org + "' AND lifted_at IS NULL", "RESET ROLE");
+        assertThat(client().redeem(code, Tokens.newToken()).status()).isEqualTo(200);
+    }
 }

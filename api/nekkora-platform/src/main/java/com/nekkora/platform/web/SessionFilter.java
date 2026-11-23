@@ -17,10 +17,12 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import com.nekkora.core.db.OrgTransactions;
 import com.nekkora.core.db.OrgTransactions.Mode;
+import com.nekkora.core.license.OrganizationHold;
 import com.nekkora.core.token.Tokens;
 import com.nekkora.core.web.ApiError;
 import com.nekkora.core.web.ApiException;
 import com.nekkora.core.web.ErrorResponses;
+import com.nekkora.core.web.RequestContext;
 import com.nekkora.core.web.RequestContextFilter;
 import com.nekkora.platform.limits.Limits;
 import com.nekkora.platform.session.SessionRepository;
@@ -34,6 +36,8 @@ import com.nekkora.platform.session.ValidSession;
  * logout e revoke-all: sem R7.
  */
 public final class SessionFilter extends OncePerRequestFilter {
+
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(SessionFilter.class);
 
     public static final String ATTRIBUTE = "nekkora.session";
     public static final String ATTRIBUTE_TOKEN = "nekkora.session.token";
@@ -55,9 +59,21 @@ public final class SessionFilter extends OncePerRequestFilter {
         Optional<UUID> org = Routes.organization(req);
         String token = Cookies.read(req, Cookies.SESSION);
         Optional<ValidSession> session = Optional.empty();
+        boolean[] held = {false};
         if (org.isPresent() && Tokens.isValidFormat(token)) {
             String hash = Tokens.sha256Hex(token);
-            session = tx.inOrganization(org.get(), Mode.READ_WRITE, j -> sessions.validate(j, org.get(), hash, true));
+            boolean conferirBloqueio = !Routes.allowedWhileHeld(req);
+            session = tx.inOrganization(org.get(), Mode.READ_WRITE, j -> {
+                Optional<ValidSession> s = sessions.validate(j, org.get(), hash, true);
+                // 075: organizacao bloqueada pela Nekkora - a sessao continua, somente leitura; escrita nova e recusada aqui
+                held[0] = s.isPresent() && conferirBloqueio && OrganizationHold.held(j, org.get());
+                return s;
+            });
+        }
+        if (held[0]) {
+            LOG.info("evento=acesso.negado regra=BLOQUEIO_NEKKORA motivo=organization_held correlacao={}", RequestContext.correlation());
+            ErrorResponses.writeError(res, ApiError.ORGANIZATION_HELD, null);
+            return;
         }
         // logout e revoke-all reduzem acesso e ficam FORA da R7 (contrato §5.3: "sem limitador"): nem 429 com a cota
         // esgotada, nem 503 com o Redis fora. Continuam valendo autenticacao (revoke-all), Origin e CSRF (CsrfFilter)

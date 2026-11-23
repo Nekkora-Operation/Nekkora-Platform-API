@@ -54,6 +54,11 @@ public class GenericErrorHandler {
 
     @ExceptionHandler(Throwable.class)
     public ResponseEntity<String> internal(Throwable e) {
+        // 075: um caminho que nao conferiu o bloqueio antes e recusado pelo gatilho do banco; a resposta e a recusa conhecida
+        if (DbErrors.organizationHeld(e)) {
+            LOG.info("evento=acesso.negado regra=BLOQUEIO_NEKKORA origem=banco correlacao={}", RequestContext.correlation());
+            return response(ApiError.ORGANIZATION_HELD, null);
+        }
         LOG.error("evento=api.erro_interno classe={} sqlstate={} correlacao={}", e.getClass().getName(), DbErrors.sqlState(e),
                 RequestContext.correlation());
         return response(ApiError.INTERNAL_ERROR, null);

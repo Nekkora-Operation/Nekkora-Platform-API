@@ -193,6 +193,11 @@ public enum ApiError {
     CLIENT_SCOPE_UNAVAILABLE(HttpStatus.CONFLICT, "conflict", "client_scope_unavailable"),
     /** 070: ampliar permissoes de uma concessao exige outro pedido, aprovado por outra pessoa. */
     CLIENT_GRANT_WIDENING_REQUIRES_REQUEST(HttpStatus.CONFLICT, "conflict", "client_grant_widening_requires_request"),
+    /**
+     * 075 (LICENCIAMENTO-002): a organizacao esta BLOQUEADA PELA NEKKORA. Trabalho novo e operacoes novas sao recusados; o que ja
+     * comecou termina e entrega; a leitura continua. So o suporte da Nekkora levanta o bloqueio. Nada foi feito.
+     */
+    ORGANIZATION_HELD(HttpStatus.FORBIDDEN, "forbidden", "organization_held"),
     /** 064 (conferencia nos fluxos): a organizacao exige licenca e a automacao nao tem licenca vinculada; nada foi iniciado. */
     LICENSE_REQUIRED(HttpStatus.CONFLICT, "conflict", "license_required"),
     /** 064: a licenca vinculada a automacao esta fora de periodo (vencida, a espera de renovacao); nada foi iniciado. */

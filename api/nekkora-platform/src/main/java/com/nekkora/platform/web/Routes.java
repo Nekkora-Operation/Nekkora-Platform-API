@@ -110,6 +110,18 @@ public final class Routes {
         };
     }
 
+    /**
+     * 075 (LICENCIAMENTO-002): escritas sob /api/v1/o/{org} que continuam aceitas com a organizacao BLOQUEADA PELA NEKKORA.
+     * So o que reduz acesso ou encerra o que ja comecou: sair, revogar sessoes, autenticar e confirmar identidade (a sessao
+     * fica somente leitura), cancelar, revogar, suspender, retirar, reduzir, recusar e reconciliar. Todo o resto (criar,
+     * alterar, publicar, ativar, autorizar, parear, solicitar, convidar, compartilhar) e recusado com 403 organization_held.
+     */
+    private static final Pattern WHILE_HELD = Pattern.compile("^/(auth/.*|.+/(cancel|revoke|suspend|retire|reduce|refuse|reconciliation))$");
+
+    public static boolean allowedWhileHeld(HttpServletRequest req) {
+        return !isWrite(req) || reducesAccess(req) || WHILE_HELD.matcher(routeSuffix(req)).matches();
+    }
+
     /** Escritas que reduzem acesso: sem limitador (R7), com cota esgotada ou Redis fora (contrato §2.1 item 6 e §5.3). */
     public static boolean reducesAccess(HttpServletRequest req) {
         String r = routeSuffix(req);

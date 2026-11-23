@@ -167,6 +167,9 @@ public final class GatewayService {
             if (orgStatus == null || orgStatus != 1) {
                 throw ApiException.unauthenticated("organizacao");
             }
+            // 075 (LICENCIAMENTO-002): organizacao bloqueada pela Nekkora - nenhum pareamento novo, nem com codigo emitido antes;
+            // nada e consumido (o gatilho da 075 reconfere no consumo)
+            com.nekkora.core.license.OrganizationHold.requireNotHeld(j, code.organization());
             // T06: o proposito so e revelado a quem tem um codigo valido (hash, prazo e organizacao ja conferidos acima).
             // Recusa por proposito trocado: nada consumido, nada alterado (o vinculo atual da maquina continua).
             if (e.purpose() == 1) {
