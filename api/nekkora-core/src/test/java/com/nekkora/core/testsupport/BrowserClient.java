@@ -85,6 +85,7 @@ public final class BrowserClient {
     }
 
     public Response send(HttpRequest.Builder b) {
+        HttpRequest.Builder semCabecalhos = respeitarR7 ? b.copy() : null; // a repeticao nao pode duplicar Cookie e CSRF
         b.timeout(Duration.ofSeconds(30));
         if (!cookies.isEmpty()) {
             b.header("Cookie", String.join("; ", cookies.entrySet().stream().map(e -> e.getKey() + "=" + e.getValue()).toList()));
@@ -116,7 +117,7 @@ public final class BrowserClient {
                 boolean antes = respeitarR7;
                 respeitarR7 = false;
                 try {
-                    return send(b);
+                    return send(semCabecalhos);
                 } finally {
                     respeitarR7 = antes;
                 }
