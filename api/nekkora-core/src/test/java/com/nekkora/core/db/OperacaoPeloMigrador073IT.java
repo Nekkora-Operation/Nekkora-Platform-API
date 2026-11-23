@@ -181,7 +181,7 @@ class OperacaoPeloMigrador073IT {
                 + "withdrawal_ticket = 'LAB-073-4', withdrawal_reason = 'retirada da designacao no teste'");
         assertThatThrownBy(() -> migrador(INTERNA, cadastrar(INTERNA, operadora))).as("sem designacao vigente, sem cadastro")
                 .hasMessageContaining("organizacao interna designada");
-        assertThat(one("SELECT count(*) FROM nekkora_internal_organization_designations")).isEqualTo("1");
+        assertThat(one("SELECT count(*) FROM nekkora_internal_organization_designations WHERE organization_id = '" + INTERNA + "'")).isEqualTo("1");
     }
 
     @Test

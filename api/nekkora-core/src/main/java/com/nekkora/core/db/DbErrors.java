@@ -59,6 +59,24 @@ public final class DbErrors {
     }
 
     /**
+     * 075: recusa do banco porque a organizacao esta bloqueada pela Nekkora (gatilhos da 075: SQLSTATE 23514, mensagem fixa
+     * "organizacao bloqueada: ORGANIZATION_HELD" ou "tentativa recusada: ORGANIZATION_HELD"). A mensagem so e comparada aqui (C10).
+     */
+    public static boolean organizationHeld(Throwable t) {
+        for (Throwable c = t; c != null; c = c.getCause()) {
+            if (c instanceof PSQLException p && p.getSQLState() != null) {
+                ServerErrorMessage m = p.getServerErrorMessage();
+                String msg = m == null ? null : m.getMessage();
+                return "23514".equals(p.getSQLState()) && m != null && m.getConstraint() == null && msg != null && msg.endsWith(": ORGANIZATION_HELD");
+            }
+            if (c.getCause() == c) {
+                break;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Recusa de regra levantada por trigger ou funcao ({@code RAISE ... USING ERRCODE = '23514'}): SQLSTATE 23514 SEM nome
      * de restricao. Uma CHECK violada tambem e 23514, mas o servidor informa a restricao - isso nao e recusa de regra, e
      * falha a propagar (ex.: CHECK de ordem temporal com o relogio do banco recuado), nunca resposta de recusa.

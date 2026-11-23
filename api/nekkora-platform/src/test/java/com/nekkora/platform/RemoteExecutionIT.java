@@ -1961,4 +1961,112 @@ class RemoteExecutionIT extends PlatformTestBase {
         // o papel do servico nao altera os limites
         assertThat(as("nekkora_platform", org, "UPDATE technical_capacity_limits SET limit_value = 9999 WHERE resource_code = 1")).isEqualTo("42501");
     }
+
+    // ------------------------------------------------------------------ NEKKORA-LICENCIAMENTO-002 (075): bloqueio da Nekkora
+
+    /** Bloqueio aberto pelo procedimento (migrador, 073); so o migrador escreve. */
+    private static void hold(UUID org) {
+        DB.asSuperuser("SET ROLE migrador_nekkora", "INSERT INTO organization_nekkora_holds (organization_id, reason, registered_by) VALUES ('" + org
+                + "', 'bloqueio do teste da 075 por irregularidade', 'suporte (teste 075)')", "RESET ROLE");
+    }
+
+    private static void lift(UUID org) {
+        DB.asSuperuser("SET ROLE migrador_nekkora", "UPDATE organization_nekkora_holds SET lifted_at = clock_timestamp(), lifted_by = 'suporte (teste 075)', "
+                + "lift_reason = 'irregularidade resolvida no teste da 075' WHERE organization_id = '" + org + "' AND lifted_at IS NULL", "RESET ROLE");
+    }
+
+    private static void held(BrowserClient.Response r) {
+        assertThat(r.status()).as(r.body()).isEqualTo(403);
+        assertThat(r.body()).isEqualTo("{\"error\":\"forbidden\",\"reason\":\"organization_held\"}");
+    }
+
+    private static String counts(UUID org) throws Exception {
+        return value("SELECT (SELECT count(*) FROM remote_executions WHERE organization_id = '" + org + "') || '|' || (SELECT count(*) FROM "
+                + "local_run_authorizations WHERE organization_id = '" + org + "') || '|' || (SELECT count(*) FROM agent_enrollments WHERE organization_id = '"
+                + org + "') || '|' || (SELECT count(*) FROM workspaces WHERE organization_id = '" + org + "')");
+    }
+
+    /**
+     * 075 (decisao de 22/11, item 4): com a organizacao BLOQUEADA PELA NEKKORA, trabalho e operacoes NOVOS sao recusados (403
+     * organization_held; o banco reconfere), a sessao continua somente leitura, o que ja comecou termina e entrega, cancelar
+     * continua, o administrador nao desfaz o bloqueio e outra organizacao nao e afetada. Levantado pelo suporte, tudo volta.
+     */
+    @Test
+    void bloqueioDaNekkoraRecusaTrabalhoNovoPreservaOQueJaComecouESoOSuporteLevanta() throws Exception {
+        Setup s = setup();
+        UUID org = s.org().id();
+        Machine m = machine(s, "Bloqueio A", true);
+        Machine m2 = machine(s, "Bloqueio B", true);
+        declare(s, null);
+        heartbeat(s, m, true);
+        heartbeat(s, m2, true);
+        authorize(s, m);
+        authorize(s, m2);
+        BrowserClient.Response running = request(s, m);
+        assertThat(running.status()).as(running.body()).isEqualTo(201);
+        String runningExecution = running.field("remoteExecutionId");
+        String runningAttempt = JSON.readTree(running.body()).get("attempts").get(0).get("attemptId").asString();
+        machineMoves(s, runningAttempt, 2, 3, 4, 5, 6);
+        BrowserClient.Response queued = request(s, m2);
+        assertThat(queued.status()).as(queued.body()).isEqualTo(201);
+        String queuedExecution = queued.field("remoteExecutionId");
+        String queuedAttempt = JSON.readTree(queued.body()).get("attempts").get(0).get("attemptId").asString();
+        // um codigo de pareamento emitido ANTES do bloqueio
+        BrowserClient.Response code = s.admin().post(s.o() + "/agent-enrollments",
+                "{\"workerName\":\"Depois\",\"agentName\":\"Maquina Depois\",\"expiresInMinutes\":15,\"remoteExecution\":true}");
+        assertThat(code.status()).as(code.body()).isEqualTo(201);
+        assertThat(JSON.readTree(s.admin().get(s.o() + "/me").body()).get("organizationHeldByNekkora").asBoolean()).isFalse();
+
+        hold(org);
+
+        // ---- estado e orientacao: a sessao continua e le
+        BrowserClient.Response me = s.admin().get(s.o() + "/me");
+        assertThat(me.status()).as("a sessao continua, somente leitura").isEqualTo(200);
+        assertThat(JSON.readTree(me.body()).get("organizationHeldByNekkora").asBoolean()).isTrue();
+        assertThat(s.admin().get(s.requests()).status()).as("leitura continua").isEqualTo(200);
+        // ---- trabalho e operacoes novos: recusados pela API, nada gravado
+        String before = counts(org);
+        held(request(s, m2));
+        held(s.admin().post(s.o() + "/workspaces/" + s.workspace() + "/local-run-authorizations", "{\"workerId\":\"" + m.worker()
+                + "\",\"automationVersionId\":\"" + s.version() + "\",\"validUntil\":\"" + OffsetDateTime.now(ZoneOffset.UTC).plusDays(5).withNano(0) + "\"}"));
+        held(s.admin().post(s.o() + "/agent-enrollments", "{\"workerName\":\"Nova\",\"agentName\":\"Maquina Nova\",\"expiresInMinutes\":15,\"remoteExecution\":true}"));
+        held(s.admin().post(s.o() + "/remote-executions/" + runningExecution + "/attempts", "{\"agentId\":\"" + m2.agent() + "\"}"));
+        held(s.admin().post(s.o() + "/workspaces", "{\"name\":\"Ambiente novo\"}"));
+        held(put(s.admin(), s.o() + "/automations/" + s.automation() + "/runtime-requirements", "{\"source\":\"PACKAGE\",\"expectedRevision\":1}"));
+        assertThat(counts(org)).as("nada novo gravado").isEqualTo(before);
+        // ---- o banco reconfere (papeis reais): trabalho novo e pareamento com codigo de antes do bloqueio
+        assertThat(as("nekkora_platform", org, "INSERT INTO remote_executions (organization_id, workspace_id, automation_id, automation_version_id, "
+                + "package_fingerprint, package_fingerprint_rule, requirements_revision, effective_dependencies, request_key, requested_by_membership_id) VALUES ('"
+                + org + "', '" + s.workspace() + "', '" + s.automation() + "', '" + s.version() + "', '" + FINGERPRINT + "', '" + EXTERNAL + "', 1, '[]'::jsonb, '"
+                + UUID.randomUUID() + "', '" + s.org().adminMembership() + "')")).as("gatilho da 075 na solicitacao").isEqualTo("23514");
+        assertThat(as("nekkora_ingestion", org, "UPDATE agent_enrollments SET consumed_at = clock_timestamp() WHERE enrollment_id = '"
+                + code.field("enrollmentId") + "'")).as("gatilho da 075 no resgate").isEqualTo("23514");
+        // ---- a tentativa que ainda nao comecou nao e lancada
+        assertThat(valueIn("nekkora_ingestion", org, "SELECT public.remote_attempt_blocker('" + org + "', '" + queuedExecution + "', '" + m2.agent() + "', '"
+                + m2.worker() + "', authorization_id) FROM remote_attempts WHERE attempt_id = '" + queuedAttempt + "'")).isEqualTo("ORGANIZATION_HELD");
+        // ---- o que ja comecou termina e entrega
+        result(s, runningAttempt, 1, "retorno.txt", "conteudo", "c0".repeat(32));
+        machineMoves(s, runningAttempt, 7);
+        JsonNode done = JSON.readTree(s.admin().get(s.o() + "/remote-executions/" + runningExecution).body());
+        assertThat(done.get("attempts").get(0).get("state").asString()).as("a execucao iniciada antes do bloqueio conclui").isEqualTo("SUCCEEDED");
+        // ---- cancelar o que ficou na fila continua (reduz, nao lanca)
+        BrowserClient.Response cancel = s.admin().post(s.o() + "/remote-executions/" + queuedExecution + "/cancel", null);
+        assertThat(cancel.status()).as(cancel.body()).isEqualTo(200);
+        // ---- o administrador (papel da aplicacao) nao desfaz nem le o motivo; isolamento entre organizacoes
+        assertThat(as("nekkora_platform", org, "UPDATE organization_nekkora_holds SET lifted_at = now(), lifted_by = 'admin', lift_reason = 'desfazer pelo admin'"))
+                .isEqualTo("42501");
+        assertThat(as("nekkora_platform", org, "SELECT reason FROM organization_nekkora_holds")).isEqualTo("42501");
+        UUID other = newOrganization().id();
+        assertThat(valueIn("nekkora_platform", other, "SELECT public.organization_held('" + org + "')")).as("outra organizacao nao enxerga").isEqualTo("f");
+        assertThat(valueIn("nekkora_platform", other, "SELECT count(*) FROM organization_nekkora_holds")).isEqualTo("0");
+        assertThat(value("SELECT status FROM organizations WHERE organization_id = '" + org + "'")).as("separado da desativacao: a situacao nao muda").isEqualTo("1");
+
+        // ---- o suporte levanta: tudo volta
+        lift(org);
+        assertThat(JSON.readTree(s.admin().get(s.o() + "/me").body()).get("organizationHeldByNekkora").asBoolean()).isFalse();
+        BrowserClient.Response again = request(s, m2);
+        assertThat(again.status()).as(again.body()).isEqualTo(201);
+        assertThat(value("SELECT count(*) || '|' || count(*) FILTER (WHERE lifted_at IS NOT NULL AND lift_reason IS NOT NULL) FROM organization_nekkora_holds "
+                + "WHERE organization_id = '" + org + "'")).as("historico: o bloqueio fica, levantado com quem e motivo").isEqualTo("1|1");
+    }
 }

@@ -304,6 +304,7 @@ public final class DesktopNavigationService {
             throw ApiException.invalid("automacao");
         }
         return inOrganization(accessToken, a, org, Mode.READ_WRITE, (j, m) -> {
+            com.nekkora.core.license.OrganizationHold.requireNotHeld(j, org);   // 075: renomear e operacao nova
             AutomationLifecycleService.Automation renamed = lifecycle.renameAutomation(j, org, m.membershipId(), m.userId(), automation, name);
             Map<String, Object> r = new LinkedHashMap<>();
             r.put("automationId", renamed.automationId().toString());
