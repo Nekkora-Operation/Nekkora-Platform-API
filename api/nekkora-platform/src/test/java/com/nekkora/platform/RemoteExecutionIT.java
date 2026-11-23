@@ -91,6 +91,8 @@ class RemoteExecutionIT extends PlatformTestBase {
                                 + "'nekkora-rpa==1.0.0', 'single')",
                 "ALTER TABLE automation_artifacts ENABLE TRIGGER USER");
         BrowserClient b = browser();
+        // R7 (60 por sessao, 2/s) continua valendo: as verificacoes longas fazem mais de 60 pedidos com a mesma sessao
+        b.respeitarR7 = true;
         firstLogin(b, o.id(), new TestUser(o.adminId(), o.adminEmail(), PASSWORD.toCharArray()));
         Setup s = new Setup(o, b, ws, automation, version);
         stepUp(s);
@@ -964,6 +966,33 @@ class RemoteExecutionIT extends PlatformTestBase {
     private com.nekkora.platform.admin.RemoteRetention retention;
 
     @org.springframework.beans.factory.annotation.Autowired
+    private com.nekkora.platform.admin.RemoteExecutionService remoteService;
+
+    /** LICENCIAMENTO-002: a disponibilidade lida, com o fim da entrega, o prazo e a data limite coerentes entre si. */
+    private static JsonNode availability(JsonNode read, String state, Integer days, String deliveryEnd) {
+        JsonNode a = read.get("availability");
+        assertThat(a.get("state").asString()).as(read.toString()).isEqualTo(state);
+        if (days != null) {
+            assertThat(a.get("days").asInt()).isEqualTo(days);
+        }
+        if (deliveryEnd == null) {
+            assertThat(a.get("deliveryEnd").isNull()).isTrue();
+            assertThat(a.get("startsAt").isNull()).as("a contagem ainda nao comecou").isTrue();
+            assertThat(a.get("availableUntil").isNull()).isTrue();
+        } else {
+            assertThat(a.get("deliveryEnd").asString()).isEqualTo(deliveryEnd);
+            java.time.OffsetDateTime starts = java.time.OffsetDateTime.parse(a.get("startsAt").asString());
+            java.time.OffsetDateTime until = java.time.OffsetDateTime.parse(a.get("availableUntil").asString());
+            assertThat(java.time.Duration.between(starts, until)).isEqualTo(java.time.Duration.ofDays(a.get("days").asInt()));
+        }
+        return a;
+    }
+
+    private static java.time.Duration ago(JsonNode a) {
+        return java.time.Duration.between(java.time.OffsetDateTime.parse(a.get("startsAt").asString()), java.time.OffsetDateTime.now());
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
     private com.nekkora.core.db.OrgTransactions orgTransactions;
 
     private static final String RESULTS_DIR = System.getProperty("java.io.tmpdir") + "/nekkora-platform-it-resultados";
@@ -1036,7 +1065,8 @@ class RemoteExecutionIT extends PlatformTestBase {
         Machine f = machine(s, "FalhaNaRemocao", true);
         Machine g = machine(s, "SemProgresso", true);
         Machine h = machine(s, "Incerta", true);
-        for (Machine m : new Machine[] {a, b, c, d, e, f, g, h}) {
+        Machine i = machine(s, "EmExecucao", true);
+        for (Machine m : new Machine[] {a, b, c, d, e, f, g, h, i}) {
             heartbeat(s, m, true);
             authorize(s, m);
         }
@@ -1099,7 +1129,39 @@ class RemoteExecutionIT extends PlatformTestBase {
         // a presenca da maquina NAO renova o prazo
         heartbeat(s, g, true);
         heartbeat(s, h, true);
+        // I: ainda em execucao - a entrega nao terminou
+        String running = runningWithLines(s, i, 1);
         String before = value("SELECT count(*) FROM remote_attempt_log_lines WHERE organization_id = '" + s.org().id() + "'");
+
+        // --- LICENCIAMENTO-002: a leitura diz ate quando o conteudo fica disponivel
+        // retencao desligada no ambiente: nada e removido automaticamente, e a leitura nao inventa data
+        remoteService.retentionPolicy(false, 30, 30);
+        availability(read(s, inTime, "logs"), "NO_RETENTION", 30, null);
+        availability(read(s, keeps, "results"), "NO_RETENTION", 30, null);
+        remoteService.retentionPolicy(true, 30, 30);
+        try {
+            // E: entrega concluida ha 29 dias - o prazo corre desde o fechamento e vence em cerca de 1 dia
+            JsonNode inTimeAvail = availability(read(s, inTime, "logs"), "SCHEDULED", 30, "CLOSED");
+            assertThat(ago(inTimeAvail)).isBetween(java.time.Duration.ofDays(29).minusMinutes(5), java.time.Duration.ofDays(29).plusMinutes(5));
+            assertThat(read(s, inTime, "logs").get("expiration").isNull()).isTrue();
+            // D: resultados entregues agora - disponiveis por 30 dias a partir do fechamento do envio
+            JsonNode keepsAvail = availability(read(s, keeps, "results"), "SCHEDULED", 30, "CLOSED");
+            assertThat(ago(keepsAvail)).isLessThan(java.time.Duration.ofMinutes(5));
+            // B: terminou agora e a maquina nao fechou o envio - entrega incompleta; se nada mais chegar, vence no teto
+            JsonNode openAvail = availability(read(s, open, "logs"), "INCOMPLETE_DELIVERY", 30, "NO_PROGRESS");
+            assertThat(ago(openAvail)).isLessThan(java.time.Duration.ofMinutes(5));
+            // H: incerta - nao vence enquanto for incerta
+            availability(read(s, uncertain, "logs"), "UNCERTAIN", 30, null);
+            // I: em execucao - o prazo comeca quando a entrega terminar
+            availability(read(s, running, "logs"), "WAITING_DELIVERY", 30, null);
+            availability(read(s, running, "results"), "WAITING_DELIVERY", 30, null);
+            // o teto sem progresso pode ser diferente do prazo
+            remoteService.retentionPolicy(true, 30, 45);
+            availability(read(s, open, "logs"), "INCOMPLETE_DELIVERY", 45, "NO_PROGRESS");
+            availability(read(s, inTime, "logs"), "SCHEDULED", 30, "CLOSED");
+        } finally {
+            remoteService.retentionPolicy(true, 30, 30);
+        }
 
         // antes do ciclo o banco nao deixa a Platform apagar nada: sem vencimento registrado nao ha remocao; e nao aceita vencimento
         // de entrega aberta nem de prazo que nao venceu
@@ -1154,6 +1216,9 @@ class RemoteExecutionIT extends PlatformTestBase {
         assertThat(logs.get("closure").get("lines").asInt()).as("o fechamento fica").isEqualTo(20);
         JsonNode x = logs.get("expiration");
         assertThat(x.get("deliveryEnd").asString()).isEqualTo("CLOSED");
+        // LICENCIAMENTO-002: vencido - a leitura diz desde quando contava e ate quando ficou disponivel
+        JsonNode expiredAvail = availability(logs, "EXPIRED", 30, "CLOSED");
+        assertThat(expiredAvail.get("startsAt").asString()).isEqualTo(x.get("deliveryEndedAt").asString());
         assertThat(x.get("retentionDays").asInt()).isEqualTo(30);
         assertThat(x.get("items").asInt()).isEqualTo(20);
         assertThat(x.get("confirmedAt").isNull()).isFalse();
@@ -1164,6 +1229,7 @@ class RemoteExecutionIT extends PlatformTestBase {
         assertThat(files.get("items").get(1).get("fileName").asString()).as("nome, tamanho e SHA-256 ficam").isEqualTo("so-desta.txt");
         assertThat(files.get("items").get(1).get("sha256").asString()).isEqualTo(only);
         assertThat(files.get("expiration").get("items").asInt()).isEqualTo(2);
+        availability(files, "EXPIRED", 30, "CLOSED");
         assertThat(files.get("expiration").get("confirmedAt").isNull()).isFalse();
         assertThat(stored(s, only)).as("os bytes so desta tentativa sairam do armazenamento").isFalse();
         assertThat(stored(s, shared)).as("os bytes que outra tentativa ainda usa ficam").isTrue();
@@ -1210,9 +1276,12 @@ class RemoteExecutionIT extends PlatformTestBase {
         JsonNode done = read(s, retried, "results");
         assertThat(done.get("expiration").get("confirmedAt").isNull()).isFalse();
         assertThat(done.get("expiration").get("retentionDays").asInt()).isEqualTo(44);
+        availability(done, "EXPIRED", 44, "CLOSED");
         assertThat(done.get("items").get(0).get("available").asBoolean()).isFalse();
         assertThat(stored(s, later)).isFalse();
 
+        // G: venceu sem progresso - entrega incompleta, contada do ultimo progresso
+        availability(incomplete, "EXPIRED", 30, "NO_PROGRESS");
         // repetir nao muda nada
         com.nekkora.platform.admin.RemoteRetention.Cycle again = retention.cycle();
         assertThat(again.failed()).isZero();

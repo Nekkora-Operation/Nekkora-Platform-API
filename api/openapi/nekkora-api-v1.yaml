@@ -5959,7 +5959,7 @@ components:
     RemoteAttemptLogs:
       type: object
       additionalProperties: false
-      required: [attemptId, items, total, automationLines, systemLines, nextAfter, closure, retentionLoss, expiration]
+      required: [attemptId, items, total, automationLines, systemLines, nextAfter, closure, retentionLoss, expiration, availability]
       properties:
         attemptId: { type: string, format: uuid }
         items:
@@ -6013,10 +6013,28 @@ components:
             deliveryEndedAt: { type: string, format: date-time }
             deliveryEnd: { type: string, enum: [CLOSED, LOSS_NOTICE, LINK_ENDED, NO_PROGRESS], description: 'NO_PROGRESS (059): entrega INCOMPLETA - venceu o teto sem progresso de entrega; a maquina nao fechou o envio e nenhum recebimento e indicado' }
             items: { type: integer, minimum: 0, description: 'Linhas que tinham texto quando venceu' }
+        availability:
+          type: object
+          additionalProperties: false
+          required: [state, days, startsAt, deliveryEnd, availableUntil]
+          description: >-
+            LICENCIAMENTO-002: ate quando o texto dos registros desta tentativa fica(m) disponivel(is) na Platform, pela retencao do servidor. O
+            prazo conta do fim da entrega calculado pelo banco (deliveryEnd/startsAt). EXPIRED = venceu (ver expiration);
+            SCHEDULED = a entrega terminou e o prazo corre ate availableUntil (a remocao acontece no primeiro ciclo depois dessa data);
+            INCOMPLETE_DELIVERY = a tentativa terminou sem a maquina fechar o envio: se nada mais chegar, vence em availableUntil
+            (teto sem progresso; um novo item adia a data); WAITING_DELIVERY = a tentativa nao terminou, o prazo comeca quando a
+            entrega terminar; UNCERTAIN = resultado nao confirmado sem reconciliacao, nao vence enquanto for incerta;
+            NO_RETENTION = a retencao nao esta ligada neste ambiente, nada e removido automaticamente.
+          properties:
+            state: { type: string, enum: [EXPIRED, SCHEDULED, INCOMPLETE_DELIVERY, WAITING_DELIVERY, UNCERTAIN, NO_RETENTION] }
+            days: { type: integer, minimum: 1, description: 'O prazo, em dias, que vale para este caso (o aplicado, quando EXPIRED)' }
+            startsAt: { type: [string, 'null'], format: date-time, description: 'Inicio da contagem: o fim da entrega. null = ainda nao comecou' }
+            deliveryEnd: { type: [string, 'null'], enum: [CLOSED, LOSS_NOTICE, LINK_ENDED, NO_PROGRESS, null] }
+            availableUntil: { type: [string, 'null'], format: date-time, description: 'startsAt + days. null = sem data (ver state)' }
     RemoteAttemptResults:
       type: object
       additionalProperties: false
-      required: [attemptId, items, closure, retentionLoss, expiration]
+      required: [attemptId, items, closure, retentionLoss, expiration, availability]
       properties:
         attemptId: { type: string, format: uuid }
         items:
@@ -6065,6 +6083,24 @@ components:
             deliveryEndedAt: { type: string, format: date-time }
             deliveryEnd: { type: string, enum: [CLOSED, LOSS_NOTICE, LINK_ENDED, NO_PROGRESS], description: 'NO_PROGRESS (059): entrega INCOMPLETA - venceu o teto sem progresso de entrega; a maquina nao fechou o envio e nenhum recebimento e indicado' }
             items: { type: integer, minimum: 0, description: 'Arquivos que estavam guardados quando venceu' }
+        availability:
+          type: object
+          additionalProperties: false
+          required: [state, days, startsAt, deliveryEnd, availableUntil]
+          description: >-
+            LICENCIAMENTO-002: ate quando os arquivos desta tentativa fica(m) disponivel(is) na Platform, pela retencao do servidor. O
+            prazo conta do fim da entrega calculado pelo banco (deliveryEnd/startsAt). EXPIRED = venceu (ver expiration);
+            SCHEDULED = a entrega terminou e o prazo corre ate availableUntil (a remocao acontece no primeiro ciclo depois dessa data);
+            INCOMPLETE_DELIVERY = a tentativa terminou sem a maquina fechar o envio: se nada mais chegar, vence em availableUntil
+            (teto sem progresso; um novo item adia a data); WAITING_DELIVERY = a tentativa nao terminou, o prazo comeca quando a
+            entrega terminar; UNCERTAIN = resultado nao confirmado sem reconciliacao, nao vence enquanto for incerta;
+            NO_RETENTION = a retencao nao esta ligada neste ambiente, nada e removido automaticamente.
+          properties:
+            state: { type: string, enum: [EXPIRED, SCHEDULED, INCOMPLETE_DELIVERY, WAITING_DELIVERY, UNCERTAIN, NO_RETENTION] }
+            days: { type: integer, minimum: 1, description: 'O prazo, em dias, que vale para este caso (o aplicado, quando EXPIRED)' }
+            startsAt: { type: [string, 'null'], format: date-time, description: 'Inicio da contagem: o fim da entrega. null = ainda nao comecou' }
+            deliveryEnd: { type: [string, 'null'], enum: [CLOSED, LOSS_NOTICE, LINK_ENDED, NO_PROGRESS, null] }
+            availableUntil: { type: [string, 'null'], format: date-time, description: 'startsAt + days. null = sem data (ver state)' }
     RemoteExecution:
       type: object
       required: [remoteExecutionId, workspaceId, automationId, automationVersionId, versionNumber, state, requirementsRevision, dependencies, requestedAt, cancelRequestedAt, attempts]
