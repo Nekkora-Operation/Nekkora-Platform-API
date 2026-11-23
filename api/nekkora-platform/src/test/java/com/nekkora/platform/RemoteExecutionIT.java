@@ -91,6 +91,8 @@ class RemoteExecutionIT extends PlatformTestBase {
                                 + "'nekkora-rpa==1.0.0', 'single')",
                 "ALTER TABLE automation_artifacts ENABLE TRIGGER USER");
         BrowserClient b = browser();
+        // R7 (60 por sessao, 2/s) continua valendo: as verificacoes longas fazem mais de 60 pedidos com a mesma sessao
+        b.respeitarR7 = true;
         firstLogin(b, o.id(), new TestUser(o.adminId(), o.adminEmail(), PASSWORD.toCharArray()));
         Setup s = new Setup(o, b, ws, automation, version);
         stepUp(s);
@@ -1239,9 +1241,6 @@ class RemoteExecutionIT extends PlatformTestBase {
                 .isEqualTo(String.valueOf(Integer.parseInt(before) + 2));
         assertThat(value("SELECT count(*) FROM remote_attempt_result_closures WHERE attempt_id = '" + expired + "'")).isEqualTo("1");
 
-        // R7 (60 pedidos por sessao, repoe 2/s) continua valendo no teste: esta verificacao ja fez mais de 60 pedidos com a mesma
-        // sessao. Num ambiente rapido (CI) o balde esvazia; espera-se a reposicao completa em vez de afrouxar o limite.
-        Thread.sleep(31_000);
         // D: mesmos bytes, no prazo - intacta e baixavel
         JsonNode keptFiles = read(s, keeps, "results");
         assertThat(keptFiles.get("expiration").isNull()).isTrue();

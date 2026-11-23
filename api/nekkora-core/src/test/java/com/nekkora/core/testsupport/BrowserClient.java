@@ -52,6 +52,12 @@ public final class BrowserClient {
     public String origin = "https://portal.nekkora.test";
     public String csrf;
     public String forwardedIp;
+    /**
+     * Opcional, desligado por padrao: com ele, um 429 do R7 (corpo exatamente {"error":"rate_limited"}, sem motivo proprio) e
+     * tratado como um navegador educado trataria - espera o Retry-After e repete uma vez. O limite do produto nao muda; limites
+     * com motivo proprio (ex.: remote_dependency_check_too_soon) continuam chegando ao teste.
+     */
+    public boolean respeitarR7;
 
     public BrowserClient(String base) {
         this(base, HTTP);
@@ -102,6 +108,17 @@ public final class BrowserClient {
                     cookies.remove(kv[0].trim());
                 } else {
                     cookies.put(kv[0].trim(), kv[1].trim());
+                }
+            }
+            if (respeitarR7 && r.statusCode() == 429 && "{\"error\":\"rate_limited\"}".equals(r.body())) {
+                long espera = r.headers().firstValueAsLong("Retry-After").orElse(1);
+                Thread.sleep(Math.min(60, espera) * 1000 + 250);
+                boolean antes = respeitarR7;
+                respeitarR7 = false;
+                try {
+                    return send(b);
+                } finally {
+                    respeitarR7 = antes;
                 }
             }
             return new Response(r.statusCode(), r.body(), r.headers());
