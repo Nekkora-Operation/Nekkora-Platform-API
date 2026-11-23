@@ -148,7 +148,7 @@ class OperacaoPeloMigrador073IT {
                 + "designation_ticket, designation_reason) VALUES ('" + INTERNA + "', 'titular', 'LAB', 'curto')")).isInstanceOf(SQLException.class);
         migrador(INTERNA, designar(INTERNA));
         assertThatThrownBy(() -> migrador(OUTRA, designar(OUTRA))).as("uma vigente por vez").hasMessageContaining("ux_nekkora_internal_organization_current");
-        assertThatThrownBy(() -> migrador(INTERNA, "UPDATE nekkora_internal_organization_designations SET organization_id = '" + OUTRA + "'"))
+        assertThatThrownBy(() -> migrador(INTERNA, "UPDATE nekkora_internal_organization_designations SET organization_id = '" + OUTRA + "' WHERE organization_id = '" + INTERNA + "' AND withdrawn_at IS NULL"))
                 .hasMessageContaining("so a retirada");
         assertThat(migrador(INTERNA, "WITH d AS (DELETE FROM nekkora_internal_organization_designations RETURNING 1) SELECT count(*) FROM d")).as("sem politica de DELETE: o migrador nao apaga nada").isEqualTo("0");
     }
@@ -165,7 +165,7 @@ class OperacaoPeloMigrador073IT {
         assertThatThrownBy(() -> migrador(INTERNA, "UPDATE license_operators SET revoked_at = now() WHERE operator_user_id = '" + operadora + "'"))
                 .hasMessageContaining("so a revogacao");
         assertThatThrownBy(() -> migrador(INTERNA, "UPDATE nekkora_internal_organization_designations SET withdrawn_at = now(), withdrawn_by = 'titular', "
-                + "withdrawal_ticket = 'LAB-073-9', withdrawal_reason = 'retirada com operador vigente'")).hasMessageContaining("operador vigente");
+                + "withdrawal_ticket = 'LAB-073-9', withdrawal_reason = 'retirada com operador vigente' WHERE organization_id = '" + INTERNA + "' AND withdrawn_at IS NULL")).hasMessageContaining("operador vigente");
         migrador(INTERNA, revogar(operadora));
         assertThat(one("SELECT public.license_op_is_operator('" + operadora + "')")).isEqualTo("f");
         assertThatThrownBy(() -> migrador(INTERNA, "UPDATE license_operators SET revoked_by = 'outra pessoa' WHERE operator_user_id = '" + operadora + "'"))
@@ -178,7 +178,7 @@ class OperacaoPeloMigrador073IT {
         assertThat(migrador(INTERNA, "WITH d AS (DELETE FROM license_operators RETURNING 1) SELECT count(*) FROM d")).as("sem politica de DELETE: o migrador nao apaga nada").isEqualTo("0");
         migrador(INTERNA, revogar(operadora));
         migrador(INTERNA, "UPDATE nekkora_internal_organization_designations SET withdrawn_at = now(), withdrawn_by = 'titular (teste 073)', "
-                + "withdrawal_ticket = 'LAB-073-4', withdrawal_reason = 'retirada da designacao no teste'");
+                + "withdrawal_ticket = 'LAB-073-4', withdrawal_reason = 'retirada da designacao no teste' WHERE organization_id = '" + INTERNA + "' AND withdrawn_at IS NULL");
         assertThatThrownBy(() -> migrador(INTERNA, cadastrar(INTERNA, operadora))).as("sem designacao vigente, sem cadastro")
                 .hasMessageContaining("organizacao interna designada");
         assertThat(one("SELECT count(*) FROM nekkora_internal_organization_designations WHERE organization_id = '" + INTERNA + "'")).isEqualTo("1");
