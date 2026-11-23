@@ -1239,6 +1239,9 @@ class RemoteExecutionIT extends PlatformTestBase {
                 .isEqualTo(String.valueOf(Integer.parseInt(before) + 2));
         assertThat(value("SELECT count(*) FROM remote_attempt_result_closures WHERE attempt_id = '" + expired + "'")).isEqualTo("1");
 
+        // R7 (60 pedidos por sessao, repoe 2/s) continua valendo no teste: esta verificacao ja fez mais de 60 pedidos com a mesma
+        // sessao. Num ambiente rapido (CI) o balde esvazia; espera-se a reposicao completa em vez de afrouxar o limite.
+        Thread.sleep(31_000);
         // D: mesmos bytes, no prazo - intacta e baixavel
         JsonNode keptFiles = read(s, keeps, "results");
         assertThat(keptFiles.get("expiration").isNull()).isTrue();
