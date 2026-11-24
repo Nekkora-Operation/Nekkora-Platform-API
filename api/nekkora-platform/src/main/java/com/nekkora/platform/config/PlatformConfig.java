@@ -361,11 +361,54 @@ public class PlatformConfig {
             @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.lost-minutes:120}") int lostMinutes,
             @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.dependency-check.interval-seconds:60}") int checkInterval,
             @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.dependency-check.answer-seconds:120}") int checkAnswer,
+            com.nekkora.platform.admin.ManagedEnvironmentService managedEnvironment,
             org.springframework.core.env.Environment env) throws java.io.IOException {
         // os resultados das execucoes remotas: a Platform so LE (quem grava e o canal da maquina); pasta propria
         return new com.nekkora.platform.admin.RemoteExecutionService(actions, access, remoteExecution, offerMinutes, lostMinutes,
                 com.nekkora.core.artifact.ResultStore.at(env.getProperty("NEKKORA_RESULTADOS_DIR", env.getProperty("nekkora.resultados.dir", ""))))
-                .dependencyCheckLimits(checkInterval, checkAnswer);
+                .dependencyCheckLimits(checkInterval, checkAnswer).managedEnvironments(managedEnvironment);
+    }
+
+    /**
+     * AMBIENTE-PYTHON-001: ambiente Python por execucao (NEKKORA_AMBIENTE_GERENCIADO; DESLIGADO por padrao). So vale com a execucao
+     * remota ligada; desligado, as rotas respondem 404 managed_environment_unavailable e a solicitacao MANAGED e recusada.
+     */
+    @Bean
+    com.nekkora.platform.admin.ManagedEnvironmentService managedEnvironmentService(
+            com.nekkora.platform.admin.AccessActions actions, com.nekkora.platform.access.WorkspaceAccess access,
+            @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.enabled:false}") boolean remoteExecution,
+            @org.springframework.beans.factory.annotation.Value("${nekkora.managed-environment.enabled:false}") boolean managed,
+            @org.springframework.beans.factory.annotation.Value("${nekkora.managed-environment.resolution-answer-seconds:600}") int answerSeconds) {
+        return new com.nekkora.platform.admin.ManagedEnvironmentService(actions, access, remoteExecution && managed, answerSeconds);
+    }
+
+    /** D7: o registro do preparo do ambiente vale 30 dias; o ciclo (de hora em hora) so existe com o recurso ligado. */
+    @Bean
+    @org.springframework.context.annotation.Conditional(ManagedEnvironmentOn.class)
+    java.util.concurrent.ScheduledExecutorService managedEnvironmentRetentionCycle(OrgTransactions tx) {
+        com.nekkora.platform.admin.ManagedEnvironmentRetention retention = new com.nekkora.platform.admin.ManagedEnvironmentRetention(tx);
+        java.util.concurrent.ScheduledExecutorService s = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "retencao-ambiente-gerenciado");
+            t.setDaemon(true);
+            return t;
+        });
+        s.scheduleWithFixedDelay(() -> {
+            try {
+                retention.cycle();
+            } catch (RuntimeException e) {
+                org.slf4j.LoggerFactory.getLogger(PlatformConfig.class).warn("evento=ambiente_gerenciado.retencao_falhou erro={}", e.getClass().getSimpleName());
+            }
+        }, 5, 60, java.util.concurrent.TimeUnit.MINUTES);
+        return s;
+    }
+
+    /** As duas chaves ligadas: a execucao remota e o ambiente por execucao. */
+    static final class ManagedEnvironmentOn implements org.springframework.context.annotation.Condition {
+        @Override
+        public boolean matches(org.springframework.context.annotation.ConditionContext c, org.springframework.core.type.AnnotatedTypeMetadata m) {
+            return "true".equals(c.getEnvironment().getProperty("nekkora.remote-execution.enabled"))
+                    && "true".equals(c.getEnvironment().getProperty("nekkora.managed-environment.enabled"));
+        }
     }
 
     /** Reconciliacao periodica das tentativas de execucao remota (055): as regras da 053, sem depender de leitura nem da maquina. */

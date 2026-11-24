@@ -80,6 +80,12 @@ nekkora:
   # VAZIA por padrao: as rotas do operador respondem 404 e ninguem concede licenca nem liga a exigencia
   licensing:
     operator-organization: ${NEKKORA_LICENCAS_ORGANIZACAO_OPERADORA:}
+  # AMBIENTE-PYTHON-001: ambiente Python por execucao (venv temporario com o lock aceito). DESLIGADO por padrao; so vale com a
+  # execucao remota ligada. Tem de ter o mesmo valor no agent-gateway. resolution-answer-seconds: prazo da maquina para resolver a
+  # lista completa (60 a 1800 s)
+  managed-environment:
+    enabled: ${NEKKORA_AMBIENTE_GERENCIADO:false}
+    resolution-answer-seconds: ${NEKKORA_AMBIENTE_GERENCIADO_RESOLUCAO_SEGUNDOS:600}
   remote-execution:
     enabled: ${NEKKORA_EXECUCAO_REMOTA:false}
     # T02: quanto tempo a tentativa espera a maquina receber antes de expirar (ponto de partida de laboratorio)

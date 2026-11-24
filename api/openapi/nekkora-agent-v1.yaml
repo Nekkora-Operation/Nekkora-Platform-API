@@ -178,6 +178,117 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /agent/api/v1/remote/environment-resolutions/{resolution}/answer:
+    post:
+      tags: [Maquina]
+      operationId: answerManagedEnvironmentResolution
+      summary: 'A maquina responde a resolucao da lista completa (AMBIENTE-PYTHON-001, 076)'
+      description: >
+        Uma vez, dentro do prazo. RESOLVED: o lock (cada dependencia pedida com a MESMA versao, sem nome repetido pela PEP 503,
+        so wheels, sha256 de 64 hex, arquivo .whl sem caminho); a Platform calcula o hash. INCOMPATIBLE e NOT_RESOLVED trazem a
+        falha (dependencia, fase, resumo); ENVIRONMENT_GONE, nao. Campos alem dos previstos recusam o pedido. Repetir a mesma
+        resposta devolve a gravada; outra, ou depois do prazo: 409 + managed_environment_resolution_closed. Chave desligada: 404
+        + managed_environment_unavailable.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: resolution, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [outcome]
+              properties:
+                outcome: { type: string, enum: [RESOLVED, INCOMPATIBLE, ENVIRONMENT_GONE, NOT_RESOLVED] }
+                pythonVersion: { type: string }
+                pipVersion: { type: string }
+                lock: { type: array, maxItems: 400, items: { $ref: '#/components/schemas/ManagedLockItem' }, description: 'So com RESOLVED' }
+                failure: { $ref: '#/components/schemas/ManagedEnvironmentFailure' }
+      responses:
+        '200': { description: 'Resposta gravada', content: { application/json: { schema: { type: object, required: [resolutionId, outcome], properties: { resolutionId: { type: string, format: uuid }, outcome: { type: string }, lockSha256: { type: string }, packages: { type: integer } } } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/attempts/{attempt}/stage:
+    post:
+      tags: [Maquina]
+      operationId: reportManagedEnvironmentStage
+      summary: 'A etapa do preparo do ambiente por execucao (AMBIENTE-PYTHON-001, 076)'
+      description: >
+        So em tentativa MANAGED com o estado PREPARING (fora disso: 409 + remote_attempt_transition). Repetir nao muda nada; renova
+        o prazo da comunicacao. O estado da tentativa nao muda. proceed false: parar (cancelamento pedido, ou tentativa terminada).
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token, epoch, stage]
+              properties:
+                token: { type: string }
+                epoch: { type: integer, minimum: 1 }
+                stage: { type: string, enum: [ENV_CREATING, DEPS_INSTALLING] }
+      responses:
+        '200': { description: 'Situacao da tentativa', content: { application/json: { schema: { $ref: '#/components/schemas/RemoteAttemptStatus' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /agent/api/v1/remote/attempts/{attempt}/environment-report:
+    put:
+      tags: [Maquina]
+      operationId: reportManagedEnvironment
+      summary: 'O relatorio do preparo do ambiente por execucao (AMBIENTE-PYTHON-001, 076)'
+      description: >
+        Uma vez por tentativa MANAGED, com a tentativa em PREPARING ou ja terminada (inclusive recusada). READY: o que foi instalado
+        de fato. FAILED: a dependencia e a fase (a automacao NAO iniciou; a maquina recusa a tentativa em seguida). INTERRUPTED: o
+        aplicativo reiniciou durante o preparo. O registro do preparo passa pela remocao de segredos (credencial em URL,
+        cabecalho de autorizacao, nomes tipicos de segredo, o token da atribuicao) e fica com o FIM do texto, ate 64 KiB; vale 30
+        dias (D7). Repetir o mesmo resultado devolve o gravado; outro: 409 + managed_environment_report_conflict.
+      parameters:
+        - { $ref: '#/components/parameters/Contract' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token, epoch, outcome, installed]
+              properties:
+                token: { type: string }
+                epoch: { type: integer, minimum: 1 }
+                outcome: { type: string, enum: [READY, FAILED, INTERRUPTED] }
+                pythonVersion: { type: string }
+                pipVersion: { type: string }
+                installed: { type: array, maxItems: 400, items: { type: object, additionalProperties: false, required: [name, version, sha256], properties: { name: { type: string }, version: { type: string }, sha256: { type: string, pattern: '^[0-9a-f]{64}$' } } }, description: 'So com READY (vazio nos outros)' }
+                failure: { $ref: '#/components/schemas/ManagedEnvironmentFailure' }
+                createMs: { type: integer, minimum: 0 }
+                installMs: { type: integer, minimum: 0 }
+                log: { type: string, description: 'O registro do preparo (saida do venv e do pip), ja sem segredos' }
+      responses:
+        '200': { description: 'Relatorio gravado', content: { application/json: { schema: { type: object, required: [attemptId, outcome, reportedAt], properties: { attemptId: { type: string, format: uuid }, outcome: { type: string }, reportedAt: { type: string, format: date-time } } } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
   /agent/api/v1/remote/attempts/{attempt}/ack:
     post:
       tags: [Maquina]
@@ -858,12 +969,48 @@ components:
             token: { type: string, description: 'Token da atribuicao; aparece so aqui' }
             epoch: { type: integer, minimum: 1 }
             leaseSeconds: { type: integer }
+            environment:
+              type: object
+              description: 'AMBIENTE-PYTHON-001: so em tentativa MANAGED. Criar um ambiente temporario a partir do pythonEnvironmentId (uma instalacao), instalar EXATAMENTE o lock (--no-deps --require-hashes, so wheels, no PyPI publico), conferir checks e so entao iniciar. Ausente: o Python preparado, como sempre'
+              required: [mode, index, lockSha256, lock, checks]
+              properties:
+                mode: { type: string, enum: [MANAGED] }
+                index: { type: string, enum: [PYPI] }
+                lockSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+                lock: { type: array, items: { $ref: '#/components/schemas/ManagedLockItem' } }
+                checks: { type: array, items: { type: string, enum: [PLAYWRIGHT_CHROMIUM, PLAYWRIGHT_FIREFOX, PLAYWRIGHT_WEBKIT] }, description: 'D5: o que conferir na maquina (nunca instalar)' }
         cancel:
           type: object
           required: [attemptId]
           properties:
             attemptId: { type: string, format: uuid }
         dependencyCheck: { $ref: '#/components/schemas/RemoteDependencyCheckRequest' }
+        environmentResolution:
+          type: object
+          description: 'AMBIENTE-PYTHON-001 (D1): resolver a lista completa destas dependencias, com as indiretas, so wheels, no PyPI publico, para o Python deste identificador (uma instalacao), sem instalar nada nele. Responder em /remote/environment-resolutions/{id}/answer'
+          required: [resolutionId, pythonEnvironmentId, dependencies, index]
+          properties:
+            resolutionId: { type: string, format: uuid }
+            pythonEnvironmentId: { type: string }
+            dependencies: { type: array, items: { type: string }, description: 'nome==versao' }
+            index: { type: string, enum: [PYPI] }
+    ManagedLockItem:
+      type: object
+      additionalProperties: false
+      required: [name, version, sha256, fileName]
+      properties:
+        name: { type: string }
+        version: { type: string }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        fileName: { type: string, description: 'O nome do wheel (.whl), sem caminho' }
+    ManagedEnvironmentFailure:
+      type: object
+      additionalProperties: false
+      required: [phase]
+      properties:
+        requirement: { type: string, maxLength: 200 }
+        phase: { type: string, description: 'Resolucao: NO_COMPATIBLE_WHEEL, RESOLUTION_CONFLICT, NOT_FOUND, INDEX_UNREACHABLE, PIP_UNAVAILABLE, TIMEOUT, OTHER. Preparo: VENV, DOWNLOAD, HASH_MISMATCH, NO_COMPATIBLE_WHEEL, INSTALL, VERIFY, PREREQUISITE, NO_SPACE, TIMEOUT, OTHER' }
+        summary: { type: string, description: 'Ate 500 caracteres guardados, sem segredos' }
     RemoteDependencyCheckRequest:
       type: object
       description: 'O que conferir: SO estas dependencias, SO no ambiente Python deste identificador opaco. Nada e instalado.'
@@ -887,7 +1034,7 @@ components:
         token: { type: string }
         epoch: { type: integer, minimum: 1 }
         state: { type: string, enum: [PREPARING, STARTING, RUNNING, SUCCEEDED, FAILED, CANCELLED, TIMED_OUT, REFUSED, ENDED_UNKNOWN] }
-        refusalReason: { type: string, enum: [BUSY, PAUSED, PACKAGE_INVALID, ENVIRONMENT_GONE, ENVIRONMENT_INCOMPATIBLE, DEPENDENCIES_MISSING, DISK_PRESSURE, CLIENT_INCOMPATIBLE, SESSION_UNAVAILABLE], description: 'So com REFUSED' }
+        refusalReason: { type: string, enum: [BUSY, PAUSED, PACKAGE_INVALID, ENVIRONMENT_GONE, ENVIRONMENT_INCOMPATIBLE, DEPENDENCIES_MISSING, DISK_PRESSURE, CLIENT_INCOMPATIBLE, SESSION_UNAVAILABLE, ENVIRONMENT_SETUP_FAILED, DEPENDENCY_INSTALL_FAILED, ENVIRONMENT_SETUP_INTERRUPTED, EXTERNAL_PREREQUISITE_MISSING], description: 'So com REFUSED. AMBIENTE-PYTHON-001: os quatro ultimos so em tentativa MANAGED, quando o preparo falhou ou foi interrompido; a automacao nao iniciou' }
         exitCode: { type: integer, description: 'So com SUCCEEDED, FAILED ou TIMED_OUT' }
         processTree: { type: string, enum: [ABSENT, ACTIVE, UNCERTAIN], description: '058, 060: junto de um estado final, o que a maquina sabe dos PROCESSOS da tentativa (o lancado e os descendentes). ABSENT: tem prova de que nenhum continua - so isto libera a maquina e a repeticao. ACTIVE: o processo principal terminou e ha processo vivo (finalizando). UNCERTAIN: nao tem como saber. A maquina repete o mesmo relato quando o que sabe muda. Ausente (aplicativo antigo): numa execucao normal nada muda; numa tentativa nao confirmada, vale como UNCERTAIN' }
         processAbsent: { type: boolean, description: '058: junto de um estado final, a maquina afirma que CONFERIU que nada desta tentativa continua em execucao nela - o processo lancado E os processos filhos dele. Ausente ou false: resta algo vivo ou ela nao sabe. Numa tentativa que o servidor ja encerrou como nao confirmada, so esta afirmacao a reconcilia pela maquina (informar o desfecho do processo principal nao basta); o mesmo relato pode ser repetido depois, ja com ela. Repetir RUNNING fica registrado como "ainda executa"' }
@@ -949,7 +1096,7 @@ components:
       properties:
         agentVersion: { type: string, pattern: '^[0-9A-Za-z.+-]{1,40}$' }
         contractVersion: { type: string, pattern: '^1\.[0-9]{1,3}$' }
-        capabilities: { type: array, maxItems: 12, items: { type: string, enum: [RUN_LOCAL, OBS_1_0, SUPERVISOR_REPORT_1_0, EXTERNAL_PYTHON_1_0, RUN_REQUEST_1_0, REMOTE_RUN_1_0, REMOTE_LOGS_1_0, REMOTE_RESULTS_1_0, PY_INVENTORY_1_0] } }
+        capabilities: { type: array, maxItems: 12, items: { type: string, enum: [RUN_LOCAL, OBS_1_0, SUPERVISOR_REPORT_1_0, EXTERNAL_PYTHON_1_0, RUN_REQUEST_1_0, REMOTE_RUN_1_0, REMOTE_LOGS_1_0, REMOTE_RESULTS_1_0, PY_INVENTORY_1_0, MANAGED_ENV_1_0] }, description: 'MANAGED_ENV_1_0 (AMBIENTE-PYTHON-001): declarar SO depois de a presenca trazer managedEnvironments true' }
         remote:
           type: object
           additionalProperties: false
@@ -971,6 +1118,7 @@ components:
             receiving: { type: string, enum: [ENABLED, PAUSED] }
             changedAt: { type: string, format: date-time }
             workerName: { type: string, description: 'O nome atual, na Platform, do Worker a que esta maquina esta associada' }
+        managedEnvironments: { type: boolean, enum: [true], description: 'AMBIENTE-PYTHON-001: presente (true) so com o ambiente por execucao ligado e a maquina habilitada para execucao remota; so entao o aplicativo declara MANAGED_ENV_1_0' }
     AuthorizationList:
       type: object
       properties:

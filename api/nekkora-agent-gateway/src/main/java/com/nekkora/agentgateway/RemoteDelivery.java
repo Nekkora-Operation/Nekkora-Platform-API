@@ -49,12 +49,28 @@ public final class RemoteDelivery {
     static final Set<String> REPORTABLE = Set.of("PREPARING", "STARTING", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED", "TIMED_OUT", "REFUSED", "ENDED_UNKNOWN");
     /** Os motivos de recusa que a MAQUINA pode dar (os de autorizacao e de vinculo sao do servidor). */
     static final Set<String> MACHINE_REASONS = Set.of("BUSY", "PAUSED", "PACKAGE_INVALID", "ENVIRONMENT_GONE", "ENVIRONMENT_INCOMPATIBLE", "DEPENDENCIES_MISSING",
-            "DISK_PRESSURE", "CLIENT_INCOMPATIBLE", "SESSION_UNAVAILABLE");
+            "DISK_PRESSURE", "CLIENT_INCOMPATIBLE", "SESSION_UNAVAILABLE",
+            // AMBIENTE-PYTHON-001 (076): o preparo do ambiente por execucao falhou ou foi interrompido; a automacao NAO iniciou
+            "ENVIRONMENT_SETUP_FAILED", "DEPENDENCY_INSTALL_FAILED", "ENVIRONMENT_SETUP_INTERRUPTED", "EXTERNAL_PREREQUISITE_MISSING");
 
-    /** A tentativa entregue. {@code token} aparece SO aqui; o servidor guarda o hash. */
+    /** A tentativa entregue. {@code token} aparece SO aqui; o servidor guarda o hash. {@code environment}: so no modo MANAGED. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Offer(UUID attemptId, UUID remoteExecutionId, int attemptNumber, UUID workspaceId, UUID automationId, UUID automationVersionId,
                         String packageFingerprint,
-                        String packageFingerprintRule, List<String> dependencies, String pythonEnvironmentId, String token, int epoch, int leaseSeconds) {
+                        String packageFingerprintRule, List<String> dependencies, String pythonEnvironmentId, String token, int epoch, int leaseSeconds,
+                        ManagedEnvironment environment) {
+    }
+
+    /**
+     * AMBIENTE-PYTHON-001 (076): so em tentativa de solicitacao MANAGED. A maquina cria um ambiente temporario a partir do
+     * Python base (o {@code pythonEnvironmentId} da oferta), instala EXATAMENTE o lock aceito ({@code --no-deps
+     * --require-hashes}, so wheels, no PyPI publico) e confere {@code checks} antes de iniciar. Ausente: o Python preparado.
+     */
+    public record ManagedEnvironment(String mode, String index, String lockSha256, List<com.nekkora.core.remote.ManagedLock.Item> lock, List<String> checks) {
+    }
+
+    /** 076: um pedido de resolucao da lista completa, a responder em {@link #answerResolution}. */
+    public record EnvironmentResolution(UUID resolutionId, String pythonEnvironmentId, List<String> dependencies, String index) {
     }
 
     /** A tentativa cuja solicitacao teve o cancelamento pedido: a maquina para o que estiver fazendo e informa CANCELLED. */
@@ -66,9 +82,9 @@ public final class RemoteDelivery {
      * no Python escolhido desta maquina, a responder em {@link #answerCheck}; vem junto com o resto, sem depender dele.
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record Next(Offer attempt, CancelNotice cancel, DependencyCheck dependencyCheck) {
+    public record Next(Offer attempt, CancelNotice cancel, DependencyCheck dependencyCheck, EnvironmentResolution environmentResolution) {
         Next(Offer attempt, CancelNotice cancel) {
-            this(attempt, cancel, null);
+            this(attempt, cancel, null, null);
         }
     }
 
@@ -213,7 +229,7 @@ public final class RemoteDelivery {
             Machine m = auth.authenticate(j, t);
             Next work = nextWork(j, m);
             // 054: o pedido de verificacao de dependencias vai junto com o que houver (ou sozinho)
-            return new Next(work.attempt(), work.cancel(), pendingCheck(j, m));
+            return new Next(work.attempt(), work.cancel(), pendingCheck(j, m), managed ? pendingResolution(j, m) : null);
         });
     }
 
@@ -765,8 +781,16 @@ public final class RemoteDelivery {
     }
 
     private static String blocker(JdbcClient j, Machine m, Row a) {
-        return j.sql("SELECT public.remote_attempt_blocker(?, ?, ?, ?, ?)").param(m.organization()).param(a.execution()).param(m.agentId()).param(a.worker())
+        String why = j.sql("SELECT public.remote_attempt_blocker(?, ?, ?, ?, ?)").param(m.organization()).param(a.execution()).param(m.agentId()).param(a.worker())
                 .param(a.authorization()).query(String.class).optional().orElse(null);
+        if (why != null) {
+            return why;
+        }
+        // 076: a tentativa MANAGED depende do aceite do ambiente; revogado (ou substituido) depois da solicitacao, nao inicia
+        Boolean revoked = j.sql("SELECT g.revoked_at IS NOT NULL FROM public.remote_attempt_environments e JOIN public.managed_environment_authorizations g "
+                        + "ON g.organization_id = e.organization_id AND g.authorization_id = e.authorization_id WHERE e.organization_id = ? AND e.attempt_id = ?")
+                .param(m.organization()).param(a.attemptId()).query(Boolean.class).optional().orElse(false);
+        return Boolean.TRUE.equals(revoked) ? "AUTHORIZATION_REVOKED" : null;
     }
 
     private void move(JdbcClient j, Machine m, Row a, int to, String reason, Integer exitCode) {
@@ -805,7 +829,267 @@ public final class RemoteDelivery {
             JSON.readTree(rs.getString(7)).forEach(d -> deps.add(d.asString()));
             return new Offer(attemptId, rs.getObject(1, UUID.class), rs.getInt(2), rs.getObject(9, UUID.class), rs.getObject(3, UUID.class),
                     rs.getObject(4, UUID.class), rs.getString(5),
-                    rs.getString(6), List.copyOf(deps), rs.getString(8), token, epoch, leaseSeconds);
+                    rs.getString(6), List.copyOf(deps), rs.getString(8), token, epoch, leaseSeconds, managedEnvironment(j, m, attemptId));
         }).single();
+    }
+
+    // ------------------------------------------------------------------ AMBIENTE-PYTHON-001 (076): ambiente por execucao
+
+    private boolean managed;
+
+    /** NEKKORA_AMBIENTE_GERENCIADO: desligado, nenhuma resolucao e entregue e as rotas do ambiente respondem 404. */
+    public RemoteDelivery managed(boolean enabled) {
+        this.managed = enabled;
+        return this;
+    }
+
+    public boolean managed() {
+        return managed;
+    }
+
+    static final List<String> RESOLUTION_OUTCOMES = List.of("RESOLVED", "INCOMPATIBLE", "ENVIRONMENT_GONE", "NOT_RESOLVED");
+    static final Set<String> RESOLUTION_PHASES = Set.of("NO_COMPATIBLE_WHEEL", "RESOLUTION_CONFLICT", "NOT_FOUND", "INDEX_UNREACHABLE", "PIP_UNAVAILABLE",
+            "TIMEOUT", "OTHER");
+    static final List<String> STAGES = List.of("ENV_CREATING", "DEPS_INSTALLING");
+    static final List<String> REPORT_OUTCOMES = List.of("READY", "FAILED", "INTERRUPTED");
+    static final Set<String> REPORT_PHASES = Set.of("VENV", "DOWNLOAD", "HASH_MISMATCH", "NO_COMPATIBLE_WHEEL", "INSTALL", "VERIFY", "PREREQUISITE",
+            "NO_SPACE", "TIMEOUT", "OTHER");
+    static final int MAX_PREPARATION_LOG_BYTES = 64 * 1024;
+    private static final java.util.regex.Pattern PY_VERSION = java.util.regex.Pattern.compile("^3\\.[0-9]{1,3}\\.[0-9]{1,3}[A-Za-z0-9.+-]{0,20}$");
+    private static final java.util.regex.Pattern PIP_VERSION = java.util.regex.Pattern.compile("^[0-9][0-9A-Za-z.+-]{0,30}$");
+    private static final java.util.regex.Pattern CONTROL = java.util.regex.Pattern.compile("[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]");
+
+    /** O que deu errado, numa linha: a dependencia (se houver), a fase e um resumo curto ja sem segredos. */
+    public record Failure(String requirement, String phase, String summary) {
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record ResolutionAnswer(UUID resolutionId, String outcome, String lockSha256, Integer packages) {
+    }
+
+    private void requireManaged() {
+        if (!managed) {
+            throw new ApiException(ApiError.MANAGED_ENVIRONMENT_UNAVAILABLE, "ambiente_gerenciado_desligado");
+        }
+    }
+
+    private static List<com.nekkora.core.remote.ManagedLock.Item> lockOf(String json) {
+        List<com.nekkora.core.remote.ManagedLock.Item> out = new ArrayList<>();
+        JSON.readTree(json).forEach(i -> out.add(new com.nekkora.core.remote.ManagedLock.Item(i.get("name").asString(), i.get("version").asString(),
+                i.get("sha256").asString(), i.get("fileName").asString())));
+        return List.copyOf(out);
+    }
+
+    private static String lockJson(List<com.nekkora.core.remote.ManagedLock.Item> lock) {
+        tools.jackson.databind.node.ArrayNode a = JSON.createArrayNode();
+        lock.forEach(i -> a.addObject().put("name", i.name()).put("version", i.version()).put("sha256", i.sha256()).put("fileName", i.fileName()));
+        return a.toString();
+    }
+
+    private static List<String> strings(String json) {
+        List<String> out = new ArrayList<>();
+        JSON.readTree(json).forEach(d -> out.add(d.asString()));
+        return List.copyOf(out);
+    }
+
+    /** O retrato do aceite da tentativa MANAGED; nulo no Python preparado. */
+    private static ManagedEnvironment managedEnvironment(JdbcClient j, Machine m, UUID attemptId) {
+        return j.sql("SELECT lock::text, lock_sha256, checks::text FROM public.remote_attempt_environments WHERE organization_id = ? AND attempt_id = ?")
+                .param(m.organization()).param(attemptId)
+                .query((rs, n) -> new ManagedEnvironment("MANAGED", "PYPI", rs.getString(2), lockOf(rs.getString(1)), strings(rs.getString(3))))
+                .optional().orElse(null);
+    }
+
+    /** A resolucao mais antiga desta maquina que ainda pode ser respondida. Marca a entrega na primeira vez. */
+    private static EnvironmentResolution pendingResolution(JdbcClient j, Machine m) {
+        record Pending(UUID id, String environment, String dependencies, boolean delivered) {
+        }
+        Pending r = j.sql("SELECT resolution_id, environment_id, dependencies::text, delivered_at IS NOT NULL FROM public.managed_environment_resolutions "
+                        + "WHERE organization_id = ? AND agent_id = ? AND outcome IS NULL AND answer_valid_until > clock_timestamp() "
+                        + "ORDER BY requested_at, resolution_id LIMIT 1").param(m.organization()).param(m.agentId())
+                .query((rs, n) -> new Pending(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getBoolean(4))).optional().orElse(null);
+        if (r == null) {
+            return null;
+        }
+        if (!r.delivered()) {
+            j.sql("UPDATE public.managed_environment_resolutions SET delivered_at = clock_timestamp() WHERE organization_id = ? AND resolution_id = ?")
+                    .param(m.organization()).param(r.id()).update();
+        }
+        return new EnvironmentResolution(r.id(), r.environment(), strings(r.dependencies()), "PYPI");
+    }
+
+    /** Remove segredos (segunda barreira; o aplicativo ja remove) e caracteres de controle; corta em {@code max} caracteres. */
+    static String clean(String text, int max, String token) {
+        if (text == null) {
+            return null;
+        }
+        String out = CONTROL.matcher(LogRedaction.redactPreparation(text, token)).replaceAll(" ");
+        if (out.length() > max) {
+            out = out.substring(0, max);
+        }
+        return out.isBlank() ? null : out;
+    }
+
+    private static Failure validFailure(Failure f, Set<String> phases) {
+        if (f == null) {
+            return null;
+        }
+        if (f.phase() == null || !phases.contains(f.phase()) || (f.requirement() != null && (f.requirement().isBlank() || f.requirement().length() > 200
+                || CHECK_ITEM_BAD.matcher(f.requirement()).find())) || (f.summary() != null && f.summary().length() > 2000)) {
+            throw ApiException.invalid("falha");
+        }
+        return new Failure(f.requirement(), f.phase(), clean(f.summary(), 500, null));
+    }
+
+    /**
+     * A maquina responde a resolucao UMA vez, dentro do prazo. RESOLVED: o lock (cada dependencia pedida com a MESMA versao, sem
+     * nome repetido, so wheels); o hash e calculado aqui. INCOMPATIBLE e NOT_RESOLVED trazem a falha; ENVIRONMENT_GONE, nao.
+     * Repetir a mesma resposta devolve a gravada; outra, ou depois do prazo: 409 managed_environment_resolution_closed.
+     */
+    public ResolutionAnswer answerResolution(MachineToken t, UUID resolutionId, String outcome, String pythonVersion, String pipVersion,
+                                             List<com.nekkora.core.remote.ManagedLock.Item> lock, Failure failure) {
+        requireManaged();
+        int code = outcome == null ? -1 : RESOLUTION_OUTCOMES.indexOf(outcome);
+        boolean resolved = code == 0;
+        if (resolutionId == null || code < 0 || resolved != (lock != null) || (code == 1 || code == 3) != (failure != null)
+                || (pythonVersion != null && !PY_VERSION.matcher(pythonVersion).matches()) || (pipVersion != null && !PIP_VERSION.matcher(pipVersion).matches())) {
+            throw ApiException.invalid("resolucao");
+        }
+        Failure f = validFailure(failure, RESOLUTION_PHASES);
+        return tx.inOrganization(t.organization(), Mode.READ_WRITE, j -> {
+            Machine m = auth.authenticate(j, t);
+            record Asked(Short outcome, String lockSha, boolean open, String dependencies) {
+            }
+            Asked r = j.sql("SELECT outcome, lock_sha256, answer_valid_until > clock_timestamp(), dependencies::text FROM public.managed_environment_resolutions "
+                            + "WHERE organization_id = ? AND resolution_id = ? AND agent_id = ? FOR UPDATE").param(m.organization()).param(resolutionId).param(m.agentId())
+                    .query((rs, n) -> new Asked(rs.getObject(1) == null ? null : rs.getShort(1), rs.getString(2), rs.getBoolean(3), rs.getString(4))).optional()
+                    .orElseThrow(() -> new ApiException(ApiError.NOT_FOUND, "resolucao"));
+            String sha = null;
+            if (resolved) {
+                String why = com.nekkora.core.remote.ManagedLock.problem(lock, strings(r.dependencies()));
+                if (why != null) {
+                    throw ApiException.invalid("lock_" + why);
+                }
+                sha = com.nekkora.core.remote.ManagedLock.sha256(lock);
+            }
+            if (r.outcome() != null) {
+                if (r.outcome() != code + 1 || !java.util.Objects.equals(r.lockSha(), sha)) {
+                    throw new ApiException(ApiError.MANAGED_ENVIRONMENT_RESOLUTION_CLOSED, "resolucao_ja_respondida");
+                }
+                return new ResolutionAnswer(resolutionId, outcome, sha, resolved ? lock.size() : null);
+            }
+            if (!r.open()) {
+                throw new ApiException(ApiError.MANAGED_ENVIRONMENT_RESOLUTION_CLOSED, "prazo_da_resposta_vencido");
+            }
+            j.sql("UPDATE public.managed_environment_resolutions SET outcome = ?, python_version = ?, pip_version = ?, lock = ?::jsonb, lock_sha256 = ?, "
+                            + "failure_requirement = ?, failure_phase = ?, failure_summary = ? WHERE organization_id = ? AND resolution_id = ?")
+                    .param((short) (code + 1)).param(pythonVersion).param(pipVersion).param(resolved ? lockJson(lock) : null).param(sha)
+                    .param(f == null ? null : f.requirement()).param(f == null ? null : f.phase()).param(f == null ? null : f.summary())
+                    .param(m.organization()).param(resolutionId).update();
+            LOG.info("evento=ambiente_gerenciado.resolucao_respondida resolucao={} resultado={} pacotes={} correlacao={}", resolutionId, outcome,
+                    resolved ? lock.size() : 0, RequestContext.correlation());
+            return new ResolutionAnswer(resolutionId, outcome, sha, resolved ? lock.size() : null);
+        });
+    }
+
+    /**
+     * A maquina informa a etapa do preparo (ENV_CREATING, DEPS_INSTALLING) de uma tentativa MANAGED em PREPARING. Repetir nao
+     * muda nada; renova o prazo da comunicacao. O estado da tentativa nao muda; {@code proceed=false} diz para parar.
+     */
+    public Status stage(MachineToken t, UUID attemptId, String token, Integer epoch, String stage) {
+        requireManaged();
+        int code = stage == null ? -1 : STAGES.indexOf(stage);
+        if (code < 0) {
+            throw ApiException.invalid("etapa");
+        }
+        return tx.inOrganization(t.organization(), Mode.READ_WRITE, j -> {
+            Machine m = auth.authenticate(j, t);
+            Row a = owned(j, m, attemptId, token, epoch);
+            if (a.state() >= 7) {
+                return status(j, m, attemptId, false);
+            }
+            if (a.state() != 4 || managedEnvironment(j, m, attemptId) == null) {
+                throw new ApiException(ApiError.REMOTE_ATTEMPT_TRANSITION, "etapa_fora_do_preparo");
+            }
+            j.sql("INSERT INTO public.remote_attempt_environment_stages (attempt_id, stage, organization_id) VALUES (?, ?, ?) ON CONFLICT DO NOTHING")
+                    .param(attemptId).param((short) (code + 1)).param(m.organization()).update();
+            renew(j, m, attemptId);
+            return status(j, m, attemptId, !a.cancelRequested());
+        });
+    }
+
+    public record InstalledItem(String name, String version, String sha256) {
+    }
+
+    public record EnvironmentReport(UUID attemptId, String outcome, java.time.OffsetDateTime reportedAt) {
+    }
+
+    /**
+     * O relatorio do preparo, UMA vez por tentativa MANAGED (com a tentativa em PREPARING ou ja terminada, inclusive recusada):
+     * READY com o que foi instalado de fato, FAILED com a dependencia e a fase, ou INTERRUPTED. O registro do preparo passa pela
+     * remocao de segredos e fica com o FIM, ate 64 KiB; vale 30 dias (D7). Repetir o mesmo resultado devolve o gravado; outro, 409.
+     */
+    public EnvironmentReport environmentReport(MachineToken t, UUID attemptId, String token, Integer epoch, String outcome, String pythonVersion,
+                                               String pipVersion, List<InstalledItem> installed, Failure failure, Integer createMs, Integer installMs, String log) {
+        requireManaged();
+        int code = outcome == null ? -1 : REPORT_OUTCOMES.indexOf(outcome);
+        if (code < 0 || (code == 1) != (failure != null) || installed == null || installed.size() > com.nekkora.core.remote.ManagedLock.MAX_ITEMS
+                || (code != 0 && !installed.isEmpty()) || (pythonVersion != null && !PY_VERSION.matcher(pythonVersion).matches())
+                || (pipVersion != null && !PIP_VERSION.matcher(pipVersion).matches()) || (createMs != null && (createMs < 0 || createMs > 86_400_000))
+                || (installMs != null && (installMs < 0 || installMs > 86_400_000)) || (log != null && log.length() > 4 * MAX_PREPARATION_LOG_BYTES)
+                || installed.stream().anyMatch(i -> i == null || i.name() == null || i.version() == null || i.sha256() == null || !SHA256.matcher(i.sha256()).matches()
+                        || i.name().length() > 80 || i.version().length() > 41 || CHECK_ITEM_BAD.matcher(i.name() + i.version()).find())) {
+            throw ApiException.invalid("relatorio");
+        }
+        Failure f = validFailure(failure, REPORT_PHASES);
+        return tx.inOrganization(t.organization(), Mode.READ_WRITE, j -> {
+            Machine m = auth.authenticate(j, t);
+            Row a = owned(j, m, attemptId, token, epoch);
+            if (managedEnvironment(j, m, attemptId) == null) {
+                throw new ApiException(ApiError.REMOTE_ATTEMPT_TRANSITION, "tentativa_sem_ambiente_gerenciado");
+            }
+            Short existing = j.sql("SELECT outcome FROM public.remote_attempt_environment_reports WHERE organization_id = ? AND attempt_id = ?")
+                    .param(m.organization()).param(attemptId).query(Short.class).optional().orElse(null);
+            if (existing != null) {
+                if (existing != code + 1) {
+                    throw new ApiException(ApiError.MANAGED_ENVIRONMENT_REPORT_CONFLICT, "relatorio_ja_gravado");
+                }
+            } else {
+                if (a.state() < 4) {
+                    throw new ApiException(ApiError.REMOTE_ATTEMPT_TRANSITION, "relatorio_antes_do_preparo");
+                }
+                tools.jackson.databind.node.ArrayNode items = JSON.createArrayNode();
+                installed.forEach(i -> items.addObject().put("name", i.name()).put("version", i.version()).put("sha256", i.sha256()));
+                j.sql("INSERT INTO public.remote_attempt_environment_reports (attempt_id, organization_id, outcome, python_version, pip_version, installed, "
+                                + "failure_requirement, failure_phase, failure_summary, create_ms, install_ms, preparation_log) VALUES (?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, ?, ?)")
+                        .param(attemptId).param(m.organization()).param((short) (code + 1)).param(pythonVersion).param(pipVersion).param(items.toString())
+                        .param(f == null ? null : f.requirement()).param(f == null ? null : f.phase()).param(f == null ? null : f.summary()).param(createMs)
+                        .param(installMs).param(tail(clean(log, Integer.MAX_VALUE, token))).update();
+                LOG.info("evento=ambiente_gerenciado.relatorio tentativa={} resultado={} pacotes={} correlacao={}", attemptId, outcome, installed.size(),
+                        RequestContext.correlation());
+            }
+            if (a.state() < 7) {
+                renew(j, m, attemptId);
+            }
+            return j.sql("SELECT outcome, reported_at FROM public.remote_attempt_environment_reports WHERE organization_id = ? AND attempt_id = ?")
+                    .param(m.organization()).param(attemptId)
+                    .query((rs, n) -> new EnvironmentReport(attemptId, REPORT_OUTCOMES.get(rs.getShort(1) - 1), rs.getObject(2, java.time.OffsetDateTime.class)))
+                    .single();
+        });
+    }
+
+    /** O FIM do registro, ate 64 KiB em UTF-8: o que explica a falha costuma estar no final. */
+    static String tail(String text) {
+        if (text == null) {
+            return null;
+        }
+        byte[] bytes = text.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        if (bytes.length <= MAX_PREPARATION_LOG_BYTES) {
+            return text;
+        }
+        String mark = "[inicio do registro cortado]\n";
+        int keep = MAX_PREPARATION_LOG_BYTES - mark.getBytes(java.nio.charset.StandardCharsets.UTF_8).length - 4;
+        String end = new String(bytes, bytes.length - keep, keep, java.nio.charset.StandardCharsets.UTF_8).replace("�", "");
+        return mark + end;
     }
 }

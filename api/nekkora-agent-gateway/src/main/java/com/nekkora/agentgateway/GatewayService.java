@@ -37,7 +37,9 @@ public final class GatewayService {
     static final Pattern EXECUTION = Pattern.compile("ex-[0-9a-f]{32}");
     static final Pattern SHA = Pattern.compile("[0-9a-f]{64}");
     static final List<String> CAPABILITIES = List.of("RUN_LOCAL", "OBS_1_0", "SUPERVISOR_REPORT_1_0", "EXTERNAL_PYTHON_1_0", "RUN_REQUEST_1_0",
-            "REMOTE_RUN_1_0", "REMOTE_LOGS_1_0", "REMOTE_RESULTS_1_0", "PY_INVENTORY_1_0");
+            "REMOTE_RUN_1_0", "REMOTE_LOGS_1_0", "REMOTE_RESULTS_1_0", "PY_INVENTORY_1_0",
+            // AMBIENTE-PYTHON-001: aceita sempre (o aplicativo so declara depois de ver managedEnvironments na presenca)
+            "MANAGED_ENV_1_0");
     static final int MAX_CAPABILITIES = 12;
     static final int ACT_REMOTE_ENABLED = 15;
     static final int ACT_RECEIVING_PAUSED = 16;
@@ -383,7 +385,22 @@ public final class GatewayService {
      * registra. Ausente nos demais casos (a resposta de um Agent anterior e a de sempre).
      */
     public record Presence(OffsetDateTime serverTime, OffsetDateTime credentialExpiresAt, String contractVersion,
-                           @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) Receiving remote) {
+                           @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) Receiving remote,
+                           @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) Boolean managedEnvironments) {
+        public Presence(OffsetDateTime serverTime, OffsetDateTime credentialExpiresAt, String contractVersion, Receiving remote) {
+            this(serverTime, credentialExpiresAt, contractVersion, remote, null);
+        }
+    }
+
+    /**
+     * AMBIENTE-PYTHON-001: NEKKORA_AMBIENTE_GERENCIADO. Ligado, a presenca de uma maquina habilitada para execucao remota diz
+     * {@code managedEnvironments: true}; so entao o aplicativo declara MANAGED_ENV_1_0. Desligado, o campo nao aparece.
+     */
+    private boolean managedEnvironments;
+
+    public GatewayService managedEnvironments(boolean enabled) {
+        this.managedEnvironments = enabled;
+        return this;
     }
 
     /**
@@ -423,7 +440,8 @@ public final class GatewayService {
                     """).param(m.agentId()).param(m.organization()).param(contractVersion)
                     .param("{" + String.join(",", capabilities.stream().distinct().sorted().toList()) + "}")
                     .param(signals.busy()).param(signals.diskPressure()).update();
-            return new Presence(now, m.credentialExpiresAt(), "1.0", receiving(j, m).orElse(null));
+            Receiving remote = receiving(j, m).orElse(null);
+            return new Presence(now, m.credentialExpiresAt(), "1.0", remote, managedEnvironments && remote != null ? Boolean.TRUE : null);
         });
     }
 

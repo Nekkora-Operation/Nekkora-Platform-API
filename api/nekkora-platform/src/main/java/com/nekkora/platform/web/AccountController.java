@@ -30,13 +30,16 @@ public class AccountController {
     private final AdminService admin;
     private final GrantAdminService grants;
     private final boolean remoteExecution;
+    private final boolean managedEnvironment;
 
     public AccountController(OrgTransactions tx, AdminService admin, GrantAdminService grants,
-                             @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.enabled:false}") boolean remoteExecution) {
+                             @org.springframework.beans.factory.annotation.Value("${nekkora.remote-execution.enabled:false}") boolean remoteExecution,
+                             @org.springframework.beans.factory.annotation.Value("${nekkora.managed-environment.enabled:false}") boolean managedEnvironment) {
         this.tx = tx;
         this.admin = admin;
         this.grants = grants;
         this.remoteExecution = remoteExecution;
+        this.managedEnvironment = remoteExecution && managedEnvironment;
     }
 
     /**
@@ -62,6 +65,8 @@ public class AccountController {
             // RELEASE-2.2: se esta Platform aceita execucao remota (chave nekkora.remote-execution.enabled). So indicacao para a tela
             // nao oferecer o que a API recusaria; quem decide continua sendo cada rota (409 remote_execution_unavailable)
             r.put("remoteExecutionAvailable", remoteExecution);
+            // AMBIENTE-PYTHON-001: o ambiente por execucao (NEKKORA_AMBIENTE_GERENCIADO, so com a execucao remota). So indicacao
+            r.put("managedEnvironmentAvailable", managedEnvironment);
             // 075 (LICENCIAMENTO-002): organizacao bloqueada pela Nekkora (so o estado; motivo e autor ficam com o suporte)
             r.put("organizationHeldByNekkora", com.nekkora.core.license.OrganizationHold.held(j, org));
             return r;

@@ -151,6 +151,12 @@ class RemoteMachinesIT extends PlatformTestBase {
         BrowserClient admin = browser();
         firstLogin(admin, o.id(), new TestUser(o.adminId(), o.adminEmail(), PASSWORD.toCharArray()));
         assertThat(admin.get("/api/v1/o/" + o.id() + "/me").body()).as("ligada nesta Platform").contains("\"remoteExecutionAvailable\":true");
+        // AMBIENTE-PYTHON-001: o ambiente por execucao tem chave propria, desligada por padrao mesmo com a execucao remota ligada
+        assertThat(admin.get("/api/v1/o/" + o.id() + "/me").body()).contains("\"managedEnvironmentAvailable\":false");
+        BrowserClient.Response off = admin.get("/api/v1/o/" + o.id() + "/automations/" + UUID.randomUUID() + "/remote-machines/" + UUID.randomUUID()
+                + "/managed-environment?versionId=" + UUID.randomUUID());
+        assertThat(off.status()).isEqualTo(404);
+        assertThat(off.body()).contains("managed_environment_unavailable");
         String base = "/api/v1/o/" + o.id() + "/agent-enrollments";
         String marked = "{\"workerName\":\"Estacao remota\",\"agentName\":\"Maquina 1\",\"expiresInMinutes\":15,\"remoteExecution\":true}";
         assertThat(admin.post(base, marked).status()).as("sem confirmacao reforcada").isEqualTo(403);

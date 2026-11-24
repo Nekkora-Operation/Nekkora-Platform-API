@@ -4039,6 +4039,105 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/o/{org}/automations/{automation}/remote-machines/{agent}/managed-environment:
+    get:
+      tags: [Execucao remota]
+      operationId: getManagedEnvironment
+      summary: 'AMBIENTE-PYTHON-001: o ambiente por execucao de uma versao numa maquina (base, lista efetiva, resolucao, catalogo e aceite)'
+      description: >
+        Exige automation.read no ambiente. Com a chave NEKKORA_AMBIENTE_GERENCIADO desligada: 404 + managed_environment_unavailable.
+        resolution e authorization sao nulos quando nao existem. current diz se a resolucao ainda corresponde ao Python escolhido,
+        a revisao vigente e a versao. diff so em STALE. externalPrerequisites vem do catalogo da Platform aplicado ao lock (ou, sem
+        lock, a lista efetiva). As dependencias sao as da versao indicada (A1).
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: automation, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+        - { name: agent, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+        - { name: versionId, in: query, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: 'Situacao do ambiente por execucao', content: { application/json: { schema: { $ref: '#/components/schemas/ManagedEnvironment' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/o/{org}/automations/{automation}/remote-machines/{agent}/managed-environment/resolutions:
+    post:
+      tags: [Execucao remota]
+      operationId: requestManagedEnvironmentResolution
+      summary: 'Pede a maquina a lista completa (lock) das dependencias da versao, so com wheels do PyPI publico'
+      description: >
+        Exige automation.manage; sem confirmacao reforcada (nao autoriza nada). Recusas 409: managed_environment_machine_incompatible,
+        managed_environment_base_not_installation (D6), remote_python_not_selected, remote_python_not_in_inventory,
+        remote_requirements_not_declared, remote_requirements_conflict, managed_environment_resolution_pending.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: automation, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+        - { name: agent, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, required: [versionId], properties: { versionId: { type: string, format: uuid } } }
+      responses:
+        '201': { description: 'Pedido criado, aguardando a maquina', content: { application/json: { schema: { $ref: '#/components/schemas/ManagedEnvironment' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/o/{org}/automations/{automation}/remote-machines/{agent}/managed-environment/authorizations:
+    post:
+      tags: [Execucao remota]
+      operationId: authorizeManagedEnvironment
+      summary: 'Aceita o lock resolvido: cada execucao desta versao nesta maquina instala exatamente ele num ambiente temporario (step-up)'
+      description: >
+        Exige automation.manage e confirmacao reforcada. Exige uma resolucao RESOLVED corrente com o mesmo lockSha256; com
+        playwright no lock, ao menos uma verificacao PLAYWRIGHT_*. Revoga o aceite anterior de (versao, maquina) e grava
+        ACT_MANAGED_ENV_AUTHORIZED. Recusas: 409 managed_environment_resolution_not_current, 409 managed_environment_lock_changed,
+        400 sem acknowledge.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: automation, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+        - { name: agent, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ManagedEnvironmentAuthorizationRequest' } } } }
+      responses:
+        '201': { description: 'Aceite gravado', content: { application/json: { schema: { $ref: '#/components/schemas/ManagedEnvironment' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/o/{org}/automations/{automation}/remote-machines/{agent}/managed-environment/authorizations/current:
+    delete:
+      tags: [Execucao remota]
+      operationId: revokeManagedEnvironmentAuthorization
+      summary: 'Revoga o aceite: a maquina volta ao Python preparado (step-up)'
+      description: 'Confirmacao reforcada. Grava ACT_MANAGED_ENV_REVOKED.'
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: automation, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+        - { name: agent, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+        - { name: versionId, in: query, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /api/v1/o/{org}/workspaces/{workspace}/remote-executions/candidates:
     get:
       tags: [Execucao remota]
@@ -4210,6 +4309,29 @@ paths:
         - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 500 } }
       responses:
         '200': { description: 'Registros da tentativa', content: { application/json: { schema: { $ref: '#/components/schemas/RemoteAttemptLogs' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/o/{org}/remote-executions/{execution}/attempts/{attempt}/environment-log:
+    get:
+      tags: [Execucao remota]
+      operationId: getRemoteAttemptEnvironmentLog
+      summary: 'AMBIENTE-PYTHON-001: o registro do preparo do ambiente por execucao de uma tentativa (texto, sem segredos)'
+      description: >
+        Exige automation.read. 410 + managed_environment_log_expired depois de 30 dias contados do relatorio (D7); o resumo
+        estruturado da falha continua na tentativa.
+      security: [ { sessionCookie: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/Org' }
+        - { name: execution, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+        - { name: attempt, in: path, required: true, schema: { type: string, format: uuid }, description: 'malformado -> 400' }
+      responses:
+        '200': { description: 'Registro do preparo', content: { text/plain: { schema: { type: string } } } }
+        '410': { description: 'Registro removido pela retencao (30 dias)', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -4551,7 +4673,7 @@ components:
     Error:
       type: object
       required: [error]
-      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, license_already_assigned, automation_already_licensed, license_not_valid, license_automation_archived, license_ended, license_period_overlaps, license_period_already_ended, license_model_unchanged, license_preview_changed, license_required, license_expired, run_not_covered, capacity_pending_limit_reached, license_not_assigned, license_transfer_same_automation, license_transfer_work_in_progress, organization_responsible_not_found, organization_responsible_is_client, previous_agent_session_has_outcome, previous_agent_session_already_reconciled, license_transfer_requester_not_admin, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_machine_unconfirmed, remote_machine_finishing, remote_previous_processes_pending, remote_previous_result_unconfirmed, remote_attempt_not_unconfirmed, remote_attempt_already_reconciled, remote_requirements_not_declared, remote_requirements_conflict, remote_package_not_supported, remote_package_not_registered, remote_python_not_selected, remote_python_not_in_inventory, remote_dependency_check_too_soon, remote_dependency_check_closed, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken, organization_creation_client_profile, organization_creation_requires_request, empty_organization_limit_reached, organization_request_not_available, organization_request_not_pending, organization_request_own, organization_request_approver_without_identity, organization_request_responsible_not_eligible, organization_not_responsible, organization_work_in_progress, organization_blocked_by_nekkora, organization_state_conflict, license_unavailable, activation_worker_not_in_workspace, activation_automation_inactive, activation_without_workers, activation_renewal_not_applicable, client_invitation_internal_member, client_invitation_legacy_account, client_invitation_other_client, client_grant_exists, client_scope_unavailable, client_grant_widening_requires_request, organization_held], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). 075 (LICENCIAMENTO-002): forbidden + organization_held = organizacao bloqueada pela Nekkora; nada novo foi feito, a leitura continua, procure o suporte. Cliente que nao o conhece trata o codigo como sempre' } }
+      properties: { error: { type: string, enum: [invalid_request, unauthenticated, forbidden, not_found, conflict, already_member, account_exists, account_unavailable, rate_limited, internal_error, service_unavailable, unsupported_contract, gone] }, reason: { type: string, enum: [workspace_name_taken, step_up_required, worker_limit_reached, license_already_assigned, automation_already_licensed, license_not_valid, license_automation_archived, license_ended, license_period_overlaps, license_period_already_ended, license_model_unchanged, license_preview_changed, license_required, license_expired, run_not_covered, capacity_pending_limit_reached, license_not_assigned, license_transfer_same_automation, license_transfer_work_in_progress, organization_responsible_not_found, organization_responsible_is_client, previous_agent_session_has_outcome, previous_agent_session_already_reconciled, license_transfer_requester_not_admin, remote_execution_unavailable, runtime_requirements_unresolved, runtime_requirements_changed, remote_authorization_missing, remote_authorization_revoked, remote_authorization_expired, remote_machine_not_enabled, remote_machine_paused, remote_machine_incompatible, remote_machine_busy, remote_machine_unconfirmed, remote_machine_finishing, remote_previous_processes_pending, remote_previous_result_unconfirmed, remote_attempt_not_unconfirmed, remote_attempt_already_reconciled, remote_requirements_not_declared, remote_requirements_conflict, remote_package_not_supported, remote_package_not_registered, remote_python_not_selected, remote_python_not_in_inventory, remote_dependency_check_too_soon, remote_dependency_check_closed, remote_result_unavailable, remote_attempt_not_finished, remote_attempt_already_finished, remote_execution_cancel_requested, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken, organization_creation_client_profile, organization_creation_requires_request, empty_organization_limit_reached, organization_request_not_available, organization_request_not_pending, organization_request_own, organization_request_approver_without_identity, organization_request_responsible_not_eligible, organization_not_responsible, organization_work_in_progress, organization_blocked_by_nekkora, organization_state_conflict, license_unavailable, activation_worker_not_in_workspace, activation_automation_inactive, activation_without_workers, activation_renewal_not_applicable, client_invitation_internal_member, client_invitation_legacy_account, client_invitation_other_client, client_grant_exists, client_scope_unavailable, client_grant_widening_requires_request, organization_held, managed_environment_unavailable, managed_environment_machine_incompatible, managed_environment_base_not_installation, managed_environment_resolution_pending, managed_environment_resolution_not_current, managed_environment_lock_changed, managed_environment_not_authorized, managed_environment_changed, managed_environment_log_expired], description: 'PLATFORM-V2-001: motivo opcional de um codigo conhecido (conflict: workspace_name_taken, worker_limit_reached, draft_exists, draft_changed, local_run_authorization_exists, organization_name_taken; forbidden: step_up_required). 075 (LICENCIAMENTO-002): forbidden + organization_held = organizacao bloqueada pela Nekkora; nada novo foi feito, a leitura continua, procure o suporte. Cliente que nao o conhece trata o codigo como sempre' } }
     WorkspacePermissionCode:
       description: 'Permissoes de workspace (14): podem aparecer em allWorkspaces e em atribuicoes de workspace. client_share.request (071): pedir compartilhamento com pessoa externa (WORKSPACE_ADMIN).'
       type: string
@@ -5843,6 +5965,7 @@ components:
         stepUpMethod: { $ref: '#/components/schemas/StepUpMethod' }
         organizationHeldByNekkora: { type: boolean, description: '075 (LICENCIAMENTO-002): a organizacao esta bloqueada pela Nekkora. Operacoes e trabalho novos sao recusados com 403 organization_held; leitura, saida, cancelar, revogar e reconciliar continuam; o que ja comecou termina e entrega. Motivo e autor nao sao expostos: oriente a procurar o suporte. Ausente (API anterior): nao bloqueada.' }
         remoteExecutionAvailable: { type: boolean, description: 'RELEASE-2.2: se esta Platform aceita execucao remota (chave nekkora.remote-execution.enabled; padrao false). So indicacao para a tela; cada rota continua recusando com 409 remote_execution_unavailable. Ausente (API anterior): tratar como indisponivel.' }
+        managedEnvironmentAvailable: { type: boolean, description: 'AMBIENTE-PYTHON-001: a chave NEKKORA_AMBIENTE_GERENCIADO ligada e a execucao remota disponivel. Ausente: indisponivel.' }
     OrganizationLicenseModel:
       type: string
       enum: [legacy, licensed]
@@ -5896,6 +6019,7 @@ components:
         requestKey: { type: string, format: uuid, description: 'Gerado pelo navegador; repeticao idempotente' }
         authorizeVersion: { type: boolean, description: 'PLATFORM-LICENCIAMENTO-001 (S2): true e o ACEITE EXPLICITO desta versao nesta maquina, no mesmo passo. Cria a autorizacao da versao para o Worker da maquina se nao houver uma que sirva; mesmo ato, mesmas recusas e mesma trilha da rota de autorizacao. Nunca vale para versoes futuras. Ausente ou false: nada e autorizado.' }
         authorizationValidUntil: { type: string, format: date-time, description: 'So com authorizeVersion. Obrigatorio na organizacao do modelo anterior; no modelo por licenca e opcional e limitado ao fim da cobertura da licenca.' }
+        environmentMode: { type: string, enum: [PREPARED, MANAGED], description: 'AMBIENTE-PYTHON-001: ausente vale PREPARED. MANAGED exige a chave, a capacidade MANAGED_ENV_1_0 e o aceite vigente e ainda correspondente de (versao, maquina): senao 409 managed_environment_not_authorized ou managed_environment_changed.' }
     RemoteExecutionCandidateList:
       type: object
       required: [items]
@@ -5929,6 +6053,142 @@ components:
                 oneOf:
                   - { $ref: '#/components/schemas/RemoteDependencyCheck' }
                   - { type: 'null' }
+              managedEnvironment:
+                type: object
+                additionalProperties: false
+                required: [compatible, authorized]
+                description: 'AMBIENTE-PYTHON-001 (so com a chave ligada): a maquina declara MANAGED_ENV_1_0, e o aceite do ambiente por execucao desta versao nela'
+                properties:
+                  compatible: { type: boolean }
+                  authorized: { type: string, enum: [NONE, CURRENT, STALE] }
+    ManagedEnvironmentLockItem:
+      type: object
+      required: [name, version, sha256, fileName]
+      properties:
+        name: { type: string }
+        version: { type: string }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        fileName: { type: string, maxLength: 200 }
+    ManagedEnvironmentFailure:
+      type: object
+      description: 'Qual dependencia falhou, em que fase e o resumo (ate 500 caracteres, sem segredos)'
+      required: [phase]
+      properties:
+        requirement: { type: [string, 'null'] }
+        phase: { type: string, description: 'Resolucao: NO_COMPATIBLE_WHEEL, RESOLUTION_CONFLICT, NOT_FOUND, INDEX_UNREACHABLE, PIP_UNAVAILABLE, TIMEOUT, OTHER. Preparo: VENV, DOWNLOAD, HASH_MISMATCH, NO_COMPATIBLE_WHEEL, INSTALL, VERIFY, PREREQUISITE, NO_SPACE, TIMEOUT, OTHER' }
+        summary: { type: [string, 'null'], maxLength: 500 }
+    ManagedEnvironment:
+      type: object
+      description: 'AMBIENTE-PYTHON-001 (2.1): o ambiente por execucao de uma versao numa maquina'
+      required: [available, machineCompatible, baseEligible, basePython, requirements, resolution, externalPrerequisites, authorization]
+      properties:
+        available: { type: boolean }
+        machineCompatible: { type: boolean, description: 'A maquina declara MANAGED_ENV_1_0' }
+        baseEligible: { type: boolean, description: 'O Python escolhido e uma instalacao (D6): um venv nao serve de base' }
+        basePython:
+          type: [object, 'null']
+          required: [environmentId, pythonVersion, kind]
+          properties:
+            environmentId: { type: string }
+            pythonVersion: { type: string }
+            kind: { type: string, description: 'INSTALLATION ou VIRTUAL_ENVIRONMENT' }
+        requirements:
+          type: [object, 'null']
+          required: [revision, dependencies]
+          properties:
+            revision: { type: [integer, 'null'] }
+            dependencies: { type: array, items: { type: string } }
+        resolution:
+          type: [object, 'null']
+          required: [resolutionId, state, requestedAt, current]
+          properties:
+            resolutionId: { type: string, format: uuid }
+            state: { type: string, enum: [PENDING, ANSWERED, UNANSWERED] }
+            outcome: { type: [string, 'null'], enum: [RESOLVED, INCOMPATIBLE, ENVIRONMENT_GONE, NOT_RESOLVED, null] }
+            requestedAt: { type: string, format: date-time }
+            answerValidUntil: { type: [string, 'null'], format: date-time }
+            answeredAt: { type: [string, 'null'], format: date-time }
+            pythonVersion: { type: [string, 'null'] }
+            pipVersion: { type: [string, 'null'] }
+            lock: { type: [array, 'null'], items: { $ref: '#/components/schemas/ManagedEnvironmentLockItem' } }
+            lockSha256: { type: [string, 'null'] }
+            failure:
+              oneOf:
+                - { $ref: '#/components/schemas/ManagedEnvironmentFailure' }
+                - { type: 'null' }
+            current: { type: boolean }
+        externalPrerequisites:
+          type: array
+          items:
+            type: object
+            required: [code, package, checks]
+            properties:
+              code: { type: string }
+              package: { type: string }
+              checks: { type: array, items: { type: string } }
+        authorization:
+          type: [object, 'null']
+          required: [authorizationId, status]
+          properties:
+            authorizationId: { type: string, format: uuid }
+            status: { type: string, enum: [CURRENT, STALE] }
+            staleReasons: { type: array, items: { type: string } }
+            lockSha256: { type: [string, 'null'] }
+            packages: { type: [integer, 'null'], minimum: 0 }
+            checks: { type: array, items: { type: string } }
+            grantedAt: { type: [string, 'null'], format: date-time }
+            requirementsRevision: { type: [integer, 'null'] }
+            diff:
+              type: [object, 'null']
+              properties:
+                added: { type: array, items: { type: string } }
+                removed: { type: array, items: { type: string } }
+                changed:
+                  type: array
+                  items: { type: object, required: [name, from, to], properties: { name: { type: string }, from: { type: string }, to: { type: string } } }
+    ManagedEnvironmentAuthorizationRequest:
+      type: object
+      additionalProperties: false
+      required: [versionId, resolutionId, lockSha256, checks, acknowledge]
+      properties:
+        versionId: { type: string, format: uuid }
+        resolutionId: { type: string, format: uuid }
+        lockSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        checks: { type: array, items: { type: string } }
+        acknowledge: { type: boolean, enum: [true] }
+    RemoteAttemptEnvironment:
+      type: object
+      description: 'AMBIENTE-PYTHON-001: o retrato do ambiente por execucao da tentativa (nulo no modo PREPARED)'
+      required: [lockSha256, packages, checks, stages, report]
+      properties:
+        lockSha256: { type: string }
+        packages: { type: integer, minimum: 0 }
+        checks: { type: array, items: { type: string } }
+        stages:
+          type: array
+          items:
+            type: object
+            required: [stage, at]
+            properties:
+              stage: { type: string, enum: [ENV_CREATING, DEPS_INSTALLING] }
+              at: { type: string, format: date-time }
+        report:
+          type: [object, 'null']
+          required: [outcome, reportedAt]
+          properties:
+            outcome: { type: string, enum: [READY, FAILED, INTERRUPTED] }
+            pythonVersion: { type: [string, 'null'] }
+            pipVersion: { type: [string, 'null'] }
+            installed: { type: array, items: { type: object, required: [name, version], properties: { name: { type: string }, version: { type: string }, sha256: { type: string } } } }
+            failure:
+              oneOf:
+                - { $ref: '#/components/schemas/ManagedEnvironmentFailure' }
+                - { type: 'null' }
+            createMs: { type: [integer, 'null'], minimum: 0 }
+            installMs: { type: [integer, 'null'], minimum: 0 }
+            logAvailable: { type: boolean }
+            logExpiredAt: { type: [string, 'null'], format: date-time }
+            reportedAt: { type: string, format: date-time }
     RemoteDependencyCheck:
       type: object
       description: >
@@ -6083,6 +6343,7 @@ components:
         workspaceName: { type: string, description: 'Nome do ambiente da solicitacao (para as listas por organizacao)' }
         automationName: { type: string, description: 'Nome da automacao da solicitacao' }
         waitingForSlot: { type: boolean, description: 'PLATFORM-LICENCIAMENTO-001: a tentativa esta na fila e, neste instante, a organizacao (modelo por licenca) esta no limite tecnico de execucoes simultaneas: espera uma vaga. Capacidade, nao licenca.' }
+        environmentMode: { type: string, enum: [PREPARED, MANAGED], description: 'AMBIENTE-PYTHON-001: PREPARED (padrao) usa o Python preparado da maquina; MANAGED cria um ambiente temporario por execucao com o lock aceito. Ausente (API anterior): PREPARED.' }
         attempts:
           type: array
           items:
@@ -6096,7 +6357,7 @@ components:
               workerId: { type: string, format: uuid }
               workerName: { type: string }
               state: { $ref: '#/components/schemas/RemoteAttemptState' }
-              refusalReason: { type: [string, 'null'], enum: [BUSY, PAUSED, PACKAGE_INVALID, ENVIRONMENT_GONE, ENVIRONMENT_INCOMPATIBLE, DEPENDENCIES_MISSING, DISK_PRESSURE, CLIENT_INCOMPATIBLE, SESSION_UNAVAILABLE, AUTHORIZATION_MISSING, AUTHORIZATION_REVOKED, AUTHORIZATION_EXPIRED, WORKER_NOT_AUTHORIZED, MACHINE_NOT_LINKED, MACHINE_NOT_ENABLED, MACHINE_INCOMPATIBLE, COMMUNICATION_LOST, LICENSE_REQUIRED, LICENSE_EXPIRED, ORGANIZATION_HELD, null] }
+              refusalReason: { type: [string, 'null'], enum: [BUSY, PAUSED, PACKAGE_INVALID, ENVIRONMENT_GONE, ENVIRONMENT_INCOMPATIBLE, DEPENDENCIES_MISSING, DISK_PRESSURE, CLIENT_INCOMPATIBLE, SESSION_UNAVAILABLE, AUTHORIZATION_MISSING, AUTHORIZATION_REVOKED, AUTHORIZATION_EXPIRED, WORKER_NOT_AUTHORIZED, MACHINE_NOT_LINKED, MACHINE_NOT_ENABLED, MACHINE_INCOMPATIBLE, COMMUNICATION_LOST, LICENSE_REQUIRED, LICENSE_EXPIRED, ORGANIZATION_HELD, ENVIRONMENT_SETUP_FAILED, DEPENDENCY_INSTALL_FAILED, ENVIRONMENT_SETUP_INTERRUPTED, EXTERNAL_PREREQUISITE_MISSING, null] }
               communication: { type: string, enum: [OK, LOST, NONE], description: 'LOST: o prazo da maquina venceu. Vencido ha mais que a espera configurada (padrao 120 min), a tentativa recebida e encerrada pelo servidor (closureCause COMMUNICATION_LOST)' }
               exitCode: { type: [integer, 'null'] }
               createdAt: { type: string, format: date-time }
@@ -6151,6 +6412,10 @@ components:
               processesAt:
                 type: [string, 'null']
                 format: date-time
+              environment:
+                oneOf:
+                  - { $ref: '#/components/schemas/RemoteAttemptEnvironment' }
+                  - { type: 'null' }
     RemoteAttemptState:
       type: string
       enum: [QUEUED, OFFERED, RECEIVED, PREPARING, STARTING, RUNNING, SUCCEEDED, FAILED, CANCELLED, TIMED_OUT, REFUSED, EXPIRED, ENDED_UNKNOWN]

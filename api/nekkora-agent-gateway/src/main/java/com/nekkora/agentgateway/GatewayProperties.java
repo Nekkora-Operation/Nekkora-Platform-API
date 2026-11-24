@@ -5,7 +5,19 @@ import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "nekkora")
-public record GatewayProperties(List<String> trustedProxies, Database database, Limits limits, RemoteExecution remoteExecution) {
+public record GatewayProperties(List<String> trustedProxies, Database database, Limits limits, RemoteExecution remoteExecution,
+                                ManagedEnvironment managedEnvironment) {
+
+    /**
+     * AMBIENTE-PYTHON-001: chave do ambiente por execucao (NEKKORA_AMBIENTE_GERENCIADO; ausente = desligado). Tem de ter o mesmo
+     * valor na Platform e so vale com a execucao remota ligada.
+     */
+    public record ManagedEnvironment(boolean enabled) {
+    }
+
+    public boolean managedEnvironmentEnabled() {
+        return remoteExecutionEnabled() && managedEnvironment != null && managedEnvironment.enabled();
+    }
 
     /**
      * PLATFORM-CLIENT-EXECUCAO-REMOTA-001: chave do recurso (NEKKORA_EXECUCAO_REMOTA; ausente = desligado). Desligado, nenhuma

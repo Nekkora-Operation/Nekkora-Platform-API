@@ -32,7 +32,7 @@ public class RemoteExecutionController {
 
     /** {@code requestKey}: UUID gerado pelo navegador para a repeticao idempotente (resposta perdida). */
     public record CreateRequest(String automationVersionId, String agentId, String requestKey, Boolean authorizeVersion,
-                                String authorizationValidUntil) {
+                                String authorizationValidUntil, String environmentMode) {
     }
 
     public record RetryRequest(String agentId, Boolean authorizeVersion, String authorizationValidUntil) {
@@ -100,7 +100,7 @@ public class RemoteExecutionController {
         }
         RemoteExecutionService.Created c = service.request(org, SessionFilter.principal(req), SessionFilter.token(req), workspace,
                 uuid(body.automationVersionId()), uuid(body.agentId()), uuid(body.requestKey()),
-                acceptance(body.authorizeVersion(), body.authorizationValidUntil()));
+                acceptance(body.authorizeVersion(), body.authorizationValidUntil()), body.environmentMode());
         return ResponseEntity.status(c.created() ? HttpStatus.CREATED : HttpStatus.OK).cacheControl(CacheControl.noStore()).body(c.execution());
     }
 
@@ -151,6 +151,13 @@ public class RemoteExecutionController {
                                                             HttpServletRequest req) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(service.logs(org, SessionFilter.principal(req), SessionFilter.token(req), execution, attempt, after, limit));
+    }
+
+    /** AMBIENTE-PYTHON-001 (D7): o registro do preparo do ambiente de uma tentativa MANAGED, sem segredos (30 dias; depois, 410). */
+    @GetMapping(value = "/api/v1/o/{org}/remote-executions/{execution}/attempts/{attempt}/environment-log", produces = "text/plain;charset=UTF-8")
+    public ResponseEntity<String> environmentLog(@PathVariable UUID org, @PathVariable UUID execution, @PathVariable UUID attempt, HttpServletRequest req) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).header("X-Content-Type-Options", "nosniff")
+                .body(service.environmentLog(org, SessionFilter.principal(req), SessionFilter.token(req), execution, attempt));
     }
 
     /** T03b: os arquivos de resultado de uma tentativa e o fechamento do envio (logs.read). */

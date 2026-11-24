@@ -31,7 +31,9 @@ import tools.jackson.databind.json.JsonMapper;
  * de destino, nunca transferida. A maquina e simulada por SQL com o papel real nekkora_ingestion (o canal dela, por HTTP, e
  * conferido no modulo do gateway: RemoteDeliveryIT).
  */
-@TestPropertySource(properties = {"nekkora.remote-execution.enabled=true", "nekkora.remote-execution.reconcile-seconds=0", "nekkora.resultados.dir=${java.io.tmpdir}/nekkora-platform-it-resultados"})
+@TestPropertySource(properties = {"nekkora.remote-execution.enabled=true", "nekkora.remote-execution.reconcile-seconds=0", "nekkora.resultados.dir=${java.io.tmpdir}/nekkora-platform-it-resultados",
+        // AMBIENTE-PYTHON-001: ligado aqui tambem (mesmo contexto do ManagedEnvironmentIT) - o Python preparado nao muda com a chave ligada
+        "nekkora.managed-environment.enabled=true"})
 class RemoteExecutionIT extends PlatformTestBase {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();

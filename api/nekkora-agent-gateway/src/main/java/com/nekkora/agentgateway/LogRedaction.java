@@ -22,6 +22,20 @@ final class LogRedaction {
     private LogRedaction() {
     }
 
+    /** Credencial embutida em URL ({@code esquema://usuario:senha@host} ou {@code esquema://token@host}). */
+    private static final Pattern URL_CREDENTIALS = Pattern.compile("(?i)\\b([a-z][a-z0-9+.-]{1,20}://)[^\\s/@:]+(?::[^\\s/@]*)?@");
+    /** {@code chave=valor} de nomes tipicos de segredo (token, senha, password, secret, api_key...), como o pip e o robo escrevem. */
+    private static final Pattern NAMED_SECRET = Pattern.compile("(?i)\\b([a-z0-9_.-]*(?:token|passw(?:or)?d|senha|secret|api[_-]?key)[a-z0-9_.-]*)(\\s*[:=]\\s*)(?!\\[removido\\])[^\\s,;\"']+");
+
+    /**
+     * AMBIENTE-PYTHON-001 (D7): o registro do PREPARO do ambiente (saida do pip e do venv). Alem do que {@link #redact} remove:
+     * credencial em URL (indice com usuario e senha) e valores de nomes tipicos de segredo.
+     */
+    static String redactPreparation(String message, String... exact) {
+        String out = URL_CREDENTIALS.matcher(redact(message, exact)).replaceAll("$1" + Matcher.quoteReplacement(MARK) + "@");
+        return NAMED_SECRET.matcher(out).replaceAll("$1$2" + Matcher.quoteReplacement(MARK));
+    }
+
     /** {@code exact}: valores que esta requisicao conhece e que nao podem aparecer (o token da atribuicao). */
     static String redact(String message, String... exact) {
         String out = message;
