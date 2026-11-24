@@ -291,6 +291,9 @@ class ManagedEnvironmentIT extends PlatformTestBase {
         assertThat(v.get("resolution").get("state").asString()).isEqualTo("PENDING");
         assertThat(v.get("requirements").get("dependencies").toString()).isEqualTo("[\"nekkora-fixture-a==1.2.3\",\"playwright==1.48.0\"]");
         assertThat(v.get("externalPrerequisites").get(0).get("code").asString()).isEqualTo("PLAYWRIGHT_BROWSER");
+        // o nome do campo e o do contrato (a Web valida a resposta): "package", nao "packageName"
+        assertThat(v.get("externalPrerequisites").get(0).get("package").asString()).isEqualTo("playwright");
+        assertThat(v.get("externalPrerequisites").get(0).has("packageName")).isFalse();
         assertThat(resolve(s, m).body()).contains("managed_environment_resolution_pending");
         String sha = answer(s, m, LOCK);
         v = JSON.readTree(view(s, m).body());

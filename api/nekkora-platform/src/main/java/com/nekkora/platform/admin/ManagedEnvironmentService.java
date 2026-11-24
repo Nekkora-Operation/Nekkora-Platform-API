@@ -73,7 +73,8 @@ public class ManagedEnvironmentService {
                              String lockSha256, Failure2 failure, boolean current, boolean waitingForExecution) {
     }
 
-    public record Prerequisite(String code, String packageName, List<String> checks) {
+    /** No JSON, {@code package} (como no contrato e no OpenAPI); {@code package} e palavra reservada em Java. */
+    public record Prerequisite(String code, @com.fasterxml.jackson.annotation.JsonProperty("package") String packageName, List<String> checks) {
     }
 
     public record Change(String name, String from, String to) {
