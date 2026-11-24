@@ -157,7 +157,22 @@ public class RuntimeRequirementsService {
         return new Analysis(lines, p.dependencies(), p.resolved() && p.dependencies().size() <= MAX_DEPENDENCIES);
     }
 
-    /** Tambem para a solicitacao de execucao remota (T02), que congela a revisao vigente e a lista efetiva. */
+    /**
+     * AMBIENTE-PYTHON-001 (correcao A1): a lista efetiva de UMA versao publicada - o manifesto DESSA versao com os acrescimos da
+     * revisao vigente. E a que a solicitacao de execucao remota congela, a que a resolucao do ambiente resolve e a que o aceite
+     * fixa. Antes, a solicitacao usava o manifesto da ULTIMA versao publicada, mesmo pedindo outra.
+     */
+    static View view(JdbcClient j, UUID org, UUID automation, UUID versionId) {
+        View latest = view(j, org, automation);
+        Published published = j.sql("SELECT v.automation_version_id, v.version_number, coalesce(a.dependencies::text, '[]') FROM public.automation_versions v "
+                        + "LEFT JOIN public.automation_artifacts a ON a.organization_id = v.organization_id AND a.automation_version_id = v.automation_version_id "
+                        + "WHERE v.organization_id = ? AND v.automation_id = ? AND v.automation_version_id = ? AND v.status = 2").param(org).param(automation)
+                .param(versionId).query((rs, n) -> new Published(rs.getObject(1, UUID.class), rs.getInt(2), strings(rs.getString(3)))).optional().orElse(null);
+        return new View(automation, latest.declared(), published, effective(published == null ? List.of() : published.dependencies(),
+                latest.declared() == null ? List.of() : latest.declared().dependencies()));
+    }
+
+    /** A tela de declaracao (por automacao): o manifesto da ULTIMA versao publicada com os acrescimos da revisao vigente. */
     static View view(JdbcClient j, UUID org, UUID automation) {
         Declared declared = j.sql("SELECT revision_number, source, dependencies::text, content_sha256, declared_at FROM public.automation_runtime_requirements "
                         + "WHERE organization_id = ? AND automation_id = ? ORDER BY revision_number DESC LIMIT 1").param(org).param(automation)

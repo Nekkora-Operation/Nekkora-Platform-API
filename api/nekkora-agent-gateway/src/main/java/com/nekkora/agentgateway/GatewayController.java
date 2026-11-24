@@ -376,6 +376,104 @@ public class GatewayController {
                 .header("Nekkora-Package-Sha256", p.sha256()).body(p.bytes());
     }
 
+    // ------------------------------------------------------------------ AMBIENTE-PYTHON-001 (076): ambiente por execucao
+
+    /**
+     * A maquina responde a resolucao da lista completa. Corpo: {@code {"outcome", "pythonVersion"?, "pipVersion"?, "lock": [{name,
+     * version, sha256, fileName}]?, "failure": {requirement?, phase, summary?}?}}. Campos alem desses recusam o pedido.
+     */
+    @PostMapping("/agent/api/v1/remote/environment-resolutions/{resolution}/answer")
+    public ResponseEntity<RemoteDelivery.ResolutionAnswer> remoteAnswerResolution(@PathVariable String resolution, @RequestBody(required = false) String body,
+                                                                                  HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(resolution);
+        JsonNode n = parse(body);
+        only(n, java.util.Set.of("outcome", "pythonVersion", "pipVersion", "lock", "failure"));
+        List<com.nekkora.core.remote.ManagedLock.Item> lock = null;
+        JsonNode l = n.get("lock");
+        if (l != null && !l.isNull()) {
+            if (!l.isArray() || l.size() > com.nekkora.core.remote.ManagedLock.MAX_ITEMS) {
+                throw ApiException.invalid("lock");
+            }
+            lock = new ArrayList<>();
+            for (JsonNode x : l) {
+                if (!x.isObject()) {
+                    throw ApiException.invalid("lock");
+                }
+                only(x, java.util.Set.of("name", "version", "sha256", "fileName"));
+                lock.add(new com.nekkora.core.remote.ManagedLock.Item(text(x, "name"), text(x, "version"), text(x, "sha256"), text(x, "fileName")));
+            }
+        }
+        List<com.nekkora.core.remote.ManagedLock.Item> items = lock;
+        RemoteDelivery.Failure failure = failure(n.get("failure"));
+        RemoteDelivery.ResolutionAnswer a = authenticated(req, () -> delivery.answerResolution(t, id, text(n, "outcome"), text(n, "pythonVersion"),
+                text(n, "pipVersion"), items, failure));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(a);
+    }
+
+    /** A etapa do preparo. Corpo: {@code {"token", "epoch", "stage": "ENV_CREATING" | "DEPS_INSTALLING"}}. */
+    @PostMapping("/agent/api/v1/remote/attempts/{attempt}/stage")
+    public ResponseEntity<RemoteDelivery.Status> remoteStage(@PathVariable String attempt, @RequestBody(required = false) String body, HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(attempt);
+        JsonNode n = parse(body);
+        RemoteDelivery.Status s = authenticated(req, () -> delivery.stage(t, id, text(n, "token"), integer(n, "epoch"), text(n, "stage")));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(s);
+    }
+
+    /**
+     * O relatorio do preparo. Corpo: {@code {"token", "epoch", "outcome", "pythonVersion"?, "pipVersion"?, "installed": [{name, version,
+     * sha256}], "failure"?, "createMs"?, "installMs"?, "log"?}}.
+     */
+    @PutMapping("/agent/api/v1/remote/attempts/{attempt}/environment-report")
+    public ResponseEntity<RemoteDelivery.EnvironmentReport> remoteEnvironmentReport(@PathVariable String attempt, @RequestBody(required = false) String body,
+                                                                                    HttpServletRequest req) {
+        MachineToken t = machine(req);
+        UUID id = uuid(attempt);
+        JsonNode n = parse(body);
+        only(n, java.util.Set.of("token", "epoch", "outcome", "pythonVersion", "pipVersion", "installed", "failure", "createMs", "installMs", "log"));
+        JsonNode in = n.get("installed");
+        if (in == null || !in.isArray() || in.size() > com.nekkora.core.remote.ManagedLock.MAX_ITEMS) {
+            throw ApiException.invalid("installed");
+        }
+        List<RemoteDelivery.InstalledItem> installed = new ArrayList<>();
+        for (JsonNode x : in) {
+            if (!x.isObject()) {
+                throw ApiException.invalid("installed");
+            }
+            only(x, java.util.Set.of("name", "version", "sha256"));
+            installed.add(new RemoteDelivery.InstalledItem(text(x, "name"), text(x, "version"), text(x, "sha256")));
+        }
+        RemoteDelivery.Failure failure = failure(n.get("failure"));
+        RemoteDelivery.EnvironmentReport r = authenticated(req, () -> delivery.environmentReport(t, id, text(n, "token"), integer(n, "epoch"),
+                text(n, "outcome"), text(n, "pythonVersion"), text(n, "pipVersion"), installed, failure, integer(n, "createMs"), integer(n, "installMs"),
+                text(n, "log")));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
+    }
+
+    private static RemoteDelivery.Failure failure(JsonNode f) {
+        if (f == null || f.isNull()) {
+            return null;
+        }
+        if (!f.isObject()) {
+            throw ApiException.invalid("falha");
+        }
+        only(f, java.util.Set.of("requirement", "phase", "summary"));
+        return new RemoteDelivery.Failure(text(f, "requirement"), text(f, "phase"), text(f, "summary"));
+    }
+
+    /** Campos alem dos previstos recusam o pedido: nenhum caminho, URL ou dado da maquina entra por um campo nao combinado. */
+    private static void only(JsonNode n, java.util.Set<String> allowed) {
+        if (n == null || !n.isObject()) {
+            throw ApiException.invalid("corpo");
+        }
+        for (String name : n.propertyNames()) {
+            if (!allowed.contains(name)) {
+                throw ApiException.invalid(name);
+            }
+        }
+    }
+
     private static Integer integer(JsonNode n, String field) {
         JsonNode v = n.get(field);
         if (v == null || v.isNull()) {

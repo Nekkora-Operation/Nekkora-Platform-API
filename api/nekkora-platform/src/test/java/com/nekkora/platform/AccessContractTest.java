@@ -127,7 +127,9 @@ class AccessContractTest {
                 // T03b: o envio de resultados e so da maquina (a leitura pelas pessoas usa remote_result_unavailable, publicado)
                 com.nekkora.core.web.ApiError.REMOTE_RESULT_CONFLICT, com.nekkora.core.web.ApiError.REMOTE_RESULT_LIMIT,
                 // T05: os registros sao enviados so pelo canal da maquina
-                com.nekkora.core.web.ApiError.REMOTE_LOG_CONFLICT, com.nekkora.core.web.ApiError.REMOTE_LOG_LIMIT);
+                com.nekkora.core.web.ApiError.REMOTE_LOG_CONFLICT, com.nekkora.core.web.ApiError.REMOTE_LOG_LIMIT,
+                // AMBIENTE-PYTHON-001: a resposta da resolucao e o relatorio do preparo sao so do canal da maquina
+                com.nekkora.core.web.ApiError.MANAGED_ENVIRONMENT_RESOLUTION_CLOSED, com.nekkora.core.web.ApiError.MANAGED_ENVIRONMENT_REPORT_CONFLICT);
         for (com.nekkora.core.web.ApiError e : com.nekkora.core.web.ApiError.values()) {
             assertThat(codigos).as("codigo de erro publicado: " + e.code()).contains(e.code());
             if (e.reason() != null && !soDaMaquina.contains(e)) {

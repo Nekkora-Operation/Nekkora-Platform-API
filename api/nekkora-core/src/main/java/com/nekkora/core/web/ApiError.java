@@ -237,6 +237,29 @@ public enum ApiError {
     REMOTE_RESULT_CONFLICT(HttpStatus.CONFLICT, "conflict", "remote_result_conflict"),
     /** Canal da maquina: o arquivo faria a tentativa passar do limite total de resultados. */
     REMOTE_RESULT_LIMIT(HttpStatus.CONFLICT, "conflict", "remote_result_limit"),
+    // ------------------------------------------------------------------ AMBIENTE-PYTHON-001 (076)
+    /** Ambiente por execucao: a chave NEKKORA_AMBIENTE_GERENCIADO esta desligada nesta Platform. Nada criado. */
+    MANAGED_ENVIRONMENT_UNAVAILABLE(HttpStatus.NOT_FOUND, "not_found", "managed_environment_unavailable"),
+    /** A maquina nao declarou MANAGED_ENV_1_0 (aplicativo antigo, ou Platform que ainda nao ofereceu o recurso a ela). */
+    MANAGED_ENVIRONMENT_MACHINE_INCOMPATIBLE(HttpStatus.CONFLICT, "conflict", "managed_environment_machine_incompatible"),
+    /** D6: o Python escolhido para a automacao nesta maquina e um ambiente virtual; o ambiente por execucao nasce de uma instalacao. */
+    MANAGED_ENVIRONMENT_BASE_NOT_INSTALLATION(HttpStatus.CONFLICT, "conflict", "managed_environment_base_not_installation"),
+    /** Ja ha um pedido de resolucao em aberto para esta automacao e maquina. Nada criado. */
+    MANAGED_ENVIRONMENT_RESOLUTION_PENDING(HttpStatus.CONFLICT, "conflict", "managed_environment_resolution_pending"),
+    /** O aceite se refere a uma resolucao que nao e mais a corrente (Python, revisao ou versao mudaram, ou ha outra mais nova). */
+    MANAGED_ENVIRONMENT_RESOLUTION_NOT_CURRENT(HttpStatus.CONFLICT, "conflict", "managed_environment_resolution_not_current"),
+    /** O lock que a pessoa viu nao e o da resolucao (hash diferente). Nada aceito. */
+    MANAGED_ENVIRONMENT_LOCK_CHANGED(HttpStatus.CONFLICT, "conflict", "managed_environment_lock_changed"),
+    /** Solicitacao MANAGED sem aceite vigente desta versao nesta maquina. */
+    MANAGED_ENVIRONMENT_NOT_AUTHORIZED(HttpStatus.CONFLICT, "conflict", "managed_environment_not_authorized"),
+    /** Solicitacao MANAGED com aceite que nao corresponde mais (revisao das dependencias ou Python base mudaram): aceitar de novo. */
+    MANAGED_ENVIRONMENT_CHANGED(HttpStatus.CONFLICT, "conflict", "managed_environment_changed"),
+    /** Canal da maquina: a resolucao ja foi respondida com outra resposta, ou o prazo venceu. */
+    MANAGED_ENVIRONMENT_RESOLUTION_CLOSED(HttpStatus.CONFLICT, "conflict", "managed_environment_resolution_closed"),
+    /** Canal da maquina: o relatorio do preparo desta tentativa ja foi gravado com outro conteudo. */
+    MANAGED_ENVIRONMENT_REPORT_CONFLICT(HttpStatus.CONFLICT, "conflict", "managed_environment_report_conflict"),
+    /** D7: o registro do preparo foi removido depois de 30 dias. */
+    MANAGED_ENVIRONMENT_LOG_EXPIRED(HttpStatus.GONE, "gone", "managed_environment_log_expired"),
     /** Canal da maquina: lote de registros com buraco na sequencia, linha repetida com outro conteudo, ou envio ja fechado. */
     REMOTE_LOG_CONFLICT(HttpStatus.CONFLICT, "conflict", "remote_log_conflict"),
     /** Canal da maquina: o lote faria a tentativa passar do limite total de registros. */

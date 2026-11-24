@@ -55,6 +55,8 @@ abstract class RemoteEnabledGatewayIT {
         r.add("nekkora.limits.batches-per-minute", () -> "100000");
         r.add("nekkora.limits.redeem-failures-per-hour", () -> "1000");
         r.add("nekkora.remote-execution.enabled", () -> "true");
+        // AMBIENTE-PYTHON-001: ligado no contexto compartilhado - toda a suite remota tambem prova que o Python preparado nao muda
+        r.add("nekkora.managed-environment.enabled", () -> "true");
         r.add("nekkora.artefatos.dir", PACKAGES::toString);
         r.add("nekkora.resultados.dir", RESULTS::toString);
     }

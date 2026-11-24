@@ -53,7 +53,9 @@ public class RemoteExecutionService {
      * pode). {@code authorization}: nula se nunca houve autorizacao desta versao para o Worker.
      */
     public record Candidate(UUID agentId, String agentName, UUID workerId, String workerName, boolean requestable, List<String> missing,
-                            AuthorizationInfo authorization, PythonChoice python, DependencyCheck dependencyCheck) {
+                            AuthorizationInfo authorization, PythonChoice python, DependencyCheck dependencyCheck,
+                            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                            ManagedEnvironmentService.CandidateEnvironment managedEnvironment) {
     }
 
     /**
@@ -192,7 +194,9 @@ public class RemoteExecutionService {
                           String refusalReason, String communication, Integer exitCode, OffsetDateTime createdAt, OffsetDateTime offerValidUntil,
                           OffsetDateTime offeredAt, OffsetDateTime receivedAt, OffsetDateTime startedAt, OffsetDateTime endedAt, String closureCause,
                           LateReport lateReport, List<Reconciliation> reconciliations, OffsetDateTime machineStillRunningAt, String processes,
-                          OffsetDateTime processesAt) {
+                          OffsetDateTime processesAt,
+                          @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                          ManagedEnvironmentService.AttemptEnvironment environment) {
         /** Tem processo pendente e ninguem o confirmou ausente (nem a maquina, nem uma declaracao): bloqueia a repeticao. */
         public boolean unresolved() {
             return ("ENDED_UNKNOWN".equals(state) || processes != null) && reconciliations.isEmpty();
@@ -260,7 +264,7 @@ public class RemoteExecutionService {
      */
     public record Execution(UUID remoteExecutionId, UUID workspaceId, UUID automationId, UUID automationVersionId, int versionNumber, String state,
                             int requirementsRevision, List<String> dependencies, OffsetDateTime requestedAt, OffsetDateTime cancelRequestedAt,
-                            List<Attempt> attempts, String workspaceName, String automationName, boolean waitingForSlot) {
+                            List<Attempt> attempts, String workspaceName, String automationName, boolean waitingForSlot, String environmentMode) {
     }
 
     public record Created(Execution execution, boolean created) {
@@ -288,6 +292,17 @@ public class RemoteExecutionService {
      */
     private static final String UNCONFIRMED = com.nekkora.core.remote.AttemptReconciliation.machineHolds("a", com.nekkora.core.remote.AttemptReconciliation.Hold.UNCERTAIN);
     private final com.nekkora.core.artifact.ResultStore results;
+    /** AMBIENTE-PYTHON-001: o ambiente por execucao (nulo ou desligado: so o Python preparado). */
+    private ManagedEnvironmentService managed;
+
+    public RemoteExecutionService managedEnvironments(ManagedEnvironmentService service) {
+        this.managed = service;
+        return this;
+    }
+
+    private boolean managedEnabled() {
+        return managed != null && managed.enabled();
+    }
 
     /**
      * {@code offerMinutes}: quanto tempo a tentativa espera a maquina receber antes de expirar (padrao de laboratorio: 15).
@@ -386,9 +401,10 @@ public class RemoteExecutionService {
                     }
                 }
                 return new Candidate(rs.getObject(1, UUID.class), rs.getString(2), rs.getObject(3, UUID.class), rs.getString(4), missing.isEmpty(),
-                        List.copyOf(missing), info, python, null);
+                        List.copyOf(missing), info, python, null, null);
             }).list().stream().map(c -> new Candidate(c.agentId(), c.agentName(), c.workerId(), c.workerName(), c.requestable(), c.missing(),
-                    c.authorization(), c.python(), latestCheck(j, org, v.automationId(), c.agentId()))).toList();
+                    c.authorization(), c.python(), latestCheck(j, org, v.automationId(), c.agentId()),
+                    managedEnabled() ? ManagedEnvironmentService.candidate(j, org, v.automationId(), c.agentId(), versionId) : null)).toList();
         });
     }
 
@@ -462,22 +478,35 @@ public class RemoteExecutionService {
 
     public Created request(UUID org, ValidSession actor, String token, UUID workspaceId, UUID versionId, UUID agentId, UUID requestKey,
                            VersionAcceptance acceptance) {
-        if (versionId == null || agentId == null || requestKey == null) {
+        return request(org, actor, token, workspaceId, versionId, agentId, requestKey, acceptance, null);
+    }
+
+    /**
+     * AMBIENTE-PYTHON-001: {@code environmentMode} PREPARED (ausente = PREPARED: o comportamento de sempre) ou MANAGED (ambiente
+     * temporario com o lock aceito; exige o aceite vigente e ainda correspondente desta versao nesta maquina).
+     */
+    public Created request(UUID org, ValidSession actor, String token, UUID workspaceId, UUID versionId, UUID agentId, UUID requestKey,
+                           VersionAcceptance acceptance, String environmentMode) {
+        if (versionId == null || agentId == null || requestKey == null || (environmentMode != null && !List.of("PREPARED", "MANAGED").contains(environmentMode))) {
             throw ApiException.invalid("solicitacao");
+        }
+        boolean managedMode = "MANAGED".equals(environmentMode);
+        if (managedMode && !managedEnabled()) {
+            throw new ApiException(ApiError.MANAGED_ENVIRONMENT_UNAVAILABLE, "ambiente_gerenciado_desligado");
         }
         if (!enabled) {
             throw new ApiException(ApiError.REMOTE_EXECUTION_UNAVAILABLE, "execucao_remota_desligada");
         }
         try {
-            return requestOnce(org, actor, token, workspaceId, versionId, agentId, requestKey, acceptance);
+            return requestOnce(org, actor, token, workspaceId, versionId, agentId, requestKey, acceptance, managedMode);
         } catch (DuplicateKeyException race) {
             // dois envios concorrentes com a mesma chave: o segundo le o primeiro
-            return requestOnce(org, actor, token, workspaceId, versionId, agentId, requestKey, acceptance);
+            return requestOnce(org, actor, token, workspaceId, versionId, agentId, requestKey, acceptance, managedMode);
         }
     }
 
     private Created requestOnce(UUID org, ValidSession actor, String token, UUID workspaceId, UUID versionId, UUID agentId, UUID requestKey,
-                                VersionAcceptance acceptance) {
+                                VersionAcceptance acceptance, boolean managedMode) {
         return actions.write(org, j -> {
             actions.requireActor(j, org, actor, token);
             access.requireWorkspace(j, org, actor.membershipId(), workspaceId, "automation.execute");
@@ -488,7 +517,8 @@ public class RemoteExecutionService {
             if (existing != null) {
                 Execution same = execution(j, org, existing);
                 if (!same.workspaceId().equals(workspaceId) || !same.automationVersionId().equals(versionId)
-                        || same.attempts().isEmpty() || !same.attempts().get(0).agentId().equals(agentId)) {
+                        || same.attempts().isEmpty() || !same.attempts().get(0).agentId().equals(agentId)
+                        || !same.environmentMode().equals(managedMode ? "MANAGED" : "PREPARED")) {
                     throw AccessActions.refuse(Failure.CONFLICT, "chave_da_solicitacao_com_outro_conteudo");
                 }
                 return new Created(same, false);
@@ -499,7 +529,8 @@ public class RemoteExecutionService {
             // antes de qualquer outra exigencia, e antes de gravar: so pacote Python externo e executado remotamente
             requireSupported(v.rule());
             requireRegistered(j, org, versionId, v.fingerprint(), v.rule());
-            RuntimeRequirementsService.View requirements = RuntimeRequirementsService.view(j, org, v.automationId());
+            // AMBIENTE-PYTHON-001 (correcao A1): a lista efetiva e a DESTA versao (o manifesto dela), nao a da ultima publicada
+            RuntimeRequirementsService.View requirements = RuntimeRequirementsService.view(j, org, v.automationId(), versionId);
             if (requirements.declared() == null) {
                 throw new ApiException(ApiError.REMOTE_REQUIREMENTS_NOT_DECLARED, "dependencias_nao_declaradas");
             }
@@ -509,14 +540,19 @@ public class RemoteExecutionService {
             ArrayNode frozen = JSON.createArrayNode();
             requirements.effective().dependencies().forEach(frozen::add);
             Target target = target(j, org, workspaceId, versionId, agentId, actor.membershipId(), acceptance);
+            ManagedEnvironmentService.Snapshot env = managedMode ? managed.requireForRequest(j, org, v.automationId(), versionId, agentId) : null;
             requireCapacity(j, org);
             UUID id = j.sql("""
                     INSERT INTO public.remote_executions (organization_id, workspace_id, automation_id, automation_version_id, package_fingerprint,
-                        package_fingerprint_rule, requirements_revision, effective_dependencies, request_key, requested_by_membership_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?) RETURNING remote_execution_id
+                        package_fingerprint_rule, requirements_revision, effective_dependencies, request_key, requested_by_membership_id, environment_mode)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?) RETURNING remote_execution_id
                     """).param(org).param(workspaceId).param(v.automationId()).param(versionId).param(v.fingerprint()).param(v.rule())
-                    .param(requirements.declared().revision()).param(frozen.toString()).param(requestKey).param(actor.membershipId()).query(UUID.class).single();
-            attempt(j, org, id, 1, target, actor.membershipId());
+                    .param(requirements.declared().revision()).param(frozen.toString()).param(requestKey).param(actor.membershipId())
+                    .param((short) (managedMode ? 2 : 1)).query(UUID.class).single();
+            UUID attemptId = attempt(j, org, id, 1, target, actor.membershipId());
+            if (env != null) {
+                ManagedEnvironmentService.snapshot(j, org, attemptId, env);
+            }
             LOG.info("evento=execucao_remota.solicitada solicitacao={} correlacao={}", id, AccessActions.correlation());
             return new Created(execution(j, org, id), true);
         });
@@ -572,8 +608,19 @@ public class RemoteExecutionService {
             requireRegistered(j, org, x.automationVersionId(), j.sql("SELECT package_fingerprint FROM public.remote_executions "
                     + "WHERE organization_id = ? AND remote_execution_id = ?").param(org).param(executionId).query(String.class).single(), SUPPORTED_RULE);
             Target target = target(j, org, x.workspaceId(), x.automationVersionId(), agentId, actor.membershipId(), acceptance);
+            // AMBIENTE-PYTHON-001: a nova tentativa mantem o modo da solicitacao; no MANAGED vale o aceite da maquina DE DESTINO
+            ManagedEnvironmentService.Snapshot env = null;
+            if ("MANAGED".equals(x.environmentMode())) {
+                if (!managedEnabled()) {
+                    throw new ApiException(ApiError.MANAGED_ENVIRONMENT_UNAVAILABLE, "ambiente_gerenciado_desligado");
+                }
+                env = managed.requireForRequest(j, org, x.automationId(), x.automationVersionId(), agentId);
+            }
             requireCapacity(j, org);
-            attempt(j, org, executionId, last.attemptNumber() + 1, target, actor.membershipId());
+            UUID attemptId = attempt(j, org, executionId, last.attemptNumber() + 1, target, actor.membershipId());
+            if (env != null) {
+                ManagedEnvironmentService.snapshot(j, org, attemptId, env);
+            }
             LOG.info("evento=execucao_remota.nova_tentativa solicitacao={} tentativa={} correlacao={}", executionId, last.attemptNumber() + 1,
                     AccessActions.correlation());
             return execution(j, org, executionId);
@@ -869,6 +916,19 @@ public class RemoteExecutionService {
         }
     }
 
+    /**
+     * AMBIENTE-PYTHON-001 (D7): o registro do preparo do ambiente de uma tentativa MANAGED, ja sem segredos. Exige logs.read.
+     * Vale 30 dias contados do relatorio (com ou sem inicio da automacao); depois, 410 managed_environment_log_expired.
+     */
+    public String environmentLog(UUID org, ValidSession actor, String token, UUID executionId, UUID attemptId) {
+        return actions.read(org, j -> {
+            actions.requireActor(j, org, actor, token);
+            scoped(j, org, actor, executionId, "logs.read");
+            requireAttempt(j, org, executionId, attemptId);
+            return ManagedEnvironmentService.preparationLog(j, org, attemptId);
+        });
+    }
+
     private static void requireAttempt(JdbcClient j, UUID org, UUID executionId, UUID attemptId) {
         if (j.sql("SELECT count(*) FROM public.remote_attempts WHERE organization_id = ? AND remote_execution_id = ? AND attempt_id = ?")
                 .param(org).param(executionId).param(attemptId).query(Long.class).single() == 0) {
@@ -932,7 +992,7 @@ public class RemoteExecutionService {
         } else if (!registered(j, org, versionId, v.fingerprint(), v.rule())) {
             out.add("PACKAGE_NOT_REGISTERED");
         }
-        RuntimeRequirementsService.View r = RuntimeRequirementsService.view(j, org, v.automationId());
+        RuntimeRequirementsService.View r = RuntimeRequirementsService.view(j, org, v.automationId(), versionId);
         if (r.declared() == null) {
             out.add("REQUIREMENTS_NOT_DECLARED");
         } else if (!r.effective().resolved()) {
@@ -1051,14 +1111,14 @@ public class RemoteExecutionService {
         com.nekkora.core.license.Capacity.requireRoomInQueue(j, org);
     }
 
-    private void attempt(JdbcClient j, UUID org, UUID executionId, int number, Target t, UUID membership) {
+    private UUID attempt(JdbcClient j, UUID org, UUID executionId, int number, Target t, UUID membership) {
         try {
-            j.sql("""
+            return j.sql("""
                     INSERT INTO public.remote_attempts (organization_id, remote_execution_id, attempt_number, agent_id, worker_id, authorization_id,
                         created_by_membership_id, offer_valid_until)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, clock_timestamp() + make_interval(mins => ?))
+                    VALUES (?, ?, ?, ?, ?, ?, ?, clock_timestamp() + make_interval(mins => ?)) RETURNING attempt_id
                     """).param(org).param(executionId).param(number).param(t.agentId()).param(t.workerId()).param(t.authorizationId()).param(membership)
-                    .param(offerMinutes).update();
+                    .param(offerMinutes).query(UUID.class).single();
         } catch (DuplicateKeyException busy) {
             // a reserva e atomica: outra solicitacao chegou a esta maquina (ou a esta solicitacao) entre a conferencia e a gravacao
             throw new ApiException(ApiError.REMOTE_MACHINE_BUSY, "maquina_ocupada");
@@ -1109,7 +1169,7 @@ public class RemoteExecutionService {
                 rs.getObject(13, OffsetDateTime.class), rs.getObject(14, OffsetDateTime.class), rs.getObject(15, OffsetDateTime.class),
                 rs.getObject(16, OffsetDateTime.class), rs.getString(17),
                 rs.getObject(18) == null ? null : new LateReport(STATES.get(rs.getShort(18) - 1), (Integer) rs.getObject(19),
-                        rs.getObject(20, OffsetDateTime.class)), new ArrayList<>(), null, null, null)).list();
+                        rs.getObject(20, OffsetDateTime.class)), new ArrayList<>(), null, null, null, null)).list();
         // 058: o que se sabe do processo de cada tentativa nao confirmada (reconciliacoes e "ainda executa")
         List<Attempt> known = new ArrayList<>();
         for (Attempt a : attempts) {
@@ -1135,7 +1195,8 @@ public class RemoteExecutionService {
             OffsetDateTime processesAt = processes == null ? null : said[5] != null ? said[5] : said[4];
             known.add(new Attempt(a.attemptId(), a.attemptNumber(), a.agentId(), a.agentName(), a.workerId(), a.workerName(), a.state(), a.refusalReason(),
                     a.communication(), a.exitCode(), a.createdAt(), a.offerValidUntil(), a.offeredAt(), a.receivedAt(), a.startedAt(), a.endedAt(),
-                    a.closureCause(), a.lateReport(), List.copyOf(recs), byMachine || processes != null ? null : said[3], processes, processesAt));
+                    a.closureCause(), a.lateReport(), List.copyOf(recs), byMachine || processes != null ? null : said[3], processes, processesAt,
+                    ManagedEnvironmentService.attemptEnvironment(j, org, a.attemptId())));
         }
         List<Attempt> resolved = List.copyOf(known);
         String latest = attempts.isEmpty() ? "QUEUED" : attempts.get(attempts.size() - 1).state();
@@ -1144,7 +1205,7 @@ public class RemoteExecutionService {
                 .query(Boolean.class).single());
         return j.sql("""
                 SELECT x.remote_execution_id, x.workspace_id, x.automation_id, x.automation_version_id, v.version_number, x.requirements_revision,
-                       x.effective_dependencies::text, x.requested_at, x.cancel_requested_at, ws.name, au.name
+                       x.effective_dependencies::text, x.requested_at, x.cancel_requested_at, ws.name, au.name, x.environment_mode
                   FROM public.remote_executions x
                   JOIN public.automation_versions v ON v.organization_id = x.organization_id AND v.automation_version_id = x.automation_version_id
                   JOIN public.workspaces ws ON ws.organization_id = x.organization_id AND ws.workspace_id = x.workspace_id
@@ -1156,7 +1217,7 @@ public class RemoteExecutionService {
             return new Execution(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getObject(3, UUID.class), rs.getObject(4, UUID.class),
                     rs.getInt(5), attempts.isEmpty() ? "QUEUED" : attempts.get(attempts.size() - 1).state(), rs.getInt(6), List.copyOf(deps),
                     rs.getObject(8, OffsetDateTime.class), rs.getObject(9, OffsetDateTime.class), resolved, rs.getString(10), rs.getString(11),
-                    waitingForSlot);
+                    waitingForSlot, rs.getShort(12) == 2 ? "MANAGED" : "PREPARED");
         }).single();
     }
 }

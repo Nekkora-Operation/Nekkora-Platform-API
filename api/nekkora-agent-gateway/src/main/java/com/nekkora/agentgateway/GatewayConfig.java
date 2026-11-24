@@ -122,13 +122,14 @@ public class GatewayConfig {
 
     @Bean
     GatewayService gatewayService(OrgTransactions tx, MachineAuth auth, GatewayProperties p) {
-        return new GatewayService(tx, auth, p.limits().credentialDays(), p.remoteExecutionEnabled(), p.renewalWindowDays());
+        return new GatewayService(tx, auth, p.limits().credentialDays(), p.remoteExecutionEnabled(), p.renewalWindowDays())
+                .managedEnvironments(p.managedEnvironmentEnabled());
     }
 
     @Bean
     RemoteDelivery remoteDelivery(OrgTransactions tx, MachineAuth auth, GatewayProperties p, com.nekkora.core.artifact.ArtifactStore packages,
                                   com.nekkora.core.artifact.ResultStore results) {
-        return new RemoteDelivery(tx, auth, p.leaseSeconds(), p.lostMinutes(), packages, results);
+        return new RemoteDelivery(tx, auth, p.leaseSeconds(), p.lostMinutes(), packages, results).managed(p.managedEnvironmentEnabled());
     }
 
     /**

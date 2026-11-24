@@ -50,6 +50,10 @@ nekkora:
     # 053: depois de o prazo da comunicacao vencer, quanto esperar antes de encerrar a tentativa como sem confirmacao.
     # Tem de ter o mesmo valor na Platform
     lost-minutes: ${NEKKORA_EXECUCAO_REMOTA_SEM_COMUNICACAO_MINUTOS:120}
+  # AMBIENTE-PYTHON-001: ambiente Python por execucao (venv temporario com as dependencias aceitas). DESLIGADO por padrao; so vale
+  # com a execucao remota ligada. Tem de ter o mesmo valor no servico da Platform.
+  managed-environment:
+    enabled: ${NEKKORA_AMBIENTE_GERENCIADO:false}
 
 logging:
   level:
