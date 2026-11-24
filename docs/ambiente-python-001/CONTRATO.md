@@ -68,7 +68,8 @@ Permissão `automation.read` no ambiente.
     "lock": [{"name": "requests", "version": "2.32.3", "sha256": "…64…", "fileName": "requests-2.32.3-py3-none-any.whl"}],
     "lockSha256": "…64…",
     "failure": {"requirement": "pandas==2.2.3", "phase": "NO_COMPATIBLE_WHEEL", "summary": "…"},
-    "current": true
+    "current": true,
+    "waitingForExecution": false
   },
   "externalPrerequisites": [
     {"code": "PLAYWRIGHT_BROWSER", "package": "playwright", "checks": ["PLAYWRIGHT_CHROMIUM", "PLAYWRIGHT_FIREFOX", "PLAYWRIGHT_WEBKIT"]},
@@ -83,6 +84,7 @@ Permissão `automation.read` no ambiente.
 ```
 - `resolution` e `authorization` são nulos quando não existem.
 - `current` diz se a resolução ainda corresponde ao Python escolhido, à revisão vigente e à versão.
+- `waitingForExecution` (só em PENDING): a máquina está com uma tentativa remota recebida e ainda não terminada (RECEIVED a RUNNING). Com uma tentativa no diário o aplicativo não consulta trabalho novo, então a lista só é gerada quando ela terminar, se ainda houver prazo. A tela diz isso.
 - `diff` só aparece em STALE e compara o lock aceito com o da resolução corrente, quando houver.
 - `externalPrerequisites` vem do catálogo da Platform aplicado ao lock (ou, sem lock, à lista efetiva).
 

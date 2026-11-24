@@ -64,10 +64,13 @@ public class ManagedEnvironmentService {
     /**
      * {@code state}: PENDING (aguardando a maquina, no prazo), ANSWERED ou UNANSWERED (o prazo venceu: nada foi decidido).
      * {@code current}: a resolucao ainda e desta versao, da revisao vigente e do Python escolhido agora.
+     * {@code waitingForExecution}: so em PENDING — a maquina esta com uma execucao remota em andamento (recebida e ainda nao
+     * terminada); com uma tentativa no diario o aplicativo nao consulta trabalho novo, entao a lista so e gerada depois que ela
+     * terminar (se ainda estiver no prazo).
      */
     public record Resolution(UUID resolutionId, UUID automationVersionId, String state, String outcome, OffsetDateTime requestedAt,
                              OffsetDateTime answerValidUntil, OffsetDateTime answeredAt, String pythonVersion, String pipVersion, List<LockItem> lock,
-                             String lockSha256, Failure2 failure, boolean current) {
+                             String lockSha256, Failure2 failure, boolean current, boolean waitingForExecution) {
     }
 
     public record Prerequisite(String code, String packageName, List<String> checks) {
@@ -184,9 +187,11 @@ public class ManagedEnvironmentService {
         return j.sql("""
                 SELECT resolution_id, automation_version_id, outcome, requested_at, answer_valid_until, answered_at, python_version, pip_version, lock::text,
                        lock_sha256, failure_requirement, failure_phase, failure_summary, answer_valid_until > clock_timestamp(), environment_id,
-                       requirements_revision, dependencies::text
-                  FROM public.managed_environment_resolutions
-                 WHERE organization_id = ? AND automation_id = ? AND agent_id = ? ORDER BY requested_at DESC, resolution_id LIMIT 1
+                       requirements_revision, dependencies::text,
+                       EXISTS (SELECT 1 FROM public.remote_attempts t WHERE t.organization_id = r.organization_id AND t.agent_id = r.agent_id
+                                  AND t.state BETWEEN 3 AND 6)
+                  FROM public.managed_environment_resolutions r
+                 WHERE r.organization_id = ? AND r.automation_id = ? AND r.agent_id = ? ORDER BY r.requested_at DESC, r.resolution_id LIMIT 1
                 """).param(org).param(automation).param(agent).query((rs, n) -> {
             Short outcome = rs.getObject(3) == null ? null : rs.getShort(3);
             String state = outcome != null ? "ANSWERED" : rs.getBoolean(14) ? "PENDING" : "UNANSWERED";
@@ -196,7 +201,7 @@ public class ManagedEnvironmentService {
             Failure2 f = rs.getString(12) == null ? null : new Failure2(rs.getString(11), rs.getString(12), rs.getString(13));
             return new Resolution(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), state, outcome == null ? null : OUTCOMES.get(outcome - 1),
                     rs.getObject(4, OffsetDateTime.class), rs.getObject(5, OffsetDateTime.class), rs.getObject(6, OffsetDateTime.class), rs.getString(7),
-                    rs.getString(8), lockItems(rs.getString(9), asked), rs.getString(10), f, current);
+                    rs.getString(8), lockItems(rs.getString(9), asked), rs.getString(10), f, current, "PENDING".equals(state) && rs.getBoolean(18));
         }).optional().orElse(null);
     }
 

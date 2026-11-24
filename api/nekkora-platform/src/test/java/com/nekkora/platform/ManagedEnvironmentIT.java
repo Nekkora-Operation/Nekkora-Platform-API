@@ -244,6 +244,27 @@ class ManagedEnvironmentIT extends PlatformTestBase {
     }
 
     @Test
+    void oPedidoDaListaDizQuandoAMaquinaEsperaUmaExecucaoTerminar() throws Exception {
+        Setup s = setup("[\"nekkora-fixture-a==1.2.3\"]");
+        Machine m = machine(s, "Espera", true);
+        assertThat(resolve(s, m).status()).isEqualTo(201);
+        assertThat(JSON.readTree(view(s, m).body()).get("resolution").get("waitingForExecution").asBoolean()).as("maquina livre").isFalse();
+        // uma execucao (Python preparado) que a maquina ja recebeu: com ela no diario, o aplicativo nao consulta trabalho novo
+        JsonNode x = JSON.readTree(request(s, m, s.version(), null).body());
+        String attempt = x.get("attempts").get(0).get("attemptId").asString();
+        assertThat(as("nekkora_ingestion", s.org().id(), "UPDATE remote_attempts SET state = 2, token_hash = repeat('a', 64), epoch = epoch + 1 WHERE attempt_id = '"
+                + attempt + "'", "UPDATE remote_attempts SET state = 3 WHERE attempt_id = '" + attempt + "'")).isEqualTo("OK");
+        JsonNode res = JSON.readTree(view(s, m).body()).get("resolution");
+        assertThat(res.get("state").asString()).isEqualTo("PENDING");
+        assertThat(res.get("waitingForExecution").asBoolean()).as("a lista espera a execucao em andamento").isTrue();
+        DB.asSuperuser("UPDATE remote_attempts SET state = 9 WHERE attempt_id = '" + attempt + "'");
+        assertThat(JSON.readTree(view(s, m).body()).get("resolution").get("waitingForExecution").asBoolean()).as("a execucao terminou").isFalse();
+        // respondida, nunca espera
+        answer(s, m, List.of(new ManagedLock.Item("nekkora-fixture-a", "1.2.3", SHA_A, null)));
+        assertThat(JSON.readTree(view(s, m).body()).get("resolution").get("waitingForExecution").asBoolean()).isFalse();
+    }
+
+    @Test
     void doPedidoDaListaCompletaAoAceiteEASolicitacaoManaged() throws Exception {
         Setup s = setup("[\"nekkora-fixture-a==1.2.3\"]");
         declare(s, "playwright==1.48.0");

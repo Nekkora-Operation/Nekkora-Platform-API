@@ -6117,6 +6117,9 @@ components:
                 - { $ref: '#/components/schemas/ManagedEnvironmentFailure' }
                 - { type: 'null' }
             current: { type: boolean }
+            waitingForExecution:
+              type: boolean
+              description: 'Só em PENDING: a máquina está com uma execução remota em andamento; a lista completa só é gerada depois que ela terminar (se ainda estiver no prazo).'
         externalPrerequisites:
           type: array
           items:
